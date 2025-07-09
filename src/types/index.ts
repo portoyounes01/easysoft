@@ -63,6 +63,7 @@ export interface Customer {
   country?: string;
   discountLevel: number;
   totalPurchases: number;
+  totalOrders: number;
   lastPurchase?: string;
 }
 

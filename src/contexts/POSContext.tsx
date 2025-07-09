@@ -26,7 +26,7 @@ interface POSContextType extends POSState {
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
 
-type POSAction = 
+type POSAction =
   | { type: 'ADD_TO_CART'; payload: { product: Product; quantity: number } }
   | { type: 'REMOVE_FROM_CART'; payload: string }
   | { type: 'UPDATE_QUANTITY'; payload: { productId: string; quantity: number } }
@@ -154,7 +154,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const processTransaction = async (paymentData: any): Promise<string> => {
     // Simulate transaction processing
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     const receiptNumber = `REC-${Date.now()}`;
     clearCart();
     return receiptNumber;

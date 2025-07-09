@@ -2,12 +2,15 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { POSProvider } from './contexts/POSContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import Layout from './components/Layout/Layout';
 import LoginForm from './components/Auth/LoginForm';
 import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
 import Products from './pages/Products';
 import Employees from './pages/Employees';
+import Transactions from './pages/Transactions';
+import Settings from './pages/Settings';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -26,36 +29,153 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
+// Permission-based route protection
+const PermissionRoute: React.FC<{
+  children: React.ReactNode;
+  permission: string;
+  fallbackPath?: string;
+}> = ({ children, permission, fallbackPath = '/pos' }) => {
+  const { hasPermission, user } = useAuth();
+
+  if (!hasPermission(permission)) {
+    // Show access denied page for unauthorized access attempts
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md mx-auto text-center">
+          <div className="bg-red-100 p-4 rounded-full inline-block mb-6">
+            <svg className="w-16 h-16 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m9-7a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-800 mb-4">Access Denied</h1>
+          <p className="text-gray-600 mb-6">
+            Sorry <strong>{user?.name}</strong>, you don't have permission to access this page.
+            <br />
+            <span className="text-sm text-gray-500">
+              Your role: <span className="font-medium capitalize">{user?.role}</span>
+            </span>
+          </p>
+          <div className="space-y-3">
+            <Navigate to={fallbackPath} replace />
+            <p className="text-sm text-gray-500">Redirecting to your allowed area...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+};
+
+// Role-based redirect logic for security
+const getRoleBasedRedirect = (role: string): string => {
+  switch (role) {
+    case 'admin':
+      return '/'; // Dashboard - full overview for admins
+    case 'manager':
+      return '/reports'; // Business intelligence for managers
+    case 'cashier':
+      return '/pos'; // Point of sale for cashiers
+    default:
+      return '/pos'; // Default to POS for unknown roles (safest option)
+  }
+};
+
 const AppContent: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   return (
     <Routes>
-      <Route 
-        path="/login" 
+      <Route
+        path="/login"
         element={
-          isAuthenticated ? <Navigate to="/" replace /> : <LoginForm />
-        } 
+          isAuthenticated && user ? (
+            <Navigate to={getRoleBasedRedirect(user.role)} replace />
+          ) : (
+            <LoginForm />
+          )
+        }
       />
-      <Route 
-        path="/*" 
+
+      {/* POS Route - Full Screen without Sidebar */}
+      <Route
+        path="/pos"
+        element={
+          <ProtectedRoute>
+            <POSProvider>
+              <PermissionRoute permission="sales">
+                <div className="min-h-screen bg-gray-50">
+                  <POS />
+                </div>
+              </PermissionRoute>
+            </POSProvider>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* All Other Routes - With Layout and Sidebar */}
+      <Route
+        path="/*"
         element={
           <ProtectedRoute>
             <POSProvider>
               <Layout>
                 <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/pos" element={<POS />} />
-                  <Route path="/products" element={<Products />} />
-                  <Route path="/employees" element={<Employees />} />
-                  <Route path="/reports" element={<div className="text-center py-8"><h2 className="text-2xl font-bold text-gray-800">Reports - Coming Soon</h2></div>} />
-                  <Route path="/transactions" element={<div className="text-center py-8"><h2 className="text-2xl font-bold text-gray-800">Transactions - Coming Soon</h2></div>} />
-                  <Route path="/settings" element={<div className="text-center py-8"><h2 className="text-2xl font-bold text-gray-800">Settings - Coming Soon</h2></div>} />
+                  <Route
+                    path="/"
+                    element={
+                      <PermissionRoute permission="dashboard">
+                        <Dashboard />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/products"
+                    element={
+                      <PermissionRoute permission="inventory">
+                        <Products />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/employees"
+                    element={
+                      <PermissionRoute permission="employees">
+                        <Employees />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/reports"
+                    element={
+                      <PermissionRoute permission="reports">
+                        <div className="text-center py-8">
+                          <h2 className="text-2xl font-bold text-gray-800">Reports - Coming Soon</h2>
+                        </div>
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/transactions"
+                    element={
+                      <PermissionRoute permission="sales">
+                        <Transactions />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <PermissionRoute permission="settings">
+                        <Settings />
+                      </PermissionRoute>
+                    }
+                  />
                 </Routes>
               </Layout>
             </POSProvider>
           </ProtectedRoute>
-        } 
+        }
       />
     </Routes>
   );
@@ -64,9 +184,11 @@ const AppContent: React.FC = () => {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <AppContent />
-      </Router>
+      <SettingsProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </SettingsProvider>
     </AuthProvider>
   );
 }

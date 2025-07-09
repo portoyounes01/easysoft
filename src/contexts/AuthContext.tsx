@@ -15,7 +15,7 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-type AuthAction = 
+type AuthAction =
   | { type: 'LOGIN_START' }
   | { type: 'LOGIN_SUCCESS'; payload: Employee }
   | { type: 'LOGIN_FAILURE' }
@@ -67,11 +67,28 @@ const mockEmployees: Employee[] = [
     phone: '+351 123 456 788',
     isActive: true,
     hireDate: '2024-02-01',
-    accessLevels: ['sales', 'inventory', 'reports'],
+    accessLevels: ['sales', 'inventory', 'reports', 'dashboard', 'employees', 'settings'],
     performance: {
       totalSales: 12350.75,
       transactionCount: 67,
       averageTransaction: 184.34
+    },
+    loginHistory: []
+  },
+  {
+    id: '3',
+    employeeNumber: 'EMP003',
+    name: 'Mike Davis',
+    role: 'cashier',
+    email: 'mike.davis@pos.com',
+    phone: '+351 123 456 787',
+    isActive: true,
+    hireDate: '2024-03-01',
+    accessLevels: ['sales'],
+    performance: {
+      totalSales: 8750.25,
+      transactionCount: 52,
+      averageTransaction: 168.27
     },
     loginHistory: []
   }
@@ -86,12 +103,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (employeeNumber: string, password: string): Promise<boolean> => {
     dispatch({ type: 'LOGIN_START' });
-    
+
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     const employee = mockEmployees.find(emp => emp.employeeNumber === employeeNumber);
-    
+
     if (employee && password === 'password') {
       dispatch({ type: 'LOGIN_SUCCESS', payload: employee });
       localStorage.setItem('pos_user', JSON.stringify(employee));

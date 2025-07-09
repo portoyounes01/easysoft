@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Temporary tracking files (cleaned up weekly)
+TEMP_TASKS_*.md
+SESSION_NOTES_*.md
+TEMP_DEBUG_*.md

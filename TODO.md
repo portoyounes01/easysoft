@@ -1,4 +1,6 @@
-# TODO 📋
+# TODO - Future Development Tasks
+
+> 📋 **IMPORTANT**: For security issues and vulnerabilities, see **`SECURITY_ISSUES.md`** - contains comprehensive security audit with 12 categorized issues requiring attention.
 
 ## Critical Backend Implementation Needed
 
