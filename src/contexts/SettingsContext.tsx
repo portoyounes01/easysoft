@@ -11,6 +11,10 @@ export interface SystemSettings {
         currencySymbol: string;
         taxRate: number;
         allowNegativeStock: boolean;
+        autoClearCart: {
+            enabled: boolean;
+            timeoutMinutes: number;
+        };
     };
     display: {
         itemsPerPage: number;
@@ -40,6 +44,10 @@ const defaultSettings: SystemSettings = {
         currencySymbol: '€',
         taxRate: 0.23,
         allowNegativeStock: false,
+        autoClearCart: {
+            enabled: false,
+            timeoutMinutes: 0, // 0 means NEVER
+        },
     },
     display: {
         itemsPerPage: 20,
@@ -76,6 +84,10 @@ const settingsReducer = (state: SettingsState, action: SettingsAction): Settings
                     pos: {
                         ...state.settings.pos,
                         ...(action.payload.pos || {}),
+                        autoClearCart: {
+                            ...state.settings.pos.autoClearCart,
+                            ...(action.payload.pos?.autoClearCart || {}),
+                        },
                     },
                     display: {
                         ...state.settings.display,
@@ -121,6 +133,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             pos: {
                 ...state.settings.pos,
                 ...(newSettings.pos || {}),
+                autoClearCart: {
+                    ...state.settings.pos.autoClearCart,
+                    ...(newSettings.pos?.autoClearCart || {}),
+                },
             },
             display: {
                 ...state.settings.display,
@@ -154,6 +170,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                         pos: {
                             ...defaultSettings.pos,
                             ...(parsedSettings.pos || {}),
+                            autoClearCart: {
+                                ...defaultSettings.pos.autoClearCart,
+                                ...(parsedSettings.pos?.autoClearCart || {}),
+                            },
                         },
                         display: {
                             ...defaultSettings.display,

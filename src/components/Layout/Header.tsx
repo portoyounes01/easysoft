@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Bell, Search, Clock, DollarSign, LogOut, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import LanguageSwitcher from '../LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  
+
   const currentTime = new Date().toLocaleString('pt-PT', {
     weekday: 'long',
     year: 'numeric',
@@ -40,19 +43,20 @@ const Header: React.FC = () => {
                 <Clock className="w-5 h-5" />
                 <span className="text-sm font-medium">{currentTime}</span>
               </div>
-              
+
               <div className="flex items-center space-x-2 bg-green-50 px-3 py-1 rounded-full">
                 <DollarSign className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-semibold text-green-700">Till Open</span>
+                <span className="text-sm font-semibold text-green-700">{t('common.tillOpen')}</span>
               </div>
             </div>
 
             <div className="flex items-center space-x-4">
+              <LanguageSwitcher />
               <div className="relative">
                 <Search className="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search products, customers..."
+                  placeholder={t('common.searchPlaceholder')}
                   className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
                 />
               </div>
@@ -85,7 +89,7 @@ const Header: React.FC = () => {
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                     <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2">
                       <User className="w-4 h-4" />
-                      <span>Profile</span>
+                      <span>{t('common.profile')}</span>
                     </button>
                     <hr className="my-1" />
                     <button
@@ -93,7 +97,7 @@ const Header: React.FC = () => {
                       className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
                     >
                       <LogOut className="w-4 h-4" />
-                      <span>Logout</span>
+                      <span>{t('common.logout')}</span>
                     </button>
                   </div>
                 )}
@@ -111,23 +115,23 @@ const Header: React.FC = () => {
               <div className="bg-red-100 p-3 rounded-full inline-block mb-4">
                 <LogOut className="w-8 h-8 text-red-600" />
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">Confirm Logout</h3>
-              <p className="text-gray-600">Are you sure you want to logout? Any unsaved work will be lost.</p>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">{t('pos.confirmLogoutTitle')}</h3>
+              <p className="text-gray-600">{t('pos.confirmLogoutQuestion')} {t('pos.unsavedWork')}</p>
             </div>
-            
+
             <div className="flex space-x-3">
               <button
                 onClick={cancelLogout}
                 className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold transition-colors"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={confirmLogout}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2"
               >
                 <LogOut className="w-4 h-4" />
-                <span>Logout</span>
+                <span>{t('common.logout')}</span>
               </button>
             </div>
           </div>
@@ -136,8 +140,8 @@ const Header: React.FC = () => {
 
       {/* Backdrop to close user menu */}
       {showUserMenu && (
-        <div 
-          className="fixed inset-0 z-40" 
+        <div
+          className="fixed inset-0 z-40"
           onClick={() => setShowUserMenu(false)}
         />
       )}

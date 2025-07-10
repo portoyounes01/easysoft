@@ -337,6 +337,68 @@ const Settings: React.FC = () => {
                                         </label>
                                     </div>
                                 </div>
+
+                                {/* Auto-Clear Cart Settings */}
+                                <div className="p-6 bg-yellow-50 rounded-xl border border-yellow-200 md:col-span-2">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-gray-800">Auto-Clear Cart</h3>
+                                            <p className="text-sm text-gray-600">Automatically clear cart after period of inactivity</p>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only peer"
+                                                checked={settings.pos.autoClearCart.enabled}
+                                                onChange={(e) => handleSettingsChange('pos', 'autoClearCart', {
+                                                    ...settings.pos.autoClearCart,
+                                                    enabled: e.target.checked
+                                                })}
+                                            />
+                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                                        </label>
+                                    </div>
+
+                                    {settings.pos.autoClearCart.enabled && (
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    <Clock className="w-4 h-4 inline mr-2" />
+                                                    Clear Cart After (minutes)
+                                                </label>
+                                                <select
+                                                    value={settings.pos.autoClearCart.timeoutMinutes}
+                                                    onChange={(e) => handleSettingsChange('pos', 'autoClearCart', {
+                                                        ...settings.pos.autoClearCart,
+                                                        timeoutMinutes: parseInt(e.target.value)
+                                                    })}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                                                >
+                                                    <option value={0}>Never</option>
+                                                    <option value={1}>1 minute</option>
+                                                    <option value={2}>2 minutes</option>
+                                                    <option value={5}>5 minutes</option>
+                                                    <option value={10}>10 minutes</option>
+                                                    <option value={15}>15 minutes</option>
+                                                    <option value={30}>30 minutes</option>
+                                                    <option value={60}>1 hour</option>
+                                                </select>
+                                            </div>
+
+                                            {/* Preview */}
+                                            <div className="p-4 bg-white rounded-lg border border-gray-200">
+                                                <h4 className="font-medium text-gray-800 mb-2">Current Configuration</h4>
+                                                <div className="text-sm text-gray-600">
+                                                    {settings.pos.autoClearCart.timeoutMinutes === 0 ? (
+                                                        <p>• Cart will <strong>never</strong> be automatically cleared</p>
+                                                    ) : (
+                                                        <p>• Cart will be cleared after <strong>{settings.pos.autoClearCart.timeoutMinutes} minutes</strong> of inactivity</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}

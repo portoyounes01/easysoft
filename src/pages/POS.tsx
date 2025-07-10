@@ -33,6 +33,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import VirtualNumpad from '../components/VirtualNumpad';
 import VirtualKeyboard from '../components/VirtualKeyboard';
 import { Category, Customer, Product } from '../types';
+import { useTranslation } from 'react-i18next';
 
 // Mock categories data
 const mockCategories: Category[] = [
@@ -248,6 +249,7 @@ const iconMap = {
 };
 
 const POS: React.FC = () => {
+  const { t } = useTranslation();
   const { cart, addToCart, removeFromCart, updateQuantity, clearCart, selectedCustomer, selectCustomer } = usePOS();
   const { user, logout } = useAuth();
   const { settings } = useSettings();
@@ -348,10 +350,12 @@ const POS: React.FC = () => {
   const [showAutoLogoutWarning, setShowAutoLogoutWarning] = useState(false);
   const [autoLogoutCountdown, setAutoLogoutCountdown] = useState(settings.autoLogout.warningSeconds);
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
-
-  // Auto-logout configuration (from settings)
-  const AUTO_LOGOUT_TIME = settings.autoLogout.timeoutMinutes * 60 * 1000; // Convert minutes to milliseconds
-  const WARNING_TIME = settings.autoLogout.warningSeconds * 1000; // Convert seconds to milliseconds
+  // Helper getters for auto-logout timings (milliseconds)
+  const getAutoLogoutTime = () => settings.autoLogout.timeoutMinutes * 60 * 1000;
+  const getWarningTime = () => settings.autoLogout.warningSeconds * 1000;
+  const [timeUntilAutoLogout, setTimeUntilAutoLogout] = useState(getAutoLogoutTime());
+  const [lastCartActivity, setLastCartActivity] = useState<number>(Date.now());
+  const [cartClearCountdown, setCartClearCountdown] = useState<number>(0);
 
   // Handle focus when Add Customer modal opens
   useEffect(() => {
@@ -375,6 +379,10 @@ const POS: React.FC = () => {
   useEffect(() => {
     const updateActivity = () => {
       setLastActivity(Date.now());
+      setLastCartActivity(Date.now()); // Reset cart activity timer too
+      if (settings.autoLogout.enabled) {
+        setTimeUntilAutoLogout(getAutoLogoutTime());
+      }
       if (showAutoLogoutWarning) {
         setShowAutoLogoutWarning(false);
         setAutoLogoutCountdown(settings.autoLogout.warningSeconds);
@@ -393,7 +401,7 @@ const POS: React.FC = () => {
         document.removeEventListener(event, updateActivity, true);
       });
     };
-  }, [showAutoLogoutWarning]);
+  }, [showAutoLogoutWarning, settings.autoLogout.enabled]);
 
   // Auto-logout timer management
   useEffect(() => {
@@ -405,9 +413,12 @@ const POS: React.FC = () => {
     const checkAutoLogout = () => {
       const now = Date.now();
       const timeSinceLastActivity = now - lastActivity;
+      const autoLogoutTime = getAutoLogoutTime();
+      const warningTime = getWarningTime();
+      setTimeUntilAutoLogout(Math.max(0, autoLogoutTime - timeSinceLastActivity));
 
       // Check if we should show warning
-      if (timeSinceLastActivity >= AUTO_LOGOUT_TIME - WARNING_TIME && !showAutoLogoutWarning) {
+      if (timeSinceLastActivity >= autoLogoutTime - warningTime && !showAutoLogoutWarning) {
         // Check cart protection setting
         const shouldProtect = settings.autoLogout.protectWhenCartHasItems && cart.length > 0;
         if (!shouldProtect) {
@@ -417,7 +428,7 @@ const POS: React.FC = () => {
       }
 
       // Check if we should auto-logout
-      if (timeSinceLastActivity >= AUTO_LOGOUT_TIME) {
+      if (timeSinceLastActivity >= autoLogoutTime) {
         const shouldProtect = settings.autoLogout.protectWhenCartHasItems && cart.length > 0;
         if (!shouldProtect) {
           handleAutoLogout();
@@ -457,6 +468,7 @@ const POS: React.FC = () => {
     setLastActivity(Date.now());
     setShowAutoLogoutWarning(false);
     setAutoLogoutCountdown(settings.autoLogout.warningSeconds);
+    setTimeUntilAutoLogout(getAutoLogoutTime());
   };
 
   // Filter products based on category only
@@ -575,13 +587,18 @@ const POS: React.FC = () => {
   };
 
   const handleCustomerClick = () => {
+    setCustomerSearchTerm(''); // clear previous search
     setShowCustomerModal(true);
+    setNumpadConfig(prev => ({ ...prev, isOpen: false }));
   };
 
   const handleCustomerSelect = (customer: Customer) => {
     selectCustomer(customer);
     setShowCustomerModal(false);
     setCustomerSearchTerm('');
+    // Ensure numpad/keyboard is closed
+    setNumpadConfig(prev => ({ ...prev, isOpen: false }));
+    setKeyboardConfig(prev => ({ ...prev, isOpen: false }));
   };
 
   const handleCustomerRemove = () => {
@@ -715,6 +732,9 @@ const POS: React.FC = () => {
     // Close modals and reset form
     setShowAddCustomerModal(false);
     setShowCustomerModal(false);
+    // Ensure any open numpad/keyboard is closed
+    setNumpadConfig(prev => ({ ...prev, isOpen: false }));
+    setKeyboardConfig(prev => ({ ...prev, isOpen: false }));
     setActiveField('');
     setKeyboardConfig({
       isOpen: false,
@@ -736,12 +756,12 @@ const POS: React.FC = () => {
       country: 'Portugal'
     });
 
-    // Show success message
-    alert(`Customer "${newCustomer.name}" added successfully!`);
+    // Optionally show toast here; currently no alert displayed
   };
 
   const handleCancelAddCustomer = () => {
     setShowAddCustomerModal(false);
+    setNumpadConfig(prev => ({ ...prev, isOpen: false }));
     setActiveField('');
     setKeyboardConfig({
       isOpen: false,
@@ -763,6 +783,41 @@ const POS: React.FC = () => {
       country: 'Portugal'
     });
   };
+
+  // Auto-clear cart timer management
+  useEffect(() => {
+    // Skip auto-clear if disabled or timeout is 0 (NEVER)
+    if (!settings.pos.autoClearCart.enabled || settings.pos.autoClearCart.timeoutMinutes === 0 || cart.length === 0) {
+      setCartClearCountdown(0);
+      return;
+    }
+
+    const checkAutoClearCart = () => {
+      const now = Date.now();
+      const timeSinceLastCartActivity = now - lastCartActivity;
+      const autoClearTime = settings.pos.autoClearCart.timeoutMinutes * 60 * 1000;
+
+      const remainingTime = Math.max(0, autoClearTime - timeSinceLastCartActivity);
+      setCartClearCountdown(remainingTime);
+
+      // Auto-clear cart when time is up
+      if (timeSinceLastCartActivity >= autoClearTime) {
+        clearCart();
+        setLastCartActivity(Date.now()); // Reset timer after clearing
+      }
+    };
+
+    const interval = setInterval(checkAutoClearCart, 1000); // Check every second
+
+    return () => clearInterval(interval);
+  }, [lastCartActivity, cart.length, settings.pos.autoClearCart, clearCart]);
+
+  // Track cart activity when cart is modified
+  useEffect(() => {
+    if (cart.length > 0) {
+      setLastCartActivity(Date.now());
+    }
+  }, [cart]);
 
   return (
     <div className="h-full flex flex-col md:flex-row">
@@ -780,7 +835,7 @@ const POS: React.FC = () => {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                <span>Back to Categories</span>
+                <span>{t('pos.backToCategories')}</span>
               </button>
             )}
 
@@ -877,7 +932,7 @@ const POS: React.FC = () => {
                       {isOutOfStock && (
                         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                           <div className="bg-red-500 text-white px-2 py-1 rounded-lg text-xs font-bold transform -rotate-12">
-                            OUT OF STOCK
+                            {t('pos.outOfStock')}
                           </div>
                         </div>
                       )}
@@ -903,9 +958,9 @@ const POS: React.FC = () => {
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8-8zm1-13h2v6h-2zm0 8h2v2h-2z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-500 mb-2">No products found</h3>
+                <h3 className="text-xl font-semibold text-gray-500 mb-2">{t('pos.noProductsFoundTitle')}</h3>
                 <p className="text-gray-400">
-                  No products match in this category
+                  {t('pos.noProductsFoundMessage')}
                 </p>
               </div>
             )}
@@ -923,7 +978,7 @@ const POS: React.FC = () => {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center space-x-2">
                   <UserCircle className="w-5 h-5 text-blue-600" />
-                  <span className="font-semibold text-blue-800">Customer</span>
+                  <span className="font-semibold text-blue-800">{t('pos.cartCustomerHeader')}</span>
                 </div>
                 <button
                   onClick={handleCustomerRemove}
@@ -933,9 +988,10 @@ const POS: React.FC = () => {
                 </button>
               </div>
               <div className="space-y-1">
-                <p className="font-bold text-gray-800">{selectedCustomer.name}</p>
-                <p className="text-sm text-gray-600">{selectedCustomer.phone}</p>
-                <p className="text-sm text-gray-600">{selectedCustomer.email}</p>
+                {selectedCustomer.name && (
+                  <p className="font-bold text-gray-800">{selectedCustomer.name}</p>
+                )}
+                <p className="text-sm text-gray-600">{selectedCustomer.taxId}</p>
                 {selectedCustomer.discountLevel > 0 && (
                   <p className="text-sm font-semibold text-green-600">
                     {selectedCustomer.discountLevel}% Customer Discount
@@ -949,8 +1005,8 @@ const POS: React.FC = () => {
           {cart.length === 0 ? (
             <div className="text-center py-12">
               <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-xl text-gray-500 mb-2">No items in cart</p>
-              <p className="text-gray-400">Start adding products to begin</p>
+              <p className="text-xl text-gray-500 mb-2">{t('pos.noCartItemsTitle')}</p>
+              <p className="text-gray-400">{t('pos.noCartItemsMessage')}</p>
             </div>
           ) : (
             <div className="space-y-1">
@@ -999,7 +1055,7 @@ const POS: React.FC = () => {
           {/* Discount Section - 25% */}
           <div className="flex-none h-[25%] flex flex-col justify-start space-y-2 mb-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-gray-700">Discount</span>
+              <span className="text-sm font-semibold text-gray-700">{t('pos.discountHeader')}</span>
               <div className="flex space-x-2">
                 <button
                   onClick={() => handleDiscountClick('percentage')}
@@ -1045,27 +1101,27 @@ const POS: React.FC = () => {
           {/* Totals - 35% */}
           <div className="flex-none h-[35%] flex flex-col justify-center space-y-1">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Subtotal:</span>
+              <span className="text-gray-600">{t('pos.subtotalLabel')}</span>
               <span className="text-gray-800 font-semibold">€{subtotal.toFixed(2)}</span>
             </div>
             {discount.type !== 'none' && (
               <div className="flex justify-between text-sm text-purple-600">
-                <span>Discount:</span>
+                <span>{t('pos.discountLabel')}</span>
                 <span className="font-semibold">-€{discountAmount.toFixed(2)}</span>
               </div>
             )}
             {selectedCustomer && selectedCustomer.discountLevel > 0 && (
               <div className="flex justify-between text-sm text-green-600">
-                <span>Customer Discount:</span>
+                <span>{t('pos.customerDiscountLabel')}</span>
                 <span className="font-semibold">-€{customerDiscountAmount.toFixed(2)}</span>
               </div>
             )}
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Tax:</span>
+              <span className="text-gray-600">{t('pos.taxLabel')}</span>
               <span className="text-gray-800 font-semibold">€{tax.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-1">
-              <span>Total:</span>
+              <span>{t('pos.totalLabel')}</span>
               <span className="text-green-600">€{finalTotal.toFixed(2)}</span>
             </div>
           </div>
@@ -1079,7 +1135,7 @@ const POS: React.FC = () => {
                   className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-2 rounded-2xl font-semibold text-base transition-all duration-200 flex items-center justify-center space-x-2 h-12"
                 >
                   <CreditCard className="w-4 h-4" />
-                  <span>Process Payment</span>
+                  <span>{t('pos.processPayment')}</span>
                 </button>
 
                 <div className="grid grid-cols-2 gap-2 h-8">
@@ -1088,13 +1144,13 @@ const POS: React.FC = () => {
                     className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-medium flex items-center justify-center space-x-1"
                   >
                     <User className="w-3 h-3" />
-                    <span className="text-xs">Customer</span>
+                    <span className="text-xs">{t('pos.customer')}</span>
                   </button>
                   <button
                     onClick={clearCart}
                     className="bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-xl font-medium text-xs"
                   >
-                    Clear Cart
+                    {t('pos.clearCart')}
                   </button>
                 </div>
               </>
@@ -1108,10 +1164,11 @@ const POS: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className={`bg-white rounded-3xl p-8 shadow-2xl flex flex-col ${numpadConfig.isOpen ? 'w-[1000px] max-w-6xl' : 'w-[600px] max-w-2xl'} h-[600px]`}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-gray-800">Select Customer</h3>
+              <h3 className="text-2xl font-bold text-gray-800">{t('pos.selectCustomerTitle')}</h3>
               <button
                 onClick={() => {
                   setShowCustomerModal(false);
+                  setCustomerSearchTerm('');
                   setNumpadConfig(prev => ({ ...prev, isOpen: false }));
                 }}
                 className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
@@ -1131,7 +1188,7 @@ const POS: React.FC = () => {
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input
                         type="text"
-                        placeholder="Search by NIF..."
+                        placeholder={t('pos.searchByNif')}
                         value={customerSearchTerm}
                         onChange={(e) => {
                           const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
@@ -1140,7 +1197,7 @@ const POS: React.FC = () => {
                         onClick={() => {
                           setNumpadConfig({
                             isOpen: true,
-                            title: 'Search by NIF',
+                            title: t('pos.searchByNif'),
                             onConfirm: (value: string) => {
                               const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
                               setCustomerSearchTerm(validatedValue);
@@ -1161,7 +1218,7 @@ const POS: React.FC = () => {
                       onClick={() => {
                         setNumpadConfig({
                           isOpen: true,
-                          title: 'Search by NIF',
+                          title: t('pos.searchByNif'),
                           onConfirm: (value: string) => {
                             const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
                             setCustomerSearchTerm(validatedValue);
@@ -1175,7 +1232,7 @@ const POS: React.FC = () => {
                       className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-2xl font-semibold transition-all duration-200 flex items-center space-x-2"
                     >
                       <Search className="w-5 h-5" />
-                      <span>Search</span>
+                      <span>{t('pos.search')}</span>
                     </button>
                   </div>
 
@@ -1188,7 +1245,7 @@ const POS: React.FC = () => {
                       className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center space-x-2"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>Add New</span>
+                      <span>{t('pos.addNew')}</span>
                     </button>
                   </div>
                 </div>
@@ -1215,7 +1272,7 @@ const POS: React.FC = () => {
 
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             <div className="flex items-center space-x-2">
-                              <span className="text-gray-600">Total Orders:</span>
+                              <span className="text-gray-600">{t('pos.totalOrders')}</span>
                               <span className="font-semibold text-gray-800">{customer.totalOrders}</span>
                             </div>
                             {customer.discountLevel > 0 && (
@@ -1229,7 +1286,7 @@ const POS: React.FC = () => {
 
                         <div className="ml-4">
                           <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200">
-                            Select
+                            {t('common.select')}
                           </button>
                         </div>
                       </div>
@@ -1239,8 +1296,8 @@ const POS: React.FC = () => {
                   {filteredCustomers.length === 0 && (
                     <div className="text-center py-12">
                       <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                      <p className="text-xl text-gray-500 mb-2">No customers found</p>
-                      <p className="text-gray-400">Try adjusting your search or add a new customer</p>
+                      <p className="text-xl text-gray-500 mb-2">{t('pos.noCustomersFoundTitle')}</p>
+                      <p className="text-gray-400">{t('pos.noCustomersFoundMessage')}</p>
                     </div>
                   )}
                 </div>
@@ -1256,7 +1313,7 @@ const POS: React.FC = () => {
                       const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
                       setCustomerSearchTerm(validatedValue);
                     }}
-                    title="Search by NIF"
+                    title={t('pos.searchByNif')}
                     initialValue={customerSearchTerm}
                     maxLength={9}
                     allowNumbers={true}
@@ -1511,7 +1568,7 @@ const POS: React.FC = () => {
                   onClick={handleCancelAddCustomer}
                   className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-2 rounded-xl min-h-[36px] transition-colors text-sm"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={handleCustomerFormSubmit}
@@ -1530,7 +1587,7 @@ const POS: React.FC = () => {
       {showPayment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-3xl p-8 w-[480px] max-w-md shadow-2xl">
-            <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">Process Payment</h3>
+            <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t('pos.processPayment')}</h3>
             <div className="space-y-6">
               <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-2xl">
                 <div className="text-4xl font-bold text-center">
@@ -1542,12 +1599,12 @@ const POS: React.FC = () => {
               {cashReceived > 0 && (
                 <div className="space-y-3">
                   <div className="flex justify-between text-lg">
-                    <span className="text-gray-600">Cash Received:</span>
+                    <span className="text-gray-600">{t('pos.cashReceived')}</span>
                     <span className="text-gray-800 font-semibold">€{cashReceived.toFixed(2)}</span>
                   </div>
                   {cashReceived > finalTotal && (
                     <div className="flex justify-between text-xl font-bold text-green-600">
-                      <span>Change Due:</span>
+                      <span>{t('pos.changeDue')}</span>
                       <span>€{(cashReceived - finalTotal).toFixed(2)}</span>
                     </div>
                   )}
@@ -1560,11 +1617,11 @@ const POS: React.FC = () => {
                   className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]"
                 >
                   <Banknote className="w-6 h-6" />
-                  <span>Cash</span>
+                  <span>{t('pos.cash')}</span>
                 </button>
                 <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]">
                   <CreditCard className="w-6 h-6" />
-                  <span>Card</span>
+                  <span>{t('pos.card')}</span>
                 </button>
               </div>
 
@@ -1576,13 +1633,13 @@ const POS: React.FC = () => {
                   }}
                   className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-3 rounded-2xl min-h-[60px]"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 rounded-2xl min-h-[60px]"
                   disabled={cashReceived > 0 && cashReceived < finalTotal}
                 >
-                  Complete Sale
+                  {t('pos.completeSale')}
                 </button>
               </div>
             </div>
@@ -1598,12 +1655,12 @@ const POS: React.FC = () => {
               <div className={`bg-gradient-to-r ${getRoleColor(user?.role || '')} p-4 rounded-full inline-block mb-6`}>
                 <UserCircle className="w-12 h-12 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-4">Confirm Logout</h3>
+              <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.confirmLogoutTitle')}</h3>
               <p className="text-lg text-gray-600 mb-2">
-                Are you sure you want to logout, <strong>{user?.name}</strong>?
+                {t('pos.confirmLogoutQuestion')}, <strong>{user?.name}</strong>?
               </p>
               <p className="text-sm text-gray-500 mb-8">
-                Any unsaved work will be lost.
+                {t('pos.unsavedWork')}
               </p>
 
               <div className="flex space-x-4">
@@ -1611,14 +1668,14 @@ const POS: React.FC = () => {
                   onClick={() => setShowLogoutConfirm(false)}
                   className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={handleLogout}
                   className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
                 >
                   <LogOut className="w-5 h-5" />
-                  <span>Logout</span>
+                  <span>{t('common.logout')}</span>
                 </button>
               </div>
             </div>
@@ -1634,15 +1691,15 @@ const POS: React.FC = () => {
               <div className="bg-gradient-to-r from-yellow-500 to-orange-500 p-4 rounded-full inline-block mb-6">
                 <Clock className="w-12 h-12 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-4">Session Timeout Warning</h3>
+              <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.sessionTimeoutWarning')}</h3>
               <p className="text-lg text-gray-600 mb-2">
-                You will be automatically logged out in:
+                {t('pos.autoLogoutMessage')}
               </p>
               <div className="text-4xl font-bold text-red-600 mb-6">
                 {autoLogoutCountdown}s
               </div>
               <p className="text-sm text-gray-500 mb-8">
-                This is for security purposes. Click "Stay Logged In" to continue your session.
+                {t('pos.securityNotice')}
               </p>
 
               <div className="flex space-x-4">
@@ -1650,14 +1707,14 @@ const POS: React.FC = () => {
                   onClick={handleAutoLogout}
                   className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
                 >
-                  Logout Now
+                  {t('pos.logoutNow')}
                 </button>
                 <button
                   onClick={handleExtendSession}
                   className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
                 >
                   <UserCircle className="w-5 h-5" />
-                  <span>Stay Logged In</span>
+                  <span>{t('pos.stayLoggedIn')}</span>
                 </button>
               </div>
             </div>
@@ -1684,12 +1741,22 @@ const POS: React.FC = () => {
             <p className="text-xs font-medium text-gray-800">{user?.name} • <span className="capitalize text-gray-600">{user?.role}</span></p>
             {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
               <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
-                Sale in Progress
+                {t('pos.saleInProgress')}
               </span>
             )}
           </div>
-          <div className="text-xs text-gray-500">
-            POS Terminal • {new Date().toLocaleDateString('pt-PT')}
+          <div className="flex items-center space-x-3 text-xs text-gray-500">
+            {settings.autoLogout.enabled && (
+              <span>
+                {Math.floor(timeUntilAutoLogout / 60000)}:{String(Math.floor((timeUntilAutoLogout % 60000) / 1000)).padStart(2, '0')}
+              </span>
+            )}
+            {settings.pos.autoClearCart.enabled && settings.pos.autoClearCart.timeoutMinutes > 0 && cart.length > 0 && (
+              <span className="text-orange-600">
+                Cart: {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
+              </span>
+            )}
+            <span>POS Terminal • {new Date().toLocaleDateString('pt-PT')}</span>
           </div>
         </div>
       </div>
