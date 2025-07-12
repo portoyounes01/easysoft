@@ -1,111 +1,68 @@
-import React, { useState } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  Edit, 
-  Trash2, 
-  Shield, 
+import React, { useState, useMemo } from 'react';
+import {
+  Plus,
+  Search,
+  Filter,
+  Edit,
+  Trash2,
+  Shield,
   User,
   Clock,
   DollarSign,
   MoreVertical
 } from 'lucide-react';
+import { useEmployees } from '../contexts/EmployeesContext';
 
 const Employees: React.FC = () => {
+  const { employees, isLoading, error, refreshEmployees } = useEmployees();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('all');
 
-  const mockEmployees = [
-    {
-      id: '1',
-      employeeNumber: 'EMP001',
-      name: 'Admin User',
-      email: 'admin@pos.com',
-      phone: '+351 123 456 789',
-      role: 'admin',
-      hireDate: '2024-01-01',
-      isActive: true,
-      performance: {
-        totalSales: 15420.50,
-        transactionCount: 89,
-        averageTransaction: 173.26,
-        hoursWorked: 160
-      }
-    },
-    {
-      id: '2',
-      employeeNumber: 'EMP002',
-      name: 'Manager Silva',
-      email: 'manager@pos.com',
-      phone: '+351 123 456 788',
-      role: 'manager',
-      hireDate: '2024-02-01',
-      isActive: true,
-      performance: {
-        totalSales: 12350.75,
-        transactionCount: 67,
-        averageTransaction: 184.34,
-        hoursWorked: 152
-      }
-    },
-    {
-      id: '3',
-      employeeNumber: 'EMP003',
-      name: 'Cashier Santos',
-      email: 'cashier@pos.com',
-      phone: '+351 123 456 787',
-      role: 'cashier',
-      hireDate: '2024-03-15',
-      isActive: true,
-      performance: {
-        totalSales: 8950.25,
-        transactionCount: 134,
-        averageTransaction: 66.79,
-        hoursWorked: 140
-      }
-    },
-    {
-      id: '4',
-      employeeNumber: 'EMP004',
-      name: 'Trainee Costa',
-      email: 'trainee@pos.com',
-      phone: '+351 123 456 786',
-      role: 'cashier',
-      hireDate: '2024-04-01',
-      isActive: true,
-      performance: {
-        totalSales: 3200.00,
-        transactionCount: 45,
-        averageTransaction: 71.11,
-        hoursWorked: 80
-      }
-    }
-  ];
+  const roles = ['all', 'admin', 'manager', 'cashier', 'trainee'];
 
-  const roles = ['all', 'admin', 'manager', 'cashier'];
-
-  const filteredEmployees = mockEmployees.filter(employee => {
-    const matchesSearch = employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         employee.employeeNumber.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = selectedRole === 'all' || employee.role === selectedRole;
-    return matchesSearch && matchesRole;
-  });
+  // Memo-compute filtered list to avoid re-render churn
+  const filteredEmployees = useMemo(() => {
+    return employees.filter(emp => {
+      const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.employee_number.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesRole = selectedRole === 'all' || emp.role === selectedRole;
+      return matchesSearch && matchesRole && emp.deleted_at === null;
+    });
+  }, [employees, searchTerm, selectedRole]);
 
   const getRoleBadge = (role: string) => {
-    const colors = {
+    const colors: Record<string, string> = {
       admin: 'bg-red-100 text-red-800',
       manager: 'bg-blue-100 text-blue-800',
-      cashier: 'bg-green-100 text-green-800'
+      cashier: 'bg-green-100 text-green-800',
+      trainee: 'bg-orange-100 text-orange-800',
     };
-    
+
     return (
-      <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${colors[role as keyof typeof colors]}`}>
+      <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${colors[role] || 'bg-gray-100 text-gray-800'}`}>
         <Shield className="w-3 h-3" />
         <span>{role.toUpperCase()}</span>
       </span>
     );
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full p-12">
+        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-12 space-y-4">
+        <p className="text-red-600 font-semibold">{error}</p>
+        <button onClick={refreshEmployees} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Retry</button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -124,10 +81,10 @@ const Employees: React.FC = () => {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
-          { title: 'Total Employees', value: '12', icon: User, color: 'bg-blue-500' },
-          { title: 'Active Today', value: '8', icon: Clock, color: 'bg-green-500' },
-          { title: 'Total Sales (Month)', value: '€40,921', icon: DollarSign, color: 'bg-purple-500' },
-          { title: 'Avg Performance', value: '94%', icon: Shield, color: 'bg-orange-500' }
+          { title: 'Total Employees', value: employees.length.toString(), icon: User, color: 'bg-blue-500' },
+          { title: 'Active', value: employees.filter(e => e.is_active).length.toString(), icon: Clock, color: 'bg-green-500' },
+          { title: 'Roles', value: [...new Set(employees.map(e => e.role))].length.toString(), icon: Shield, color: 'bg-purple-500' },
+          { title: 'Deleted', value: employees.filter(e => e.deleted_at !== null).length.toString(), icon: Trash2, color: 'bg-red-500' }
         ].map((stat, index) => {
           const Icon = stat.icon;
           return (
@@ -160,7 +117,7 @@ const Employees: React.FC = () => {
                 className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
               />
             </div>
-            
+
             <select
               value={selectedRole}
               onChange={(e) => setSelectedRole(e.target.value)}
@@ -196,7 +153,7 @@ const Employees: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-800">{employee.name}</h3>
-                  <p className="text-sm text-gray-600">{employee.employeeNumber}</p>
+                  <p className="text-sm text-gray-600">{employee.employee_number}</p>
                   <p className="text-sm text-gray-500">{employee.email}</p>
                 </div>
               </div>
@@ -214,32 +171,32 @@ const Employees: React.FC = () => {
                   <DollarSign className="w-4 h-4 text-green-600" />
                   <span className="text-sm font-medium text-green-800">Total Sales</span>
                 </div>
-                <p className="text-lg font-bold text-green-700">€{employee.performance.totalSales.toFixed(2)}</p>
+                <p className="text-lg font-bold text-green-700">€{employee.total_sales.toFixed(2)}</p>
               </div>
-              
+
               <div className="bg-blue-50 p-3 rounded-lg">
                 <div className="flex items-center space-x-2 mb-1">
                   <Clock className="w-4 h-4 text-blue-600" />
                   <span className="text-sm font-medium text-blue-800">Hours Worked</span>
                 </div>
-                <p className="text-lg font-bold text-blue-700">{employee.performance.hoursWorked}h</p>
+                <p className="text-lg font-bold text-blue-700">{employee.hours_worked}h</p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <p className="text-sm text-gray-600">Transactions</p>
-                <p className="font-semibold text-gray-800">{employee.performance.transactionCount}</p>
+                <p className="font-semibold text-gray-800">{employee.transaction_count}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Avg Transaction</p>
-                <p className="font-semibold text-gray-800">€{employee.performance.averageTransaction.toFixed(2)}</p>
+                <p className="font-semibold text-gray-800">€{employee.average_transaction.toFixed(2)}</p>
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t border-gray-200">
               <span className="text-sm text-gray-500">
-                Hire Date: {new Date(employee.hireDate).toLocaleDateString('pt-PT')}
+                Hire Date: {new Date(employee.hire_date).toLocaleDateString('pt-PT')}
               </span>
               <div className="flex items-center space-x-2">
                 <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">

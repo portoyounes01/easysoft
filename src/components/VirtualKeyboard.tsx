@@ -190,12 +190,8 @@ const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
                         >
                             ABCD
                         </button>
-                        <button
-                            onClick={handleClear}
-                            className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-lg"
-                        >
-                            Clear
-                        </button>
+                        {/* Empty middle slot where Clear button was */}
+                        <div></div>
                         <button
                             onClick={handleDelete}
                             className="bg-red-500 hover:bg-red-600 text-white font-bold py-4 rounded-2xl transition-colors min-h-[60px] flex items-center justify-center"
@@ -361,12 +357,8 @@ const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
                         >
                             {isSpecialCharsMode ? 'ABC' : '@#$'}
                         </button>
-                        <button
-                            onClick={handleClear}
-                            className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 rounded-xl transition-colors min-h-[50px] text-sm col-span-2"
-                        >
-                            Clear
-                        </button>
+                        {/* Empty space where Clear button was */}
+                        <div className="col-span-2"></div>
                         <button
                             onClick={handleDelete}
                             className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-colors min-h-[50px] flex items-center justify-center"

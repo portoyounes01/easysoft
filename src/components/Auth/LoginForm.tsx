@@ -1,30 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, LogIn, User, Settings, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Employee } from '../../types';
+import { useEmployees } from '../../contexts/EmployeesContext';
+import { Employee } from '../../types/supabase';
 import VirtualKeyboard from '../VirtualKeyboard';
 
-// Sample employees for the dropdown
-const sampleEmployees: Pick<Employee, 'employeeNumber' | 'name' | 'role'>[] = [
-  { employeeNumber: 'EMP001', name: 'John Smith', role: 'admin' },
-  { employeeNumber: 'EMP002', name: 'Sarah Johnson', role: 'manager' },
-  { employeeNumber: 'EMP003', name: 'Mike Davis', role: 'cashier' },
-  { employeeNumber: 'EMP004', name: 'Emily Brown', role: 'cashier' },
-  { employeeNumber: 'EMP005', name: 'David Wilson', role: 'cashier' },
-];
-
-// Employees for individual cards (excluding admin and manager for now)
-const cardEmployees: Pick<Employee, 'employeeNumber' | 'name' | 'role'>[] = [
-  { employeeNumber: 'EMP003', name: 'Mike Davis', role: 'cashier' },
-  { employeeNumber: 'EMP004', name: 'Emily Brown', role: 'cashier' },
-  { employeeNumber: 'EMP005', name: 'David Wilson', role: 'cashier' },
-];
-
-// Admin/Manager employees for admin mode
-const adminEmployees: Pick<Employee, 'employeeNumber' | 'name' | 'role'>[] = [
-  { employeeNumber: 'EMP001', name: 'John Smith', role: 'admin' },
-  { employeeNumber: 'EMP002', name: 'Sarah Johnson', role: 'manager' },
-];
+// Employee display interface for the UI
+interface EmployeeDisplay {
+  employeeNumber: string;
+  name: string;
+  role: string;
+}
 
 // Get role color for visual distinction
 const getRoleColor = (role: string) => {
@@ -38,19 +24,51 @@ const getRoleColor = (role: string) => {
 
 const LoginForm: React.FC = () => {
   const [isAdminMode, setIsAdminMode] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<Pick<Employee, 'employeeNumber' | 'name' | 'role'> | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeDisplay | null>(null);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [showKeyboard, setShowKeyboard] = useState(true);
+  const [employeeList, setEmployeeList] = useState<EmployeeDisplay[]>([]);
+
   const { login, isLoading } = useAuth();
+  const employeesContext = useEmployees();
 
-  const currentEmployees = isAdminMode ? adminEmployees : cardEmployees;
+  // Load employees when component mounts or employees data changes
+  useEffect(() => {
+    const loadEmployees = () => {
+      if (employeesContext.employees.length > 0) {
+        // Convert database employees to display format
+        const displayEmployees: EmployeeDisplay[] = employeesContext.employees
+          .filter(emp => emp.is_active && !emp.deleted_at) // Only active, non-deleted employees
+          .map(emp => ({
+            employeeNumber: emp.employee_number,
+            name: emp.name,
+            role: emp.role
+          }));
 
-  const handleEmployeeSelect = (employee: Pick<Employee, 'employeeNumber' | 'name' | 'role'>) => {
+        setEmployeeList(displayEmployees);
+      }
+    };
+
+    loadEmployees();
+  }, [employeesContext.employees]);
+
+  // Filter employees based on admin mode
+  const currentEmployees = employeeList.filter(emp => {
+    if (isAdminMode) {
+      return emp.role === 'admin' || emp.role === 'manager';
+    } else {
+      return emp.role === 'cashier' || emp.role === 'trainee';
+    }
+  });
+
+  const handleEmployeeSelect = (employee: EmployeeDisplay) => {
     setSelectedEmployee(employee);
     setError('');
     setPassword('');
+    // Show keyboard for both admin and employees
+    setShowKeyboard(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,13 +76,15 @@ const LoginForm: React.FC = () => {
     setError('');
 
     if (!selectedEmployee || !password) {
-      setError('Please select an employee and enter password');
+      const authType = selectedEmployee?.role === 'admin' ? 'password' : 'PIN';
+      setError(`Please select an employee and enter ${authType}`);
       return;
     }
 
     const success = await login(selectedEmployee.employeeNumber, password);
     if (!success) {
-      setError('Invalid employee or password');
+      const authType = selectedEmployee.role === 'admin' ? 'password' : 'PIN';
+      setError(`Invalid employee or ${authType}`);
     }
   };
 
@@ -73,19 +93,42 @@ const LoginForm: React.FC = () => {
     setPassword('');
     setError('');
     setShowPassword(false);
+    setShowKeyboard(true);
   };
 
-  const handleKeyPress = (key: string) => {
-    setPassword(prev => prev + key);
-  };
+  // Show loading state while employees are being loaded
+  if (employeesContext.isLoading && employeeList.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-slate-900 flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+          <h1 className="text-4xl font-bold text-white mb-2">Loading Employees...</h1>
+          <p className="text-xl text-blue-100">Please wait while we load the employee database</p>
+        </div>
+      </div>
+    );
+  }
 
-  const handleBackspace = () => {
-    setPassword(prev => prev.slice(0, -1));
-  };
-
-  const handleClear = () => {
-    setPassword('');
-  };
+  // Show error state if there's an error loading employees
+  if (employeesContext.error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-slate-900 flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="bg-red-500 p-4 rounded-full mb-6 mx-auto w-16 h-16 flex items-center justify-center">
+            <span className="text-white text-2xl">!</span>
+          </div>
+          <h1 className="text-4xl font-bold text-white mb-2">Unable to Load Employees</h1>
+          <p className="text-xl text-blue-100 mb-4">{employeesContext.error}</p>
+          <button
+            onClick={() => employeesContext.refreshEmployees()}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-slate-900 flex items-center justify-center p-6 relative">
@@ -98,8 +141,8 @@ const LoginForm: React.FC = () => {
           setError('');
         }}
         className={`fixed top-6 right-6 z-10 px-6 py-4 rounded-xl font-semibold text-lg transition-all duration-200 flex items-center space-x-3 shadow-lg min-h-[60px] ${isAdminMode
-            ? 'bg-orange-500 hover:bg-orange-600 text-white'
-            : 'bg-white hover:bg-gray-50 text-gray-700'
+          ? 'bg-orange-500 hover:bg-orange-600 text-white'
+          : 'bg-white hover:bg-gray-50 text-gray-700'
           }`}
         title={isAdminMode ? 'Switch to Employee Mode' : 'Switch to Admin Mode'}
       >
@@ -121,6 +164,14 @@ const LoginForm: React.FC = () => {
         {isAdminMode ? '🛠️ Admin Mode' : '👥 Employee Mode'}
       </div>
 
+      {/* Sync Status Indicator */}
+      {employeesContext.syncStatus && (
+        <div className="fixed bottom-6 left-6 z-10 px-4 py-2 rounded-lg text-sm font-medium bg-white/20 text-white backdrop-blur-sm">
+          {employeesContext.syncStatus.isOnline ? '🟢 Online' : '🔴 Offline'}
+          {employeesContext.syncStatus.isSyncing && ' - Syncing...'}
+        </div>
+      )}
+
       <div className="w-full max-w-7xl">
         {!selectedEmployee ? (
           // Employee Selection Screen
@@ -128,11 +179,16 @@ const LoginForm: React.FC = () => {
             <div className="mb-12">
               <h1 className="text-6xl font-bold text-white mb-4">Select Employee</h1>
               <p className="text-2xl text-blue-100">Touch your name to continue</p>
+              {currentEmployees.length === 0 && (
+                <p className="text-xl text-orange-200 mt-4">
+                  No {isAdminMode ? 'admin/manager' : 'cashier/trainee'} employees found
+                </p>
+              )}
             </div>
 
             <div className={`grid gap-8 ${currentEmployees.length === 2
-                ? 'grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto'
-                : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+              ? 'grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto'
+              : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
               }`}>
               {currentEmployees.map((employee) => (
                 <button
@@ -164,11 +220,11 @@ const LoginForm: React.FC = () => {
                 <p className="text-2xl text-gray-600 capitalize">{selectedEmployee.role}</p>
               </div>
 
-              {/* Password Form */}
+              {/* Password/PIN Form */}
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <label className="block text-2xl font-semibold text-gray-700 mb-4">
-                    Enter Password
+                    {selectedEmployee?.role === 'admin' ? 'Enter Password' : 'Enter PIN'}
                   </label>
                   <div className="relative">
                     <input
@@ -176,16 +232,19 @@ const LoginForm: React.FC = () => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full px-8 py-6 text-2xl bg-gray-50 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="Enter your password"
+                      placeholder={selectedEmployee?.role === 'admin' ? 'Enter your password' : 'Enter your PIN'}
                       disabled={isLoading}
+                      readOnly
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-2"
-                    >
-                      {showPassword ? <EyeOff className="w-8 h-8" /> : <Eye className="w-8 h-8" />}
-                    </button>
+                    {selectedEmployee?.role === 'admin' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-2"
+                      >
+                        {showPassword ? <EyeOff className="w-8 h-8" /> : <Eye className="w-8 h-8" />}
+                      </button>
+                    )}
                   </div>
 
                   {/* Keyboard Toggle */}
@@ -199,17 +258,22 @@ const LoginForm: React.FC = () => {
                     </button>
 
                     <div className="text-sm text-gray-500">
-                      Demo Password: <span className="font-mono bg-gray-100 px-2 py-1 rounded">password</span>
+                      Demo {selectedEmployee?.role === 'admin' ? 'Password' : 'PIN'}: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{selectedEmployee?.role === 'admin' ? 'password' : '1234'}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Virtual Keyboard */}
+                {/* Virtual Keyboard for Admin and Employees */}
                 {showKeyboard && (
                   <VirtualKeyboard
-                    onKeyPress={handleKeyPress}
-                    onBackspace={handleBackspace}
-                    onClear={handleClear}
+                    isOpen={true}
+                    onClose={() => setShowKeyboard(false)}
+                    onConfirm={(value: string) => setPassword(value)}
+                    title=""
+                    initialValue={password}
+                    maxLength={selectedEmployee?.role === 'admin' ? 50 : 6}
+                    allowNumbers={true}
+                    allowLetters={selectedEmployee?.role === 'admin'}
                   />
                 )}
 

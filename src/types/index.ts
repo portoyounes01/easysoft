@@ -1,28 +1,4 @@
-export interface Employee {
-  id: string;
-  employeeNumber: string;
-  name: string;
-  role: 'admin' | 'manager' | 'cashier';
-  email: string;
-  phone: string;
-  isActive: boolean;
-  hireDate: string;
-  accessLevels: string[];
-  performance: {
-    totalSales: number;
-    transactionCount: number;
-    averageTransaction: number;
-  };
-  loginHistory: LoginRecord[];
-}
-
-export interface LoginRecord {
-  id: string;
-  employeeId: string;
-  loginTime: string;
-  logoutTime?: string;
-  registerAccess: boolean;
-}
+// Legacy Employee interfaces removed – use types from src/types/supabase.ts instead.
 
 export interface Product {
   id: string;

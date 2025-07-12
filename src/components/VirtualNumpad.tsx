@@ -41,10 +41,6 @@ const VirtualNumpad: React.FC<VirtualNumpadProps> = ({
         setValue(prev => prev.slice(0, -1));
     };
 
-    const handleClear = () => {
-        setValue('');
-    };
-
     const handleConfirm = () => {
         if (value.trim() !== '') {
             onConfirm(value);
@@ -164,12 +160,6 @@ const VirtualNumpad: React.FC<VirtualNumpadProps> = ({
 
                 {/* Action Buttons */}
                 <div className="flex space-x-4">
-                    <button
-                        onClick={handleClear}
-                        className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors"
-                    >
-                        Clear
-                    </button>
                     <button
                         onClick={onClose}
                         className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"

@@ -80,7 +80,7 @@ const Header: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-gray-800">{user?.name}</p>
-                    <p className="text-xs text-gray-500">{user?.employeeNumber}</p>
+                    <p className="text-xs text-gray-500">{user?.employee_number}</p>
                   </div>
                 </button>
 

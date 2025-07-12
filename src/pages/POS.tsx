@@ -332,6 +332,7 @@ const POS: React.FC = () => {
     onConfirm: (value: string) => { },
     prefix: '',
     suffix: '',
+    placeholder: '0.00',
     allowDecimal: true,
     maxLength: 10
   });
@@ -538,6 +539,7 @@ const POS: React.FC = () => {
       },
       prefix: type === 'fixed' ? '€' : '',
       suffix: type === 'percentage' ? '%' : '',
+      placeholder: type === 'percentage' ? '%0.00' : '€0.00',
       allowDecimal: true,
       maxLength: 8
     });
@@ -555,6 +557,7 @@ const POS: React.FC = () => {
       },
       prefix: '€',
       suffix: '',
+      placeholder: '€0.00',
       allowDecimal: true,
       maxLength: 10
     });
@@ -1017,21 +1020,19 @@ const POS: React.FC = () => {
                   </div>
 
                   <div className="flex items-center space-x-2 ml-2">
-                    <span className="text-xs text-gray-500">€{item.product.price.toFixed(2)}</span>
-
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-2">
                       <button
                         onClick={() => handleUpdateQuantity(item.product.id, item.quantity - 1)}
-                        className="bg-gray-200 hover:bg-gray-300 p-1 rounded transition-colors min-h-[24px] min-w-[24px] flex items-center justify-center"
+                        className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white p-2 rounded-xl transition-all duration-200 min-h-[20px] min-w-[20px] flex items-center justify-center shadow-lg hover:shadow-xl"
                       >
-                        <Minus className="w-2 h-2" />
+                        <Minus className="w-4 h-4" />
                       </button>
-                      <span className="text-sm font-semibold text-gray-800 min-w-[24px] text-center">{item.quantity}</span>
+                      <span className="text-sm font-semibold text-gray-800 min-w-[20px] text-center">{item.quantity}</span>
                       <button
                         onClick={() => handleUpdateQuantity(item.product.id, item.quantity + 1)}
-                        className="bg-gray-200 hover:bg-gray-300 p-1 rounded transition-colors min-h-[24px] min-w-[24px] flex items-center justify-center"
+                        className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white p-2 rounded-xl transition-all duration-200 min-h-[20px] min-w-[20px] flex items-center justify-center shadow-lg hover:shadow-xl"
                       >
-                        <Plus className="w-2 h-2" />
+                        <Plus className="w-4 h-4" />
                       </button>
                     </div>
 
@@ -1054,22 +1055,19 @@ const POS: React.FC = () => {
         <div className="h-1/2 p-4 bg-white flex flex-col">
           {/* Discount Section - 25% */}
           <div className="flex-none h-[25%] flex flex-col justify-start space-y-2 mb-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-gray-700">{t('pos.discountHeader')}</span>
-              <div className="flex space-x-2">
+            <div className="flex items-center justify-end">
+              <div className="flex space-x-2 w-full">
                 <button
                   onClick={() => handleDiscountClick('percentage')}
-                  className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white p-2 rounded-xl transition-colors flex items-center space-x-1"
+                  className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-3 py-2 rounded-xl transition-colors flex items-center justify-center flex-1 min-w-0"
                 >
-                  <Percent className="w-3 h-3" />
-                  <span className="text-xs">%</span>
+                  <span className="text-sm font-medium truncate">{t('pos.discountPercentage')}</span>
                 </button>
                 <button
                   onClick={() => handleDiscountClick('fixed')}
-                  className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white p-2 rounded-xl transition-colors flex items-center space-x-1"
+                  className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-3 py-2 rounded-xl transition-colors flex items-center justify-center flex-1 min-w-0"
                 >
-                  <Calculator className="w-3 h-3" />
-                  <span className="text-xs">€</span>
+                  <span className="text-sm font-medium truncate">{t('pos.discountFixed')}</span>
                 </button>
               </div>
             </div>
@@ -1204,6 +1202,7 @@ const POS: React.FC = () => {
                             },
                             prefix: '',
                             suffix: '',
+                            placeholder: '123456789',
                             allowDecimal: false,
                             maxLength: 9
                           });
@@ -1225,6 +1224,7 @@ const POS: React.FC = () => {
                           },
                           prefix: '',
                           suffix: '',
+                          placeholder: '123456789',
                           allowDecimal: false,
                           maxLength: 9
                         });
@@ -1466,82 +1466,62 @@ const POS: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Address Information Section */}
+                  {/* Location Information Section */}
                   <div>
-                    <div className="grid grid-cols-1 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Address
+                          City
                         </label>
                         <input
                           type="text"
-                          value={newCustomerForm.address}
-                          onChange={(e) => handleCustomerFormChange('address', e.target.value)}
-                          onClick={() => handleTextFieldClick('address', true, true, 100)}
-                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'address'
+                          value={newCustomerForm.city}
+                          onChange={(e) => handleCustomerFormChange('city', e.target.value)}
+                          onClick={() => handleTextFieldClick('city', false, true, 30)}
+                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'city'
                             ? 'border-blue-500 bg-blue-50'
                             : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
                             }`}
-                          placeholder="Street address"
+                          placeholder="Lisbon"
                           readOnly
                         />
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            City
-                          </label>
-                          <input
-                            type="text"
-                            value={newCustomerForm.city}
-                            onChange={(e) => handleCustomerFormChange('city', e.target.value)}
-                            onClick={() => handleTextFieldClick('city', false, true, 50)}
-                            className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'city'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                              }`}
-                            placeholder="City"
-                            readOnly
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Postal Code
-                          </label>
-                          <input
-                            type="text"
-                            value={newCustomerForm.postalCode}
-                            onChange={(e) => handleCustomerFormChange('postalCode', e.target.value)}
-                            onClick={() => handleTextFieldClick('postalCode', true, false, 10)}
-                            className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'postalCode'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                              }`}
-                            placeholder="1000-001"
-                            readOnly
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Country
-                          </label>
-                          <select
-                            value={newCustomerForm.country}
-                            onChange={(e) => handleCustomerFormChange('country', e.target.value)}
-                            className="w-full px-2 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent text-sm"
-                          >
-                            <option value="Portugal">Portugal</option>
-                            <option value="Spain">Spain</option>
-                            <option value="France">France</option>
-                            <option value="Germany">Germany</option>
-                            <option value="United Kingdom">United Kingdom</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Postal Code
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomerForm.postalCode}
+                          onChange={(e) => handleCustomerFormChange('postalCode', e.target.value)}
+                          onClick={() => handleTextFieldClick('postalCode', true, false, 10)}
+                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'postalCode'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                            }`}
+                          placeholder="1000-001"
+                          readOnly
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Country
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomerForm.country}
+                          onChange={(e) => handleCustomerFormChange('country', e.target.value)}
+                          onClick={() => handleTextFieldClick('country', false, true, 30)}
+                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'country'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                            }`}
+                          placeholder="Portugal"
+                          readOnly
+                        />
                       </div>
                     </div>
                   </div>
-
 
                 </div>
               </div>
@@ -1730,6 +1710,7 @@ const POS: React.FC = () => {
         title={numpadConfig.title}
         prefix={numpadConfig.prefix}
         suffix={numpadConfig.suffix}
+        placeholder={numpadConfig.placeholder}
         allowDecimal={numpadConfig.allowDecimal}
         maxLength={numpadConfig.maxLength}
       />

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { Employee } from '../types';
+import { Employee } from '../types/supabase';
+import { useEmployees } from './EmployeesContext';
 
 interface AuthState {
   user: Employee | null;
@@ -39,60 +40,14 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
   }
 };
 
-// Mock employee data
-const mockEmployees: Employee[] = [
-  {
-    id: '1',
-    employeeNumber: 'EMP001',
-    name: 'Admin User',
-    role: 'admin',
-    email: 'admin@pos.com',
-    phone: '+351 123 456 789',
-    isActive: true,
-    hireDate: '2024-01-01',
-    accessLevels: ['all'],
-    performance: {
-      totalSales: 15420.50,
-      transactionCount: 89,
-      averageTransaction: 173.26
-    },
-    loginHistory: []
-  },
-  {
-    id: '2',
-    employeeNumber: 'EMP002',
-    name: 'Manager Silva',
-    role: 'manager',
-    email: 'manager@pos.com',
-    phone: '+351 123 456 788',
-    isActive: true,
-    hireDate: '2024-02-01',
-    accessLevels: ['sales', 'inventory', 'reports', 'dashboard', 'employees', 'settings'],
-    performance: {
-      totalSales: 12350.75,
-      transactionCount: 67,
-      averageTransaction: 184.34
-    },
-    loginHistory: []
-  },
-  {
-    id: '3',
-    employeeNumber: 'EMP003',
-    name: 'Mike Davis',
-    role: 'cashier',
-    email: 'mike.davis@pos.com',
-    phone: '+351 123 456 787',
-    isActive: true,
-    hireDate: '2024-03-01',
-    accessLevels: ['sales'],
-    performance: {
-      totalSales: 8750.25,
-      transactionCount: 52,
-      averageTransaction: 168.27
-    },
-    loginHistory: []
-  }
-];
+// Hash password function (matching the one in employeeService)
+const hashPassword = async (password: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, {
@@ -101,19 +56,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isLoading: true
   });
 
+  // Access the employees context
+  const employeesContext = useEmployees();
+
   const login = async (employeeNumber: string, password: string): Promise<boolean> => {
     dispatch({ type: 'LOGIN_START' });
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      // Wait for employees to be loaded
+      if (employeesContext.isLoading) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
 
-    const employee = mockEmployees.find(emp => emp.employeeNumber === employeeNumber);
+      // Find the employee by employee number
+      const employee = employeesContext.employees.find(emp => emp.employee_number === employeeNumber);
 
-    if (employee && password === 'password') {
-      dispatch({ type: 'LOGIN_SUCCESS', payload: employee });
-      localStorage.setItem('pos_user', JSON.stringify(employee));
-      return true;
-    } else {
+      if (!employee) {
+        dispatch({ type: 'LOGIN_FAILURE' });
+        return false;
+      }
+
+      // Check if employee is active
+      if (!employee.is_active) {
+        dispatch({ type: 'LOGIN_FAILURE' });
+        return false;
+      }
+
+      let isValidCredentials = false;
+
+      // Admin uses password, employees use PIN
+      if (employee.role === 'admin') {
+        // Hash the provided password and compare with stored hash
+        const hashedPassword = await hashPassword(password);
+        isValidCredentials = hashedPassword === employee.password_hash;
+      } else {
+        // Employees (cashier, manager) use PIN
+        isValidCredentials = password === employee.pin;
+      }
+
+      if (isValidCredentials) {
+        dispatch({ type: 'LOGIN_SUCCESS', payload: employee });
+        localStorage.setItem('pos_user', JSON.stringify(employee));
+        return true;
+      }
+
+      dispatch({ type: 'LOGIN_FAILURE' });
+      return false;
+    } catch (error) {
+      console.error('Login error:', error);
       dispatch({ type: 'LOGIN_FAILURE' });
       return false;
     }
@@ -127,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hasPermission = (permission: string): boolean => {
     if (!state.user) return false;
     if (state.user.role === 'admin') return true;
-    return state.user.accessLevels.includes(permission) || state.user.accessLevels.includes('all');
+    return state.user.access_levels.includes(permission) || state.user.access_levels.includes('all');
   };
 
   useEffect(() => {
