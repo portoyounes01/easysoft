@@ -88,7 +88,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (employee.role === 'admin') {
         // Hash the provided password and compare with stored hash
         const hashedPassword = await hashPassword(password);
-        isValidCredentials = hashedPassword === employee.password_hash;
+        // Temporary fix for demo: if stored hash is the dummy hash, use the correct SHA-256 hash
+        const correctPasswordHash = '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8';
+
+        if (employee.password_hash === '$2b$10$dummy_hash_for_password') {
+          // Demo admin - compare with correct SHA-256 hash
+          isValidCredentials = hashedPassword === correctPasswordHash;
+        } else {
+          // Production - use stored hash
+          isValidCredentials = hashedPassword === employee.password_hash;
+        }
       } else {
         // Employees (cashier, manager) use PIN
         isValidCredentials = password === employee.pin;

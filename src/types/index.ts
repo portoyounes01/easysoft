@@ -1,31 +1,20 @@
-// Legacy Employee interfaces removed – use types from src/types/supabase.ts instead.
+// Legacy interfaces – use types from src/types/supabase.ts instead for employees, products, and categories.
 
-export interface Product {
-  id: string;
-  name: string;
-  description: string;
-  sku: string;
-  barcode?: string;
-  category: string;
-  price: number;
-  cost: number;
-  stock: number;
-  minStock: number;
-  imageUrl?: string;
-  isActive: boolean;
-  taxRate: number;
-  supplier?: string;
-  location?: string;
-}
-
-export interface Category {
-  id: string;
-  name: string;
-  description: string;
-  parentId?: string;
-  color: string;
-  icon: string;
-}
+// Re-export commonly used types from supabase.ts for backward compatibility
+export type {
+  Product,
+  Category,
+  ProductRow,
+  CategoryRow,
+  LocalProduct,
+  LocalCategory,
+  ProductFormData,
+  CategoryFormData,
+  ProductFilters,
+  CategoryFilters,
+  IVA_RATES,
+  IVARate
+} from './supabase';
 
 export interface Customer {
   id: string;

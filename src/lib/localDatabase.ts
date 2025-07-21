@@ -1,11 +1,24 @@
 import Dexie, { Table } from 'dexie';
-import { LocalEmployee, PendingEmployeeOperation, SyncMetadata } from '../types/supabase';
+import { generateUUID } from '../utils/uuid';
+import {
+    LocalEmployee,
+    LocalCategory,
+    LocalProduct,
+    PendingEmployeeOperation,
+    PendingCategoryOperation,
+    PendingProductOperation,
+    SyncMetadata
+} from '../types/supabase';
 
-// Local database schema for offline-first employee management
+// Local database schema for offline-first POS management
 export class LocalPOSDatabase extends Dexie {
     // Tables
     employees!: Table<LocalEmployee>;
-    syncQueue!: Table<PendingEmployeeOperation>;
+    categories!: Table<LocalCategory>;
+    products!: Table<LocalProduct>;
+    employeeSyncQueue!: Table<PendingEmployeeOperation>;
+    categorySyncQueue!: Table<PendingCategoryOperation>;
+    productSyncQueue!: Table<PendingProductOperation>;
     syncMetadata!: Table<SyncMetadata & { id: string }>;
 
     constructor() {
@@ -13,8 +26,12 @@ export class LocalPOSDatabase extends Dexie {
 
         this.version(1).stores({
             employees: 'id, employee_number, name, role, is_active, updated_at, needs_push, deleted_at',
-            syncQueue: 'id, type, employeeId, timestamp, retryCount',
-            syncMetadata: 'id' // Only one record with id='employees'
+            categories: 'id, name, is_active, display_order, updated_at, needs_push, deleted_at',
+            products: 'id, sku, name, category_id, is_active, stock, updated_at, needs_push, deleted_at',
+            employeeSyncQueue: 'id, type, employeeId, timestamp, retryCount',
+            categorySyncQueue: 'id, type, categoryId, timestamp, retryCount',
+            productSyncQueue: 'id, type, productId, timestamp, retryCount',
+            syncMetadata: 'id' // Records: 'employees', 'categories', 'products'
         });
 
         // Add hooks for auto-updating sync flags
@@ -37,6 +54,48 @@ export class LocalPOSDatabase extends Dexie {
                 deleted_at: new Date(),
                 needs_push: true,
             }).then(() => false); // Return false to prevent actual deletion
+        });
+
+        // Categories hooks
+        this.categories.hook('creating', (primKey, obj, trans) => {
+            obj.created_at = new Date();
+            obj.updated_at = new Date();
+            obj.needs_push = true;
+            obj.is_conflicted = false;
+            obj.last_synced_at = null;
+        });
+
+        this.categories.hook('updating', (modifications, primKey, obj, trans) => {
+            (modifications as any).updated_at = new Date();
+            (modifications as any).needs_push = true;
+        });
+
+        this.categories.hook('deleting', (primKey, obj, trans) => {
+            return this.categories.update(primKey, {
+                deleted_at: new Date(),
+                needs_push: true,
+            }).then(() => false);
+        });
+
+        // Products hooks
+        this.products.hook('creating', (primKey, obj, trans) => {
+            obj.created_at = new Date();
+            obj.updated_at = new Date();
+            obj.needs_push = true;
+            obj.is_conflicted = false;
+            obj.last_synced_at = null;
+        });
+
+        this.products.hook('updating', (modifications, primKey, obj, trans) => {
+            (modifications as any).updated_at = new Date();
+            (modifications as any).needs_push = true;
+        });
+
+        this.products.hook('deleting', (primKey, obj, trans) => {
+            return this.products.update(primKey, {
+                deleted_at: new Date(),
+                needs_push: true,
+            }).then(() => false);
         });
     }
 }
@@ -84,7 +143,7 @@ export class EmployeeLocalService {
 
     // Create new employee
     async createEmployee(employeeData: Omit<LocalEmployee, 'id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'>): Promise<string> {
-        const id = crypto.randomUUID();
+        const id = generateUUID();
         const employee: LocalEmployee = {
             ...employeeData,
             id,
@@ -95,7 +154,7 @@ export class EmployeeLocalService {
             last_synced_at: null,
         };
 
-        await localDb.transaction('rw', [localDb.employees, localDb.syncQueue], async () => {
+        await localDb.transaction('rw', [localDb.employees, localDb.employeeSyncQueue], async () => {
             await localDb.employees.add(employee);
             await this.queueOperation('CREATE', id, employee);
         });
@@ -111,7 +170,7 @@ export class EmployeeLocalService {
             needs_push: true,
         };
 
-        await localDb.transaction('rw', [localDb.employees, localDb.syncQueue], async () => {
+        await localDb.transaction('rw', [localDb.employees, localDb.employeeSyncQueue], async () => {
             await localDb.employees.update(id, updateData);
             await this.queueOperation('UPDATE', id, updateData);
         });
@@ -119,7 +178,7 @@ export class EmployeeLocalService {
 
     // Soft delete employee
     async deleteEmployee(id: string): Promise<void> {
-        await localDb.transaction('rw', [localDb.employees, localDb.syncQueue], async () => {
+        await localDb.transaction('rw', [localDb.employees, localDb.employeeSyncQueue], async () => {
             await localDb.employees.update(id, {
                 deleted_at: new Date(),
                 is_active: false,
@@ -157,7 +216,7 @@ export class EmployeeLocalService {
         data: any
     ): Promise<void> {
         const operation: PendingEmployeeOperation = {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             type,
             employeeId,
             data,
@@ -165,19 +224,19 @@ export class EmployeeLocalService {
             retryCount: 0,
         };
 
-        await localDb.syncQueue.add(operation);
+        await localDb.employeeSyncQueue.add(operation);
         await this.updateSyncMetadata({ pendingOperations: 1 }); // Increment counter
     }
 
     // Get pending sync operations
     async getPendingSyncOperations(): Promise<PendingEmployeeOperation[]> {
-        return await localDb.syncQueue.orderBy('timestamp').toArray();
+        return await localDb.employeeSyncQueue.orderBy('timestamp').toArray();
     }
 
     // Clear sync operation after successful sync
     async clearSyncOperation(operationId: string): Promise<void> {
-        await localDb.transaction('rw', [localDb.syncQueue, localDb.syncMetadata], async () => {
-            await localDb.syncQueue.delete(operationId);
+        await localDb.transaction('rw', [localDb.employeeSyncQueue, localDb.syncMetadata], async () => {
+            await localDb.employeeSyncQueue.delete(operationId);
             await this.updateSyncMetadata({ pendingOperations: -1 }); // Decrement counter
         });
     }

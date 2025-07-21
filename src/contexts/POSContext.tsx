@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useReducer } from 'react';
 import { Product, Transaction, Customer, CashDrawer } from '../types';
+import { LocalProduct } from '../types/supabase';
 
 interface POSState {
   currentTransaction: Partial<Transaction> | null;
   cart: Array<{
-    product: Product;
+    product: LocalProduct;
     quantity: number;
     discount: number;
   }>;
@@ -13,7 +14,7 @@ interface POSState {
 }
 
 interface POSContextType extends POSState {
-  addToCart: (product: Product, quantity?: number) => void;
+  addToCart: (product: LocalProduct, quantity?: number) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   applyDiscount: (productId: string, discount: number) => void;
@@ -27,7 +28,7 @@ interface POSContextType extends POSState {
 const POSContext = createContext<POSContextType | undefined>(undefined);
 
 type POSAction =
-  | { type: 'ADD_TO_CART'; payload: { product: Product; quantity: number } }
+  | { type: 'ADD_TO_CART'; payload: { product: LocalProduct; quantity: number } }
   | { type: 'REMOVE_FROM_CART'; payload: string }
   | { type: 'UPDATE_QUANTITY'; payload: { productId: string; quantity: number } }
   | { type: 'APPLY_DISCOUNT'; payload: { productId: string; discount: number } }
@@ -107,7 +108,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     selectedCustomer: null
   });
 
-  const addToCart = (product: Product, quantity = 1) => {
+  const addToCart = (product: LocalProduct, quantity = 1) => {
     dispatch({ type: 'ADD_TO_CART', payload: { product, quantity } });
   };
 

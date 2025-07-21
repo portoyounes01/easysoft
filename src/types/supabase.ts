@@ -9,6 +9,16 @@ export interface Database {
                 Insert: EmployeeInsert;
                 Update: EmployeeUpdate;
             };
+            categories: {
+                Row: CategoryRow;
+                Insert: CategoryInsert;
+                Update: CategoryUpdate;
+            };
+            products: {
+                Row: ProductRow;
+                Insert: ProductInsert;
+                Update: ProductUpdate;
+            };
         };
         Functions: {
             get_employees_delta: {
@@ -19,9 +29,173 @@ export interface Database {
                 Args: { employees_data: unknown };
                 Returns: { id: string; success: boolean; error: string }[];
             };
+            get_categories_delta: {
+                Args: { last_sync_timestamp?: string };
+                Returns: CategoryRow[];
+            };
+            get_products_delta: {
+                Args: { last_sync_timestamp?: string };
+                Returns: ProductRow[];
+            };
+            upsert_categories: {
+                Args: { categories_data: unknown };
+                Returns: number;
+            };
+            upsert_products: {
+                Args: { products_data: unknown };
+                Returns: number;
+            };
         };
     };
 }
+
+// =====================================================
+// CATEGORY TYPES
+// =====================================================
+
+// Base category interface from database
+export interface CategoryRow {
+    id: string;
+    name: string;
+    description: string | null;
+    color: string; // Tailwind gradient classes
+    icon: string; // Icon name for UI
+    display_order: number;
+    is_active: boolean;
+    created_at: string; // ISO timestamp
+    updated_at: string; // ISO timestamp
+    last_synced_at: string | null; // ISO timestamp
+    deleted_at: string | null; // ISO timestamp
+}
+
+// For inserting new categories
+export interface CategoryInsert {
+    id?: string; // Optional, will be generated if not provided
+    name: string;
+    description?: string | null;
+    color?: string;
+    icon?: string;
+    display_order?: number;
+    is_active?: boolean;
+    created_at?: string; // Will be auto-generated if not provided
+    updated_at?: string; // Will be auto-generated
+    last_synced_at?: string | null;
+    deleted_at?: string | null;
+}
+
+// For updating existing categories
+export interface CategoryUpdate {
+    id?: never; // Can't update ID
+    name?: string;
+    description?: string | null;
+    color?: string;
+    icon?: string;
+    display_order?: number;
+    is_active?: boolean;
+    updated_at?: string; // Will be auto-generated
+    last_synced_at?: string | null;
+    deleted_at?: string | null;
+}
+
+// Enhanced category interface for the app
+export interface Category extends CategoryRow {
+    // Additional computed fields
+    product_count?: number;
+}
+
+// =====================================================
+// PRODUCT TYPES
+// =====================================================
+
+// Base product interface from database
+export interface ProductRow {
+    id: string;
+    name: string;
+    description: string | null;
+    sku: string;
+    barcode: string | null;
+    category_id: string | null;
+    category_name: string | null; // Denormalized for performance
+    price: number;
+    cost: number;
+    iva_rate: number; // Portuguese IVA tax rate as decimal (0.06, 0.13, 0.23)
+    stock: number;
+    min_stock: number;
+    track_stock: boolean;
+    image_url: string | null;
+    supplier: string | null;
+    location: string | null;
+    is_active: boolean;
+    display_order: number;
+    created_at: string; // ISO timestamp
+    updated_at: string; // ISO timestamp
+    last_synced_at: string | null; // ISO timestamp
+    deleted_at: string | null; // ISO timestamp
+}
+
+// For inserting new products
+export interface ProductInsert {
+    id?: string; // Optional, will be generated if not provided
+    name: string;
+    description?: string | null;
+    sku: string;
+    barcode?: string | null;
+    category_id?: string | null;
+    category_name?: string | null;
+    price: number;
+    cost?: number;
+    iva_rate: number;
+    stock?: number;
+    min_stock?: number;
+    track_stock?: boolean;
+    image_url?: string | null;
+    supplier?: string | null;
+    location?: string | null;
+    is_active?: boolean;
+    display_order?: number;
+    created_at?: string; // Will be auto-generated if not provided
+    updated_at?: string; // Will be auto-generated
+    last_synced_at?: string | null;
+    deleted_at?: string | null;
+}
+
+// For updating existing products
+export interface ProductUpdate {
+    id?: never; // Can't update ID
+    name?: string;
+    description?: string | null;
+    sku?: string;
+    barcode?: string | null;
+    category_id?: string | null;
+    category_name?: string | null;
+    price?: number;
+    cost?: number;
+    iva_rate?: number;
+    stock?: number;
+    min_stock?: number;
+    track_stock?: boolean;
+    image_url?: string | null;
+    supplier?: string | null;
+    location?: string | null;
+    is_active?: boolean;
+    display_order?: number;
+    updated_at?: string; // Will be auto-generated
+    last_synced_at?: string | null;
+    deleted_at?: string | null;
+}
+
+// Enhanced product interface for the app
+export interface Product extends ProductRow {
+    // Additional computed fields
+    stock_status?: 'in_stock' | 'low_stock' | 'out_of_stock';
+    category?: Category; // Full category object
+    tax_amount?: number; // Calculated tax amount
+    price_with_tax?: number; // Price including IVA
+}
+
+// =====================================================
+// EMPLOYEE TYPES
+// =====================================================
 
 // Base employee interface from database
 export interface EmployeeRow {
@@ -203,4 +377,156 @@ export interface EmployeeFilters {
 export interface EmployeeSortOptions {
     field: keyof EmployeeRow;
     direction: 'asc' | 'desc';
-} 
+}
+
+// =====================================================
+// PRODUCT & CATEGORY SYNC TYPES
+// =====================================================
+
+// Local database interfaces for products and categories
+export interface LocalCategory extends Omit<CategoryRow, 'created_at' | 'updated_at' | 'last_synced_at' | 'deleted_at'> {
+    // Local specific fields
+    created_at: Date;
+    updated_at: Date;
+    last_synced_at: Date | null;
+    deleted_at: Date | null;
+
+    // Sync flags
+    needs_push: boolean;
+    is_conflicted: boolean;
+}
+
+export interface LocalProduct extends Omit<ProductRow, 'created_at' | 'updated_at' | 'last_synced_at' | 'deleted_at'> {
+    // Local specific fields
+    created_at: Date;
+    updated_at: Date;
+    last_synced_at: Date | null;
+    deleted_at: Date | null;
+
+    // Sync flags
+    needs_push: boolean;
+    is_conflicted: boolean;
+}
+
+// Sync operation queue items
+export interface PendingCategoryOperation {
+    id: string;
+    type: 'CREATE' | 'UPDATE' | 'DELETE';
+    categoryId: string;
+    data: CategoryInsert | CategoryUpdate | null;
+    timestamp: string;
+    retryCount: number;
+    error?: string;
+}
+
+export interface PendingProductOperation {
+    id: string;
+    type: 'CREATE' | 'UPDATE' | 'DELETE';
+    productId: string;
+    data: ProductInsert | ProductUpdate | null;
+    timestamp: string;
+    retryCount: number;
+    error?: string;
+}
+
+// API response types
+export interface CategorySyncResponse {
+    categories: CategoryRow[];
+    syncMetadata: {
+        serverTimestamp: string;
+        hasMore: boolean;
+        totalCount: number;
+    };
+}
+
+export interface ProductSyncResponse {
+    products: ProductRow[];
+    syncMetadata: {
+        serverTimestamp: string;
+        hasMore: boolean;
+        totalCount: number;
+    };
+}
+
+// Form data interfaces
+export interface CategoryFormData {
+    name: string;
+    description: string;
+    color: string;
+    icon: string;
+    display_order: number;
+    is_active: boolean;
+}
+
+export interface ProductFormData {
+    name: string;
+    description: string;
+    sku: string;
+    category_id: string;
+    price: number;
+    cost: number;
+    iva_rate: number;
+    stock: number;
+    min_stock: number;
+    track_stock: boolean;
+    image_url: string;
+    supplier: string;
+    location: string;
+    is_active: boolean;
+}
+
+// Filter and search interfaces
+export interface ProductFilters {
+    category_id?: string | 'all';
+    is_active?: boolean;
+    stock_status?: 'all' | 'in_stock' | 'low_stock' | 'out_of_stock';
+    search?: string; // Search by name, SKU, or barcode
+    price_min?: number;
+    price_max?: number;
+    supplier?: string;
+}
+
+export interface CategoryFilters {
+    is_active?: boolean;
+    search?: string; // Search by name or description
+}
+
+export interface ProductSortOptions {
+    field: keyof ProductRow;
+    direction: 'asc' | 'desc';
+}
+
+export interface CategorySortOptions {
+    field: keyof CategoryRow;
+    direction: 'asc' | 'desc';
+}
+
+// Portuguese IVA rates constants
+export const IVA_RATES = [
+    { value: 0.06, label: '6% (Reduced Rate)', description: 'Basic foods, books, medicines' },
+    { value: 0.13, label: '13% (Intermediate Rate)', description: 'Restaurants, hotels, some services' },
+    { value: 0.23, label: '23% (Standard Rate)', description: 'Most goods and services' }
+] as const;
+
+export type IVARate = typeof IVA_RATES[number]['value'];
+
+// Stock status calculation helper
+export const calculateStockStatus = (product: Pick<ProductRow, 'stock' | 'min_stock' | 'track_stock'>): 'in_stock' | 'low_stock' | 'out_of_stock' => {
+    if (!product.track_stock) return 'in_stock';
+    if (product.stock === 0) return 'out_of_stock';
+    if (product.stock <= product.min_stock) return 'low_stock';
+    return 'in_stock';
+};
+
+// Tax calculation helpers
+export const calculateTaxAmount = (price: number, ivaRate: number): number => {
+    return price * ivaRate;
+};
+
+export const calculatePriceWithTax = (price: number, ivaRate: number): number => {
+    return price + calculateTaxAmount(price, ivaRate);
+};
+
+export const calculatePriceWithoutTax = (priceWithTax: number, ivaRate: number): number => {
+    return priceWithTax / (1 + ivaRate);
+}; 

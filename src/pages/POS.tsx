@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { NavLink } from 'react-router-dom';
 import {
   ShoppingCart,
   Plus,
@@ -25,141 +26,34 @@ import {
   CreditCard as TaxIcon,
   Check,
   AlertCircle,
-  Clock
+  Clock,
+  Loader2,
+  Package,
+  RefreshCw,
+  Menu,
+  LayoutDashboard,
+  BarChart3,
+  Settings,
+  FileText
 } from 'lucide-react';
 import { usePOS } from '../contexts/POSContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { useProducts } from '../contexts/ProductsContext';
 import VirtualNumpad from '../components/VirtualNumpad';
 import VirtualKeyboard from '../components/VirtualKeyboard';
-import { Category, Customer, Product } from '../types';
+import { Customer } from '../types';
+import { LocalProduct, LocalCategory, calculateStockStatus } from '../types/supabase';
 import { useTranslation } from 'react-i18next';
 
-// Mock categories data
-const mockCategories: Category[] = [
-  {
-    id: '1',
-    name: 'Beverages',
-    description: 'Coffee, tea, sodas, and other drinks',
-    color: 'from-amber-500 to-orange-600',
-    icon: 'coffee'
-  },
-  {
-    id: '2',
-    name: 'Dairy',
-    description: 'Milk, cheese, yogurt, and dairy products',
-    color: 'from-blue-500 to-cyan-600',
-    icon: 'milk'
-  },
-  {
-    id: '3',
-    name: 'Bakery',
-    description: 'Fresh bread, pastries, and baked goods',
-    color: 'from-yellow-500 to-amber-600',
-    icon: 'cake'
-  },
-  {
-    id: '4',
-    name: 'Confectionery',
-    description: 'Chocolates, candies, and sweet treats',
-    color: 'from-pink-500 to-rose-600',
-    icon: 'candy'
-  }
-];
-
-// Mock product data
-const mockProducts = [
-  {
-    id: '1',
-    name: 'Premium Coffee Beans',
-    description: 'High-quality arabica coffee beans',
-    sku: 'COF001',
-    category: 'Beverages',
-    categoryId: '1',
-    price: 12.50,
-    cost: 8.00,
-    stock: 45,
-    minStock: 10,
-    imageUrl: 'https://images.pexels.com/photos/894695/pexels-photo-894695.jpeg?auto=compress&cs=tinysrgb&w=300',
-    isActive: true,
-    taxRate: 0.23,
-  },
-  {
-    id: '2',
-    name: 'Organic Milk',
-    description: 'Fresh organic whole milk',
-    sku: 'MLK001',
-    category: 'Dairy',
-    categoryId: '2',
-    price: 2.80,
-    cost: 1.50,
-    stock: 28,
-    minStock: 15,
-    imageUrl: 'https://images.pexels.com/photos/236010/pexels-photo-236010.jpeg?auto=compress&cs=tinysrgb&w=300',
-    isActive: true,
-    taxRate: 0.06,
-  },
-  {
-    id: '3',
-    name: 'Artisan Bread',
-    description: 'Freshly baked sourdough bread',
-    sku: 'BRD001',
-    category: 'Bakery',
-    categoryId: '3',
-    price: 4.50,
-    cost: 2.00,
-    stock: 12,
-    minStock: 5,
-    imageUrl: 'https://images.pexels.com/photos/209206/pexels-photo-209206.jpeg?auto=compress&cs=tinysrgb&w=300',
-    isActive: true,
-    taxRate: 0.06,
-  },
-  {
-    id: '4',
-    name: 'Dark Chocolate Bar',
-    description: '85% cocoa premium chocolate',
-    sku: 'CHC001',
-    category: 'Confectionery',
-    categoryId: '4',
-    price: 6.90,
-    cost: 3.50,
-    stock: 35,
-    minStock: 25,
-    imageUrl: 'https://images.pexels.com/photos/918327/pexels-photo-918327.jpeg?auto=compress&cs=tinysrgb&w=300',
-    isActive: true,
-    taxRate: 0.23,
-  },
-  {
-    id: '5',
-    name: 'Espresso Machine',
-    description: 'Professional grade espresso machine',
-    sku: 'COF002',
-    category: 'Beverages',
-    categoryId: '1',
-    price: 299.99,
-    cost: 200.00,
-    stock: 0,
-    minStock: 2,
-    imageUrl: 'https://images.pexels.com/photos/324028/pexels-photo-324028.jpeg?auto=compress&cs=tinysrgb&w=300',
-    isActive: true,
-    taxRate: 0.23,
-  },
-  {
-    id: '6',
-    name: 'Greek Yogurt',
-    description: 'Creamy Greek-style yogurt',
-    sku: 'MLK002',
-    category: 'Dairy',
-    categoryId: '2',
-    price: 3.20,
-    cost: 2.00,
-    stock: 20,
-    minStock: 10,
-    imageUrl: 'https://images.pexels.com/photos/1435903/pexels-photo-1435903.jpeg?auto=compress&cs=tinysrgb&w=300',
-    isActive: true,
-    taxRate: 0.06,
-  }
-];
+// Icon mapping for categories
+const iconMap = {
+  grid: Grid,
+  coffee: Coffee,
+  milk: Milk,
+  cake: Cake,
+  candy: Candy,
+};
 
 // Mock customer data - will be moved to context/localStorage in production
 let mockCustomers: Customer[] = [
@@ -240,22 +134,24 @@ let mockCustomers: Customer[] = [
   }
 ];
 
-const iconMap = {
-  grid: Grid,
-  coffee: Coffee,
-  milk: Milk,
-  cake: Cake,
-  candy: Candy,
-};
-
 const POS: React.FC = () => {
   const { t } = useTranslation();
   const { cart, addToCart, removeFromCart, updateQuantity, clearCart, selectedCustomer, selectCustomer } = usePOS();
   const { user, logout } = useAuth();
   const { settings } = useSettings();
+  const {
+    products: allProducts,
+    categories: allCategories,
+    getProductsByCategory,
+    getActiveProducts,
+    isLoading,
+    error,
+    syncData,
+    refreshData
+  } = useProducts();
 
   // Stock validation helper function
-  const canAddToCart = (product: Product, requestedQuantity = 1): boolean => {
+  const canAddToCart = (product: LocalProduct, requestedQuantity = 1): boolean => {
     // If negative stock is allowed, always allow
     if (settings.pos.allowNegativeStock) {
       return true;
@@ -271,7 +167,7 @@ const POS: React.FC = () => {
   };
 
   // Enhanced addToCart with stock validation
-  const handleAddToCart = (product: Product, quantity = 1) => {
+  const handleAddToCart = (product: LocalProduct, quantity = 1) => {
     // Only allow adding if stock validation passes
     // UI prevents clicks on out-of-stock items, but this is a safety check
     if (canAddToCart(product, quantity)) {
@@ -313,7 +209,18 @@ const POS: React.FC = () => {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('pos-sidebar-collapsed');
+    return saved ? JSON.parse(saved) : false;
+  });
   const [discount, setDiscount] = useState({ type: 'none', value: 0 });
+
+  // Toggle sidebar and persist state
+  const toggleSidebar = () => {
+    const newCollapsed = !isSidebarCollapsed;
+    setIsSidebarCollapsed(newCollapsed);
+    localStorage.setItem('pos-sidebar-collapsed', JSON.stringify(newCollapsed));
+  };
   const [cashReceived, setCashReceived] = useState(0);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [newCustomerForm, setNewCustomerForm] = useState({
@@ -473,9 +380,7 @@ const POS: React.FC = () => {
   };
 
   // Filter products based on category only
-  const filteredProducts = selectedCategoryId ? mockProducts.filter(product =>
-    product.categoryId === selectedCategoryId
-  ) : [];
+  const filteredProducts = selectedCategoryId ? getProductsByCategory(selectedCategoryId) : [];
 
   // Filter customers based on search term (NIF only)
   const filteredCustomers = mockCustomers.filter(customer =>
@@ -488,10 +393,9 @@ const POS: React.FC = () => {
     : discount.type === 'fixed'
       ? discount.value
       : 0;
+
   const discountedSubtotal = subtotal - discountAmount;
-  const tax = cart.reduce((sum, item) => sum + (item.product.price * item.quantity * item.product.taxRate), 0);
-  const total = discountedSubtotal + tax;
-  const changeAmount = cashReceived > total ? cashReceived - total : 0;
+  const tax = cart.reduce((sum, item) => sum + (item.product.price * item.quantity * item.product.iva_rate), 0);
 
   // NIF validation helper
   const getNifValidationState = (nif: string) => {
@@ -518,6 +422,7 @@ const POS: React.FC = () => {
   const customerDiscountAmount = discountedSubtotal * customerDiscount / 100;
   const finalSubtotal = discountedSubtotal - customerDiscountAmount;
   const finalTotal = finalSubtotal + tax;
+  const changeAmount = cashReceived > finalTotal ? cashReceived - finalTotal : 0;
 
   const handleCategoryClick = (categoryId: string) => {
     setSelectedCategoryId(categoryId);
@@ -822,153 +727,904 @@ const POS: React.FC = () => {
     }
   }, [cart]);
 
+  // Handle retry/refresh data
+  const handleRetryData = async () => {
+    try {
+      await refreshData();
+    } catch (error) {
+      console.error('Failed to refresh data:', error);
+    }
+  };
+
+  // Handle sync data
+  const handleSyncData = async () => {
+    try {
+      await syncData();
+    } catch (error) {
+      console.error('Failed to sync data:', error);
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col md:flex-row">
+    <div className="h-full flex">
+      {/* Sidebar */}
+      <div className={`bg-gradient-to-b from-slate-900 to-slate-800 text-white min-h-screen flex flex-col shadow-2xl transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}>
+        <div className="p-6 border-b border-slate-700">
+          <div className="flex items-center space-x-3">
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-lg flex-shrink-0">
+              <FileText className="w-6 h-6 text-white" />
+            </div>
+            {!isSidebarCollapsed && (
+              <div>
+                <h1 className="text-xl font-bold">POS System</h1>
+                <p className="text-slate-400 text-sm">Professional Edition</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <nav className="flex-1 p-4">
+          <ul className="space-y-2">
+            {[
+              { path: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard' },
+              { path: '/pos', icon: ShoppingCart, label: 'Point of Sale', permission: 'sales' },
+              { path: '/products', icon: Package, label: 'Products', permission: 'inventory' },
+              { path: '/employees', icon: Users, label: 'Employees', permission: 'employees' },
+              { path: '/reports', icon: BarChart3, label: 'Reports', permission: 'reports' },
+              { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'sales' },
+              { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' }
+            ].map((item) => {
+              if (!user) return null;
+              if (user.role !== 'admin' && !user.access_levels.includes(item.permission) && !user.access_levels.includes('all')) return null;
+
+              const Icon = item.icon;
+              return (
+                <li key={item.path}>
+                  <NavLink
+                    to={item.path}
+                    className={({ isActive }) =>
+                      `flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 group relative ${isActive
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg transform scale-105'
+                        : 'text-slate-300 hover:bg-slate-700 hover:text-white hover:transform hover:scale-105'
+                      } ${isSidebarCollapsed ? 'justify-center' : ''}`
+                    }
+                    title={isSidebarCollapsed ? item.label : undefined}
+                  >
+                    <Icon className="w-5 h-5 flex-shrink-0" />
+                    {!isSidebarCollapsed && <span className="font-medium">{item.label}</span>}
+
+                    {/* Tooltip for collapsed state */}
+                    {isSidebarCollapsed && (
+                      <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                        {item.label}
+                      </div>
+                    )}
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="p-4 border-t border-slate-700">
+          <div className={`flex items-center p-3 bg-slate-800 rounded-lg mb-3 ${isSidebarCollapsed ? 'justify-center space-x-0' : 'space-x-3'}`}>
+            <div className={`bg-gradient-to-r ${getRoleColor(user?.role || '')} p-2 rounded-full flex-shrink-0`}>
+              <UserCircle className="w-5 h-5 text-white" />
+            </div>
+            {!isSidebarCollapsed && (
+              <div className="flex-1">
+                <p className="font-medium text-sm">{user?.name}</p>
+                <p className="text-slate-400 text-xs">{user?.role.toUpperCase()}</p>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => setShowLogoutConfirm(true)}
+            className={`w-full flex items-center px-4 py-3 text-slate-300 hover:bg-red-600 hover:text-white rounded-lg transition-all duration-200 hover:transform hover:scale-105 group relative ${isSidebarCollapsed ? 'justify-center space-x-0' : 'space-x-3'}`}
+            title={isSidebarCollapsed ? 'Logout' : undefined}
+          >
+            <LogOut className="w-5 h-5 group-hover:animate-pulse flex-shrink-0" />
+            {!isSidebarCollapsed && <span className="font-medium">Logout</span>}
+
+            {/* Tooltip for collapsed state */}
+            {isSidebarCollapsed && (
+              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                Logout
+              </div>
+            )}
+          </button>
+        </div>
+      </div>
+
       {/* Main Content Area */}
       <div className="flex-1 p-3 sm:p-4 md:p-6 pb-8">
         {/* Header */}
         <div className="mb-4 sm:mb-6">
-          <div className={`flex items-center mb-3 sm:mb-4 ${selectedCategoryId ? 'justify-between' : 'justify-end'}`}>
-            {/* Back to Categories Button */}
-            {selectedCategoryId && (
+          <div className="flex items-center mb-3 sm:mb-4">
+            {/* Menu Toggle and Back button */}
+            <div className="flex items-center space-x-3">
+              {/* Menu Toggle Button */}
               <button
-                onClick={() => setSelectedCategoryId('')}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors min-h-[60px]"
+                onClick={toggleSidebar}
+                className="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-2xl transition-all duration-200 flex items-center space-x-2 min-h-[60px] shadow-lg"
+                title="Toggle Navigation"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                <span>{t('pos.backToCategories')}</span>
+                <Menu className="w-5 h-5" />
+                <span className="hidden sm:inline font-semibold">Menu</span>
               </button>
-            )}
 
-            {/* Logout Button */}
-            <button
-              onClick={() => setShowLogoutConfirm(true)}
-              className="bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white p-3 rounded-2xl transition-all duration-200 flex items-center space-x-2 min-h-[60px] shadow-lg"
-            >
-              <LogOut className="w-5 h-5" />
-              <span className="hidden sm:inline font-semibold">Logout</span>
-            </button>
+              {/* Back to Categories Button */}
+              {selectedCategoryId && (
+                <button
+                  onClick={() => setSelectedCategoryId('')}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors min-h-[60px]"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  <span>{t('pos.backToCategories')}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Category View */}
-        {!selectedCategoryId && (
-          <div className="mb-6">
-            <div className="text-center mb-8">
-              {/* <h2 className="text-3xl font-bold text-gray-800 mb-2">Choose a Category</h2> */}
-              {/* <p className="text-lg text-gray-600">Select a product category to view available items</p> */}
-            </div>
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              {mockCategories.map((category) => (
-                <div
-                  key={category.id}
-                  onClick={() => handleCategoryClick(category.id)}
-                  className={`
-                    bg-gradient-to-r ${category.color} text-white rounded-xl shadow-lg border border-white 
-                    overflow-hidden hover:scale-105 hover:shadow-xl transition-all duration-300 cursor-pointer 
-                    aspect-square flex flex-col items-center justify-center p-4 relative
-                  `}
-                >
-                  <div className="bg-white bg-opacity-20 p-3 rounded-lg mb-3">
-                    {renderCategoryIcon(category.icon)}
-                  </div>
-
-                  <h3 className="text-sm font-bold text-center">{category.name}</h3>
-                </div>
-              ))}
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center">
+              <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Loading Products...</h2>
+              <p className="text-gray-600">Please wait while we load your product catalog</p>
             </div>
           </div>
         )}
 
-        {/* Products View */}
-        {selectedCategoryId && (
-          <div>
-            {/* Category Header */}
-            <div className="mb-6">
-              {(() => {
-                const currentCategory = mockCategories.find(c => c.id === selectedCategoryId);
-                return currentCategory ? (
-                  <div className={`bg-gradient-to-r ${currentCategory.color} text-white rounded-2xl p-6 mb-6`}>
-                    <div className="flex items-center space-x-4">
-                      <div className="bg-white bg-opacity-20 p-3 rounded-2xl">
-                        {renderCategoryIcon(currentCategory.icon)}
-                      </div>
-                      <div>
-                        <h2 className="text-2xl font-bold">{currentCategory.name}</h2>
-                        <p className="text-white text-opacity-90">{currentCategory.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : null;
-              })()}
+        {/* Error State */}
+        {error && !isLoading && (
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center max-w-md">
+              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">{t('pos.errorLoadingData')}</h2>
+              <p className="text-gray-600 mb-6">{error}</p>
+              <div className="flex space-x-3 justify-center">
+                <button
+                  onClick={handleRetryData}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  <span>{t('pos.retry')}</span>
+                </button>
+                <button
+                  onClick={handleSyncData}
+                  className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  <span>{t('pos.syncData')}</span>
+                </button>
+              </div>
             </div>
+          </div>
+        )}
 
-            {/* Products Grid */}
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 max-h-[calc(100vh-400px)] overflow-y-auto">
-              {filteredProducts.map((product) => {
-                const canAdd = canAddToCart(product, 1);
-                const isOutOfStock = !canAdd && !settings.pos.allowNegativeStock;
+        {/* Main Content - Only show when not loading and no error */}
+        {!isLoading && !error && (
+          <>
+            {/* Category View */}
+            {!selectedCategoryId && (
+              <div className="mb-6">
 
-                return (
-                  <div
-                    key={product.id}
-                    className={`
-                      bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden transition-all duration-300 aspect-square flex flex-col p-3 relative
-                      ${canAdd
-                        ? 'hover:scale-105 hover:shadow-xl cursor-pointer'
-                        : 'opacity-60 cursor-not-allowed'
-                      }
-                    `}
-                    onClick={canAdd ? () => handleAddToCart(product) : undefined}
-                  >
-                    {/* Image - Takes 2/3 of the card */}
-                    <div className="h-2/3 w-full mb-2 rounded-lg overflow-hidden flex-shrink-0 relative">
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale' : ''}`}
-                      />
-
-                      {/* Out of Stock Overlay */}
-                      {isOutOfStock && (
-                        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                          <div className="bg-red-500 text-white px-2 py-1 rounded-lg text-xs font-bold transform -rotate-12">
-                            {t('pos.outOfStock')}
-                          </div>
+                {/* Categories Grid */}
+                {allCategories.length > 0 ? (
+                  <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    {allCategories.map((category) => (
+                      <div
+                        key={category.id}
+                        onClick={() => handleCategoryClick(category.id)}
+                        className={`
+                          bg-gradient-to-r ${category.color} text-white rounded-xl shadow-lg border border-white 
+                          overflow-hidden hover:scale-105 hover:shadow-xl transition-all duration-300 cursor-pointer 
+                          aspect-square flex flex-col items-center justify-center p-4 relative
+                        `}
+                      >
+                        <div className="bg-white bg-opacity-20 p-3 rounded-lg mb-3">
+                          {renderCategoryIcon(category.icon)}
                         </div>
-                      )}
-                    </div>
-
-                    {/* Name - Takes 1/3 of the card */}
-                    <div className="h-1/3 flex flex-col justify-center text-center">
-                      <h3 className={`text-sm font-bold line-clamp-2 leading-tight ${isOutOfStock ? 'text-gray-500' : 'text-gray-800'
-                        }`}>
-                        {product.name}
-                      </h3>
+                        <h3 className="text-sm font-bold text-center">{category.name}</h3>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* Empty Categories State */
+                  <div className="text-center py-12">
+                    <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">{t('pos.noCategoriesAvailable')}</h3>
+                    <p className="text-gray-600 mb-6">{t('pos.emptyCatalogMessage')}</p>
+                    <div className="flex space-x-3 justify-center">
+                      <button
+                        onClick={handleRetryData}
+                        className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
+                      >
+                        <RefreshCw className="w-5 h-5" />
+                        <span>{t('pos.refresh')}</span>
+                      </button>
+                      <button
+                        onClick={handleSyncData}
+                        className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
+                      >
+                        <RefreshCw className="w-5 h-5" />
+                        <span>{t('pos.syncData')}</span>
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-
-            {/* Empty State for Products */}
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-12">
-                <div className="text-gray-300 mb-4">
-                  <svg className="w-16 h-16 mx-auto" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8-8zm1-13h2v6h-2zm0 8h2v2h-2z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-semibold text-gray-500 mb-2">{t('pos.noProductsFoundTitle')}</h3>
-                <p className="text-gray-400">
-                  {t('pos.noProductsFoundMessage')}
-                </p>
+                )}
               </div>
             )}
+
+            {/* Products View */}
+            {selectedCategoryId && (
+              <div>
+                {/* Category Header */}
+                <div className="mb-6">
+                  {(() => {
+                    const currentCategory = allCategories.find(c => c.id === selectedCategoryId);
+                    return currentCategory ? (
+                      <div className={`bg-gradient-to-r ${currentCategory.color} text-white rounded-2xl p-6 mb-6`}>
+                        <div className="flex items-center space-x-4">
+                          <div className="bg-white bg-opacity-20 p-3 rounded-2xl">
+                            {renderCategoryIcon(currentCategory.icon)}
+                          </div>
+                          <div>
+                            <h2 className="text-2xl font-bold">{currentCategory.name}</h2>
+                            <p className="text-white text-opacity-90">{currentCategory.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+
+                {/* Products Grid */}
+                {filteredProducts.length > 0 ? (
+                  <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 max-h-[calc(100vh-400px)] overflow-y-auto">
+                    {filteredProducts.map((product) => {
+                      const canAdd = canAddToCart(product, 1);
+                      const isOutOfStock = !canAdd && !settings.pos.allowNegativeStock;
+
+                      return (
+                        <div
+                          key={product.id}
+                          className={`
+                            bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden transition-all duration-300 aspect-square flex flex-col p-3 relative
+                            ${canAdd
+                              ? 'hover:scale-105 hover:shadow-xl cursor-pointer'
+                              : 'opacity-60 cursor-not-allowed'
+                            }
+                          `}
+                          onClick={canAdd ? () => handleAddToCart(product) : undefined}
+                        >
+                          {/* Image - Takes 2/3 of the card */}
+                          <div className="h-2/3 w-full mb-2 rounded-lg overflow-hidden flex-shrink-0 relative">
+                            <img
+                              src={product.image_url || '/placeholder-product.jpg'}
+                              alt={product.name}
+                              className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale' : ''}`}
+                            />
+
+                            {/* Out of Stock Overlay */}
+                            {isOutOfStock && (
+                              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                                <div className="bg-red-500 text-white px-2 py-1 rounded-lg text-xs font-bold transform -rotate-12">
+                                  {t('pos.outOfStock')}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Name - Takes 1/3 of the card */}
+                          <div className="h-1/3 flex flex-col justify-center text-center">
+                            <h3 className={`text-sm font-bold line-clamp-2 leading-tight ${isOutOfStock ? 'text-gray-500' : 'text-gray-800'
+                              }`}>
+                              {product.name}
+                            </h3>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* Empty Products State */
+                  <div className="text-center py-12">
+                    <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-500 mb-2">{t('pos.noProductsFoundTitle')}</h3>
+                    <p className="text-gray-400">
+                      {t('pos.noProductsFoundMessage')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Customer Selection Modal */}
+        {showCustomerModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className={`bg-white rounded-3xl p-8 shadow-2xl flex flex-col ${numpadConfig.isOpen ? 'w-[1000px] max-w-6xl' : 'w-[600px] max-w-2xl'} h-[600px]`}>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-800">{t('pos.selectCustomerTitle')}</h3>
+                <button
+                  onClick={() => {
+                    setShowCustomerModal(false);
+                    setCustomerSearchTerm('');
+                    setNumpadConfig(prev => ({ ...prev, isOpen: false }));
+                  }}
+                  className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Main Content Area */}
+              <div className={`flex-1 flex ${numpadConfig.isOpen ? 'space-x-6' : ''} overflow-hidden`}>
+                {/* Customer Section */}
+                <div className={`${numpadConfig.isOpen ? 'flex-1' : 'w-full'} flex flex-col`}>
+                  {/* Search Section */}
+                  <div className="mb-6 space-y-4">
+                    <div className="flex space-x-3">
+                      <div className="flex-1 relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder={t('pos.searchByNif')}
+                          value={customerSearchTerm}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                            setCustomerSearchTerm(value);
+                          }}
+                          onClick={() => {
+                            setNumpadConfig({
+                              isOpen: true,
+                              title: t('pos.searchByNif'),
+                              onConfirm: (value: string) => {
+                                const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                                setCustomerSearchTerm(validatedValue);
+                              },
+                              prefix: '',
+                              suffix: '',
+                              placeholder: '123456789',
+                              allowDecimal: false,
+                              maxLength: 9
+                            });
+                          }}
+                          className={`w-full pl-10 pr-4 py-3 border rounded-2xl focus:outline-none focus:ring-2 focus:border-transparent cursor-pointer ${numpadConfig.isOpen ? 'border-blue-500 bg-blue-50' : 'border-gray-300 focus:ring-blue-500'
+                            }`}
+                          maxLength={9}
+                        />
+                      </div>
+                      <button
+                        onClick={() => {
+                          setNumpadConfig({
+                            isOpen: true,
+                            title: t('pos.searchByNif'),
+                            onConfirm: (value: string) => {
+                              const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                              setCustomerSearchTerm(validatedValue);
+                            },
+                            prefix: '',
+                            suffix: '',
+                            placeholder: '123456789',
+                            allowDecimal: false,
+                            maxLength: 9
+                          });
+                        }}
+                        className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-2xl font-semibold transition-all duration-200 flex items-center space-x-2"
+                      >
+                        <Search className="w-5 h-5" />
+                        <span>{t('pos.search')}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-600">
+                        {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''} found
+                      </p>
+                      <button
+                        onClick={handleAddNewCustomer}
+                        className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center space-x-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>{t('pos.addNew')}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Customer List */}
+                  <div className="flex-1 overflow-y-auto space-y-3">
+                    {filteredCustomers.map((customer) => (
+                      <div
+                        key={customer.id}
+                        onClick={() => handleCustomerSelect(customer)}
+                        className="bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:shadow-lg"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-xl">
+                                <UserCircle className="w-5 h-5 text-white" />
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-gray-800">{customer.name}</h4>
+                                <p className="text-sm text-gray-600">{customer.taxId}</p>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-gray-600">{t('pos.totalOrders')}</span>
+                                <span className="font-semibold text-gray-800">{customer.totalOrders}</span>
+                              </div>
+                              {customer.discountLevel > 0 && (
+                                <div className="flex items-center space-x-2">
+                                  <Percent className="w-4 h-4 text-green-500" />
+                                  <span className="font-semibold text-green-600">{customer.discountLevel}% Discount</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="ml-4">
+                            <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200">
+                              {t('common.select')}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {filteredCustomers.length === 0 && (
+                      <div className="text-center py-12">
+                        <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <p className="text-xl text-gray-500 mb-2">{t('pos.noCustomersFoundTitle')}</p>
+                        <p className="text-gray-400">{t('pos.noCustomersFoundMessage')}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Numpad Section */}
+                {numpadConfig.isOpen && (
+                  <div className="flex-1">
+                    <VirtualKeyboard
+                      isOpen={true}
+                      onClose={() => setNumpadConfig(prev => ({ ...prev, isOpen: false }))}
+                      onConfirm={(value: string) => {
+                        const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                        setCustomerSearchTerm(validatedValue);
+                      }}
+                      title={t('pos.searchByNif')}
+                      initialValue={customerSearchTerm}
+                      maxLength={9}
+                      allowNumbers={true}
+                      allowLetters={true}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Add New Customer Modal */}
+        {showAddCustomerModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-3xl p-8 w-[1000px] max-w-6xl h-[700px] shadow-2xl flex flex-col">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-800">Add New Customer</h3>
+                <button
+                  onClick={handleCancelAddCustomer}
+                  className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Customer Form and Keyboard */}
+              <div className="flex-1 flex space-x-6 overflow-hidden">
+                {/* Customer Form */}
+                <div className="flex-1 overflow-y-auto">
+                  <div className="space-y-3">
+                    {/* Personal Information Section */}
+                    <div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Name
+                          </label>
+                          <input
+                            type="text"
+                            value={newCustomerForm.name}
+                            onChange={(e) => handleCustomerFormChange('name', e.target.value)}
+                            onClick={() => handleTextFieldClick('name', false, true, 50)}
+                            className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'name'
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                              }`}
+                            placeholder="Enter customer name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            NIF *
+                          </label>
+                          <div className="relative">
+                            <TaxIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                            <input
+                              type="text"
+                              value={newCustomerForm.taxId}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                                handleCustomerFormChange('taxId', value);
+                              }}
+                              onClick={() => {
+                                setActiveField('taxId');
+                                setKeyboardConfig({
+                                  isOpen: true,
+                                  title: '',
+                                  field: 'taxId',
+                                  onConfirm: (value: string) => {
+                                    // Apply NIF validation: alphanumeric, max 9 characters, uppercase
+                                    const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                                    handleCustomerFormChange('taxId', validatedValue);
+                                  },
+                                  maxLength: 9,
+                                  allowNumbers: true,
+                                  allowLetters: true
+                                });
+                              }}
+                              className={getNifFieldClasses(
+                                newCustomerForm.taxId,
+                                `w-full pl-6 pr-8 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'taxId'
+                                  ? 'border-blue-500 bg-blue-50'
+                                  : ''
+                                }`
+                              )}
+                              placeholder="123456789 / X1234567L"
+                              maxLength={9}
+                              required
+                            />
+                            {newCustomerForm.taxId && (
+                              <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                                {getNifValidationState(newCustomerForm.taxId) === 'valid' ? (
+                                  <Check className="w-3 h-3 text-green-500" />
+                                ) : (
+                                  <AlertCircle className="w-3 h-3 text-red-500" />
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Contact Information Section */}
+                    <div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Phone
+                          </label>
+                          <div className="relative">
+                            <Phone className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                            <input
+                              type="tel"
+                              value={newCustomerForm.phone}
+                              onChange={(e) => handleCustomerFormChange('phone', e.target.value)}
+                              onClick={() => handleTextFieldClick('phone', true, false, 20)}
+                              className={`w-full pl-6 pr-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'phone'
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                                }`}
+                              placeholder="+351 912 345 678"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Email
+                          </label>
+                          <div className="relative">
+                            <Mail className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                            <input
+                              type="email"
+                              value={newCustomerForm.email}
+                              onChange={(e) => handleCustomerFormChange('email', e.target.value)}
+                              onClick={() => handleTextFieldClick('email', true, true, 50)}
+                              className={`w-full pl-6 pr-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'email'
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                                }`}
+                              placeholder="customer@email.com"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Location Information Section */}
+                    <div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            City
+                          </label>
+                          <input
+                            type="text"
+                            value={newCustomerForm.city}
+                            onChange={(e) => handleCustomerFormChange('city', e.target.value)}
+                            onClick={() => handleTextFieldClick('city', false, true, 30)}
+                            className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'city'
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                              }`}
+                            placeholder="Lisbon"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Postal Code
+                          </label>
+                          <input
+                            type="text"
+                            value={newCustomerForm.postalCode}
+                            onChange={(e) => handleCustomerFormChange('postalCode', e.target.value)}
+                            onClick={() => handleTextFieldClick('postalCode', true, false, 10)}
+                            className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'postalCode'
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                              }`}
+                            placeholder="1000-001"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Country
+                          </label>
+                          <input
+                            type="text"
+                            value={newCustomerForm.country}
+                            onChange={(e) => handleCustomerFormChange('country', e.target.value)}
+                            onClick={() => handleTextFieldClick('country', false, true, 30)}
+                            className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'country'
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                              }`}
+                            placeholder="Portugal"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Virtual Keyboard */}
+                <div className="flex-1">
+                  <VirtualKeyboard
+                    isOpen={showAddCustomerModal}
+                    onClose={() => { }}
+                    onConfirm={keyboardConfig.onConfirm}
+                    title=""
+                    initialValue={activeField && newCustomerForm[activeField as keyof typeof newCustomerForm] ? newCustomerForm[activeField as keyof typeof newCustomerForm]?.toString() || '' : ''}
+                    maxLength={keyboardConfig.maxLength}
+                    allowNumbers={keyboardConfig.allowNumbers}
+                    allowLetters={keyboardConfig.allowLetters}
+                  />
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex-none mt-6 pt-6 border-t border-gray-200">
+                <div className="flex space-x-2">
+                  <button
+                    onClick={handleCancelAddCustomer}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-2 rounded-xl min-h-[36px] transition-colors text-sm"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    onClick={handleCustomerFormSubmit}
+                    className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-2 rounded-xl min-h-[36px] transition-colors flex items-center justify-center space-x-2 text-sm"
+                  >
+                    <Save className="w-3 h-3" />
+                    <span>Save Customer</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Modal */}
+        {showPayment && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-3xl p-8 w-[480px] max-w-md shadow-2xl">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t('pos.processPayment')}</h3>
+              <div className="space-y-6">
+                <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-2xl">
+                  <div className="text-4xl font-bold text-center">
+                    €{finalTotal.toFixed(2)}
+                  </div>
+                </div>
+
+                {/* Cash Payment Section */}
+                {cashReceived > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-lg">
+                      <span className="text-gray-600">{t('pos.cashReceived')}</span>
+                      <span className="text-gray-800 font-semibold">€{cashReceived.toFixed(2)}</span>
+                    </div>
+                    {cashReceived > finalTotal && (
+                      <div className="flex justify-between text-xl font-bold text-green-600">
+                        <span>{t('pos.changeDue')}</span>
+                        <span>€{(cashReceived - finalTotal).toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={handleCashClick}
+                    className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]"
+                  >
+                    <Banknote className="w-6 h-6" />
+                    <span>{t('pos.cash')}</span>
+                  </button>
+                  <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]">
+                    <CreditCard className="w-6 h-6" />
+                    <span>{t('pos.card')}</span>
+                  </button>
+                </div>
+
+                <div className="flex space-x-4">
+                  <button
+                    onClick={() => {
+                      setShowPayment(false);
+                      setCashReceived(0);
+                    }}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-3 rounded-2xl min-h-[60px]"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 rounded-2xl min-h-[60px]"
+                    disabled={cashReceived > 0 && cashReceived < finalTotal}
+                  >
+                    {t('pos.completeSale')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Logout Confirmation Modal */}
+        {showLogoutConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-3xl p-8 w-[400px] max-w-md shadow-2xl">
+              <div className="text-center">
+                <div className={`bg-gradient-to-r ${getRoleColor(user?.role || '')} p-4 rounded-full inline-block mb-6`}>
+                  <UserCircle className="w-12 h-12 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.confirmLogoutTitle')}</h3>
+                <p className="text-lg text-gray-600 mb-2">
+                  {t('pos.confirmLogoutQuestion')}, <strong>{user?.name}</strong>?
+                </p>
+                <p className="text-sm text-gray-500 mb-8">
+                  {t('pos.unsavedWork')}
+                </p>
+
+                <div className="flex space-x-4">
+                  <button
+                    onClick={() => setShowLogoutConfirm(false)}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <LogOut className="w-5 h-5" />
+                    <span>{t('common.logout')}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Auto-Logout Warning Modal */}
+        {showAutoLogoutWarning && settings.autoLogout.enabled && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+            <div className="bg-white rounded-3xl p-8 w-[450px] max-w-md shadow-2xl border-4 border-yellow-400">
+              <div className="text-center">
+                <div className="bg-gradient-to-r from-yellow-500 to-orange-500 p-4 rounded-full inline-block mb-6">
+                  <Clock className="w-12 h-12 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.sessionTimeoutWarning')}</h3>
+                <p className="text-lg text-gray-600 mb-2">
+                  {t('pos.autoLogoutMessage')}
+                </p>
+                <div className="text-4xl font-bold text-red-600 mb-6">
+                  {autoLogoutCountdown}s
+                </div>
+                <p className="text-sm text-gray-500 mb-8">
+                  {t('pos.securityNotice')}
+                </p>
+
+                <div className="flex space-x-4">
+                  <button
+                    onClick={handleAutoLogout}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
+                  >
+                    {t('pos.logoutNow')}
+                  </button>
+                  <button
+                    onClick={handleExtendSession}
+                    className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <UserCircle className="w-5 h-5" />
+                    <span>{t('pos.stayLoggedIn')}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Virtual Numpad */}
+        <VirtualNumpad
+          isOpen={numpadConfig.isOpen && !showCustomerModal}
+          onClose={() => setNumpadConfig(prev => ({ ...prev, isOpen: false }))}
+          onConfirm={numpadConfig.onConfirm}
+          title={numpadConfig.title}
+          prefix={numpadConfig.prefix}
+          suffix={numpadConfig.suffix}
+          placeholder={numpadConfig.placeholder}
+          allowDecimal={numpadConfig.allowDecimal}
+          maxLength={numpadConfig.maxLength}
+        />
+
+        {/* Bottom User Status Bar */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-1 z-10">
+          <div className="flex items-center justify-between max-w-7xl mx-auto">
+            <div className="flex items-center space-x-3">
+              <p className="text-xs font-medium text-gray-800">{user?.name} • <span className="capitalize text-gray-600">{user?.role}</span></p>
+              {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
+                <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
+                  {t('pos.saleInProgress')}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center space-x-3 text-xs text-gray-500">
+              {settings.autoLogout.enabled && (
+                <span>
+                  {Math.floor(timeUntilAutoLogout / 60000)}:{String(Math.floor((timeUntilAutoLogout % 60000) / 1000)).padStart(2, '0')}
+                </span>
+              )}
+              {settings.pos.autoClearCart.enabled && settings.pos.autoClearCart.timeoutMinutes > 0 && cart.length > 0 && (
+                <span className="text-orange-600">
+                  Cart: {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
+                </span>
+              )}
+              <span>POS Terminal • {new Date().toLocaleDateString('pt-PT')}</span>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* Cart Sidebar */}
@@ -1157,590 +1813,7 @@ const POS: React.FC = () => {
         </div>
       </div>
 
-      {/* Customer Selection Modal */}
-      {showCustomerModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className={`bg-white rounded-3xl p-8 shadow-2xl flex flex-col ${numpadConfig.isOpen ? 'w-[1000px] max-w-6xl' : 'w-[600px] max-w-2xl'} h-[600px]`}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-gray-800">{t('pos.selectCustomerTitle')}</h3>
-              <button
-                onClick={() => {
-                  setShowCustomerModal(false);
-                  setCustomerSearchTerm('');
-                  setNumpadConfig(prev => ({ ...prev, isOpen: false }));
-                }}
-                className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
 
-            {/* Main Content Area */}
-            <div className={`flex-1 flex ${numpadConfig.isOpen ? 'space-x-6' : ''} overflow-hidden`}>
-              {/* Customer Section */}
-              <div className={`${numpadConfig.isOpen ? 'flex-1' : 'w-full'} flex flex-col`}>
-                {/* Search Section */}
-                <div className="mb-6 space-y-4">
-                  <div className="flex space-x-3">
-                    <div className="flex-1 relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder={t('pos.searchByNif')}
-                        value={customerSearchTerm}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                          setCustomerSearchTerm(value);
-                        }}
-                        onClick={() => {
-                          setNumpadConfig({
-                            isOpen: true,
-                            title: t('pos.searchByNif'),
-                            onConfirm: (value: string) => {
-                              const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                              setCustomerSearchTerm(validatedValue);
-                            },
-                            prefix: '',
-                            suffix: '',
-                            placeholder: '123456789',
-                            allowDecimal: false,
-                            maxLength: 9
-                          });
-                        }}
-                        className={`w-full pl-10 pr-4 py-3 border rounded-2xl focus:outline-none focus:ring-2 focus:border-transparent cursor-pointer ${numpadConfig.isOpen ? 'border-blue-500 bg-blue-50' : 'border-gray-300 focus:ring-blue-500'
-                          }`}
-                        maxLength={9}
-                        readOnly
-                      />
-                    </div>
-                    <button
-                      onClick={() => {
-                        setNumpadConfig({
-                          isOpen: true,
-                          title: t('pos.searchByNif'),
-                          onConfirm: (value: string) => {
-                            const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                            setCustomerSearchTerm(validatedValue);
-                          },
-                          prefix: '',
-                          suffix: '',
-                          placeholder: '123456789',
-                          allowDecimal: false,
-                          maxLength: 9
-                        });
-                      }}
-                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-2xl font-semibold transition-all duration-200 flex items-center space-x-2"
-                    >
-                      <Search className="w-5 h-5" />
-                      <span>{t('pos.search')}</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-600">
-                      {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''} found
-                    </p>
-                    <button
-                      onClick={handleAddNewCustomer}
-                      className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center space-x-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>{t('pos.addNew')}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Customer List */}
-                <div className="flex-1 overflow-y-auto space-y-3">
-                  {filteredCustomers.map((customer) => (
-                    <div
-                      key={customer.id}
-                      onClick={() => handleCustomerSelect(customer)}
-                      className="bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:shadow-lg"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-xl">
-                              <UserCircle className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-gray-800">{customer.name}</h4>
-                              <p className="text-sm text-gray-600">{customer.taxId}</p>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-gray-600">{t('pos.totalOrders')}</span>
-                              <span className="font-semibold text-gray-800">{customer.totalOrders}</span>
-                            </div>
-                            {customer.discountLevel > 0 && (
-                              <div className="flex items-center space-x-2">
-                                <Percent className="w-4 h-4 text-green-500" />
-                                <span className="font-semibold text-green-600">{customer.discountLevel}% Discount</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="ml-4">
-                          <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200">
-                            {t('common.select')}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {filteredCustomers.length === 0 && (
-                    <div className="text-center py-12">
-                      <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                      <p className="text-xl text-gray-500 mb-2">{t('pos.noCustomersFoundTitle')}</p>
-                      <p className="text-gray-400">{t('pos.noCustomersFoundMessage')}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Numpad Section */}
-              {numpadConfig.isOpen && (
-                <div className="flex-1">
-                  <VirtualKeyboard
-                    isOpen={true}
-                    onClose={() => setNumpadConfig(prev => ({ ...prev, isOpen: false }))}
-                    onConfirm={(value: string) => {
-                      const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                      setCustomerSearchTerm(validatedValue);
-                    }}
-                    title={t('pos.searchByNif')}
-                    initialValue={customerSearchTerm}
-                    maxLength={9}
-                    allowNumbers={true}
-                    allowLetters={true}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add New Customer Modal */}
-      {showAddCustomerModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-3xl p-8 w-[1000px] max-w-6xl h-[700px] shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-gray-800">Add New Customer</h3>
-              <button
-                onClick={handleCancelAddCustomer}
-                className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Customer Form and Keyboard */}
-            <div className="flex-1 flex space-x-6 overflow-hidden">
-              {/* Customer Form */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="space-y-3">
-                  {/* Personal Information Section */}
-                  <div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Name
-                        </label>
-                        <input
-                          type="text"
-                          value={newCustomerForm.name}
-                          onChange={(e) => handleCustomerFormChange('name', e.target.value)}
-                          onClick={() => handleTextFieldClick('name', false, true, 50)}
-                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'name'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                            }`}
-                          placeholder="Enter customer name"
-                          readOnly
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          NIF *
-                        </label>
-                        <div className="relative">
-                          <TaxIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
-                          <input
-                            type="text"
-                            value={newCustomerForm.taxId}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                              handleCustomerFormChange('taxId', value);
-                            }}
-                            onClick={() => {
-                              setActiveField('taxId');
-                              setKeyboardConfig({
-                                isOpen: true,
-                                title: '',
-                                field: 'taxId',
-                                onConfirm: (value: string) => {
-                                  // Apply NIF validation: alphanumeric, max 9 characters, uppercase
-                                  const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                                  handleCustomerFormChange('taxId', validatedValue);
-                                },
-                                maxLength: 9,
-                                allowNumbers: true,
-                                allowLetters: true
-                              });
-                            }}
-                            className={getNifFieldClasses(
-                              newCustomerForm.taxId,
-                              `w-full pl-6 pr-8 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'taxId'
-                                ? 'border-blue-500 bg-blue-50'
-                                : ''
-                              }`
-                            )}
-                            placeholder="123456789 / X1234567L"
-                            maxLength={9}
-                            required
-                            readOnly
-                          />
-                          {newCustomerForm.taxId && (
-                            <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                              {getNifValidationState(newCustomerForm.taxId) === 'valid' ? (
-                                <Check className="w-3 h-3 text-green-500" />
-                              ) : (
-                                <AlertCircle className="w-3 h-3 text-red-500" />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Contact Information Section */}
-                  <div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Phone
-                        </label>
-                        <div className="relative">
-                          <Phone className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
-                          <input
-                            type="tel"
-                            value={newCustomerForm.phone}
-                            onChange={(e) => handleCustomerFormChange('phone', e.target.value)}
-                            onClick={() => handleTextFieldClick('phone', true, false, 20)}
-                            className={`w-full pl-6 pr-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'phone'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                              }`}
-                            placeholder="+351 912 345 678"
-                            readOnly
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Email
-                        </label>
-                        <div className="relative">
-                          <Mail className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
-                          <input
-                            type="email"
-                            value={newCustomerForm.email}
-                            onChange={(e) => handleCustomerFormChange('email', e.target.value)}
-                            onClick={() => handleTextFieldClick('email', true, true, 50)}
-                            className={`w-full pl-6 pr-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'email'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                              }`}
-                            placeholder="customer@email.com"
-                            readOnly
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Location Information Section */}
-                  <div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          City
-                        </label>
-                        <input
-                          type="text"
-                          value={newCustomerForm.city}
-                          onChange={(e) => handleCustomerFormChange('city', e.target.value)}
-                          onClick={() => handleTextFieldClick('city', false, true, 30)}
-                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'city'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                            }`}
-                          placeholder="Lisbon"
-                          readOnly
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Postal Code
-                        </label>
-                        <input
-                          type="text"
-                          value={newCustomerForm.postalCode}
-                          onChange={(e) => handleCustomerFormChange('postalCode', e.target.value)}
-                          onClick={() => handleTextFieldClick('postalCode', true, false, 10)}
-                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'postalCode'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                            }`}
-                          placeholder="1000-001"
-                          readOnly
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Country
-                        </label>
-                        <input
-                          type="text"
-                          value={newCustomerForm.country}
-                          onChange={(e) => handleCustomerFormChange('country', e.target.value)}
-                          onClick={() => handleTextFieldClick('country', false, true, 30)}
-                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'country'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                            }`}
-                          placeholder="Portugal"
-                          readOnly
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-              {/* Virtual Keyboard */}
-              <div className="flex-1">
-                <VirtualKeyboard
-                  isOpen={showAddCustomerModal}
-                  onClose={() => { }}
-                  onConfirm={keyboardConfig.onConfirm}
-                  title=""
-                  initialValue={activeField && newCustomerForm[activeField as keyof typeof newCustomerForm] ? newCustomerForm[activeField as keyof typeof newCustomerForm]?.toString() || '' : ''}
-                  maxLength={keyboardConfig.maxLength}
-                  allowNumbers={keyboardConfig.allowNumbers}
-                  allowLetters={keyboardConfig.allowLetters}
-                />
-              </div>
-            </div>
-
-            {/* Form Actions */}
-            <div className="flex-none mt-6 pt-6 border-t border-gray-200">
-              <div className="flex space-x-2">
-                <button
-                  onClick={handleCancelAddCustomer}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-2 rounded-xl min-h-[36px] transition-colors text-sm"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={handleCustomerFormSubmit}
-                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-2 rounded-xl min-h-[36px] transition-colors flex items-center justify-center space-x-2 text-sm"
-                >
-                  <Save className="w-3 h-3" />
-                  <span>Save Customer</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Modal */}
-      {showPayment && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-3xl p-8 w-[480px] max-w-md shadow-2xl">
-            <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t('pos.processPayment')}</h3>
-            <div className="space-y-6">
-              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-2xl">
-                <div className="text-4xl font-bold text-center">
-                  €{finalTotal.toFixed(2)}
-                </div>
-              </div>
-
-              {/* Cash Payment Section */}
-              {cashReceived > 0 && (
-                <div className="space-y-3">
-                  <div className="flex justify-between text-lg">
-                    <span className="text-gray-600">{t('pos.cashReceived')}</span>
-                    <span className="text-gray-800 font-semibold">€{cashReceived.toFixed(2)}</span>
-                  </div>
-                  {cashReceived > finalTotal && (
-                    <div className="flex justify-between text-xl font-bold text-green-600">
-                      <span>{t('pos.changeDue')}</span>
-                      <span>€{(cashReceived - finalTotal).toFixed(2)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  onClick={handleCashClick}
-                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]"
-                >
-                  <Banknote className="w-6 h-6" />
-                  <span>{t('pos.cash')}</span>
-                </button>
-                <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]">
-                  <CreditCard className="w-6 h-6" />
-                  <span>{t('pos.card')}</span>
-                </button>
-              </div>
-
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => {
-                    setShowPayment(false);
-                    setCashReceived(0);
-                  }}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-3 rounded-2xl min-h-[60px]"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 rounded-2xl min-h-[60px]"
-                  disabled={cashReceived > 0 && cashReceived < finalTotal}
-                >
-                  {t('pos.completeSale')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Logout Confirmation Modal */}
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-3xl p-8 w-[400px] max-w-md shadow-2xl">
-            <div className="text-center">
-              <div className={`bg-gradient-to-r ${getRoleColor(user?.role || '')} p-4 rounded-full inline-block mb-6`}>
-                <UserCircle className="w-12 h-12 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.confirmLogoutTitle')}</h3>
-              <p className="text-lg text-gray-600 mb-2">
-                {t('pos.confirmLogoutQuestion')}, <strong>{user?.name}</strong>?
-              </p>
-              <p className="text-sm text-gray-500 mb-8">
-                {t('pos.unsavedWork')}
-              </p>
-
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => setShowLogoutConfirm(false)}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
-                >
-                  <LogOut className="w-5 h-5" />
-                  <span>{t('common.logout')}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Auto-Logout Warning Modal */}
-      {showAutoLogoutWarning && settings.autoLogout.enabled && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-          <div className="bg-white rounded-3xl p-8 w-[450px] max-w-md shadow-2xl border-4 border-yellow-400">
-            <div className="text-center">
-              <div className="bg-gradient-to-r from-yellow-500 to-orange-500 p-4 rounded-full inline-block mb-6">
-                <Clock className="w-12 h-12 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.sessionTimeoutWarning')}</h3>
-              <p className="text-lg text-gray-600 mb-2">
-                {t('pos.autoLogoutMessage')}
-              </p>
-              <div className="text-4xl font-bold text-red-600 mb-6">
-                {autoLogoutCountdown}s
-              </div>
-              <p className="text-sm text-gray-500 mb-8">
-                {t('pos.securityNotice')}
-              </p>
-
-              <div className="flex space-x-4">
-                <button
-                  onClick={handleAutoLogout}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
-                >
-                  {t('pos.logoutNow')}
-                </button>
-                <button
-                  onClick={handleExtendSession}
-                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
-                >
-                  <UserCircle className="w-5 h-5" />
-                  <span>{t('pos.stayLoggedIn')}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Virtual Numpad */}
-      <VirtualNumpad
-        isOpen={numpadConfig.isOpen && !showCustomerModal}
-        onClose={() => setNumpadConfig(prev => ({ ...prev, isOpen: false }))}
-        onConfirm={numpadConfig.onConfirm}
-        title={numpadConfig.title}
-        prefix={numpadConfig.prefix}
-        suffix={numpadConfig.suffix}
-        placeholder={numpadConfig.placeholder}
-        allowDecimal={numpadConfig.allowDecimal}
-        maxLength={numpadConfig.maxLength}
-      />
-
-      {/* Bottom User Status Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-1 z-10">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <p className="text-xs font-medium text-gray-800">{user?.name} • <span className="capitalize text-gray-600">{user?.role}</span></p>
-            {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
-              <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
-                {t('pos.saleInProgress')}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center space-x-3 text-xs text-gray-500">
-            {settings.autoLogout.enabled && (
-              <span>
-                {Math.floor(timeUntilAutoLogout / 60000)}:{String(Math.floor((timeUntilAutoLogout % 60000) / 1000)).padStart(2, '0')}
-              </span>
-            )}
-            {settings.pos.autoClearCart.enabled && settings.pos.autoClearCart.timeoutMinutes > 0 && cart.length > 0 && (
-              <span className="text-orange-600">
-                Cart: {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
-              </span>
-            )}
-            <span>POS Terminal • {new Date().toLocaleDateString('pt-PT')}</span>
-          </div>
-        </div>
-      </div>
 
     </div>
   );
