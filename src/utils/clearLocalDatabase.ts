@@ -1,49 +1,58 @@
 import { localDb } from '../lib/localDatabase';
 
-export const clearLocalDatabase = async () => {
+/**
+ * Clear and reinitialize the local database
+ * This will fix any schema mismatches or corrupted data
+ */
+export const clearAndReinitializeDatabase = async (): Promise<void> => {
     try {
-        console.log('🗑️  Starting local database cleanup...');
+        console.log('Clearing local database...');
 
-        // Check current data before clearing
-        const categoryCount = await localDb.categories.count();
-        const productCount = await localDb.products.count();
+        // Close the database connection
+        localDb.close();
 
-        console.log('📊 Current database state:');
-        console.log(`   Categories: ${categoryCount}`);
-        console.log(`   Products: ${productCount}`);
+        // Delete the entire database
+        await localDb.delete();
 
-        if (categoryCount === 0 && productCount === 0) {
-            console.log('✅ Database is already empty - nothing to clear');
-            return;
-        }
+        // Reopen and recreate the database with the current schema
+        await localDb.open();
 
-        // Clear products first (due to foreign key relationship)
-        console.log('🗂️  Clearing products...');
-        await localDb.products.clear();
-        console.log('   ✅ Products cleared');
-
-        // Clear categories
-        console.log('📂 Clearing categories...');
-        await localDb.categories.clear();
-        console.log('   ✅ Categories cleared');
-
-        // Verify cleanup
-        const finalCategoryCount = await localDb.categories.count();
-        const finalProductCount = await localDb.products.count();
-
-        console.log('🎉 Database cleanup completed successfully!');
-        console.log('📊 Final database state:');
-        console.log(`   Categories: ${finalCategoryCount}`);
-        console.log(`   Products: ${finalProductCount}`);
-
-        if (finalCategoryCount === 0 && finalProductCount === 0) {
-            console.log('✅ All products and categories have been successfully removed');
-        } else {
-            console.warn('⚠️  Some data may still remain - please check manually');
-        }
-
+        console.log('Local database cleared and reinitialized successfully');
     } catch (error) {
-        console.error('❌ Error clearing local database:', error);
+        console.error('Failed to clear and reinitialize database:', error);
+        throw error;
+    }
+};
+
+/**
+ * Clear all employee data only (keep schema)
+ */
+export const clearEmployeeData = async (): Promise<void> => {
+    try {
+        console.log('Clearing employee data...');
+
+        await localDb.transaction('rw', [
+            localDb.employees,
+            localDb.employeeSyncQueue,
+            localDb.syncMetadata
+        ], async () => {
+            await localDb.employees.clear();
+            await localDb.employeeSyncQueue.clear();
+            await localDb.syncMetadata.clear();
+
+            // Reinitialize sync metadata
+            await localDb.syncMetadata.add({
+                id: 'employees',
+                lastPulledAt: null,
+                lastPushedAt: null,
+                pendingOperations: 0,
+                conflictCount: 0,
+            });
+        });
+
+        console.log('Employee data cleared successfully');
+    } catch (error) {
+        console.error('Failed to clear employee data:', error);
         throw error;
     }
 };
@@ -56,12 +65,12 @@ if (typeof window === 'undefined' && import.meta.url) {
 
     if (isMainModule) {
         console.log('🚀 Running clear local database script...');
-        clearLocalDatabase()
+        clearAndReinitializeDatabase()
             .then(() => {
                 console.log('✅ Script completed successfully');
                 process.exit(0);
             })
-            .catch((error) => {
+            .catch((error: Error) => {
                 console.error('💥 Script failed:', error);
                 process.exit(1);
             });

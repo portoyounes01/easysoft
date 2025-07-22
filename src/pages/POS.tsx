@@ -213,6 +213,7 @@ const POS: React.FC = () => {
     const saved = localStorage.getItem('pos-sidebar-collapsed');
     return saved ? JSON.parse(saved) : false;
   });
+  const [showNavigation, setShowNavigation] = useState(false);
   const [discount, setDiscount] = useState({ type: 'none', value: 0 });
 
   // Toggle sidebar and persist state
@@ -221,6 +222,12 @@ const POS: React.FC = () => {
     setIsSidebarCollapsed(newCollapsed);
     localStorage.setItem('pos-sidebar-collapsed', JSON.stringify(newCollapsed));
   };
+
+  // Toggle navigation overlay
+  const toggleNavigation = () => {
+    setShowNavigation(!showNavigation);
+  };
+
   const [cashReceived, setCashReceived] = useState(0);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [newCustomerForm, setNewCustomerForm] = useState({
@@ -746,889 +753,336 @@ const POS: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex">
-      {/* Sidebar */}
-      <div className={`bg-gradient-to-b from-slate-900 to-slate-800 text-white min-h-screen flex flex-col shadow-2xl transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}>
-        <div className="p-6 border-b border-slate-700">
-          <div className="flex items-center space-x-3">
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-lg flex-shrink-0">
-              <FileText className="w-6 h-6 text-white" />
-            </div>
-            {!isSidebarCollapsed && (
-              <div>
-                <h1 className="text-xl font-bold">POS System</h1>
-                <p className="text-slate-400 text-sm">Professional Edition</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {[
-              { path: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard' },
-              { path: '/pos', icon: ShoppingCart, label: 'Point of Sale', permission: 'sales' },
-              { path: '/products', icon: Package, label: 'Products', permission: 'inventory' },
-              { path: '/employees', icon: Users, label: 'Employees', permission: 'employees' },
-              { path: '/reports', icon: BarChart3, label: 'Reports', permission: 'reports' },
-              { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'sales' },
-              { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' }
-            ].map((item) => {
-              if (!user) return null;
-              if (user.role !== 'admin' && !user.access_levels.includes(item.permission) && !user.access_levels.includes('all')) return null;
-
-              const Icon = item.icon;
-              return (
-                <li key={item.path}>
-                  <NavLink
-                    to={item.path}
-                    className={({ isActive }) =>
-                      `flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 group relative ${isActive
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg transform scale-105'
-                        : 'text-slate-300 hover:bg-slate-700 hover:text-white hover:transform hover:scale-105'
-                      } ${isSidebarCollapsed ? 'justify-center' : ''}`
-                    }
-                    title={isSidebarCollapsed ? item.label : undefined}
-                  >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
-                    {!isSidebarCollapsed && <span className="font-medium">{item.label}</span>}
-
-                    {/* Tooltip for collapsed state */}
-                    {isSidebarCollapsed && (
-                      <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                        {item.label}
-                      </div>
-                    )}
-                  </NavLink>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        <div className="p-4 border-t border-slate-700">
-          <div className={`flex items-center p-3 bg-slate-800 rounded-lg mb-3 ${isSidebarCollapsed ? 'justify-center space-x-0' : 'space-x-3'}`}>
-            <div className={`bg-gradient-to-r ${getRoleColor(user?.role || '')} p-2 rounded-full flex-shrink-0`}>
-              <UserCircle className="w-5 h-5 text-white" />
-            </div>
-            {!isSidebarCollapsed && (
-              <div className="flex-1">
-                <p className="font-medium text-sm">{user?.name}</p>
-                <p className="text-slate-400 text-xs">{user?.role.toUpperCase()}</p>
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={() => setShowLogoutConfirm(true)}
-            className={`w-full flex items-center px-4 py-3 text-slate-300 hover:bg-red-600 hover:text-white rounded-lg transition-all duration-200 hover:transform hover:scale-105 group relative ${isSidebarCollapsed ? 'justify-center space-x-0' : 'space-x-3'}`}
-            title={isSidebarCollapsed ? 'Logout' : undefined}
-          >
-            <LogOut className="w-5 h-5 group-hover:animate-pulse flex-shrink-0" />
-            {!isSidebarCollapsed && <span className="font-medium">Logout</span>}
-
-            {/* Tooltip for collapsed state */}
-            {isSidebarCollapsed && (
-              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                Logout
-              </div>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 p-3 sm:p-4 md:p-6 pb-8">
-        {/* Header */}
-        <div className="mb-4 sm:mb-6">
-          <div className="flex items-center mb-3 sm:mb-4">
-            {/* Menu Toggle and Back button */}
-            <div className="flex items-center space-x-3">
-              {/* Menu Toggle Button */}
+    <div className="h-screen flex bg-gray-50">
+      {/* Main Content Area - takes most space */}
+      <div className="flex-1 flex flex-col">
+        {/* Top Header - only over left sidebar + center, not cart */}
+        <div className="flex-none bg-white shadow-sm border-b border-gray-200 px-4 py-3">
+          <div className="flex items-center justify-between">
+            {/* Left - Hamburger Menu only */}
+            <div className="flex items-center">
               <button
-                onClick={toggleSidebar}
-                className="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-2xl transition-all duration-200 flex items-center space-x-2 min-h-[60px] shadow-lg"
+                onClick={toggleNavigation}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 title="Toggle Navigation"
               >
-                <Menu className="w-5 h-5" />
-                <span className="hidden sm:inline font-semibold">Menu</span>
+                <Menu className="w-6 h-6 text-gray-600" />
               </button>
+            </div>
 
-              {/* Back to Categories Button */}
-              {selectedCategoryId && (
-                <button
-                  onClick={() => setSelectedCategoryId('')}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors min-h-[60px]"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  <span>{t('pos.backToCategories')}</span>
-                </button>
-              )}
+            {/* Center - Search Bar */}
+            <div className="flex-1 max-w-md mx-8">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search Product..."
+                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Right - Action Buttons */}
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handleCustomerClick}
+                className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg transition-colors"
+                title="Customer"
+              >
+                <User className="w-5 h-5" />
+              </button>
+              <button className="bg-gray-200 hover:bg-gray-300 text-gray-700 p-2 rounded-lg transition-colors">
+                <Settings className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-center">
-              <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Loading Products...</h2>
-              <p className="text-gray-600">Please wait while we load your product catalog</p>
-            </div>
-          </div>
-        )}
-
-        {/* Error State */}
-        {error && !isLoading && (
-          <div className="flex items-center justify-center h-96">
-            <div className="text-center max-w-md">
-              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">{t('pos.errorLoadingData')}</h2>
-              <p className="text-gray-600 mb-6">{error}</p>
-              <div className="flex space-x-3 justify-center">
-                <button
-                  onClick={handleRetryData}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
-                >
-                  <RefreshCw className="w-5 h-5" />
-                  <span>{t('pos.retry')}</span>
-                </button>
-                <button
-                  onClick={handleSyncData}
-                  className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
-                >
-                  <RefreshCw className="w-5 h-5" />
-                  <span>{t('pos.syncData')}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Main Content - Only show when not loading and no error */}
-        {!isLoading && !error && (
+        {/* Navigation Overlay */}
+        {showNavigation && (
           <>
-            {/* Category View */}
-            {!selectedCategoryId && (
-              <div className="mb-6">
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black bg-opacity-30 z-40"
+              onClick={() => setShowNavigation(false)}
+            />
 
-                {/* Categories Grid */}
-                {allCategories.length > 0 ? (
-                  <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                    {allCategories.map((category) => (
-                      <div
-                        key={category.id}
-                        onClick={() => handleCategoryClick(category.id)}
-                        className={`
-                          bg-gradient-to-r ${category.color} text-white rounded-xl shadow-lg border border-white 
-                          overflow-hidden hover:scale-105 hover:shadow-xl transition-all duration-300 cursor-pointer 
-                          aspect-square flex flex-col items-center justify-center p-4 relative
-                        `}
-                      >
-                        <div className="bg-white bg-opacity-20 p-3 rounded-lg mb-3">
-                          {renderCategoryIcon(category.icon)}
-                        </div>
-                        <h3 className="text-sm font-bold text-center">{category.name}</h3>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  /* Empty Categories State */
-                  <div className="text-center py-12">
-                    <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-gray-800 mb-2">{t('pos.noCategoriesAvailable')}</h3>
-                    <p className="text-gray-600 mb-6">{t('pos.emptyCatalogMessage')}</p>
-                    <div className="flex space-x-3 justify-center">
-                      <button
-                        onClick={handleRetryData}
-                        className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
-                      >
-                        <RefreshCw className="w-5 h-5" />
-                        <span>{t('pos.refresh')}</span>
-                      </button>
-                      <button
-                        onClick={handleSyncData}
-                        className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
-                      >
-                        <RefreshCw className="w-5 h-5" />
-                        <span>{t('pos.syncData')}</span>
-                      </button>
+            {/* Navigation Sidebar */}
+            <div className="fixed top-0 left-0 h-full w-80 bg-gradient-to-b from-slate-900 to-slate-800 text-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col">
+              <div className="p-6 border-b border-slate-700">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-lg flex-shrink-0">
+                      <FileText className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h1 className="text-xl font-bold">POS System</h1>
+                      <p className="text-slate-400 text-sm">Professional Edition</p>
                     </div>
                   </div>
-                )}
+                  <button
+                    onClick={() => setShowNavigation(false)}
+                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
-            )}
 
-            {/* Products View */}
-            {selectedCategoryId && (
-              <div>
-                {/* Category Header */}
-                <div className="mb-6">
-                  {(() => {
-                    const currentCategory = allCategories.find(c => c.id === selectedCategoryId);
-                    return currentCategory ? (
-                      <div className={`bg-gradient-to-r ${currentCategory.color} text-white rounded-2xl p-6 mb-6`}>
-                        <div className="flex items-center space-x-4">
-                          <div className="bg-white bg-opacity-20 p-3 rounded-2xl">
-                            {renderCategoryIcon(currentCategory.icon)}
-                          </div>
-                          <div>
-                            <h2 className="text-2xl font-bold">{currentCategory.name}</h2>
-                            <p className="text-white text-opacity-90">{currentCategory.description}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ) : null;
-                  })()}
+              <nav className="flex-1 p-4">
+                <ul className="space-y-2">
+                  {[
+                    { path: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard' },
+                    { path: '/pos', icon: ShoppingCart, label: 'Point of Sale', permission: 'sales' },
+                    { path: '/products', icon: Package, label: 'Products', permission: 'inventory' },
+                    { path: '/employees', icon: Users, label: 'Employees', permission: 'employees' },
+                    { path: '/reports', icon: BarChart3, label: 'Reports', permission: 'reports' },
+                    { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'sales' },
+                    { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' }
+                  ].map((item) => {
+                    if (!user) return null;
+                    if (user.role !== 'admin' && !user.access_levels.includes(item.permission) && !user.access_levels.includes('all')) return null;
+
+                    const Icon = item.icon;
+                    return (
+                      <li key={item.path}>
+                        <NavLink
+                          to={item.path}
+                          onClick={() => setShowNavigation(false)}
+                          className={({ isActive }) =>
+                            `flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 group relative ${isActive
+                              ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg transform scale-105'
+                              : 'text-slate-300 hover:bg-slate-700 hover:text-white hover:transform hover:scale-105'
+                            }`
+                          }
+                        >
+                          <Icon className="w-5 h-5 flex-shrink-0" />
+                          <span className="font-medium">{item.label}</span>
+                        </NavLink>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </nav>
+
+              <div className="p-4 border-t border-slate-700">
+                <div className="flex items-center p-3 bg-slate-800 rounded-lg mb-3 space-x-3">
+                  <div className={`bg-gradient-to-r ${getRoleColor(user?.role || '')} p-2 rounded-full flex-shrink-0`}>
+                    <UserCircle className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">{user?.name}</p>
+                    <p className="text-slate-400 text-xs">{user?.role.toUpperCase()}</p>
+                  </div>
                 </div>
 
-                {/* Products Grid */}
-                {filteredProducts.length > 0 ? (
-                  <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 max-h-[calc(100vh-400px)] overflow-y-auto">
-                    {filteredProducts.map((product) => {
-                      const canAdd = canAddToCart(product, 1);
-                      const isOutOfStock = !canAdd && !settings.pos.allowNegativeStock;
-
-                      return (
-                        <div
-                          key={product.id}
-                          className={`
-                            bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden transition-all duration-300 aspect-square flex flex-col p-3 relative
-                            ${canAdd
-                              ? 'hover:scale-105 hover:shadow-xl cursor-pointer'
-                              : 'opacity-60 cursor-not-allowed'
-                            }
-                          `}
-                          onClick={canAdd ? () => handleAddToCart(product) : undefined}
-                        >
-                          {/* Image - Takes 2/3 of the card */}
-                          <div className="h-2/3 w-full mb-2 rounded-lg overflow-hidden flex-shrink-0 relative">
-                            <img
-                              src={product.image_url || '/placeholder-product.jpg'}
-                              alt={product.name}
-                              className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale' : ''}`}
-                            />
-
-                            {/* Out of Stock Overlay */}
-                            {isOutOfStock && (
-                              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                                <div className="bg-red-500 text-white px-2 py-1 rounded-lg text-xs font-bold transform -rotate-12">
-                                  {t('pos.outOfStock')}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Name - Takes 1/3 of the card */}
-                          <div className="h-1/3 flex flex-col justify-center text-center">
-                            <h3 className={`text-sm font-bold line-clamp-2 leading-tight ${isOutOfStock ? 'text-gray-500' : 'text-gray-800'
-                              }`}>
-                              {product.name}
-                            </h3>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  /* Empty Products State */
-                  <div className="text-center py-12">
-                    <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-500 mb-2">{t('pos.noProductsFoundTitle')}</h3>
-                    <p className="text-gray-400">
-                      {t('pos.noProductsFoundMessage')}
-                    </p>
-                  </div>
-                )}
+                <button
+                  onClick={() => setShowLogoutConfirm(true)}
+                  className="w-full flex items-center px-4 py-3 text-slate-300 hover:bg-red-600 hover:text-white rounded-lg transition-all duration-200 hover:transform hover:scale-105 space-x-3"
+                >
+                  <LogOut className="w-5 h-5 group-hover:animate-pulse flex-shrink-0" />
+                  <span className="font-medium">Logout</span>
+                </button>
               </div>
-            )}
+            </div>
           </>
         )}
 
-        {/* Customer Selection Modal */}
-        {showCustomerModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className={`bg-white rounded-3xl p-8 shadow-2xl flex flex-col ${numpadConfig.isOpen ? 'w-[1000px] max-w-6xl' : 'w-[600px] max-w-2xl'} h-[600px]`}>
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-800">{t('pos.selectCustomerTitle')}</h3>
-                <button
-                  onClick={() => {
-                    setShowCustomerModal(false);
-                    setCustomerSearchTerm('');
-                    setNumpadConfig(prev => ({ ...prev, isOpen: false }));
-                  }}
-                  className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+        {/* Content Area - Left sidebar + Center products */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left Categories Sidebar */}
+          <div className="w-44 bg-white shadow-sm border-r border-gray-200 flex flex-col">
+            {/* All Option */}
+            <button
+              onClick={() => setSelectedCategoryId('')}
+              className={`flex flex-col items-center justify-center p-4 border-b border-gray-200 transition-all duration-200 ${!selectedCategoryId
+                ? 'bg-blue-500 text-white border-l-4 border-l-blue-600'
+                : 'text-gray-600 hover:bg-gray-50'
+                }`}
+            >
+              <div className={`p-3 rounded-lg mb-2 ${!selectedCategoryId ? 'bg-white bg-opacity-20' : 'bg-gray-100'
+                }`}>
+                <Grid className="w-6 h-6" />
               </div>
+              <span className="text-sm font-medium">All</span>
+            </button>
 
-              {/* Main Content Area */}
-              <div className={`flex-1 flex ${numpadConfig.isOpen ? 'space-x-6' : ''} overflow-hidden`}>
-                {/* Customer Section */}
-                <div className={`${numpadConfig.isOpen ? 'flex-1' : 'w-full'} flex flex-col`}>
-                  {/* Search Section */}
-                  <div className="mb-6 space-y-4">
-                    <div className="flex space-x-3">
-                      <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder={t('pos.searchByNif')}
-                          value={customerSearchTerm}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                            setCustomerSearchTerm(value);
-                          }}
-                          onClick={() => {
-                            setNumpadConfig({
-                              isOpen: true,
-                              title: t('pos.searchByNif'),
-                              onConfirm: (value: string) => {
-                                const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                                setCustomerSearchTerm(validatedValue);
-                              },
-                              prefix: '',
-                              suffix: '',
-                              placeholder: '123456789',
-                              allowDecimal: false,
-                              maxLength: 9
-                            });
-                          }}
-                          className={`w-full pl-10 pr-4 py-3 border rounded-2xl focus:outline-none focus:ring-2 focus:border-transparent cursor-pointer ${numpadConfig.isOpen ? 'border-blue-500 bg-blue-50' : 'border-gray-300 focus:ring-blue-500'
-                            }`}
-                          maxLength={9}
-                        />
-                      </div>
-                      <button
-                        onClick={() => {
-                          setNumpadConfig({
-                            isOpen: true,
-                            title: t('pos.searchByNif'),
-                            onConfirm: (value: string) => {
-                              const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                              setCustomerSearchTerm(validatedValue);
-                            },
-                            prefix: '',
-                            suffix: '',
-                            placeholder: '123456789',
-                            allowDecimal: false,
-                            maxLength: 9
-                          });
-                        }}
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-2xl font-semibold transition-all duration-200 flex items-center space-x-2"
-                      >
-                        <Search className="w-5 h-5" />
-                        <span>{t('pos.search')}</span>
-                      </button>
+            {/* Category Options */}
+            <div className="flex-1 overflow-y-auto">
+              {allCategories.length > 0 ? (
+                allCategories.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => setSelectedCategoryId(category.id)}
+                    className={`w-full flex flex-col items-center justify-center p-4 border-b border-gray-200 transition-all duration-200 ${selectedCategoryId === category.id
+                      ? `bg-gradient-to-r ${category.color} text-white border-l-4 border-l-opacity-60`
+                      : 'text-gray-600 hover:bg-gray-50'
+                      }`}
+                  >
+                    <div className={`p-3 rounded-lg mb-2 ${selectedCategoryId === category.id ? 'bg-white bg-opacity-20' : 'bg-gray-100'
+                      }`}>
+                      {renderCategoryIcon(category.icon)}
                     </div>
-
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-gray-600">
-                        {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''} found
-                      </p>
-                      <button
-                        onClick={handleAddNewCustomer}
-                        className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center space-x-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>{t('pos.addNew')}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Customer List */}
-                  <div className="flex-1 overflow-y-auto space-y-3">
-                    {filteredCustomers.map((customer) => (
-                      <div
-                        key={customer.id}
-                        onClick={() => handleCustomerSelect(customer)}
-                        className="bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:shadow-lg"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-3 mb-2">
-                              <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-xl">
-                                <UserCircle className="w-5 h-5 text-white" />
-                              </div>
-                              <div>
-                                <h4 className="font-bold text-gray-800">{customer.name}</h4>
-                                <p className="text-sm text-gray-600">{customer.taxId}</p>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div className="flex items-center space-x-2">
-                                <span className="text-gray-600">{t('pos.totalOrders')}</span>
-                                <span className="font-semibold text-gray-800">{customer.totalOrders}</span>
-                              </div>
-                              {customer.discountLevel > 0 && (
-                                <div className="flex items-center space-x-2">
-                                  <Percent className="w-4 h-4 text-green-500" />
-                                  <span className="font-semibold text-green-600">{customer.discountLevel}% Discount</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="ml-4">
-                            <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200">
-                              {t('common.select')}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-
-                    {filteredCustomers.length === 0 && (
-                      <div className="text-center py-12">
-                        <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <p className="text-xl text-gray-500 mb-2">{t('pos.noCustomersFoundTitle')}</p>
-                        <p className="text-gray-400">{t('pos.noCustomersFoundMessage')}</p>
-                      </div>
-                    )}
+                    <span className="text-sm font-medium text-center leading-tight">{category.name}</span>
+                  </button>
+                ))
+              ) : (
+                /* Empty Categories State */
+                <div className="p-4 text-center">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500 mb-4">{t('pos.noCategoriesAvailable')}</p>
+                  <div className="space-y-2">
+                    <button
+                      onClick={handleRetryData}
+                      className="w-full bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs font-medium transition-colors"
+                    >
+                      {t('pos.refresh')}
+                    </button>
+                    <button
+                      onClick={handleSyncData}
+                      className="w-full bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-xs font-medium transition-colors"
+                    >
+                      {t('pos.syncData')}
+                    </button>
                   </div>
                 </div>
-
-                {/* Numpad Section */}
-                {numpadConfig.isOpen && (
-                  <div className="flex-1">
-                    <VirtualKeyboard
-                      isOpen={true}
-                      onClose={() => setNumpadConfig(prev => ({ ...prev, isOpen: false }))}
-                      onConfirm={(value: string) => {
-                        const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                        setCustomerSearchTerm(validatedValue);
-                      }}
-                      title={t('pos.searchByNif')}
-                      initialValue={customerSearchTerm}
-                      maxLength={9}
-                      allowNumbers={true}
-                      allowLetters={true}
-                    />
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           </div>
-        )}
 
-        {/* Add New Customer Modal */}
-        {showAddCustomerModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-3xl p-8 w-[1000px] max-w-6xl h-[700px] shadow-2xl flex flex-col">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-800">Add New Customer</h3>
-                <button
-                  onClick={handleCancelAddCustomer}
-                  className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+          {/* Center Products Area */}
+          <div className="flex-1 bg-gray-50 overflow-hidden">
+            {/* Loading State */}
+            {isLoading && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Loading Products...</h2>
+                  <p className="text-gray-600">Please wait while we load your product catalog</p>
+                </div>
               </div>
+            )}
 
-              {/* Customer Form and Keyboard */}
-              <div className="flex-1 flex space-x-6 overflow-hidden">
-                {/* Customer Form */}
-                <div className="flex-1 overflow-y-auto">
-                  <div className="space-y-3">
-                    {/* Personal Information Section */}
-                    <div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Name
-                          </label>
-                          <input
-                            type="text"
-                            value={newCustomerForm.name}
-                            onChange={(e) => handleCustomerFormChange('name', e.target.value)}
-                            onClick={() => handleTextFieldClick('name', false, true, 50)}
-                            className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'name'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                              }`}
-                            placeholder="Enter customer name"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            NIF *
-                          </label>
-                          <div className="relative">
-                            <TaxIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
-                            <input
-                              type="text"
-                              value={newCustomerForm.taxId}
-                              onChange={(e) => {
-                                const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                                handleCustomerFormChange('taxId', value);
-                              }}
-                              onClick={() => {
-                                setActiveField('taxId');
-                                setKeyboardConfig({
-                                  isOpen: true,
-                                  title: '',
-                                  field: 'taxId',
-                                  onConfirm: (value: string) => {
-                                    // Apply NIF validation: alphanumeric, max 9 characters, uppercase
-                                    const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                                    handleCustomerFormChange('taxId', validatedValue);
-                                  },
-                                  maxLength: 9,
-                                  allowNumbers: true,
-                                  allowLetters: true
-                                });
-                              }}
-                              className={getNifFieldClasses(
-                                newCustomerForm.taxId,
-                                `w-full pl-6 pr-8 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'taxId'
-                                  ? 'border-blue-500 bg-blue-50'
-                                  : ''
-                                }`
-                              )}
-                              placeholder="123456789 / X1234567L"
-                              maxLength={9}
-                              required
-                            />
-                            {newCustomerForm.taxId && (
-                              <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                                {getNifValidationState(newCustomerForm.taxId) === 'valid' ? (
-                                  <Check className="w-3 h-3 text-green-500" />
-                                ) : (
-                                  <AlertCircle className="w-3 h-3 text-red-500" />
+            {/* Error State */}
+            {error && !isLoading && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center max-w-md">
+                  <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">{t('pos.errorLoadingData')}</h2>
+                  <p className="text-gray-600 mb-6">{error}</p>
+                  <div className="flex space-x-3 justify-center">
+                    <button
+                      onClick={handleRetryData}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
+                    >
+                      <RefreshCw className="w-5 h-5" />
+                      <span>{t('pos.retry')}</span>
+                    </button>
+                    <button
+                      onClick={handleSyncData}
+                      className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
+                    >
+                      <RefreshCw className="w-5 h-5" />
+                      <span>{t('pos.syncData')}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Products Content */}
+            {!isLoading && !error && (
+              <div className="h-full overflow-y-auto p-6">
+                {/* Show products for selected category OR all products if no category selected */}
+                {(() => {
+                  const productsToShow = selectedCategoryId ? filteredProducts : getActiveProducts();
+
+                  return (
+                    <>
+                      {/* Products Grid */}
+                      {productsToShow.length > 0 ? (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                          {productsToShow.map((product) => {
+                            const canAdd = canAddToCart(product, 1);
+                            const isOutOfStock = !canAdd && !settings.pos.allowNegativeStock;
+                            const cartItem = cart.find(item => item.product.id === product.id);
+                            const cartQuantity = cartItem ? cartItem.quantity : 0;
+                            const remainingStock = product.stock - cartQuantity;
+
+                            return (
+                              <div
+                                key={product.id}
+                                className={`
+                                  bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 cursor-pointer relative
+                                  ${canAdd
+                                    ? 'hover:shadow-lg hover:scale-105'
+                                    : 'opacity-60 cursor-not-allowed'
+                                  }
+                                `}
+                                onClick={canAdd ? () => handleAddToCart(product) : undefined}
+                              >
+                                {/* Cart Quantity Badge */}
+                                {cartQuantity > 0 && (
+                                  <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold z-10">
+                                    {cartQuantity}
+                                  </div>
                                 )}
+
+                                {/* Product Image */}
+                                <div className="aspect-square relative">
+                                  <img
+                                    src={product.image_url || '/placeholder-product.jpg'}
+                                    alt={product.name}
+                                    className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale' : ''}`}
+                                  />
+
+                                  {/* Out of Stock Overlay */}
+                                  {isOutOfStock && (
+                                    <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                                      <div className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm font-bold">
+                                        {t('pos.outOfStock')}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Product Info */}
+                                <div className="p-3 flex flex-col h-20">
+                                  <h3 className="font-semibold text-gray-800 text-sm truncate flex-1" title={product.name}>{product.name}</h3>
+
+                                  {/* Price and Stock at bottom */}
+                                  <div className="flex items-center justify-between mt-auto pt-2">
+                                    <span className="text-sm font-bold text-gray-900">€{product.price.toFixed(2)}</span>
+                                    <span className="text-xs text-gray-500">Stock: {remainingStock}</span>
+                                  </div>
+                                </div>
                               </div>
-                            )}
-                          </div>
+                            );
+                          })}
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Contact Information Section */}
-                    <div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Phone
-                          </label>
-                          <div className="relative">
-                            <Phone className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
-                            <input
-                              type="tel"
-                              value={newCustomerForm.phone}
-                              onChange={(e) => handleCustomerFormChange('phone', e.target.value)}
-                              onClick={() => handleTextFieldClick('phone', true, false, 20)}
-                              className={`w-full pl-6 pr-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'phone'
-                                ? 'border-blue-500 bg-blue-50'
-                                : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                                }`}
-                              placeholder="+351 912 345 678"
-                            />
-                          </div>
+                      ) : (
+                        /* Empty Products State */
+                        <div className="text-center py-20">
+                          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <h3 className="text-xl font-semibold text-gray-500 mb-2">
+                            {selectedCategoryId ? t('pos.noProductsFoundTitle') : 'No Products Available'}
+                          </h3>
+                          <p className="text-gray-400">
+                            {selectedCategoryId ? t('pos.noProductsFoundMessage') : 'No products found in your catalog'}
+                          </p>
                         </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Email
-                          </label>
-                          <div className="relative">
-                            <Mail className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
-                            <input
-                              type="email"
-                              value={newCustomerForm.email}
-                              onChange={(e) => handleCustomerFormChange('email', e.target.value)}
-                              onClick={() => handleTextFieldClick('email', true, true, 50)}
-                              className={`w-full pl-6 pr-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'email'
-                                ? 'border-blue-500 bg-blue-50'
-                                : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                                }`}
-                              placeholder="customer@email.com"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Location Information Section */}
-                    <div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            City
-                          </label>
-                          <input
-                            type="text"
-                            value={newCustomerForm.city}
-                            onChange={(e) => handleCustomerFormChange('city', e.target.value)}
-                            onClick={() => handleTextFieldClick('city', false, true, 30)}
-                            className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'city'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                              }`}
-                            placeholder="Lisbon"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Postal Code
-                          </label>
-                          <input
-                            type="text"
-                            value={newCustomerForm.postalCode}
-                            onChange={(e) => handleCustomerFormChange('postalCode', e.target.value)}
-                            onClick={() => handleTextFieldClick('postalCode', true, false, 10)}
-                            className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'postalCode'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                              }`}
-                            placeholder="1000-001"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Country
-                          </label>
-                          <input
-                            type="text"
-                            value={newCustomerForm.country}
-                            onChange={(e) => handleCustomerFormChange('country', e.target.value)}
-                            onClick={() => handleTextFieldClick('country', false, true, 30)}
-                            className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'country'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                              }`}
-                            placeholder="Portugal"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-
-                {/* Virtual Keyboard */}
-                <div className="flex-1">
-                  <VirtualKeyboard
-                    isOpen={showAddCustomerModal}
-                    onClose={() => { }}
-                    onConfirm={keyboardConfig.onConfirm}
-                    title=""
-                    initialValue={activeField && newCustomerForm[activeField as keyof typeof newCustomerForm] ? newCustomerForm[activeField as keyof typeof newCustomerForm]?.toString() || '' : ''}
-                    maxLength={keyboardConfig.maxLength}
-                    allowNumbers={keyboardConfig.allowNumbers}
-                    allowLetters={keyboardConfig.allowLetters}
-                  />
-                </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
-
-              {/* Form Actions */}
-              <div className="flex-none mt-6 pt-6 border-t border-gray-200">
-                <div className="flex space-x-2">
-                  <button
-                    onClick={handleCancelAddCustomer}
-                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-2 rounded-xl min-h-[36px] transition-colors text-sm"
-                  >
-                    {t('common.cancel')}
-                  </button>
-                  <button
-                    onClick={handleCustomerFormSubmit}
-                    className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-2 rounded-xl min-h-[36px] transition-colors flex items-center justify-center space-x-2 text-sm"
-                  >
-                    <Save className="w-3 h-3" />
-                    <span>Save Customer</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Payment Modal */}
-        {showPayment && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-3xl p-8 w-[480px] max-w-md shadow-2xl">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t('pos.processPayment')}</h3>
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-2xl">
-                  <div className="text-4xl font-bold text-center">
-                    €{finalTotal.toFixed(2)}
-                  </div>
-                </div>
-
-                {/* Cash Payment Section */}
-                {cashReceived > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-lg">
-                      <span className="text-gray-600">{t('pos.cashReceived')}</span>
-                      <span className="text-gray-800 font-semibold">€{cashReceived.toFixed(2)}</span>
-                    </div>
-                    {cashReceived > finalTotal && (
-                      <div className="flex justify-between text-xl font-bold text-green-600">
-                        <span>{t('pos.changeDue')}</span>
-                        <span>€{(cashReceived - finalTotal).toFixed(2)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={handleCashClick}
-                    className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]"
-                  >
-                    <Banknote className="w-6 h-6" />
-                    <span>{t('pos.cash')}</span>
-                  </button>
-                  <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]">
-                    <CreditCard className="w-6 h-6" />
-                    <span>{t('pos.card')}</span>
-                  </button>
-                </div>
-
-                <div className="flex space-x-4">
-                  <button
-                    onClick={() => {
-                      setShowPayment(false);
-                      setCashReceived(0);
-                    }}
-                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-3 rounded-2xl min-h-[60px]"
-                  >
-                    {t('common.cancel')}
-                  </button>
-                  <button
-                    className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 rounded-2xl min-h-[60px]"
-                    disabled={cashReceived > 0 && cashReceived < finalTotal}
-                  >
-                    {t('pos.completeSale')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Logout Confirmation Modal */}
-        {showLogoutConfirm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-3xl p-8 w-[400px] max-w-md shadow-2xl">
-              <div className="text-center">
-                <div className={`bg-gradient-to-r ${getRoleColor(user?.role || '')} p-4 rounded-full inline-block mb-6`}>
-                  <UserCircle className="w-12 h-12 text-white" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.confirmLogoutTitle')}</h3>
-                <p className="text-lg text-gray-600 mb-2">
-                  {t('pos.confirmLogoutQuestion')}, <strong>{user?.name}</strong>?
-                </p>
-                <p className="text-sm text-gray-500 mb-8">
-                  {t('pos.unsavedWork')}
-                </p>
-
-                <div className="flex space-x-4">
-                  <button
-                    onClick={() => setShowLogoutConfirm(false)}
-                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
-                  >
-                    {t('common.cancel')}
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
-                  >
-                    <LogOut className="w-5 h-5" />
-                    <span>{t('common.logout')}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Auto-Logout Warning Modal */}
-        {showAutoLogoutWarning && settings.autoLogout.enabled && (
-          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-            <div className="bg-white rounded-3xl p-8 w-[450px] max-w-md shadow-2xl border-4 border-yellow-400">
-              <div className="text-center">
-                <div className="bg-gradient-to-r from-yellow-500 to-orange-500 p-4 rounded-full inline-block mb-6">
-                  <Clock className="w-12 h-12 text-white" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.sessionTimeoutWarning')}</h3>
-                <p className="text-lg text-gray-600 mb-2">
-                  {t('pos.autoLogoutMessage')}
-                </p>
-                <div className="text-4xl font-bold text-red-600 mb-6">
-                  {autoLogoutCountdown}s
-                </div>
-                <p className="text-sm text-gray-500 mb-8">
-                  {t('pos.securityNotice')}
-                </p>
-
-                <div className="flex space-x-4">
-                  <button
-                    onClick={handleAutoLogout}
-                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
-                  >
-                    {t('pos.logoutNow')}
-                  </button>
-                  <button
-                    onClick={handleExtendSession}
-                    className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
-                  >
-                    <UserCircle className="w-5 h-5" />
-                    <span>{t('pos.stayLoggedIn')}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Virtual Numpad */}
-        <VirtualNumpad
-          isOpen={numpadConfig.isOpen && !showCustomerModal}
-          onClose={() => setNumpadConfig(prev => ({ ...prev, isOpen: false }))}
-          onConfirm={numpadConfig.onConfirm}
-          title={numpadConfig.title}
-          prefix={numpadConfig.prefix}
-          suffix={numpadConfig.suffix}
-          placeholder={numpadConfig.placeholder}
-          allowDecimal={numpadConfig.allowDecimal}
-          maxLength={numpadConfig.maxLength}
-        />
-
-        {/* Bottom User Status Bar */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-1 z-10">
-          <div className="flex items-center justify-between max-w-7xl mx-auto">
-            <div className="flex items-center space-x-3">
-              <p className="text-xs font-medium text-gray-800">{user?.name} • <span className="capitalize text-gray-600">{user?.role}</span></p>
-              {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
-                <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
-                  {t('pos.saleInProgress')}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center space-x-3 text-xs text-gray-500">
-              {settings.autoLogout.enabled && (
-                <span>
-                  {Math.floor(timeUntilAutoLogout / 60000)}:{String(Math.floor((timeUntilAutoLogout % 60000) / 1000)).padStart(2, '0')}
-                </span>
-              )}
-              {settings.pos.autoClearCart.enabled && settings.pos.autoClearCart.timeoutMinutes > 0 && cart.length > 0 && (
-                <span className="text-orange-600">
-                  Cart: {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
-                </span>
-              )}
-              <span>POS Terminal • {new Date().toLocaleDateString('pt-PT')}</span>
-            </div>
+            )}
           </div>
         </div>
-
       </div>
 
-      {/* Cart Sidebar */}
-      <div className="w-full md:w-80 lg:w-96 bg-white shadow-xl border-l-2 border-gray-200 flex flex-col md:max-w-md h-screen pb-8">
+      {/* Right Cart Sidebar - Full Height */}
+      <div className="w-96 bg-white shadow-xl border-l border-gray-200 flex flex-col h-screen">
         {/* Top Half - Cart Items */}
         <div className="h-1/2 overflow-y-auto p-4 sm:p-6 border-b-2 border-gray-200">
           {/* Customer Info */}
@@ -1813,8 +1267,582 @@ const POS: React.FC = () => {
         </div>
       </div>
 
+      {/* Customer Selection Modal */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className={`bg-white rounded-3xl p-8 shadow-2xl flex flex-col ${numpadConfig.isOpen ? 'w-[1000px] max-w-6xl' : 'w-[600px] max-w-2xl'} h-[600px]`}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-800">{t('pos.selectCustomerTitle')}</h3>
+              <button
+                onClick={() => {
+                  setShowCustomerModal(false);
+                  setCustomerSearchTerm('');
+                  setNumpadConfig(prev => ({ ...prev, isOpen: false }));
+                }}
+                className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
 
+            {/* Main Content Area */}
+            <div className={`flex-1 flex ${numpadConfig.isOpen ? 'space-x-6' : ''} overflow-hidden`}>
+              {/* Customer Section */}
+              <div className={`${numpadConfig.isOpen ? 'flex-1' : 'w-full'} flex flex-col`}>
+                {/* Search Section */}
+                <div className="mb-6 space-y-4">
+                  <div className="flex space-x-3">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder={t('pos.searchByNif')}
+                        value={customerSearchTerm}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                          setCustomerSearchTerm(value);
+                        }}
+                        onClick={() => {
+                          setNumpadConfig({
+                            isOpen: true,
+                            title: t('pos.searchByNif'),
+                            onConfirm: (value: string) => {
+                              const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                              setCustomerSearchTerm(validatedValue);
+                            },
+                            prefix: '',
+                            suffix: '',
+                            placeholder: '123456789',
+                            allowDecimal: false,
+                            maxLength: 9
+                          });
+                        }}
+                        className={`w-full pl-10 pr-4 py-3 border rounded-2xl focus:outline-none focus:ring-2 focus:border-transparent cursor-pointer ${numpadConfig.isOpen ? 'border-blue-500 bg-blue-50' : 'border-gray-300 focus:ring-blue-500'
+                          }`}
+                        maxLength={9}
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        setNumpadConfig({
+                          isOpen: true,
+                          title: t('pos.searchByNif'),
+                          onConfirm: (value: string) => {
+                            const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                            setCustomerSearchTerm(validatedValue);
+                          },
+                          prefix: '',
+                          suffix: '',
+                          placeholder: '123456789',
+                          allowDecimal: false,
+                          maxLength: 9
+                        });
+                      }}
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-2xl font-semibold transition-all duration-200 flex items-center space-x-2"
+                    >
+                      <Search className="w-5 h-5" />
+                      <span>{t('pos.search')}</span>
+                    </button>
+                  </div>
 
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">
+                      {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''} found
+                    </p>
+                    <button
+                      onClick={handleAddNewCustomer}
+                      className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center space-x-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>{t('pos.addNew')}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Customer List */}
+                <div className="flex-1 overflow-y-auto space-y-3">
+                  {filteredCustomers.map((customer) => (
+                    <div
+                      key={customer.id}
+                      onClick={() => handleCustomerSelect(customer)}
+                      className="bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:shadow-lg"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-xl">
+                              <UserCircle className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-gray-800">{customer.name}</h4>
+                              <p className="text-sm text-gray-600">{customer.taxId}</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-gray-600">{t('pos.totalOrders')}</span>
+                              <span className="font-semibold text-gray-800">{customer.totalOrders}</span>
+                            </div>
+                            {customer.discountLevel > 0 && (
+                              <div className="flex items-center space-x-2">
+                                <Percent className="w-4 h-4 text-green-500" />
+                                <span className="font-semibold text-green-600">{customer.discountLevel}% Discount</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="ml-4">
+                          <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200">
+                            {t('common.select')}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {filteredCustomers.length === 0 && (
+                    <div className="text-center py-12">
+                      <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-xl text-gray-500 mb-2">{t('pos.noCustomersFoundTitle')}</p>
+                      <p className="text-gray-400">{t('pos.noCustomersFoundMessage')}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Numpad Section */}
+              {numpadConfig.isOpen && (
+                <div className="flex-1">
+                  <VirtualKeyboard
+                    isOpen={true}
+                    onClose={() => setNumpadConfig(prev => ({ ...prev, isOpen: false }))}
+                    onConfirm={(value: string) => {
+                      const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                      setCustomerSearchTerm(validatedValue);
+                    }}
+                    title={t('pos.searchByNif')}
+                    initialValue={customerSearchTerm}
+                    maxLength={9}
+                    allowNumbers={true}
+                    allowLetters={true}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Customer Modal */}
+      {showAddCustomerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-3xl p-8 w-[1000px] max-w-6xl h-[700px] shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-800">Add New Customer</h3>
+              <button
+                onClick={handleCancelAddCustomer}
+                className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Customer Form and Keyboard */}
+            <div className="flex-1 flex space-x-6 overflow-hidden">
+              {/* Customer Form */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="space-y-3">
+                  {/* Personal Information Section */}
+                  <div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Name
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomerForm.name}
+                          onChange={(e) => handleCustomerFormChange('name', e.target.value)}
+                          onClick={() => handleTextFieldClick('name', false, true, 50)}
+                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'name'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                            }`}
+                          placeholder="Enter customer name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          NIF *
+                        </label>
+                        <div className="relative">
+                          <TaxIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                          <input
+                            type="text"
+                            value={newCustomerForm.taxId}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                              handleCustomerFormChange('taxId', value);
+                            }}
+                            onClick={() => {
+                              setActiveField('taxId');
+                              setKeyboardConfig({
+                                isOpen: true,
+                                title: '',
+                                field: 'taxId',
+                                onConfirm: (value: string) => {
+                                  // Apply NIF validation: alphanumeric, max 9 characters, uppercase
+                                  const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                                  handleCustomerFormChange('taxId', validatedValue);
+                                },
+                                maxLength: 9,
+                                allowNumbers: true,
+                                allowLetters: true
+                              });
+                            }}
+                            className={getNifFieldClasses(
+                              newCustomerForm.taxId,
+                              `w-full pl-6 pr-8 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'taxId'
+                                ? 'border-blue-500 bg-blue-50'
+                                : ''
+                              }`
+                            )}
+                            placeholder="123456789 / X1234567L"
+                            maxLength={9}
+                            required
+                          />
+                          {newCustomerForm.taxId && (
+                            <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                              {getNifValidationState(newCustomerForm.taxId) === 'valid' ? (
+                                <Check className="w-3 h-3 text-green-500" />
+                              ) : (
+                                <AlertCircle className="w-3 h-3 text-red-500" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact Information Section */}
+                  <div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Phone
+                        </label>
+                        <div className="relative">
+                          <Phone className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                          <input
+                            type="tel"
+                            value={newCustomerForm.phone}
+                            onChange={(e) => handleCustomerFormChange('phone', e.target.value)}
+                            onClick={() => handleTextFieldClick('phone', true, false, 20)}
+                            className={`w-full pl-6 pr-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'phone'
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                              }`}
+                            placeholder="+351 912 345 678"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Email
+                        </label>
+                        <div className="relative">
+                          <Mail className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                          <input
+                            type="email"
+                            value={newCustomerForm.email}
+                            onChange={(e) => handleCustomerFormChange('email', e.target.value)}
+                            onClick={() => handleTextFieldClick('email', true, true, 50)}
+                            className={`w-full pl-6 pr-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'email'
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                              }`}
+                            placeholder="customer@email.com"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Location Information Section */}
+                  <div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          City
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomerForm.city}
+                          onChange={(e) => handleCustomerFormChange('city', e.target.value)}
+                          onClick={() => handleTextFieldClick('city', false, true, 30)}
+                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'city'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                            }`}
+                          placeholder="Lisbon"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Postal Code
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomerForm.postalCode}
+                          onChange={(e) => handleCustomerFormChange('postalCode', e.target.value)}
+                          onClick={() => handleTextFieldClick('postalCode', true, false, 10)}
+                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'postalCode'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                            }`}
+                          placeholder="1000-001"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Country
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomerForm.country}
+                          onChange={(e) => handleCustomerFormChange('country', e.target.value)}
+                          onClick={() => handleTextFieldClick('country', false, true, 30)}
+                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'country'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
+                            }`}
+                          placeholder="Portugal"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Virtual Keyboard */}
+              <div className="flex-1">
+                <VirtualKeyboard
+                  isOpen={showAddCustomerModal}
+                  onClose={() => { }}
+                  onConfirm={keyboardConfig.onConfirm}
+                  title=""
+                  initialValue={activeField && newCustomerForm[activeField as keyof typeof newCustomerForm] ? newCustomerForm[activeField as keyof typeof newCustomerForm]?.toString() || '' : ''}
+                  maxLength={keyboardConfig.maxLength}
+                  allowNumbers={keyboardConfig.allowNumbers}
+                  allowLetters={keyboardConfig.allowLetters}
+                />
+              </div>
+            </div>
+
+            {/* Form Actions */}
+            <div className="flex-none mt-6 pt-6 border-t border-gray-200">
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleCancelAddCustomer}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-2 rounded-xl min-h-[36px] transition-colors text-sm"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={handleCustomerFormSubmit}
+                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-2 rounded-xl min-h-[36px] transition-colors flex items-center justify-center space-x-2 text-sm"
+                >
+                  <Save className="w-3 h-3" />
+                  <span>Save Customer</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-3xl p-8 w-[480px] max-w-md shadow-2xl">
+            <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t('pos.processPayment')}</h3>
+            <div className="space-y-6">
+              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-2xl">
+                <div className="text-4xl font-bold text-center">
+                  €{finalTotal.toFixed(2)}
+                </div>
+              </div>
+
+              {/* Cash Payment Section */}
+              {cashReceived > 0 && (
+                <div className="space-y-3">
+                  <div className="flex justify-between text-lg">
+                    <span className="text-gray-600">{t('pos.cashReceived')}</span>
+                    <span className="text-gray-800 font-semibold">€{cashReceived.toFixed(2)}</span>
+                  </div>
+                  {cashReceived > finalTotal && (
+                    <div className="flex justify-between text-xl font-bold text-green-600">
+                      <span>{t('pos.changeDue')}</span>
+                      <span>€{(cashReceived - finalTotal).toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={handleCashClick}
+                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]"
+                >
+                  <Banknote className="w-6 h-6" />
+                  <span>{t('pos.cash')}</span>
+                </button>
+                <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]">
+                  <CreditCard className="w-6 h-6" />
+                  <span>{t('pos.card')}</span>
+                </button>
+              </div>
+
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => {
+                    setShowPayment(false);
+                    setCashReceived(0);
+                  }}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-3 rounded-2xl min-h-[60px]"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 rounded-2xl min-h-[60px]"
+                  disabled={cashReceived > 0 && cashReceived < finalTotal}
+                >
+                  {t('pos.completeSale')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-3xl p-8 w-[400px] max-w-md shadow-2xl">
+            <div className="text-center">
+              <div className={`bg-gradient-to-r ${getRoleColor(user?.role || '')} p-4 rounded-full inline-block mb-6`}>
+                <UserCircle className="w-12 h-12 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.confirmLogoutTitle')}</h3>
+              <p className="text-lg text-gray-600 mb-2">
+                {t('pos.confirmLogoutQuestion')}, <strong>{user?.name}</strong>?
+              </p>
+              <p className="text-sm text-gray-500 mb-8">
+                {t('pos.unsavedWork')}
+              </p>
+
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span>{t('common.logout')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Logout Warning Modal */}
+      {showAutoLogoutWarning && settings.autoLogout.enabled && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white rounded-3xl p-8 w-[450px] max-w-md shadow-2xl border-4 border-yellow-400">
+            <div className="text-center">
+              <div className="bg-gradient-to-r from-yellow-500 to-orange-500 p-4 rounded-full inline-block mb-6">
+                <Clock className="w-12 h-12 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.sessionTimeoutWarning')}</h3>
+              <p className="text-lg text-gray-600 mb-2">
+                {t('pos.autoLogoutMessage')}
+              </p>
+              <div className="text-4xl font-bold text-red-600 mb-6">
+                {autoLogoutCountdown}s
+              </div>
+              <p className="text-sm text-gray-500 mb-8">
+                {t('pos.securityNotice')}
+              </p>
+
+              <div className="flex space-x-4">
+                <button
+                  onClick={handleAutoLogout}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
+                >
+                  {t('pos.logoutNow')}
+                </button>
+                <button
+                  onClick={handleExtendSession}
+                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
+                >
+                  <UserCircle className="w-5 h-5" />
+                  <span>{t('pos.stayLoggedIn')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Virtual Numpad */}
+      <VirtualNumpad
+        isOpen={numpadConfig.isOpen && !showCustomerModal}
+        onClose={() => setNumpadConfig(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={numpadConfig.onConfirm}
+        title={numpadConfig.title}
+        prefix={numpadConfig.prefix}
+        suffix={numpadConfig.suffix}
+        placeholder={numpadConfig.placeholder}
+        allowDecimal={numpadConfig.allowDecimal}
+        maxLength={numpadConfig.maxLength}
+      />
+
+      {/* Bottom User Status Bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-1 z-10">
+        <div className="flex items-center justify-between max-w-7xl mx-auto">
+          <div className="flex items-center space-x-3">
+            <p className="text-xs font-medium text-gray-800">{user?.name} • <span className="capitalize text-gray-600">{user?.role}</span></p>
+            {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
+              <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
+                {t('pos.saleInProgress')}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center space-x-3 text-xs text-gray-500">
+            {settings.autoLogout.enabled && (
+              <span>
+                {Math.floor(timeUntilAutoLogout / 60000)}:{String(Math.floor((timeUntilAutoLogout % 60000) / 1000)).padStart(2, '0')}
+              </span>
+            )}
+            {settings.pos.autoClearCart.enabled && settings.pos.autoClearCart.timeoutMinutes > 0 && cart.length > 0 && (
+              <span className="text-orange-600">
+                Cart: {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
+              </span>
+            )}
+            <span>POS Terminal • {new Date().toLocaleDateString('pt-PT')}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

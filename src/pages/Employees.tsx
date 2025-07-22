@@ -1,217 +1,910 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
-  Plus,
-  Search,
-  Filter,
-  Edit,
-  Trash2,
-  Shield,
-  User,
-  Clock,
-  DollarSign,
-  MoreVertical
+    Plus,
+    Search,
+    Filter,
+    Edit,
+    Trash2,
+    Shield,
+    User,
+    Clock,
+    DollarSign,
+    MoreVertical,
+    X,
+    Save,
+    AlertCircle,
+    Eye,
+    EyeOff,
+    Calendar,
+    Mail,
+    Phone,
+    KeyRound,
+    Loader2,
+    UserCheck,
+    UserX,
+    BarChart3,
+    Copy
 } from 'lucide-react';
 import { useEmployees } from '../contexts/EmployeesContext';
+import { EmployeeFormData, EmployeeRole, AccessLevel, Employee } from '../types/supabase';
+import DatabaseReset from '../components/DatabaseReset';
 
 const Employees: React.FC = () => {
-  const { employees, isLoading, error, refreshEmployees } = useEmployees();
+    const {
+        employees,
+        isLoading,
+        error,
+        refreshEmployees,
+        createEmployee,
+        updateEmployee,
+        deleteEmployee
+    } = useEmployees();
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRole, setSelectedRole] = useState('all');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedRole, setSelectedRole] = useState('all');
+    const [showEmployeeForm, setShowEmployeeForm] = useState(false);
+    const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState<Employee | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+    const [showDatabaseReset, setShowDatabaseReset] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const roles = ['all', 'admin', 'manager', 'cashier', 'trainee'];
+    const roles = ['all', 'admin', 'manager', 'cashier'];
 
-  // Memo-compute filtered list to avoid re-render churn
-  const filteredEmployees = useMemo(() => {
-    return employees.filter(emp => {
-      const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.employee_number.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesRole = selectedRole === 'all' || emp.role === selectedRole;
-      return matchesSearch && matchesRole && emp.deleted_at === null;
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setOpenDropdown(null);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
+
+    // Check for database errors
+    useEffect(() => {
+        if (error && (
+            error.includes('object store') ||
+            error.includes('NotFoundError') ||
+            error.includes('IDBTransaction') ||
+            error.includes('database object could not be found')
+        )) {
+            setShowDatabaseReset(true);
+        }
+    }, [error]);
+
+    // Form state
+    const [formData, setFormData] = useState<EmployeeFormData>({
+        employee_number: '',
+        name: '',
+        email: '',
+        phone: '',
+        role: 'cashier',
+        access_levels: ['sales'],
+        hire_date: new Date().toISOString().split('T')[0],
+        password: '',
+        pin: '',
+        is_active: true
     });
-  }, [employees, searchTerm, selectedRole]);
 
-  const getRoleBadge = (role: string) => {
-    const colors: Record<string, string> = {
-      admin: 'bg-red-100 text-red-800',
-      manager: 'bg-blue-100 text-blue-800',
-      cashier: 'bg-green-100 text-green-800',
-      trainee: 'bg-orange-100 text-orange-800',
+    const [formErrors, setFormErrors] = useState<Partial<Record<keyof EmployeeFormData, string>>>({});
+    const [showPassword, setShowPassword] = useState(false);
+
+    // Available access levels
+    const accessLevels: { value: AccessLevel; label: string; description: string }[] = [
+        { value: 'all', label: 'All Access', description: 'Full system access' },
+        { value: 'sales', label: 'Sales', description: 'Point of sale operations' },
+        { value: 'inventory', label: 'Inventory', description: 'Product management' },
+        { value: 'reports', label: 'Reports', description: 'View reports and analytics' },
+        { value: 'dashboard', label: 'Dashboard', description: 'Main dashboard access' },
+        { value: 'employees', label: 'Employees', description: 'Employee management' },
+        { value: 'settings', label: 'Settings', description: 'System configuration' },
+        { value: 'transactions', label: 'Transactions', description: 'Transaction history' },
+        { value: 'products', label: 'Products', description: 'Product catalog management' }
+    ];
+
+    // Memo-compute filtered list to avoid re-render churn
+    const filteredEmployees = useMemo(() => {
+        return employees.filter(emp => {
+            const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                emp.employee_number.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesRole = selectedRole === 'all' || emp.role === selectedRole;
+            return matchesSearch && matchesRole && emp.deleted_at === null;
+        });
+    }, [employees, searchTerm, selectedRole]);
+
+    const getRoleBadge = (role: string) => {
+        const colors: Record<string, string> = {
+            admin: 'bg-red-100 text-red-800',
+            manager: 'bg-blue-100 text-blue-800',
+            cashier: 'bg-green-100 text-green-800',
+        };
+
+        return (
+            <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${colors[role] || 'bg-gray-100 text-gray-800'}`}>
+                <Shield className="w-3 h-3" />
+                <span>{role.toUpperCase()}</span>
+            </span>
+        );
     };
 
-    return (
-      <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${colors[role] || 'bg-gray-100 text-gray-800'}`}>
-        <Shield className="w-3 h-3" />
-        <span>{role.toUpperCase()}</span>
-      </span>
-    );
-  };
+    // Generate next employee number
+    const generateEmployeeNumber = () => {
+        const maxNumber = employees.reduce((max, emp) => {
+            const num = parseInt(emp.employee_number.replace(/\D/g, ''), 10);
+            return isNaN(num) ? max : Math.max(max, num);
+        }, 0);
+        return `EMP${String(maxNumber + 1).padStart(4, '0')}`;
+    };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full p-12">
-        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+    // Handle form field changes
+    const handleFormChange = (field: keyof EmployeeFormData, value: any) => {
+        setFormData(prev => ({
+            ...prev,
+            [field]: value
+        }));
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-12 space-y-4">
-        <p className="text-red-600 font-semibold">{error}</p>
-        <button onClick={refreshEmployees} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Retry</button>
-      </div>
-    );
-  }
+        // Clear error for this field
+        if (formErrors[field]) {
+            setFormErrors(prev => ({
+                ...prev,
+                [field]: undefined
+            }));
+        }
+    };
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">Employee Management</h1>
-          <p className="text-gray-600 mt-1">Manage staff, track performance, and set permissions</p>
-        </div>
-        <button className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-600 transition-all flex items-center space-x-2 shadow-lg">
-          <Plus className="w-5 h-5" />
-          <span>Add Employee</span>
-        </button>
-      </div>
+    // Handle access level toggle
+    const handleAccessLevelToggle = (level: AccessLevel) => {
+        setFormData(prev => ({
+            ...prev,
+            access_levels: prev.access_levels.includes(level)
+                ? prev.access_levels.filter(l => l !== level)
+                : [...prev.access_levels, level]
+        }));
+    };
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {[
-          { title: 'Total Employees', value: employees.length.toString(), icon: User, color: 'bg-blue-500' },
-          { title: 'Active', value: employees.filter(e => e.is_active).length.toString(), icon: Clock, color: 'bg-green-500' },
-          { title: 'Roles', value: [...new Set(employees.map(e => e.role))].length.toString(), icon: Shield, color: 'bg-purple-500' },
-          { title: 'Deleted', value: employees.filter(e => e.deleted_at !== null).length.toString(), icon: Trash2, color: 'bg-red-500' }
-        ].map((stat, index) => {
-          const Icon = stat.icon;
-          return (
-            <div key={index} className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-              <div className="flex items-center justify-between">
+    // Validate form
+    const validateForm = (): boolean => {
+        const errors: Partial<Record<keyof EmployeeFormData, string>> = {};
+
+        if (!formData.name.trim()) {
+            errors.name = 'Name is required';
+        }
+
+        if (!formData.employee_number.trim()) {
+            errors.employee_number = 'Employee number is required';
+        } else {
+            // Check for duplicate employee number (excluding current employee when editing)
+            const duplicate = employees.find(emp =>
+                emp.employee_number === formData.employee_number &&
+                emp.id !== editingEmployee?.id &&
+                !emp.deleted_at
+            );
+            if (duplicate) {
+                errors.employee_number = 'Employee number already exists';
+            }
+        }
+
+        if (!formData.email.trim()) {
+            errors.email = 'Email is required';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+            errors.email = 'Invalid email format';
+        } else {
+            // Check for duplicate email (excluding current employee when editing)
+            const duplicate = employees.find(emp =>
+                emp.email === formData.email &&
+                emp.id !== editingEmployee?.id &&
+                !emp.deleted_at
+            );
+            if (duplicate) {
+                errors.email = 'Email already exists';
+            }
+        }
+
+        if (!formData.hire_date) {
+            errors.hire_date = 'Hire date is required';
+        }
+
+        if (formData.access_levels.length === 0) {
+            errors.access_levels = 'At least one access level is required';
+        }
+
+        // Password validation only for new employees
+        if (!editingEmployee && !formData.password?.trim()) {
+            errors.password = 'Password is required for new employees';
+        }
+
+        setFormErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
+    // Handle form submission
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!validateForm()) return;
+
+        setIsSubmitting(true);
+        try {
+            if (editingEmployee) {
+                // Update existing employee
+                const updateData = { ...formData };
+                if (!updateData.password?.trim()) {
+                    delete updateData.password; // Don't update password if empty
+                }
+                await updateEmployee(editingEmployee.id, updateData);
+            } else {
+                // Create new employee
+                await createEmployee(formData);
+            }
+
+            handleCloseForm();
+        } catch (error) {
+            console.error('Failed to save employee:', error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // Handle opening form for new employee
+    const handleAddEmployee = () => {
+        setEditingEmployee(null);
+        setFormData({
+            employee_number: generateEmployeeNumber(),
+            name: '',
+            email: '',
+            phone: '',
+            role: 'cashier',
+            access_levels: ['sales'],
+            hire_date: new Date().toISOString().split('T')[0],
+            password: '',
+            pin: '',
+            is_active: true
+        });
+        setFormErrors({});
+        setShowEmployeeForm(true);
+    };
+
+    // Handle opening form for editing
+    const handleEditEmployee = (employee: Employee) => {
+        setEditingEmployee(employee);
+        setFormData({
+            employee_number: employee.employee_number,
+            name: employee.name,
+            email: employee.email || '',
+            phone: employee.phone || '',
+            role: employee.role,
+            access_levels: employee.access_levels as AccessLevel[],
+            hire_date: employee.hire_date,
+            password: '', // Don't pre-fill password
+            pin: employee.pin || '',
+            is_active: employee.is_active
+        });
+        setFormErrors({});
+        setShowEmployeeForm(true);
+    };
+
+    // Handle closing form
+    const handleCloseForm = () => {
+        setShowEmployeeForm(false);
+        setEditingEmployee(null);
+        setFormData({
+            employee_number: '',
+            name: '',
+            email: '',
+            phone: '',
+            role: 'cashier',
+            access_levels: ['sales'],
+            hire_date: new Date().toISOString().split('T')[0],
+            password: '',
+            pin: '',
+            is_active: true
+        });
+        setFormErrors({});
+    };
+
+    // Handle delete confirmation
+    const handleDeleteEmployee = async () => {
+        if (!showDeleteConfirm) return;
+
+        try {
+            await deleteEmployee(showDeleteConfirm.id);
+            setShowDeleteConfirm(null);
+        } catch (error) {
+            console.error('Failed to delete employee:', error);
+        }
+    };
+
+    // Handle dropdown toggle
+    const handleDropdownToggle = (employeeId: string) => {
+        setOpenDropdown(openDropdown === employeeId ? null : employeeId);
+    };
+
+    // Handle activate/deactivate employee
+    const handleToggleEmployeeStatus = async (employee: Employee) => {
+        try {
+            await updateEmployee(employee.id, { is_active: !employee.is_active });
+            setOpenDropdown(null);
+        } catch (error) {
+            console.error('Failed to update employee status:', error);
+        }
+    };
+
+    // Handle copy employee number
+    const handleCopyEmployeeNumber = (employeeNumber: string) => {
+        navigator.clipboard.writeText(employeeNumber);
+        setOpenDropdown(null);
+        // You could add a toast notification here
+    };
+
+    // Show database reset if there's a schema error
+    if (showDatabaseReset) {
+        return (
+            <div className="space-y-6">
                 <div>
-                  <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
-                  <p className="text-gray-600 text-sm">{stat.title}</p>
+                    <h1 className="text-3xl font-bold text-gray-800">Employee Management</h1>
+                    <p className="text-gray-600 mt-1">Database requires reset due to schema changes</p>
                 </div>
-                <div className={`p-3 rounded-lg ${stat.color}`}>
-                  <Icon className="w-6 h-6 text-white" />
-                </div>
-              </div>
+                <DatabaseReset onComplete={() => window.location.reload()} />
             </div>
-          );
-        })}
-      </div>
+        );
+    }
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-          <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search employees..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
-              />
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-full p-12">
+                <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             </div>
+        );
+    }
 
-            <select
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              {roles.map(role => (
-                <option key={role} value={role}>
-                  {role === 'all' ? 'All Roles' : role.charAt(0).toUpperCase() + role.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <button className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-              <Filter className="w-4 h-4" />
-              <span>Filters</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Employee Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {filteredEmployees.map((employee) => (
-          <div key={employee.id} className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-lg font-bold">
-                    {employee.name.split(' ').map(n => n[0]).join('')}
-                  </span>
+    if (error) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full p-12 space-y-4">
+                <p className="text-red-600 font-semibold">{error}</p>
+                <div className="flex space-x-3">
+                    <button onClick={refreshEmployees} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Retry</button>
+                    <button
+                        onClick={() => setShowDatabaseReset(true)}
+                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+                    >
+                        Reset Database
+                    </button>
                 </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-800">{employee.name}</h3>
-                  <p className="text-sm text-gray-600">{employee.employee_number}</p>
-                  <p className="text-sm text-gray-500">{employee.email}</p>
+                    <h1 className="text-3xl font-bold text-gray-800">Employee Management</h1>
+                    <p className="text-gray-600 mt-1">Manage staff, track performance, and set permissions</p>
                 </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                {getRoleBadge(employee.role)}
-                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg">
-                  <MoreVertical className="w-4 h-4" />
+                <button
+                    onClick={handleAddEmployee}
+                    className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-600 transition-all flex items-center space-x-2 shadow-lg"
+                >
+                    <Plus className="w-5 h-5" />
+                    <span>Add Employee</span>
                 </button>
-              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="bg-green-50 p-3 rounded-lg">
-                <div className="flex items-center space-x-2 mb-1">
-                  <DollarSign className="w-4 h-4 text-green-600" />
-                  <span className="text-sm font-medium text-green-800">Total Sales</span>
+            {/* Filters */}
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                    <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                            <input
+                                type="text"
+                                placeholder="Search employees..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
+                            />
+                        </div>
+
+                        <select
+                            value={selectedRole}
+                            onChange={(e) => setSelectedRole(e.target.value)}
+                            className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                            {roles.map(role => (
+                                <option key={role} value={role}>
+                                    {role === 'all' ? 'All Roles' : role.charAt(0).toUpperCase() + role.slice(1)}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                        <button className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                            <Filter className="w-4 h-4" />
+                            <span>Filters</span>
+                        </button>
+                    </div>
                 </div>
-                <p className="text-lg font-bold text-green-700">€{employee.total_sales.toFixed(2)}</p>
-              </div>
-
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <div className="flex items-center space-x-2 mb-1">
-                  <Clock className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-800">Hours Worked</span>
-                </div>
-                <p className="text-lg font-bold text-blue-700">{employee.hours_worked}h</p>
-              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <p className="text-sm text-gray-600">Transactions</p>
-                <p className="font-semibold text-gray-800">{employee.transaction_count}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Avg Transaction</p>
-                <p className="font-semibold text-gray-800">€{employee.average_transaction.toFixed(2)}</p>
-              </div>
+            {/* Employee Cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {filteredEmployees.map((employee) => {
+                    // Calculate days worked (assuming 8 hours = 1 day)
+                    const daysWorked = Math.max(1, Math.round(employee.hours_worked / 8));
+                    // Calculate average sales per day
+                    const avgSalesPerDay = employee.total_sales / daysWorked;
+
+                    return (
+                        <div key={employee.id} className={`bg-white rounded-xl shadow-lg p-6 border ${employee.is_active ? 'border-gray-100' : 'border-red-200 opacity-75'}`}>
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-center space-x-4">
+                                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                        <span className="text-white text-lg font-bold">
+                                            {employee.name.split(' ').map(n => n[0]).join('')}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-gray-800">{employee.name}</h3>
+                                        <p className="text-sm text-gray-600">{employee.employee_number}</p>
+                                        <p className="text-sm text-gray-500">{employee.email}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    {getRoleBadge(employee.role)}
+                                    {!employee.is_active && (
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                            Inactive
+                                        </span>
+                                    )}
+                                    <div className="relative" ref={openDropdown === employee.id ? dropdownRef : null}>
+                                        <button
+                                            onClick={() => handleDropdownToggle(employee.id)}
+                                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                                        >
+                                            <MoreVertical className="w-4 h-4" />
+                                        </button>
+
+                                        {/* Dropdown Menu */}
+                                        {openDropdown === employee.id && (
+                                            <div className="absolute right-0 top-10 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+                                                <button
+                                                    onClick={() => {
+                                                        handleEditEmployee(employee);
+                                                        setOpenDropdown(null);
+                                                    }}
+                                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                                                >
+                                                    <Edit className="w-4 h-4" />
+                                                    <span>Edit Employee</span>
+                                                </button>
+
+                                                <button
+                                                    onClick={() => handleCopyEmployeeNumber(employee.employee_number)}
+                                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                                                >
+                                                    <Copy className="w-4 h-4" />
+                                                    <span>Copy Employee #</span>
+                                                </button>
+
+                                                <button
+                                                    onClick={() => handleToggleEmployeeStatus(employee)}
+                                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                                                >
+                                                    {employee.is_active ? (
+                                                        <>
+                                                            <UserX className="w-4 h-4" />
+                                                            <span>Deactivate</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <UserCheck className="w-4 h-4" />
+                                                            <span>Activate</span>
+                                                        </>
+                                                    )}
+                                                </button>
+
+                                                <div className="border-t border-gray-100 my-1"></div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        setShowDeleteConfirm(employee);
+                                                        setOpenDropdown(null);
+                                                    }}
+                                                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                    <span>Delete Employee</span>
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div className="bg-green-50 p-3 rounded-lg">
+                                    <div className="flex items-center space-x-2 mb-1">
+                                        <DollarSign className="w-4 h-4 text-green-600" />
+                                        <span className="text-sm font-medium text-green-800">Total Sales</span>
+                                    </div>
+                                    <p className="text-lg font-bold text-green-700">€{employee.total_sales.toFixed(2)}</p>
+                                </div>
+
+                                <div className="bg-blue-50 p-3 rounded-lg">
+                                    <div className="flex items-center space-x-2 mb-1">
+                                        <Clock className="w-4 h-4 text-blue-600" />
+                                        <span className="text-sm font-medium text-blue-800">Days Worked</span>
+                                    </div>
+                                    <p className="text-lg font-bold text-blue-700">{daysWorked}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <p className="text-sm text-gray-600">Transactions</p>
+                                    <p className="font-semibold text-gray-800">{employee.transaction_count}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-600">Avg Sales per Day</p>
+                                    <p className="font-semibold text-gray-800">€{avgSalesPerDay.toFixed(2)}</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                                <span className="text-sm text-gray-500">
+                                    Hire Date: {new Date(employee.hire_date).toLocaleDateString('pt-PT')}
+                                </span>
+                                <div className="flex items-center space-x-2">
+                                    <button
+                                        onClick={() => handleEditEmployee(employee)}
+                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                        title="Edit Employee"
+                                    >
+                                        <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => setShowDeleteConfirm(employee)}
+                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        title="Delete Employee"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-              <span className="text-sm text-gray-500">
-                Hire Date: {new Date(employee.hire_date).toLocaleDateString('pt-PT')}
-              </span>
-              <div className="flex items-center space-x-2">
-                <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+            {/* Employee Form Modal */}
+            {showEmployeeForm && (
+                <>
+                    {/* Backdrop */}
+                    <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={handleCloseForm} />
+
+                    {/* Modal */}
+                    <div className="fixed inset-0 z-50 overflow-y-auto">
+                        <div className="flex items-center justify-center min-h-full px-4 py-8">
+                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                                {/* Header */}
+                                <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white p-6 rounded-t-2xl">
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="text-xl font-bold">
+                                            {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
+                                        </h2>
+                                        <button
+                                            onClick={handleCloseForm}
+                                            className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
+                                        >
+                                            <X className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Form */}
+                                <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                                    {/* Basic Information */}
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Employee Number *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.employee_number}
+                                                    onChange={(e) => handleFormChange('employee_number', e.target.value)}
+                                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.employee_number ? 'border-red-500' : 'border-gray-300'
+                                                        }`}
+                                                    placeholder="EMP0001"
+                                                />
+                                                {formErrors.employee_number && (
+                                                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                                                        <AlertCircle className="w-4 h-4 mr-1" />
+                                                        {formErrors.employee_number}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Full Name *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.name}
+                                                    onChange={(e) => handleFormChange('name', e.target.value)}
+                                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.name ? 'border-red-500' : 'border-gray-300'
+                                                        }`}
+                                                    placeholder="John Doe"
+                                                />
+                                                {formErrors.name && (
+                                                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                                                        <AlertCircle className="w-4 h-4 mr-1" />
+                                                        {formErrors.name}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Email *
+                                                </label>
+                                                <div className="relative">
+                                                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                    <input
+                                                        type="email"
+                                                        value={formData.email}
+                                                        onChange={(e) => handleFormChange('email', e.target.value)}
+                                                        className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.email ? 'border-red-500' : 'border-gray-300'
+                                                            }`}
+                                                        placeholder="john@example.com"
+                                                    />
+                                                </div>
+                                                {formErrors.email && (
+                                                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                                                        <AlertCircle className="w-4 h-4 mr-1" />
+                                                        {formErrors.email}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Phone
+                                                </label>
+                                                <div className="relative">
+                                                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                    <input
+                                                        type="tel"
+                                                        value={formData.phone}
+                                                        onChange={(e) => handleFormChange('phone', e.target.value)}
+                                                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="+351 912 345 678"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Hire Date *
+                                                </label>
+                                                <div className="relative">
+                                                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                    <input
+                                                        type="date"
+                                                        value={formData.hire_date}
+                                                        onChange={(e) => handleFormChange('hire_date', e.target.value)}
+                                                        className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.hire_date ? 'border-red-500' : 'border-gray-300'
+                                                            }`}
+                                                    />
+                                                </div>
+                                                {formErrors.hire_date && (
+                                                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                                                        <AlertCircle className="w-4 h-4 mr-1" />
+                                                        {formErrors.hire_date}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Role *
+                                                </label>
+                                                <select
+                                                    value={formData.role}
+                                                    onChange={(e) => handleFormChange('role', e.target.value as EmployeeRole)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                >
+                                                    <option value="cashier">Cashier</option>
+                                                    <option value="manager">Manager</option>
+                                                    <option value="admin">Admin</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Security */}
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Security</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Password {!editingEmployee && '*'}
+                                                </label>
+                                                <div className="relative">
+                                                    <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                    <input
+                                                        type={showPassword ? 'text' : 'password'}
+                                                        value={formData.password}
+                                                        onChange={(e) => handleFormChange('password', e.target.value)}
+                                                        className={`w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.password ? 'border-red-500' : 'border-gray-300'
+                                                            }`}
+                                                        placeholder={editingEmployee ? 'Leave empty to keep current' : 'Enter password'}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowPassword(!showPassword)}
+                                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                                    >
+                                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                    </button>
+                                                </div>
+                                                {formErrors.password && (
+                                                    <p className="mt-1 text-sm text-red-600 flex items-center">
+                                                        <AlertCircle className="w-4 h-4 mr-1" />
+                                                        {formErrors.password}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    PIN (Optional)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.pin}
+                                                    onChange={(e) => handleFormChange('pin', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    placeholder="123456"
+                                                    maxLength={6}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Access Levels */}
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Access Levels</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {accessLevels.map((level) => (
+                                                <label
+                                                    key={level.value}
+                                                    className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={formData.access_levels.includes(level.value)}
+                                                        onChange={() => handleAccessLevelToggle(level.value)}
+                                                        className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                                    />
+                                                    <div>
+                                                        <div className="font-medium text-gray-900">{level.label}</div>
+                                                        <div className="text-sm text-gray-500">{level.description}</div>
+                                                    </div>
+                                                </label>
+                                            ))}
+                                        </div>
+                                        {formErrors.access_levels && (
+                                            <p className="mt-2 text-sm text-red-600 flex items-center">
+                                                <AlertCircle className="w-4 h-4 mr-1" />
+                                                {formErrors.access_levels}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Status */}
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Status</h3>
+                                        <label className="flex items-center space-x-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.is_active}
+                                                onChange={(e) => handleFormChange('is_active', e.target.checked)}
+                                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            />
+                                            <span className="text-gray-900">Active Employee</span>
+                                        </label>
+                                    </div>
+
+                                    {/* Form Actions */}
+                                    <div className="flex space-x-4 pt-6 border-t border-gray-200">
+                                        <button
+                                            type="button"
+                                            onClick={handleCloseForm}
+                                            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                        >
+                                            {isSubmitting ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                    <span>Saving...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Save className="w-4 h-4" />
+                                                    <span>{editingEmployee ? 'Update' : 'Create'}</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm && (
+                <>
+                    {/* Backdrop */}
+                    <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowDeleteConfirm(null)} />
+
+                    {/* Modal */}
+                    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+                            <div className="flex items-center space-x-3 mb-4">
+                                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                                    <Trash2 className="w-5 h-5 text-red-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-900">Delete Employee</h3>
+                                    <p className="text-sm text-gray-500">This action cannot be undone</p>
+                                </div>
+                            </div>
+
+                            <p className="text-gray-700 mb-6">
+                                Are you sure you want to delete <strong>{showDeleteConfirm.name}</strong>?
+                                This will remove all employee data and cannot be reversed.
+                            </p>
+
+                            <div className="flex space-x-3">
+                                <button
+                                    onClick={() => setShowDeleteConfirm(null)}
+                                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleDeleteEmployee}
+                                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+        </div>
+    );
 };
 
 export default Employees;

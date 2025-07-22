@@ -24,15 +24,23 @@ export class LocalPOSDatabase extends Dexie {
     constructor() {
         super('POSDatabase');
 
-        this.version(1).stores({
+        // Central place for the schema so we can reuse for upgrades
+        const schema = {
             employees: 'id, employee_number, name, role, is_active, updated_at, needs_push, deleted_at',
             categories: 'id, name, is_active, display_order, updated_at, needs_push, deleted_at',
             products: 'id, sku, name, category_id, is_active, stock, updated_at, needs_push, deleted_at',
             employeeSyncQueue: 'id, type, employeeId, timestamp, retryCount',
             categorySyncQueue: 'id, type, categoryId, timestamp, retryCount',
             productSyncQueue: 'id, type, productId, timestamp, retryCount',
-            syncMetadata: 'id' // Records: 'employees', 'categories', 'products'
-        });
+            syncMetadata: 'id'
+        } as const;
+
+        // Initial version (for fresh installs)
+        this.version(1).stores(schema);
+
+        // Bump to version 2 to ensure all object stores exist for older corrupted databases
+        // Dexie will add missing stores during upgrade without deleting data
+        this.version(2).stores(schema);
 
         // Add hooks for auto-updating sync flags
         this.employees.hook('creating', (primKey, obj, trans) => {
@@ -123,7 +131,7 @@ export class EmployeeLocalService {
     // Get all active employees (excluding soft-deleted)
     async getAllEmployees(): Promise<LocalEmployee[]> {
         return await localDb.employees
-            .filter(emp => emp.deleted_at === null && emp.is_active === true)
+            .filter(emp => emp.deleted_at === null && emp.is_active)
             .toArray();
     }
 
@@ -154,7 +162,7 @@ export class EmployeeLocalService {
             last_synced_at: null,
         };
 
-        await localDb.transaction('rw', [localDb.employees, localDb.employeeSyncQueue], async () => {
+        await localDb.transaction('rw', [localDb.employees, localDb.employeeSyncQueue, localDb.syncMetadata], async () => {
             await localDb.employees.add(employee);
             await this.queueOperation('CREATE', id, employee);
         });
@@ -170,7 +178,7 @@ export class EmployeeLocalService {
             needs_push: true,
         };
 
-        await localDb.transaction('rw', [localDb.employees, localDb.employeeSyncQueue], async () => {
+        await localDb.transaction('rw', [localDb.employees, localDb.employeeSyncQueue, localDb.syncMetadata], async () => {
             await localDb.employees.update(id, updateData);
             await this.queueOperation('UPDATE', id, updateData);
         });
@@ -178,7 +186,7 @@ export class EmployeeLocalService {
 
     // Soft delete employee
     async deleteEmployee(id: string): Promise<void> {
-        await localDb.transaction('rw', [localDb.employees, localDb.employeeSyncQueue], async () => {
+        await localDb.transaction('rw', [localDb.employees, localDb.employeeSyncQueue, localDb.syncMetadata], async () => {
             await localDb.employees.update(id, {
                 deleted_at: new Date(),
                 is_active: false,
@@ -205,7 +213,7 @@ export class EmployeeLocalService {
     // Filter employees by role
     async getEmployeesByRole(role: string): Promise<LocalEmployee[]> {
         return await localDb.employees
-            .filter(emp => emp.role === role && emp.deleted_at === null && emp.is_active === true)
+            .filter(emp => emp.role === role && emp.deleted_at === null && emp.is_active)
             .toArray();
     }
 
@@ -243,9 +251,9 @@ export class EmployeeLocalService {
 
     // Mark sync operation as failed
     async markSyncOperationFailed(operationId: string, error: string): Promise<void> {
-        const operation = await localDb.syncQueue.get(operationId);
+        const operation = await localDb.employeeSyncQueue.get(operationId);
         if (operation) {
-            await localDb.syncQueue.update(operationId, {
+            await localDb.employeeSyncQueue.update(operationId, {
                 retryCount: operation.retryCount + 1,
                 error,
             });
@@ -275,16 +283,31 @@ export class EmployeeLocalService {
 
     // Update sync metadata
     async updateSyncMetadata(updates: Partial<SyncMetadata>): Promise<void> {
-        const current = await localDb.syncMetadata.get('employees');
-        if (current) {
-            const newData = { ...current, ...updates };
+        try {
+            const current = await localDb.syncMetadata.get('employees');
+            if (current) {
+                const newData = { ...current, ...updates };
 
-            // Handle pending operations counter
-            if (updates.pendingOperations !== undefined) {
-                newData.pendingOperations = Math.max(0, current.pendingOperations + updates.pendingOperations);
+                // Handle pending operations counter
+                if (updates.pendingOperations !== undefined) {
+                    newData.pendingOperations = Math.max(0, current.pendingOperations + updates.pendingOperations);
+                }
+
+                await localDb.syncMetadata.put(newData);
+            } else {
+                // Initialize if doesn't exist
+                const initialData = {
+                    id: 'employees',
+                    lastPulledAt: updates.lastPulledAt || null,
+                    lastPushedAt: updates.lastPushedAt || null,
+                    pendingOperations: updates.pendingOperations || 0,
+                    conflictCount: updates.conflictCount || 0,
+                };
+                await localDb.syncMetadata.put(initialData);
             }
-
-            await localDb.syncMetadata.put(newData);
+        } catch (error) {
+            console.warn('Failed to update sync metadata:', error);
+            // Don't throw error to prevent breaking the main operation
         }
     }
 
@@ -321,9 +344,9 @@ export class EmployeeLocalService {
 
     // Clear all data (for testing or reset)
     async clearAllData(): Promise<void> {
-        await localDb.transaction('rw', [localDb.employees, localDb.syncQueue, localDb.syncMetadata], async () => {
+        await localDb.transaction('rw', [localDb.employees, localDb.employeeSyncQueue, localDb.syncMetadata], async () => {
             await localDb.employees.clear();
-            await localDb.syncQueue.clear();
+            await localDb.employeeSyncQueue.clear();
             await localDb.syncMetadata.clear();
             await initializeSyncMetadata();
         });
@@ -339,9 +362,9 @@ export class EmployeeLocalService {
     }> {
         const [total, active, deleted, pending, syncMeta] = await Promise.all([
             localDb.employees.count(),
-            localDb.employees.filter(emp => emp.is_active === true && emp.deleted_at === null).count(),
+            localDb.employees.filter(emp => emp.is_active && emp.deleted_at === null).count(),
             localDb.employees.filter(emp => emp.deleted_at !== null).count(),
-            localDb.syncQueue.count(),
+            localDb.employeeSyncQueue.count(),
             this.getSyncMetadata(),
         ]);
 

@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured, connectionStatus } from '../lib/supabase';
 import { employeeLocalService, initializeLocalDatabase } from '../lib/localDatabase';
+import { hashPassword } from '../utils/hashUtils';
 import {
     EmployeeRow,
     EmployeeInsert,
@@ -436,12 +437,7 @@ export class EmployeeService {
 
     // Simple password hashing (in production, use a proper library like bcrypt)
     private async hashPassword(password: string): Promise<string> {
-        // This is a simple implementation - in production use bcrypt or similar
-        const encoder = new TextEncoder();
-        const data = encoder.encode(password);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        return await hashPassword(password);
     }
 
     // Notify sync callbacks
