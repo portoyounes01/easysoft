@@ -23,10 +23,12 @@ import {
     UserCheck,
     UserX,
     BarChart3,
-    Copy
+    Copy,
+    Banknote
 } from 'lucide-react';
 import { useEmployees } from '../contexts/EmployeesContext';
-import { EmployeeFormData, EmployeeRole, AccessLevel, Employee } from '../types/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { EmployeeFormData, EmployeeRole, AccessLevel, Employee, AccessLevels } from '../types/supabase';
 import DatabaseReset from '../components/DatabaseReset';
 
 const Employees: React.FC = () => {
@@ -39,6 +41,8 @@ const Employees: React.FC = () => {
         updateEmployee,
         deleteEmployee
     } = useEmployees();
+
+    const { user: currentUser } = useAuth();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedRole, setSelectedRole] = useState('all');
@@ -82,8 +86,7 @@ const Employees: React.FC = () => {
     const [formData, setFormData] = useState<EmployeeFormData>({
         employee_number: '',
         name: '',
-        email: '',
-        phone: '',
+        phone: undefined,
         role: 'cashier',
         access_levels: ['sales'],
         hire_date: new Date().toISOString().split('T')[0],
@@ -99,13 +102,12 @@ const Employees: React.FC = () => {
     const accessLevels: { value: AccessLevel; label: string; description: string }[] = [
         { value: 'all', label: 'All Access', description: 'Full system access' },
         { value: 'sales', label: 'Sales', description: 'Point of sale operations' },
-        { value: 'inventory', label: 'Inventory', description: 'Product management' },
+        { value: 'inventory', label: 'Inventory', description: 'Product and category management' },
         { value: 'reports', label: 'Reports', description: 'View reports and analytics' },
         { value: 'dashboard', label: 'Dashboard', description: 'Main dashboard access' },
         { value: 'employees', label: 'Employees', description: 'Employee management' },
         { value: 'settings', label: 'Settings', description: 'System configuration' },
-        { value: 'transactions', label: 'Transactions', description: 'Transaction history' },
-        { value: 'products', label: 'Products', description: 'Product catalog management' }
+        { value: 'transactions', label: 'Transactions', description: 'Transaction history (separate from sales)' }
     ];
 
     // Memo-compute filtered list to avoid re-render churn
@@ -144,10 +146,38 @@ const Employees: React.FC = () => {
 
     // Handle form field changes
     const handleFormChange = (field: keyof EmployeeFormData, value: any) => {
-        setFormData(prev => ({
-            ...prev,
-            [field]: value
-        }));
+        setFormData(prev => {
+            const newData = {
+                ...prev,
+                [field]: value
+            };
+
+            // Handle role changes - manage phone visibility and access levels
+            if (field === 'role') {
+                if (value === 'cashier') {
+                    // Clear phone for cashiers
+                    newData.phone = undefined;
+                    // Set default access levels for cashiers
+                    newData.access_levels = ['sales'];
+                } else if (value === 'manager') {
+                    // Initialize phone for managers
+                    if (prev.role === 'cashier') {
+                        newData.phone = '';
+                    }
+                    // Set default access levels for managers
+                    newData.access_levels = ['sales', 'inventory', 'reports', 'dashboard', 'employees', 'settings', 'transactions'];
+                } else if (value === 'admin') {
+                    // Initialize phone for admins
+                    if (prev.role === 'cashier') {
+                        newData.phone = '';
+                    }
+                    // Admins get all access levels automatically
+                    newData.access_levels = [...AccessLevels];
+                }
+            }
+
+            return newData;
+        });
 
         // Clear error for this field
         if (formErrors[field]) {
@@ -156,16 +186,48 @@ const Employees: React.FC = () => {
                 [field]: undefined
             }));
         }
+
+
     };
 
-    // Handle access level toggle
+    // Handle access level toggle with smart "all access" behavior
     const handleAccessLevelToggle = (level: AccessLevel) => {
-        setFormData(prev => ({
-            ...prev,
-            access_levels: prev.access_levels.includes(level)
-                ? prev.access_levels.filter(l => l !== level)
-                : [...prev.access_levels, level]
-        }));
+        setFormData(prev => {
+            const currentLevels = prev.access_levels;
+            const isCurrentlySelected = currentLevels.includes(level);
+
+            if (level === 'all') {
+                if (isCurrentlySelected) {
+                    // Deselecting "all" - remove all permissions
+                    return { ...prev, access_levels: [] };
+                } else {
+                    // Selecting "all" - add all permissions
+                    return { ...prev, access_levels: [...AccessLevels] };
+                }
+            } else {
+                // Toggling individual permission
+                let newLevels: AccessLevel[];
+
+                if (isCurrentlySelected) {
+                    // Removing permission - also remove "all" if it was selected
+                    newLevels = currentLevels.filter(l => l !== level && l !== 'all');
+                } else {
+                    // Adding permission
+                    newLevels = [...currentLevels.filter(l => l !== 'all'), level];
+
+                    // Check if all non-"all" permissions are now selected
+                    const nonAllPermissions = AccessLevels.filter((l: AccessLevel) => l !== 'all');
+                    const hasAllNonAllPermissions = nonAllPermissions.every((p: AccessLevel) => newLevels.includes(p));
+
+                    if (hasAllNonAllPermissions) {
+                        // Auto-select "all" if all other permissions are selected
+                        newLevels = [...AccessLevels];
+                    }
+                }
+
+                return { ...prev, access_levels: newLevels };
+            }
+        });
     };
 
     // Validate form
@@ -176,8 +238,14 @@ const Employees: React.FC = () => {
             errors.name = 'Name is required';
         }
 
-        if (!formData.employee_number.trim()) {
-            errors.employee_number = 'Employee number is required';
+        // Prevent non-admins from assigning admin role
+        if (formData.role === 'admin' && currentUser?.role !== 'admin') {
+            errors.role = 'Only administrators can assign admin role';
+        }
+
+        // Employee number should always be auto-generated and present
+        if (!formData.employee_number?.trim()) {
+            errors.employee_number = 'Employee number generation failed';
         } else {
             // Check for duplicate employee number (excluding current employee when editing)
             const duplicate = employees.find(emp =>
@@ -190,19 +258,14 @@ const Employees: React.FC = () => {
             }
         }
 
-        if (!formData.email.trim()) {
-            errors.email = 'Email is required';
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-            errors.email = 'Invalid email format';
-        } else {
-            // Check for duplicate email (excluding current employee when editing)
-            const duplicate = employees.find(emp =>
-                emp.email === formData.email &&
-                emp.id !== editingEmployee?.id &&
-                !emp.deleted_at
-            );
-            if (duplicate) {
-                errors.email = 'Email already exists';
+        // PIN validation for managers and cashiers only
+        if ((formData.role === 'manager' || formData.role === 'cashier')) {
+            if (!editingEmployee && !formData.pin?.trim()) {
+                errors.pin = 'PIN is required for new employees';
+            } else if (formData.pin?.trim() && formData.pin.length < 6) {
+                errors.pin = 'PIN must be at least 6 characters';
+            } else if (formData.pin?.trim() && !/^\d+$/.test(formData.pin)) {
+                errors.pin = 'PIN must contain only numbers';
             }
         }
 
@@ -210,13 +273,14 @@ const Employees: React.FC = () => {
             errors.hire_date = 'Hire date is required';
         }
 
-        if (formData.access_levels.length === 0) {
+        // Access levels validation (not needed for admins - they get all automatically)
+        if (formData.role !== 'admin' && formData.access_levels.length === 0) {
             errors.access_levels = 'At least one access level is required';
         }
 
-        // Password validation only for new employees
-        if (!editingEmployee && !formData.password?.trim()) {
-            errors.password = 'Password is required for new employees';
+        // Password validation only for new admin employees
+        if (formData.role === 'admin' && !editingEmployee && !formData.password?.trim()) {
+            errors.password = 'Password is required for new admin employees';
         }
 
         setFormErrors(errors);
@@ -229,15 +293,33 @@ const Employees: React.FC = () => {
 
         if (!validateForm()) return;
 
+        // Additional security check: prevent non-admins from creating/modifying admin employees
+        if (formData.role === 'admin' && currentUser?.role !== 'admin') {
+            console.error('Security violation: Non-admin attempted to create/modify admin employee');
+            return;
+        }
+
+        // If editing an admin employee, only allow admins
+        if (editingEmployee?.role === 'admin' && currentUser?.role !== 'admin') {
+            console.error('Security violation: Non-admin attempted to modify admin employee');
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             if (editingEmployee) {
                 // Update existing employee
-                const updateData = { ...formData };
+                const updateData: Partial<EmployeeFormData> = { ...formData };
                 if (!updateData.password?.trim()) {
                     delete updateData.password; // Don't update password if empty
                 }
-                await updateEmployee(editingEmployee.id, updateData);
+                if (!formData.pin?.trim()) {
+                    // Don't include PIN in update if empty
+                    const { pin, ...dataWithoutPin } = updateData;
+                    await updateEmployee(editingEmployee.id, dataWithoutPin as Partial<EmployeeFormData>);
+                } else {
+                    await updateEmployee(editingEmployee.id, updateData);
+                }
             } else {
                 // Create new employee
                 await createEmployee(formData);
@@ -257,13 +339,12 @@ const Employees: React.FC = () => {
         setFormData({
             employee_number: generateEmployeeNumber(),
             name: '',
-            email: '',
-            phone: '',
+            phone: undefined, // Undefined for default cashier role
             role: 'cashier',
-            access_levels: ['sales'],
+            access_levels: ['sales'], // Default for cashiers
             hire_date: new Date().toISOString().split('T')[0],
             password: '',
-            pin: '',
+            pin: '', // Empty PIN for new employee
             is_active: true
         });
         setFormErrors({});
@@ -272,17 +353,22 @@ const Employees: React.FC = () => {
 
     // Handle opening form for editing
     const handleEditEmployee = (employee: Employee) => {
+        // Prevent non-admins from editing admin employees
+        if (employee.role === 'admin' && currentUser?.role !== 'admin') {
+            console.warn('Non-admin user attempted to edit admin employee');
+            return;
+        }
+
         setEditingEmployee(employee);
         setFormData({
             employee_number: employee.employee_number,
             name: employee.name,
-            email: employee.email || '',
-            phone: employee.phone || '',
+            phone: (employee.role === 'manager' || employee.role === 'admin') ? (employee.phone || '') : undefined,
             role: employee.role,
             access_levels: employee.access_levels as AccessLevel[],
             hire_date: employee.hire_date,
             password: '', // Don't pre-fill password
-            pin: employee.pin || '',
+            pin: '', // Don't pre-fill PIN (like password)
             is_active: employee.is_active
         });
         setFormErrors({});
@@ -296,13 +382,12 @@ const Employees: React.FC = () => {
         setFormData({
             employee_number: '',
             name: '',
-            email: '',
-            phone: '',
+            phone: undefined, // Undefined for cashier role
             role: 'cashier',
-            access_levels: ['sales'],
+            access_levels: ['sales'], // Default for cashiers
             hire_date: new Date().toISOString().split('T')[0],
             password: '',
-            pin: '',
+            pin: '', // Empty PIN for reset
             is_active: true
         });
         setFormErrors({});
@@ -311,6 +396,13 @@ const Employees: React.FC = () => {
     // Handle delete confirmation
     const handleDeleteEmployee = async () => {
         if (!showDeleteConfirm) return;
+
+        // Prevent non-admins from deleting admin employees
+        if (showDeleteConfirm.role === 'admin' && currentUser?.role !== 'admin') {
+            console.error('Security violation: Non-admin attempted to delete admin employee');
+            setShowDeleteConfirm(null);
+            return;
+        }
 
         try {
             await deleteEmployee(showDeleteConfirm.id);
@@ -459,6 +551,12 @@ const Employees: React.FC = () => {
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     {getRoleBadge(employee.role)}
+                                    {/* Show lock icon for admin employees when viewed by non-admins */}
+                                    {employee.role === 'admin' && currentUser?.role !== 'admin' && (
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600" title="Admin access restricted">
+                                            <KeyRound className="w-3 h-3" />
+                                        </span>
+                                    )}
                                     {!employee.is_active && (
                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                             Inactive
@@ -532,7 +630,7 @@ const Employees: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div className="bg-green-50 p-3 rounded-lg">
                                     <div className="flex items-center space-x-2 mb-1">
-                                        <DollarSign className="w-4 h-4 text-green-600" />
+                                        <Banknote className="w-4 h-4 text-green-600" />
                                         <span className="text-sm font-medium text-green-800">Total Sales</span>
                                     </div>
                                     <p className="text-lg font-bold text-green-700">€{employee.total_sales.toFixed(2)}</p>
@@ -563,20 +661,43 @@ const Employees: React.FC = () => {
                                     Hire Date: {new Date(employee.hire_date).toLocaleDateString('pt-PT')}
                                 </span>
                                 <div className="flex items-center space-x-2">
-                                    <button
-                                        onClick={() => handleEditEmployee(employee)}
-                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                        title="Edit Employee"
-                                    >
-                                        <Edit className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => setShowDeleteConfirm(employee)}
-                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                        title="Delete Employee"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    {/* Only admins can edit other admins */}
+                                    {(currentUser?.role === 'admin' || employee.role !== 'admin') ? (
+                                        <button
+                                            onClick={() => handleEditEmployee(employee)}
+                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                            title="Edit Employee"
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+                                    ) : (
+                                        <button
+                                            disabled
+                                            className="p-2 text-gray-400 cursor-not-allowed rounded-lg"
+                                            title="Only admins can edit other admins"
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+                                    )}
+
+                                    {/* Only admins can delete other admins */}
+                                    {(currentUser?.role === 'admin' || employee.role !== 'admin') ? (
+                                        <button
+                                            onClick={() => setShowDeleteConfirm(employee)}
+                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                            title="Delete Employee"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    ) : (
+                                        <button
+                                            disabled
+                                            className="p-2 text-gray-400 cursor-not-allowed rounded-lg"
+                                            title="Only admins can delete other admins"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -597,9 +718,16 @@ const Employees: React.FC = () => {
                                 {/* Header */}
                                 <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white p-6 rounded-t-2xl">
                                     <div className="flex items-center justify-between">
-                                        <h2 className="text-xl font-bold">
-                                            {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
-                                        </h2>
+                                        <div>
+                                            <h2 className="text-xl font-bold">
+                                                {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
+                                            </h2>
+                                            {formData.employee_number && (
+                                                <p className="text-blue-100 text-sm mt-1">
+                                                    Employee Number: {formData.employee_number}
+                                                </p>
+                                            )}
+                                        </div>
                                         <button
                                             onClick={handleCloseForm}
                                             className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
@@ -615,26 +743,7 @@ const Employees: React.FC = () => {
                                     <div>
                                         <h3 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Employee Number *
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={formData.employee_number}
-                                                    onChange={(e) => handleFormChange('employee_number', e.target.value)}
-                                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.employee_number ? 'border-red-500' : 'border-gray-300'
-                                                        }`}
-                                                    placeholder="EMP0001"
-                                                />
-                                                {formErrors.employee_number && (
-                                                    <p className="mt-1 text-sm text-red-600 flex items-center">
-                                                        <AlertCircle className="w-4 h-4 mr-1" />
-                                                        {formErrors.employee_number}
-                                                    </p>
-                                                )}
-                                            </div>
-
+                                            {/* 1. Full Name */}
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                                     Full Name *
@@ -655,45 +764,7 @@ const Employees: React.FC = () => {
                                                 )}
                                             </div>
 
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Email *
-                                                </label>
-                                                <div className="relative">
-                                                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                                    <input
-                                                        type="email"
-                                                        value={formData.email}
-                                                        onChange={(e) => handleFormChange('email', e.target.value)}
-                                                        className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.email ? 'border-red-500' : 'border-gray-300'
-                                                            }`}
-                                                        placeholder="john@example.com"
-                                                    />
-                                                </div>
-                                                {formErrors.email && (
-                                                    <p className="mt-1 text-sm text-red-600 flex items-center">
-                                                        <AlertCircle className="w-4 h-4 mr-1" />
-                                                        {formErrors.email}
-                                                    </p>
-                                                )}
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Phone
-                                                </label>
-                                                <div className="relative">
-                                                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                                    <input
-                                                        type="tel"
-                                                        value={formData.phone}
-                                                        onChange={(e) => handleFormChange('phone', e.target.value)}
-                                                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                        placeholder="+351 912 345 678"
-                                                    />
-                                                </div>
-                                            </div>
-
+                                            {/* 2. Hire Date */}
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                                     Hire Date *
@@ -716,6 +787,7 @@ const Employees: React.FC = () => {
                                                 )}
                                             </div>
 
+                                            {/* 3. Role */}
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                                     Role *
@@ -723,13 +795,39 @@ const Employees: React.FC = () => {
                                                 <select
                                                     value={formData.role}
                                                     onChange={(e) => handleFormChange('role', e.target.value as EmployeeRole)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                    disabled={editingEmployee?.role === 'admin' && currentUser?.role !== 'admin'}
+                                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editingEmployee?.role === 'admin' && currentUser?.role !== 'admin'
+                                                            ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed'
+                                                            : 'border-gray-300'
+                                                        }`}
                                                 >
                                                     <option value="cashier">Cashier</option>
                                                     <option value="manager">Manager</option>
-                                                    <option value="admin">Admin</option>
+                                                    {/* Only admins can create/assign admin role */}
+                                                    {currentUser?.role === 'admin' && (
+                                                        <option value="admin">Admin</option>
+                                                    )}
                                                 </select>
                                             </div>
+
+                                            {/* 4. Phone field - only for managers and admins */}
+                                            {(formData.role === 'manager' || formData.role === 'admin') && (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Phone
+                                                    </label>
+                                                    <div className="relative">
+                                                        <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                        <input
+                                                            type="tel"
+                                                            value={formData.phone ?? ''}
+                                                            onChange={(e) => handleFormChange('phone', e.target.value)}
+                                                            className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                            placeholder="+351 912 345 678"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -737,81 +835,102 @@ const Employees: React.FC = () => {
                                     <div>
                                         <h3 className="text-lg font-semibold text-gray-800 mb-4">Security</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Password {!editingEmployee && '*'}
-                                                </label>
-                                                <div className="relative">
-                                                    <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                                    <input
-                                                        type={showPassword ? 'text' : 'password'}
-                                                        value={formData.password}
-                                                        onChange={(e) => handleFormChange('password', e.target.value)}
-                                                        className={`w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.password ? 'border-red-500' : 'border-gray-300'
-                                                            }`}
-                                                        placeholder={editingEmployee ? 'Leave empty to keep current' : 'Enter password'}
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setShowPassword(!showPassword)}
-                                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                                    >
-                                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                                    </button>
-                                                </div>
-                                                {formErrors.password && (
-                                                    <p className="mt-1 text-sm text-red-600 flex items-center">
-                                                        <AlertCircle className="w-4 h-4 mr-1" />
-                                                        {formErrors.password}
-                                                    </p>
-                                                )}
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    PIN (Optional)
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={formData.pin}
-                                                    onChange={(e) => handleFormChange('pin', e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                    placeholder="123456"
-                                                    maxLength={6}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Access Levels */}
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Access Levels</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            {accessLevels.map((level) => (
-                                                <label
-                                                    key={level.value}
-                                                    className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={formData.access_levels.includes(level.value)}
-                                                        onChange={() => handleAccessLevelToggle(level.value)}
-                                                        className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                                    />
-                                                    <div>
-                                                        <div className="font-medium text-gray-900">{level.label}</div>
-                                                        <div className="text-sm text-gray-500">{level.description}</div>
+                                            {/* Password field - only for admins */}
+                                            {formData.role === 'admin' && (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Password {!editingEmployee && '*'}
+                                                    </label>
+                                                    <div className="relative">
+                                                        <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                        <input
+                                                            type={showPassword ? 'text' : 'password'}
+                                                            value={formData.password}
+                                                            onChange={(e) => handleFormChange('password', e.target.value)}
+                                                            className={`w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.password ? 'border-red-500' : 'border-gray-300'
+                                                                }`}
+                                                            placeholder={editingEmployee ? 'Leave empty to keep current' : 'Enter password'}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowPassword(!showPassword)}
+                                                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                                        >
+                                                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                        </button>
                                                     </div>
-                                                </label>
-                                            ))}
+                                                    {formErrors.password && (
+                                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                                            <AlertCircle className="w-4 h-4 mr-1" />
+                                                            {formErrors.password}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* PIN field - for managers and cashiers */}
+                                            {(formData.role === 'manager' || formData.role === 'cashier') && (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        PIN {!editingEmployee && '*'}
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={formData.pin}
+                                                        onChange={(e) => handleFormChange('pin', e.target.value.replace(/\D/g, '').slice(0, 8))}
+                                                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.pin ? 'border-red-500' : 'border-gray-300'
+                                                            }`}
+                                                        placeholder={editingEmployee ? 'Leave empty to keep current PIN' : 'Enter 6+ digit PIN'}
+                                                        maxLength={8}
+                                                    />
+                                                    {formErrors.pin && (
+                                                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                                                            <AlertCircle className="w-4 h-4 mr-1" />
+                                                            {formErrors.pin}
+                                                        </p>
+                                                    )}
+                                                    <p className="mt-1 text-xs text-gray-500">
+                                                        {editingEmployee
+                                                            ? 'Leave empty to keep current PIN, or enter new 6+ digit PIN'
+                                                            : 'PIN must be at least 6 digits, will be securely hashed'
+                                                        }
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
-                                        {formErrors.access_levels && (
-                                            <p className="mt-2 text-sm text-red-600 flex items-center">
-                                                <AlertCircle className="w-4 h-4 mr-1" />
-                                                {formErrors.access_levels}
-                                            </p>
-                                        )}
                                     </div>
+
+                                    {/* Access Levels - Hidden for admins (they get all access automatically) */}
+                                    {formData.role !== 'admin' && (
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">Access Levels</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {accessLevels.map((level) => (
+                                                    <label
+                                                        key={level.value}
+                                                        className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={formData.access_levels.includes(level.value)}
+                                                            onChange={() => handleAccessLevelToggle(level.value)}
+                                                            className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                                        />
+                                                        <div>
+                                                            <div className="font-medium text-gray-900">{level.label}</div>
+                                                            <div className="text-sm text-gray-500">{level.description}</div>
+                                                        </div>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            {formErrors.access_levels && (
+                                                <p className="mt-2 text-sm text-red-600 flex items-center">
+                                                    <AlertCircle className="w-4 h-4 mr-1" />
+                                                    {formErrors.access_levels}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {/* Status */}
                                     <div>

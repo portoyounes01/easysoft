@@ -10,6 +10,7 @@ import POS from './pages/POS';
 import Products from './pages/Products';
 import Employees from './pages/Employees';
 import Transactions from './pages/Transactions';
+import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -149,16 +150,14 @@ const AppContent: React.FC = () => {
                     path="/reports"
                     element={
                       <PermissionRoute permission="reports">
-                        <div className="text-center py-8">
-                          <h2 className="text-2xl font-bold text-gray-800">Reports - Coming Soon</h2>
-                        </div>
+                        <Reports />
                       </PermissionRoute>
                     }
                   />
                   <Route
                     path="/transactions"
                     element={
-                      <PermissionRoute permission="sales">
+                      <PermissionRoute permission="transactions">
                         <Transactions />
                       </PermissionRoute>
                     }

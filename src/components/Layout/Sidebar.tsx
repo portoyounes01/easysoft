@@ -28,7 +28,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
     { path: '/products', icon: Package, label: 'Products', permission: 'inventory' },
     { path: '/employees', icon: Users, label: 'Employees', permission: 'employees' },
     { path: '/reports', icon: BarChart3, label: 'Reports', permission: 'reports' },
-    { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'sales' },
+    { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'transactions' },
     { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' }
   ];
 

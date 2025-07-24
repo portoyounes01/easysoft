@@ -91,8 +91,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isValidCredentials = hashedPassword === employee.password_hash;
         }
       } else {
-        // Employees (cashier, manager) use PIN
-        isValidCredentials = password === employee.pin;
+        // Employees (cashier, manager) use PIN - compare hashed PIN
+        const hashedPin = await hashPassword(password);
+        isValidCredentials = hashedPin === employee.pin;
       }
 
       if (isValidCredentials) {

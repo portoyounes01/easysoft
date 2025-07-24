@@ -198,13 +198,6 @@ const Products: React.FC = () => {
         </div>
         <div className="flex items-center space-x-3">
           <button
-            onClick={handleCreateCategory}
-            className="min-h-[60px] bg-gradient-to-r from-purple-600 to-purple-500 text-white px-8 py-4 rounded-lg font-semibold hover:from-purple-700 hover:to-purple-600 transition-all hover:scale-105 active:scale-95 flex items-center space-x-3 shadow-lg"
-          >
-            <Tag className="w-6 h-6" />
-            <span>Manage Categories</span>
-          </button>
-          <button
             onClick={handleCreateProduct}
             className="min-h-[60px] bg-gradient-to-r from-blue-600 to-blue-500 text-white px-8 py-4 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-600 transition-all hover:scale-105 active:scale-95 flex items-center space-x-3 shadow-lg"
           >
@@ -305,10 +298,11 @@ const Products: React.FC = () => {
                 return (
                   <div
                     key={category.id}
-                    className={`relative group border rounded-lg p-4 hover:shadow-md transition-all ${category.is_active
-                      ? 'bg-white border-gray-200 hover:border-gray-300'
+                    className={`relative group border rounded-lg p-4 hover:shadow-md transition-all cursor-pointer ${category.is_active
+                      ? 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50'
                       : 'bg-gray-100 border-gray-300 opacity-60 hover:opacity-75'
                       }`}
+                    onClick={() => handleEditCategory(category)}
                   >
                     {/* Inactive Badge */}
                     {!category.is_active && (
@@ -338,26 +332,17 @@ const Products: React.FC = () => {
                       <div className={`flex items-center justify-between text-xs ${category.is_active ? 'text-gray-500' : 'text-gray-400'
                         }`}>
                         <span>{productCount} products</span>
-                        <span>Order: {category.display_order}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCategory(category.id, category.name);
+                          }}
+                          className="min-h-[44px] min-w-[44px] p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete Category"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                    </div>
-
-                    {/* Action Buttons - POS Optimized */}
-                    <div className="absolute top-2 right-2 flex space-x-1">
-                      <button
-                        onClick={() => handleEditCategory(category)}
-                        className="min-h-[44px] min-w-[44px] p-2 bg-blue-500 bg-opacity-90 hover:bg-opacity-100 text-white rounded-lg shadow-lg transition-all hover:scale-105 active:scale-95"
-                        title="Edit Category"
-                      >
-                        <Edit className="w-5 h-5 mx-auto" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCategory(category.id, category.name)}
-                        className="min-h-[44px] min-w-[44px] p-2 bg-red-500 bg-opacity-90 hover:bg-opacity-100 text-white rounded-lg shadow-lg transition-all hover:scale-105 active:scale-95"
-                        title="Delete Category"
-                      >
-                        <Trash2 className="w-5 h-5 mx-auto" />
-                      </button>
                     </div>
                   </div>
                 );

@@ -158,7 +158,7 @@ INSERT INTO public.employees (
     'manager@pos.com',
     '+351 123 456 788',
     'manager',
-    ARRAY['sales', 'inventory', 'reports', 'dashboard', 'employees', 'settings'],
+    ARRAY['sales', 'inventory', 'reports', 'dashboard', 'employees', 'settings', 'transactions'],
     '2024-02-01',
     '$2b$10$dummy_hash_for_1234', -- This should be properly hashed '1234'
     '1234',

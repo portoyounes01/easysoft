@@ -30,8 +30,6 @@
   - [ ] **Credit note creation**
   - [ ] **Invoice generation with tax ID**
   - [ ] **Receipt numbering system**
-- [ ] **Reporting & Analytics (Backend)**
-  - [ ] Implement database queries and API endpoints for sales reports by date range.
 
 ## Medium Priority Features
 - [ ] **Printing & Hardware**

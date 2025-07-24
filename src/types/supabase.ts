@@ -340,14 +340,13 @@ export type EmployeeRole = typeof EmployeeRoles[number];
 
 export const AccessLevels = [
     'all',
-    'sales',
-    'inventory',
-    'reports',
-    'dashboard',
-    'employees',
-    'settings',
-    'transactions',
-    'products'
+    'sales',        // POS operations only
+    'inventory',    // Product and category management (merged products + inventory)
+    'reports',      // Business reports and analytics
+    'dashboard',    // Main dashboard access
+    'employees',    // Employee management
+    'settings',     // System configuration
+    'transactions'  // Transaction history (separate from sales)
 ] as const;
 export type AccessLevel = typeof AccessLevels[number];
 
@@ -355,13 +354,12 @@ export type AccessLevel = typeof AccessLevels[number];
 export interface EmployeeFormData {
     employee_number: string;
     name: string;
-    email: string;
-    phone: string;
+    phone?: string; // Optional - only for managers and admins
     role: EmployeeRole;
     access_levels: AccessLevel[];
     hire_date: string; // ISO date string
-    password?: string; // Raw password (will be hashed)
-    pin?: string;
+    password?: string; // Raw password (will be hashed) - for admin login only
+    pin: string; // Mandatory PIN for all roles (6+ chars, will be hashed)
     is_active: boolean;
 }
 

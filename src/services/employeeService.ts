@@ -88,14 +88,17 @@ export class EmployeeService {
             passwordHash = await this.hashPassword(employeeData.password);
         }
 
+        // Hash PIN (mandatory for all employees)
+        const pinHash = await this.hashPassword(employeeData.pin);
+
         // Create local employee record
         const localEmployeeData: Omit<LocalEmployee, 'id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'> = {
             employee_number: employeeData.employee_number,
             name: employeeData.name,
-            email: employeeData.email || null,
+            email: null, // No longer using email
             phone: employeeData.phone || null,
             password_hash: passwordHash,
-            pin: employeeData.pin || null,
+            pin: pinHash, // Store hashed PIN
             role: employeeData.role,
             access_levels: employeeData.access_levels,
             is_active: employeeData.is_active,
@@ -124,13 +127,16 @@ export class EmployeeService {
         const updateData: Partial<LocalEmployee> = {};
 
         if (updates.name !== undefined) updateData.name = updates.name;
-        if (updates.email !== undefined) updateData.email = updates.email || null;
         if (updates.phone !== undefined) updateData.phone = updates.phone || null;
         if (updates.role !== undefined) updateData.role = updates.role;
         if (updates.access_levels !== undefined) updateData.access_levels = updates.access_levels;
         if (updates.is_active !== undefined) updateData.is_active = updates.is_active;
         if (updates.hire_date !== undefined) updateData.hire_date = updates.hire_date;
-        if (updates.pin !== undefined) updateData.pin = updates.pin || null;
+
+        // Hash PIN if provided (don't update if empty)
+        if (updates.pin && updates.pin.trim()) {
+            updateData.pin = await this.hashPassword(updates.pin);
+        }
 
         // Hash password if provided
         if (updates.password) {
