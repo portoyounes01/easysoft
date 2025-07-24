@@ -26,515 +26,21 @@ import {
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useProducts } from '../contexts/ProductsContext';
 import { useTranslation } from 'react-i18next';
+import { reportingService } from '../services/transactionService';
+import {
+    ReportTransaction,
+    ReportFilters,
+    EmployeePerformance,
+    ProductPerformance,
+    OverviewMetrics
+} from '../types/supabase';
 
-// Mock transaction data for reporting (in production this would come from a transactions context/API)
-interface ReportTransaction {
-    id: string;
-    employeeId: string;
-    employeeName: string;
-    customerId?: string;
-    customerName?: string;
-    date: string;
-    time: string;
-    items: Array<{
-        productId: string;
-        productName: string;
-        categoryId: string;
-        categoryName: string;
-        quantity: number;
-        unitPrice: number;
-        cost: number;
-        total: number;
-        profit: number;
-    }>;
-    subtotal: number;
-    discount: number;
-    tax: number;
-    total: number;
-    paymentMethod: 'cash' | 'card' | 'mixed';
-    status: 'completed' | 'refunded' | 'partial_refund';
-}
-
-// Mock transactions data - in production this would come from a service
-const mockTransactions: ReportTransaction[] = [
-    // Recent transactions (last 30 days)
-    {
-        id: 'txn-1',
-        employeeId: 'EMP001',
-        employeeName: 'Carlos Ferreira',
-        customerId: 'cust-1',
-        customerName: 'Maria Silva',
-        date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 day ago
-        time: '14:30',
-        items: [
-            {
-                productId: 'prod-1',
-                productName: 'Premium Coffee Beans',
-                categoryId: 'cat-1',
-                categoryName: 'Coffee',
-                quantity: 2,
-                unitPrice: 12.50,
-                cost: 8.00,
-                total: 25.00,
-                profit: 9.00
-            },
-            {
-                productId: 'prod-5',
-                productName: 'Croissant',
-                categoryId: 'cat-4',
-                categoryName: 'Bakery',
-                quantity: 1,
-                unitPrice: 3.50,
-                cost: 1.20,
-                total: 3.50,
-                profit: 2.30
-            }
-        ],
-        subtotal: 28.50,
-        discount: 1.43,
-        tax: 6.20,
-        total: 33.27,
-        paymentMethod: 'card',
-        status: 'completed'
-    },
-    {
-        id: 'txn-2',
-        employeeId: 'EMP002',
-        employeeName: 'João Santos',
-        date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 2 days ago
-        time: '15:45',
-        items: [
-            {
-                productId: 'prod-2',
-                productName: 'Organic Milk',
-                categoryId: 'cat-2',
-                categoryName: 'Dairy',
-                quantity: 3,
-                unitPrice: 2.80,
-                cost: 1.50,
-                total: 8.40,
-                profit: 3.90
-            },
-            {
-                productId: 'prod-3',
-                productName: 'Dark Chocolate',
-                categoryId: 'cat-3',
-                categoryName: 'Confectionery',
-                quantity: 2,
-                unitPrice: 6.90,
-                cost: 4.20,
-                total: 13.80,
-                profit: 5.40
-            }
-        ],
-        subtotal: 22.20,
-        discount: 0,
-        tax: 5.11,
-        total: 27.31,
-        paymentMethod: 'cash',
-        status: 'completed'
-    },
-    {
-        id: 'txn-3',
-        employeeId: 'EMP003',
-        employeeName: 'Maria Oliveira',
-        date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 3 days ago
-        time: '16:20',
-        items: [
-            {
-                productId: 'prod-1',
-                productName: 'Premium Coffee Beans',
-                categoryId: 'cat-1',
-                categoryName: 'Coffee',
-                quantity: 1,
-                unitPrice: 12.50,
-                cost: 8.00,
-                total: 12.50,
-                profit: 4.50
-            },
-            {
-                productId: 'prod-6',
-                productName: 'Cheese',
-                categoryId: 'cat-2',
-                categoryName: 'Dairy',
-                quantity: 1,
-                unitPrice: 8.90,
-                cost: 5.50,
-                total: 8.90,
-                profit: 3.40
-            }
-        ],
-        subtotal: 21.40,
-        discount: 0,
-        tax: 4.92,
-        total: 26.32,
-        paymentMethod: 'card',
-        status: 'completed'
-    },
-    {
-        id: 'txn-4',
-        employeeId: 'EMP001',
-        employeeName: 'Carlos Ferreira',
-        customerId: 'cust-2',
-        customerName: 'João Costa',
-        date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 5 days ago
-        time: '10:15',
-        items: [
-            {
-                productId: 'prod-7',
-                productName: 'Espresso',
-                categoryId: 'cat-1',
-                categoryName: 'Coffee',
-                quantity: 2,
-                unitPrice: 1.50,
-                cost: 0.30,
-                total: 3.00,
-                profit: 2.40
-            },
-            {
-                productId: 'prod-8',
-                productName: 'Muffin',
-                categoryId: 'cat-4',
-                categoryName: 'Bakery',
-                quantity: 1,
-                unitPrice: 4.20,
-                cost: 1.80,
-                total: 4.20,
-                profit: 2.40
-            }
-        ],
-        subtotal: 7.20,
-        discount: 0.36,
-        tax: 1.58,
-        total: 8.42,
-        paymentMethod: 'cash',
-        status: 'completed'
-    },
-    {
-        id: 'txn-5',
-        employeeId: 'EMP002',
-        employeeName: 'João Santos',
-        date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days ago
-        time: '13:25',
-        items: [
-            {
-                productId: 'prod-3',
-                productName: 'Dark Chocolate',
-                categoryId: 'cat-3',
-                categoryName: 'Confectionery',
-                quantity: 3,
-                unitPrice: 6.90,
-                cost: 4.20,
-                total: 20.70,
-                profit: 8.10
-            },
-            {
-                productId: 'prod-9',
-                productName: 'Candy Bar',
-                categoryId: 'cat-3',
-                categoryName: 'Confectionery',
-                quantity: 2,
-                unitPrice: 2.50,
-                cost: 1.00,
-                total: 5.00,
-                profit: 3.00
-            }
-        ],
-        subtotal: 25.70,
-        discount: 0,
-        tax: 5.91,
-        total: 31.61,
-        paymentMethod: 'card',
-        status: 'completed'
-    },
-    {
-        id: 'txn-6',
-        employeeId: 'EMP003',
-        employeeName: 'Maria Oliveira',
-        date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 10 days ago
-        time: '17:40',
-        items: [
-            {
-                productId: 'prod-2',
-                productName: 'Organic Milk',
-                categoryId: 'cat-2',
-                categoryName: 'Dairy',
-                quantity: 2,
-                unitPrice: 2.80,
-                cost: 1.50,
-                total: 5.60,
-                profit: 2.60
-            },
-            {
-                productId: 'prod-10',
-                productName: 'Yogurt',
-                categoryId: 'cat-2',
-                categoryName: 'Dairy',
-                quantity: 3,
-                unitPrice: 1.80,
-                cost: 0.90,
-                total: 5.40,
-                profit: 2.70
-            }
-        ],
-        subtotal: 11.00,
-        discount: 0.55,
-        tax: 2.40,
-        total: 12.85,
-        paymentMethod: 'cash',
-        status: 'completed'
-    },
-    {
-        id: 'txn-7',
-        employeeId: 'EMP001',
-        employeeName: 'Carlos Ferreira',
-        date: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 12 days ago
-        time: '11:30',
-        items: [
-            {
-                productId: 'prod-1',
-                productName: 'Premium Coffee Beans',
-                categoryId: 'cat-1',
-                categoryName: 'Coffee',
-                quantity: 1,
-                unitPrice: 12.50,
-                cost: 8.00,
-                total: 12.50,
-                profit: 4.50
-            },
-            {
-                productId: 'prod-11',
-                productName: 'Sandwich',
-                categoryId: 'cat-4',
-                categoryName: 'Bakery',
-                quantity: 1,
-                unitPrice: 7.50,
-                cost: 3.20,
-                total: 7.50,
-                profit: 4.30
-            }
-        ],
-        subtotal: 20.00,
-        discount: 2.00,
-        tax: 4.14,
-        total: 22.14,
-        paymentMethod: 'mixed',
-        status: 'completed'
-    },
-    {
-        id: 'txn-8',
-        employeeId: 'EMP002',
-        employeeName: 'João Santos',
-        customerId: 'cust-3',
-        customerName: 'Ana Pereira',
-        date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 15 days ago
-        time: '14:15',
-        items: [
-            {
-                productId: 'prod-7',
-                productName: 'Espresso',
-                categoryId: 'cat-1',
-                categoryName: 'Coffee',
-                quantity: 4,
-                unitPrice: 1.50,
-                cost: 0.30,
-                total: 6.00,
-                profit: 4.80
-            },
-            {
-                productId: 'prod-12',
-                productName: 'Cake Slice',
-                categoryId: 'cat-4',
-                categoryName: 'Bakery',
-                quantity: 2,
-                unitPrice: 5.80,
-                cost: 2.50,
-                total: 11.60,
-                profit: 6.60
-            }
-        ],
-        subtotal: 17.60,
-        discount: 0,
-        tax: 4.05,
-        total: 21.65,
-        paymentMethod: 'card',
-        status: 'completed'
-    },
-    {
-        id: 'txn-9',
-        employeeId: 'EMP003',
-        employeeName: 'Maria Oliveira',
-        date: new Date(Date.now() - 18 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 18 days ago
-        time: '16:50',
-        items: [
-            {
-                productId: 'prod-3',
-                productName: 'Dark Chocolate',
-                categoryId: 'cat-3',
-                categoryName: 'Confectionery',
-                quantity: 1,
-                unitPrice: 6.90,
-                cost: 4.20,
-                total: 6.90,
-                profit: 2.70
-            },
-            {
-                productId: 'prod-13',
-                productName: 'Gummy Bears',
-                categoryId: 'cat-3',
-                categoryName: 'Confectionery',
-                quantity: 2,
-                unitPrice: 3.20,
-                cost: 1.50,
-                total: 6.40,
-                profit: 3.40
-            }
-        ],
-        subtotal: 13.30,
-        discount: 0,
-        tax: 3.06,
-        total: 16.36,
-        paymentMethod: 'cash',
-        status: 'completed'
-    },
-    {
-        id: 'txn-10',
-        employeeId: 'EMP001',
-        employeeName: 'Carlos Ferreira',
-        customerId: 'cust-4',
-        customerName: 'Pedro Santos',
-        date: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 20 days ago
-        time: '09:45',
-        items: [
-            {
-                productId: 'prod-2',
-                productName: 'Organic Milk',
-                categoryId: 'cat-2',
-                categoryName: 'Dairy',
-                quantity: 1,
-                unitPrice: 2.80,
-                cost: 1.50,
-                total: 2.80,
-                profit: 1.30
-            },
-            {
-                productId: 'prod-14',
-                productName: 'Butter',
-                categoryId: 'cat-2',
-                categoryName: 'Dairy',
-                quantity: 1,
-                unitPrice: 4.50,
-                cost: 2.80,
-                total: 4.50,
-                profit: 1.70
-            },
-            {
-                productId: 'prod-5',
-                productName: 'Croissant',
-                categoryId: 'cat-4',
-                categoryName: 'Bakery',
-                quantity: 2,
-                unitPrice: 3.50,
-                cost: 1.20,
-                total: 7.00,
-                profit: 4.60
-            }
-        ],
-        subtotal: 14.30,
-        discount: 0.71,
-        tax: 3.13,
-        total: 16.72,
-        paymentMethod: 'card',
-        status: 'completed'
-    },
-    {
-        id: 'txn-11',
-        employeeId: 'EMP002',
-        employeeName: 'João Santos',
-        date: new Date(Date.now() - 22 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 22 days ago
-        time: '12:20',
-        items: [
-            {
-                productId: 'prod-7',
-                productName: 'Espresso',
-                categoryId: 'cat-1',
-                categoryName: 'Coffee',
-                quantity: 3,
-                unitPrice: 1.50,
-                cost: 0.30,
-                total: 4.50,
-                profit: 3.60
-            },
-            {
-                productId: 'prod-15',
-                productName: 'Latte',
-                categoryId: 'cat-1',
-                categoryName: 'Coffee',
-                quantity: 1,
-                unitPrice: 3.80,
-                cost: 1.20,
-                total: 3.80,
-                profit: 2.60
-            }
-        ],
-        subtotal: 8.30,
-        discount: 0,
-        tax: 1.91,
-        total: 10.21,
-        paymentMethod: 'cash',
-        status: 'completed'
-    },
-    {
-        id: 'txn-12',
-        employeeId: 'EMP003',
-        employeeName: 'Maria Oliveira',
-        customerId: 'cust-5',
-        customerName: 'Carla Silva',
-        date: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 25 days ago
-        time: '15:35',
-        items: [
-            {
-                productId: 'prod-8',
-                productName: 'Muffin',
-                categoryId: 'cat-4',
-                categoryName: 'Bakery',
-                quantity: 3,
-                unitPrice: 4.20,
-                cost: 1.80,
-                total: 12.60,
-                profit: 7.20
-            },
-            {
-                productId: 'prod-16',
-                productName: 'Cookies',
-                categoryId: 'cat-3',
-                categoryName: 'Confectionery',
-                quantity: 1,
-                unitPrice: 5.50,
-                cost: 2.20,
-                total: 5.50,
-                profit: 3.30
-            }
-        ],
-        subtotal: 18.10,
-        discount: 1.81,
-        tax: 3.75,
-        total: 20.04,
-        paymentMethod: 'card',
-        status: 'completed'
-    }
-];
+// Note: Mock data has been replaced with real database integration
+// The transaction data now comes from the reportingService
 
 interface DateRange {
     start: string;
     end: string;
-}
-
-interface ReportFilters {
-    dateRange: DateRange;
-    employeeId?: string;
-    categoryId?: string;
-    paymentMethod?: string;
 }
 
 const Reports: React.FC = () => {
@@ -551,85 +57,58 @@ const Reports: React.FC = () => {
     });
     const [showFilters, setShowFilters] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [reportData, setReportData] = useState<{
+        transactions: ReportTransaction[];
+        employeePerformance: EmployeePerformance[];
+        productPerformance: ProductPerformance[];
+        overviewMetrics: OverviewMetrics;
+    } | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
-    // Filter transactions based on current filters
-    const filteredTransactions = useMemo(() => {
-        return mockTransactions.filter(transaction => {
-            const transactionDate = transaction.date;
-            const matchesDateRange = transactionDate >= filters.dateRange.start && transactionDate <= filters.dateRange.end;
-            const matchesEmployee = !filters.employeeId || transaction.employeeId === filters.employeeId;
-            const matchesPayment = !filters.paymentMethod || transaction.paymentMethod === filters.paymentMethod;
-            const matchesCategory = !filters.categoryId || transaction.items.some(item => item.categoryId === filters.categoryId);
+    // Load report data when filters change
+    useEffect(() => {
+        const loadReportData = async () => {
+            try {
+                setIsLoading(true);
+                setError(null);
 
-            return matchesDateRange && matchesEmployee && matchesPayment && matchesCategory && transaction.status === 'completed';
-        });
+                const data = await reportingService.getReportData(filters);
+                setReportData(data);
+            } catch (err) {
+                console.error('Error loading report data:', err);
+                setError(err instanceof Error ? err.message : 'Failed to load report data');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadReportData();
     }, [filters]);
 
-    // Calculate overview metrics
+    // Get filtered transactions
+    const filteredTransactions = useMemo(() => {
+        if (!reportData) return [];
+        return reportData.transactions;
+    }, [reportData]);
+
+    // Get report data from service
     const overviewMetrics = useMemo(() => {
-        const totalRevenue = filteredTransactions.reduce((sum, t) => sum + t.total, 0);
-        const totalTransactions = filteredTransactions.length;
-        const totalItems = filteredTransactions.reduce((sum, t) =>
-            sum + t.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0
-        );
-        const avgTransaction = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
-
-        return {
-            totalRevenue,
-            totalTransactions,
-            totalItems,
-            avgTransaction
+        return reportData?.overviewMetrics || {
+            totalRevenue: 0,
+            totalTransactions: 0,
+            totalItems: 0,
+            avgTransaction: 0
         };
-    }, [filteredTransactions]);
+    }, [reportData]);
 
-    // Calculate employee performance
     const employeePerformance = useMemo(() => {
-        const performanceMap = new Map();
+        return reportData?.employeePerformance || [];
+    }, [reportData]);
 
-        filteredTransactions.forEach(transaction => {
-            const existing = performanceMap.get(transaction.employeeId) || {
-                employeeId: transaction.employeeId,
-                employeeName: transaction.employeeName,
-                totalSales: 0,
-                transactionCount: 0,
-                itemsSold: 0
-            };
-
-            existing.totalSales += transaction.total;
-            existing.transactionCount += 1;
-            existing.itemsSold += transaction.items.reduce((sum, item) => sum + item.quantity, 0);
-
-            performanceMap.set(transaction.employeeId, existing);
-        });
-
-        return Array.from(performanceMap.values()).sort((a, b) => b.totalSales - a.totalSales);
-    }, [filteredTransactions]);
-
-    // Calculate product performance
     const productPerformance = useMemo(() => {
-        const productMap = new Map();
-
-        filteredTransactions.forEach(transaction => {
-            transaction.items.forEach(item => {
-                const existing = productMap.get(item.productId) || {
-                    productId: item.productId,
-                    productName: item.productName,
-                    categoryName: item.categoryName,
-                    quantitySold: 0,
-                    totalRevenue: 0,
-                    transactionCount: 0
-                };
-
-                existing.quantitySold += item.quantity;
-                existing.totalRevenue += item.total;
-                existing.transactionCount += 1;
-
-                productMap.set(item.productId, existing);
-            });
-        });
-
-        return Array.from(productMap.values()).sort((a, b) => b.quantitySold - a.quantitySold);
-    }, [filteredTransactions]);
+        return reportData?.productPerformance || [];
+    }, [reportData]);
 
 
 
@@ -640,13 +119,12 @@ const Reports: React.FC = () => {
 
     // Handle export to Excel
     const handleExportExcel = async () => {
+        if (!reportData) return;
+
         setIsExporting(true);
         try {
-            // In production, this would call an API to generate Excel file
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate export
-
-            // Create CSV content for demonstration
-            const csvContent = generateCSVReport();
+            // Generate CSV content using the reporting service
+            const csvContent = reportingService.generateCSVReport(filteredTransactions);
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
@@ -658,34 +136,10 @@ const Reports: React.FC = () => {
             document.body.removeChild(link);
         } catch (error) {
             console.error('Export failed:', error);
+            setError('Failed to export report. Please try again.');
         } finally {
             setIsExporting(false);
         }
-    };
-
-    // Generate CSV report content
-    const generateCSVReport = () => {
-        const headers = [
-            'Date', 'Time', 'Employee', 'Customer', 'Product', 'Category',
-            'Quantity', 'Unit Price', 'Total', 'Payment Method'
-        ];
-
-        const rows = filteredTransactions.flatMap(transaction =>
-            transaction.items.map(item => [
-                transaction.date,
-                transaction.time,
-                transaction.employeeName,
-                transaction.customerName || 'N/A',
-                item.productName,
-                item.categoryName,
-                item.quantity,
-                `€${item.unitPrice.toFixed(2)}`,
-                `€${item.total.toFixed(2)}`,
-                transaction.paymentMethod
-            ])
-        );
-
-        return [headers, ...rows].map(row => row.join(',')).join('\n');
     };
 
     const formatCurrency = (amount: number) => {
@@ -705,6 +159,53 @@ const Reports: React.FC = () => {
         { id: 'products', label: 'Product Analysis', icon: Package },
         { id: 'inventory', label: 'Inventory Report', icon: ShoppingCart }
     ];
+
+    // Show loading state
+    if (isLoading) {
+        return (
+            <div className="space-y-6">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-800">Advanced Reports</h1>
+                        <p className="text-gray-600 mt-1">Comprehensive business analytics and insights</p>
+                    </div>
+                </div>
+                <div className="flex items-center justify-center h-64">
+                    <div className="flex items-center space-x-2">
+                        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                        <span className="text-gray-600">Loading report data...</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error state
+    if (error) {
+        return (
+            <div className="space-y-6">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-800">Advanced Reports</h1>
+                        <p className="text-gray-600 mt-1">Comprehensive business analytics and insights</p>
+                    </div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+                    <div className="flex items-center space-x-2">
+                        <AlertCircle className="w-5 h-5 text-red-500" />
+                        <h3 className="text-red-800 font-medium">Error Loading Report Data</h3>
+                    </div>
+                    <p className="text-red-700 mt-2">{error}</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="mt-4 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                        Retry
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">

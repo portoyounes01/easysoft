@@ -102,6 +102,10 @@ CREATE INDEX IF NOT EXISTS idx_products_low_stock ON public.products(stock, min_
 -- TRIGGERS FOR AUTOMATIC TIMESTAMP UPDATES
 -- =====================================================
 
+-- Drop existing triggers first
+DROP TRIGGER IF EXISTS update_categories_updated_at ON public.categories;
+DROP TRIGGER IF EXISTS update_products_updated_at ON public.products;
+
 -- Categories trigger
 CREATE TRIGGER update_categories_updated_at
   BEFORE UPDATE ON public.categories
@@ -118,6 +122,12 @@ CREATE TRIGGER update_products_updated_at
 -- SYNC HELPER FUNCTIONS
 -- =====================================================
 
+-- Drop existing functions first to avoid return type conflicts
+DROP FUNCTION IF EXISTS public.get_categories_delta(TIMESTAMPTZ);
+DROP FUNCTION IF EXISTS public.get_products_delta(TIMESTAMPTZ);
+DROP FUNCTION IF EXISTS public.upsert_categories(JSONB);
+DROP FUNCTION IF EXISTS public.upsert_products(JSONB);
+
 -- Get categories delta for sync
 CREATE OR REPLACE FUNCTION public.get_categories_delta(last_sync_timestamp TIMESTAMPTZ DEFAULT '1970-01-01'::TIMESTAMPTZ)
 RETURNS TABLE (
@@ -130,13 +140,17 @@ RETURNS TABLE (
   is_active BOOLEAN,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
-  deleted_at TIMESTAMPTZ
+  deleted_at TIMESTAMPTZ,
+  needs_push BOOLEAN,
+  is_conflicted BOOLEAN
 ) AS $$
 BEGIN
   RETURN QUERY
   SELECT 
     c.id, c.name, c.description, c.color, c.icon, c.display_order,
-    c.is_active, c.created_at, c.updated_at, c.deleted_at
+    c.is_active, c.created_at, c.updated_at, c.deleted_at,
+    COALESCE(c.needs_push, FALSE) as needs_push,
+    COALESCE(c.is_conflicted, FALSE) as is_conflicted
   FROM public.categories c
   WHERE c.updated_at > last_sync_timestamp
   ORDER BY c.updated_at ASC;
@@ -166,7 +180,9 @@ RETURNS TABLE (
   display_order INTEGER,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
-  deleted_at TIMESTAMPTZ
+  deleted_at TIMESTAMPTZ,
+  needs_push BOOLEAN,
+  is_conflicted BOOLEAN
 ) AS $$
 BEGIN
   RETURN QUERY
@@ -174,7 +190,9 @@ BEGIN
     p.id, p.name, p.description, p.sku, p.barcode, p.category_id, p.category_name,
     p.price, p.cost, p.iva_rate, p.stock, p.min_stock, p.track_stock,
     p.image_url, p.supplier, p.location, p.is_active, p.display_order,
-    p.created_at, p.updated_at, p.deleted_at
+    p.created_at, p.updated_at, p.deleted_at,
+    COALESCE(p.needs_push, FALSE) as needs_push,
+    COALESCE(p.is_conflicted, FALSE) as is_conflicted
   FROM public.products p
   WHERE p.updated_at > last_sync_timestamp
   ORDER BY p.updated_at ASC;
@@ -192,17 +210,19 @@ BEGIN
     SELECT * FROM jsonb_to_recordset(categories_data) AS x(
       id UUID, name TEXT, description TEXT, color TEXT, icon TEXT,
       display_order INTEGER, is_active BOOLEAN, created_at TIMESTAMPTZ,
-      updated_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ
+      updated_at TIMESTAMPTZ, deleted_at TIMESTAMPTZ, needs_push BOOLEAN,
+      is_conflicted BOOLEAN
     )
   LOOP
     INSERT INTO public.categories (
       id, name, description, color, icon, display_order, is_active,
-      created_at, updated_at, deleted_at
+      created_at, updated_at, deleted_at, needs_push, is_conflicted
     ) VALUES (
       category_record.id, category_record.name, category_record.description,
       category_record.color, category_record.icon, category_record.display_order,
       category_record.is_active, category_record.created_at, category_record.updated_at,
-      category_record.deleted_at
+      category_record.deleted_at, COALESCE(category_record.needs_push, FALSE),
+      COALESCE(category_record.is_conflicted, FALSE)
     )
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
@@ -212,7 +232,9 @@ BEGIN
       display_order = EXCLUDED.display_order,
       is_active = EXCLUDED.is_active,
       updated_at = EXCLUDED.updated_at,
-      deleted_at = EXCLUDED.deleted_at
+      deleted_at = EXCLUDED.deleted_at,
+      needs_push = EXCLUDED.needs_push,
+      is_conflicted = EXCLUDED.is_conflicted
     WHERE public.categories.updated_at < EXCLUDED.updated_at;
     
     upserted_count := upserted_count + 1;
@@ -236,14 +258,14 @@ BEGIN
       iva_rate NUMERIC, stock INTEGER, min_stock INTEGER, track_stock BOOLEAN,
       image_url TEXT, supplier TEXT, location TEXT, is_active BOOLEAN,
       display_order INTEGER, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ,
-      deleted_at TIMESTAMPTZ
+      deleted_at TIMESTAMPTZ, needs_push BOOLEAN, is_conflicted BOOLEAN
     )
   LOOP
     INSERT INTO public.products (
       id, name, description, sku, barcode, category_id, category_name,
       price, cost, iva_rate, stock, min_stock, track_stock, image_url,
       supplier, location, is_active, display_order, created_at, updated_at,
-      deleted_at
+      deleted_at, needs_push, is_conflicted
     ) VALUES (
       product_record.id, product_record.name, product_record.description,
       product_record.sku, product_record.barcode, product_record.category_id,
@@ -251,7 +273,8 @@ BEGIN
       product_record.iva_rate, product_record.stock, product_record.min_stock,
       product_record.track_stock, product_record.image_url, product_record.supplier,
       product_record.location, product_record.is_active, product_record.display_order,
-      product_record.created_at, product_record.updated_at, product_record.deleted_at
+      product_record.created_at, product_record.updated_at, product_record.deleted_at,
+      COALESCE(product_record.needs_push, FALSE), COALESCE(product_record.is_conflicted, FALSE)
     )
     ON CONFLICT (sku) DO UPDATE SET
       name = EXCLUDED.name,
@@ -271,7 +294,9 @@ BEGIN
       is_active = EXCLUDED.is_active,
       display_order = EXCLUDED.display_order,
       updated_at = EXCLUDED.updated_at,
-      deleted_at = EXCLUDED.deleted_at
+      deleted_at = EXCLUDED.deleted_at,
+      needs_push = EXCLUDED.needs_push,
+      is_conflicted = EXCLUDED.is_conflicted
     WHERE public.products.updated_at < EXCLUDED.updated_at;
     
     upserted_count := upserted_count + 1;
@@ -285,35 +310,55 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ROW LEVEL SECURITY (RLS)
 -- =====================================================
 
+-- Drop views that depend on the tables before altering table structure
+DROP VIEW IF EXISTS public.active_products_with_categories CASCADE;
+DROP VIEW IF EXISTS public.low_stock_products CASCADE;
+
 -- Enable RLS
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 
--- Categories policies (allow all operations for authenticated users)
-CREATE POLICY "Categories are viewable by authenticated users" ON public.categories
-  FOR SELECT USING (auth.role() = 'authenticated');
+-- Add sync columns if they don't exist
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS needs_push BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS is_conflicted BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS needs_push BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_conflicted BOOLEAN DEFAULT FALSE;
 
-CREATE POLICY "Categories are insertable by authenticated users" ON public.categories
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+-- Drop existing policies first
+DROP POLICY IF EXISTS "Categories are viewable by authenticated users" ON public.categories;
+DROP POLICY IF EXISTS "Categories are insertable by authenticated users" ON public.categories;
+DROP POLICY IF EXISTS "Categories are updatable by authenticated users" ON public.categories;
+DROP POLICY IF EXISTS "Categories are deletable by authenticated users" ON public.categories;
+DROP POLICY IF EXISTS "Products are viewable by authenticated users" ON public.products;
+DROP POLICY IF EXISTS "Products are insertable by authenticated users" ON public.products;
+DROP POLICY IF EXISTS "Products are updatable by authenticated users" ON public.products;
+DROP POLICY IF EXISTS "Products are deletable by authenticated users" ON public.products;
 
-CREATE POLICY "Categories are updatable by authenticated users" ON public.categories
-  FOR UPDATE USING (auth.role() = 'authenticated');
+-- Categories policies (allow all operations for anon and authenticated users)
+CREATE POLICY "Categories are viewable by all users" ON public.categories
+  FOR SELECT USING (auth.role() IN ('anon', 'authenticated'));
 
-CREATE POLICY "Categories are deletable by authenticated users" ON public.categories
-  FOR DELETE USING (auth.role() = 'authenticated');
+CREATE POLICY "Categories are insertable by all users" ON public.categories
+  FOR INSERT WITH CHECK (auth.role() IN ('anon', 'authenticated'));
 
--- Products policies (allow all operations for authenticated users)
-CREATE POLICY "Products are viewable by authenticated users" ON public.products
-  FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Categories are updatable by all users" ON public.categories
+  FOR UPDATE USING (auth.role() IN ('anon', 'authenticated'));
 
-CREATE POLICY "Products are insertable by authenticated users" ON public.products
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Categories are deletable by all users" ON public.categories
+  FOR DELETE USING (auth.role() IN ('anon', 'authenticated'));
 
-CREATE POLICY "Products are updatable by authenticated users" ON public.products
-  FOR UPDATE USING (auth.role() = 'authenticated');
+-- Products policies (allow all operations for anon and authenticated users)
+CREATE POLICY "Products are viewable by all users" ON public.products
+  FOR SELECT USING (auth.role() IN ('anon', 'authenticated'));
 
-CREATE POLICY "Products are deletable by authenticated users" ON public.products
-  FOR DELETE USING (auth.role() = 'authenticated');
+CREATE POLICY "Products are insertable by all users" ON public.products
+  FOR INSERT WITH CHECK (auth.role() IN ('anon', 'authenticated'));
+
+CREATE POLICY "Products are updatable by all users" ON public.products
+  FOR UPDATE USING (auth.role() IN ('anon', 'authenticated'));
+
+CREATE POLICY "Products are deletable by all users" ON public.products
+  FOR DELETE USING (auth.role() IN ('anon', 'authenticated'));
 
 -- =====================================================
 -- SAMPLE DATA

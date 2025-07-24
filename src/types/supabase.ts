@@ -19,6 +19,26 @@ export interface Database {
                 Insert: ProductInsert;
                 Update: ProductUpdate;
             };
+            customers: {
+                Row: CustomerRow;
+                Insert: CustomerInsert;
+                Update: CustomerUpdate;
+            };
+            transactions: {
+                Row: TransactionRow;
+                Insert: TransactionInsert;
+                Update: TransactionUpdate;
+            };
+            transaction_items: {
+                Row: TransactionItemRow;
+                Insert: TransactionItemInsert;
+                Update: TransactionItemUpdate;
+            };
+            daily_sales_summary: {
+                Row: DailySalesSummaryRow;
+                Insert: DailySalesSummaryInsert;
+                Update: DailySalesSummaryUpdate;
+            };
         };
         Functions: {
             get_employees_delta: {
@@ -44,6 +64,27 @@ export interface Database {
             upsert_products: {
                 Args: { products_data: unknown };
                 Returns: number;
+            };
+            get_transactions_delta: {
+                Args: { last_sync_timestamp?: string };
+                Returns: TransactionRow[];
+            };
+            get_transaction_items_delta: {
+                Args: { last_sync_timestamp?: string };
+                Returns: TransactionItemRow[];
+            };
+            generate_transaction_number: {
+                Args: Record<PropertyKey, never>;
+                Returns: string;
+            };
+            calculate_transaction_totals: {
+                Args: { transaction_uuid: string };
+                Returns: {
+                    subtotal: number;
+                    total_tax: number;
+                    total_profit: number;
+                    total_amount: number;
+                }[];
             };
         };
     };
@@ -527,4 +568,425 @@ export const calculatePriceWithTax = (price: number, ivaRate: number): number =>
 
 export const calculatePriceWithoutTax = (priceWithTax: number, ivaRate: number): number => {
     return priceWithTax / (1 + ivaRate);
-}; 
+};
+
+// =====================================================
+// CUSTOMER TYPES
+// =====================================================
+
+// Base customer interface from database
+export interface CustomerRow {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    total_spent: number;
+    transaction_count: number;
+    loyalty_points: number;
+    is_active: boolean;
+    preferred_payment_method: string | null;
+    created_at: string; // ISO timestamp
+    updated_at: string; // ISO timestamp
+    last_synced_at: string | null; // ISO timestamp
+    deleted_at: string | null; // ISO timestamp
+}
+
+// For inserting new customers
+export interface CustomerInsert {
+    id?: string; // Optional, will be generated if not provided
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    total_spent?: number;
+    transaction_count?: number;
+    loyalty_points?: number;
+    is_active?: boolean;
+    preferred_payment_method?: string | null;
+    created_at?: string; // Will be auto-generated if not provided
+    updated_at?: string; // Will be auto-generated
+    last_synced_at?: string | null;
+    deleted_at?: string | null;
+}
+
+// For updating existing customers
+export interface CustomerUpdate {
+    id?: never; // Can't update ID
+    name?: string;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    total_spent?: number;
+    transaction_count?: number;
+    loyalty_points?: number;
+    is_active?: boolean;
+    preferred_payment_method?: string | null;
+    updated_at?: string; // Will be auto-generated
+    last_synced_at?: string | null;
+    deleted_at?: string | null;
+}
+
+// Enhanced customer interface for the app
+export interface Customer extends CustomerRow {
+    // Additional computed fields
+    average_transaction?: number;
+    last_purchase_date?: string;
+}
+
+// =====================================================
+// TRANSACTION TYPES
+// =====================================================
+
+// Base transaction interface from database
+export interface TransactionRow {
+    id: string;
+    transaction_number: string;
+    employee_id: string;
+    employee_name: string;
+    customer_id: string | null;
+    customer_name: string | null;
+    transaction_date: string; // ISO date string
+    transaction_time: string; // Time string (HH:MM:SS)
+    subtotal: number;
+    discount: number;
+    tax: number;
+    total: number;
+    payment_method: 'cash' | 'card' | 'mixed';
+    amount_paid: number | null;
+    change_given: number;
+    status: 'completed' | 'refunded' | 'partial_refund' | 'pending' | 'cancelled';
+    notes: string | null;
+    receipt_number: string | null;
+    created_at: string; // ISO timestamp
+    updated_at: string; // ISO timestamp
+    last_synced_at: string | null; // ISO timestamp
+    deleted_at: string | null; // ISO timestamp
+}
+
+// For inserting new transactions
+export interface TransactionInsert {
+    id?: string; // Optional, will be generated if not provided
+    transaction_number?: string; // Will be generated if not provided
+    employee_id: string;
+    employee_name: string;
+    customer_id?: string | null;
+    customer_name?: string | null;
+    transaction_date: string; // ISO date string
+    transaction_time: string; // Time string
+    subtotal: number;
+    discount?: number;
+    tax: number;
+    total: number;
+    payment_method: 'cash' | 'card' | 'mixed';
+    amount_paid?: number | null;
+    change_given?: number;
+    status?: 'completed' | 'refunded' | 'partial_refund' | 'pending' | 'cancelled';
+    notes?: string | null;
+    receipt_number?: string | null;
+    created_at?: string; // Will be auto-generated if not provided
+    updated_at?: string; // Will be auto-generated
+    last_synced_at?: string | null;
+    deleted_at?: string | null;
+}
+
+// For updating existing transactions
+export interface TransactionUpdate {
+    id?: never; // Can't update ID
+    transaction_number?: never; // Can't update transaction number
+    employee_id?: string;
+    employee_name?: string;
+    customer_id?: string | null;
+    customer_name?: string | null;
+    transaction_date?: string;
+    transaction_time?: string;
+    subtotal?: number;
+    discount?: number;
+    tax?: number;
+    total?: number;
+    payment_method?: 'cash' | 'card' | 'mixed';
+    amount_paid?: number | null;
+    change_given?: number;
+    status?: 'completed' | 'refunded' | 'partial_refund' | 'pending' | 'cancelled';
+    notes?: string | null;
+    receipt_number?: string | null;
+    updated_at?: string; // Will be auto-generated
+    last_synced_at?: string | null;
+    deleted_at?: string | null;
+}
+
+// Enhanced transaction interface for the app
+export interface Transaction extends TransactionRow {
+    // Additional computed fields
+    items?: TransactionItem[];
+    customer?: Customer;
+    employee?: Employee;
+}
+
+// =====================================================
+// TRANSACTION ITEM TYPES
+// =====================================================
+
+// Base transaction item interface from database
+export interface TransactionItemRow {
+    id: string;
+    transaction_id: string;
+    product_id: string;
+    product_name: string;
+    product_sku: string;
+    category_id: string | null;
+    category_name: string | null;
+    quantity: number;
+    unit_price: number;
+    unit_cost: number;
+    iva_rate: number;
+    line_total: number;
+    tax_amount: number;
+    profit_amount: number;
+    discount_amount: number;
+    discount_percentage: number;
+    created_at: string; // ISO timestamp
+    updated_at: string; // ISO timestamp
+    last_synced_at: string | null; // ISO timestamp
+    deleted_at: string | null; // ISO timestamp
+}
+
+// For inserting new transaction items
+export interface TransactionItemInsert {
+    id?: string; // Optional, will be generated if not provided
+    transaction_id: string;
+    product_id: string;
+    product_name: string;
+    product_sku: string;
+    category_id?: string | null;
+    category_name?: string | null;
+    quantity: number;
+    unit_price: number;
+    unit_cost?: number;
+    iva_rate: number;
+    line_total: number;
+    tax_amount: number;
+    profit_amount?: number;
+    discount_amount?: number;
+    discount_percentage?: number;
+    created_at?: string; // Will be auto-generated if not provided
+    updated_at?: string; // Will be auto-generated
+    last_synced_at?: string | null;
+    deleted_at?: string | null;
+}
+
+// For updating existing transaction items
+export interface TransactionItemUpdate {
+    id?: never; // Can't update ID
+    transaction_id?: never; // Can't update transaction ID
+    product_id?: string;
+    product_name?: string;
+    product_sku?: string;
+    category_id?: string | null;
+    category_name?: string | null;
+    quantity?: number;
+    unit_price?: number;
+    unit_cost?: number;
+    iva_rate?: number;
+    line_total?: number;
+    tax_amount?: number;
+    profit_amount?: number;
+    discount_amount?: number;
+    discount_percentage?: number;
+    updated_at?: string; // Will be auto-generated
+    last_synced_at?: string | null;
+    deleted_at?: string | null;
+}
+
+// Enhanced transaction item interface for the app
+export interface TransactionItem extends TransactionItemRow {
+    // Additional computed fields
+    product?: Product;
+    category?: Category;
+}
+
+// =====================================================
+// DAILY SALES SUMMARY TYPES
+// =====================================================
+
+// Base daily sales summary interface from database
+export interface DailySalesSummaryRow {
+    summary_date: string; // ISO date string
+    employee_id: string;
+    total_sales: number;
+    transaction_count: number;
+    items_sold: number;
+    average_transaction: number;
+    cash_sales: number;
+    card_sales: number;
+    mixed_sales: number;
+    total_tax: number;
+    total_profit: number;
+    created_at: string; // ISO timestamp
+    updated_at: string; // ISO timestamp
+}
+
+// For inserting new daily sales summary
+export interface DailySalesSummaryInsert {
+    summary_date: string; // ISO date string
+    employee_id: string;
+    total_sales?: number;
+    transaction_count?: number;
+    items_sold?: number;
+    average_transaction?: number;
+    cash_sales?: number;
+    card_sales?: number;
+    mixed_sales?: number;
+    total_tax?: number;
+    total_profit?: number;
+    created_at?: string; // Will be auto-generated if not provided
+    updated_at?: string; // Will be auto-generated
+}
+
+// For updating existing daily sales summary
+export interface DailySalesSummaryUpdate {
+    summary_date?: never; // Part of composite key, can't update
+    employee_id?: never; // Part of composite key, can't update
+    total_sales?: number;
+    transaction_count?: number;
+    items_sold?: number;
+    average_transaction?: number;
+    cash_sales?: number;
+    card_sales?: number;
+    mixed_sales?: number;
+    total_tax?: number;
+    total_profit?: number;
+    updated_at?: string; // Will be auto-generated
+}
+
+// Enhanced daily sales summary interface for the app
+export interface DailySalesSummary extends DailySalesSummaryRow {
+    // Additional computed fields
+    employee?: Employee;
+}
+
+// =====================================================
+// REPORTING TYPES
+// =====================================================
+
+// For the Reports page - matches the existing mock data structure
+export interface ReportTransaction {
+    id: string;
+    employeeId: string;
+    employeeName: string;
+    customerId?: string;
+    customerName?: string;
+    date: string;
+    time: string;
+    items: Array<{
+        productId: string;
+        productName: string;
+        categoryId: string;
+        categoryName: string;
+        quantity: number;
+        unitPrice: number;
+        cost: number;
+        total: number;
+        profit: number;
+    }>;
+    subtotal: number;
+    discount: number;
+    tax: number;
+    total: number;
+    paymentMethod: 'cash' | 'card' | 'mixed';
+    status: 'completed' | 'refunded' | 'partial_refund';
+}
+
+// Report filters
+export interface ReportFilters {
+    dateRange: {
+        start: string;
+        end: string;
+    };
+    employeeId?: string;
+    categoryId?: string;
+    paymentMethod?: string;
+}
+
+// Employee performance metrics
+export interface EmployeePerformance {
+    employeeId: string;
+    employeeName: string;
+    totalSales: number;
+    transactionCount: number;
+    itemsSold: number;
+}
+
+// Product performance metrics
+export interface ProductPerformance {
+    productId: string;
+    productName: string;
+    categoryName: string;
+    quantitySold: number;
+    totalRevenue: number;
+    transactionCount: number;
+}
+
+// Overview metrics for reports
+export interface OverviewMetrics {
+    totalRevenue: number;
+    totalTransactions: number;
+    totalItems: number;
+    avgTransaction: number;
+}
+
+// =====================================================
+// FORM AND API TYPES
+// =====================================================
+
+// Transaction form data (for creating new transactions)
+export interface TransactionFormData {
+    employee_id: string;
+    customer_id?: string;
+    items: Array<{
+        product_id: string;
+        quantity: number;
+        unit_price: number;
+        discount_percentage?: number;
+    }>;
+    payment_method: 'cash' | 'card' | 'mixed';
+    amount_paid?: number;
+    notes?: string;
+}
+
+// Customer form data
+export interface CustomerFormData {
+    name: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    preferred_payment_method?: string;
+}
+
+// Transaction search and filter options
+export interface TransactionFilters {
+    employee_id?: string;
+    customer_id?: string;
+    payment_method?: 'cash' | 'card' | 'mixed';
+    status?: 'completed' | 'refunded' | 'partial_refund' | 'pending' | 'cancelled';
+    date_from?: string;
+    date_to?: string;
+    search?: string; // Search by transaction number, customer name, or employee name
+    min_amount?: number;
+    max_amount?: number;
+}
+
+export interface TransactionSortOptions {
+    field: keyof TransactionRow;
+    direction: 'asc' | 'desc';
+}
+
+// =====================================================
+// PAYMENT CONSTANTS
+// =====================================================
+
+export const PaymentMethods = ['cash', 'card', 'mixed'] as const;
+export type PaymentMethod = typeof PaymentMethods[number];
+
+export const TransactionStatuses = ['completed', 'refunded', 'partial_refund', 'pending', 'cancelled'] as const;
+export type TransactionStatus = typeof TransactionStatuses[number]; 

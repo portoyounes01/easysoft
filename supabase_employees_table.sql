@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS public.employees (
   pin TEXT, -- For cashier/basic accounts
   
   -- Role and permissions
-  role TEXT NOT NULL CHECK (role IN ('admin', 'manager', 'cashier')),
+  role TEXT NOT NULL CHECK (role IN ('admin', 'manager', 'cashier', 'trainee')),
   access_levels TEXT[] DEFAULT '{}',
   
   -- Status and employment info
@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS public.employees (
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   last_synced_at TIMESTAMPTZ,
   
+  -- Offline sync fields
+  needs_push BOOLEAN DEFAULT false,
+  is_conflicted BOOLEAN DEFAULT false,
+  
   -- Soft delete support
   deleted_at TIMESTAMPTZ
 );
@@ -47,6 +51,14 @@ CREATE INDEX IF NOT EXISTS idx_employees_employee_number ON public.employees(emp
 CREATE INDEX IF NOT EXISTS idx_employees_role ON public.employees(role);
 CREATE INDEX IF NOT EXISTS idx_employees_is_active ON public.employees(is_active);
 CREATE INDEX IF NOT EXISTS idx_employees_updated_at ON public.employees(updated_at);
+
+-- Drop existing constraint and add new one to include 'trainee' role
+ALTER TABLE public.employees DROP CONSTRAINT IF EXISTS employees_role_check;
+ALTER TABLE public.employees ADD CONSTRAINT employees_role_check CHECK (role IN ('admin', 'manager', 'cashier', 'trainee'));
+
+-- Add missing sync columns if they don't exist
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS needs_push BOOLEAN DEFAULT false;
+ALTER TABLE public.employees ADD COLUMN IF NOT EXISTS is_conflicted BOOLEAN DEFAULT false;
 
 -- Create function to automatically update updated_at
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
@@ -105,22 +117,33 @@ CREATE OR REPLACE TRIGGER prevent_employees_unauthorized_changes
 -- Enable Row-Level-Security (RLS)
 ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 
--- 1️⃣  Read-only access for active, non-deleted employees (anon + authenticated)
+-- Drop all existing policies first
 DROP POLICY IF EXISTS "Allow read access to active employees" ON public.employees;
-CREATE POLICY "Allow read access to active employees" ON public.employees
-  FOR SELECT
-  USING (
-    auth.role() IN ('anon', 'authenticated')
-    AND is_active = true
-    AND deleted_at IS NULL
-  );
-
--- 2️⃣  Employees can update their own basic details (NON-recursive)
 DROP POLICY IF EXISTS "Allow employees to update own info" ON public.employees;
-CREATE POLICY "Allow employees to update own info" ON public.employees
+DROP POLICY IF EXISTS "Allow authenticated users to insert employees" ON public.employees;
+DROP POLICY IF EXISTS "Allow authenticated users to update employees" ON public.employees;
+DROP POLICY IF EXISTS "Allow authenticated users to delete employees" ON public.employees;
+
+-- 1️⃣ Allow read access to all employees for authenticated users (including inactive/deleted for admin purposes)
+CREATE POLICY "Allow read access to employees" ON public.employees
+  FOR SELECT
+  USING (auth.role() IN ('anon', 'authenticated'));
+
+-- 2️⃣ Allow authenticated users to insert new employees
+CREATE POLICY "Allow authenticated users to insert employees" ON public.employees
+  FOR INSERT
+  WITH CHECK (auth.role() = 'authenticated');
+
+-- 3️⃣ Allow authenticated users to update employees
+CREATE POLICY "Allow authenticated users to update employees" ON public.employees
   FOR UPDATE
-  USING ( id = auth.uid()::uuid )
-  WITH CHECK ( id = auth.uid()::uuid );
+  USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+-- 4️⃣ Allow authenticated users to delete employees (soft delete)
+CREATE POLICY "Allow authenticated users to delete employees" ON public.employees
+  FOR DELETE
+  USING (auth.role() = 'authenticated');
 
 -- NOTE ❗️
 -- We intentionally removed the previous "Allow admin full access" policy
@@ -199,6 +222,10 @@ INSERT INTO public.employees (
   )
 ON CONFLICT (employee_number) DO NOTHING;
 
+-- Drop existing functions before recreating them
+DROP FUNCTION IF EXISTS public.get_employees_delta(TIMESTAMPTZ);
+DROP FUNCTION IF EXISTS public.upsert_employees(JSONB);
+
 -- Create a function to get employees for sync (returns rows modified after a timestamp)
 CREATE OR REPLACE FUNCTION public.get_employees_delta(since_timestamp TIMESTAMPTZ DEFAULT '1970-01-01'::TIMESTAMPTZ)
 RETURNS TABLE (
@@ -219,6 +246,9 @@ RETURNS TABLE (
   hours_worked INTEGER,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
+  last_synced_at TIMESTAMPTZ,
+  needs_push BOOLEAN,
+  is_conflicted BOOLEAN,
   deleted_at TIMESTAMPTZ
 ) 
 SECURITY DEFINER
@@ -228,7 +258,8 @@ AS $$
     e.id, e.employee_number, e.name, e.email, e.phone,
     e.password_hash, e.pin, e.role, e.access_levels, e.is_active,
     e.hire_date, e.total_sales, e.transaction_count, e.average_transaction,
-    e.hours_worked, e.created_at, e.updated_at, e.deleted_at
+    e.hours_worked, e.created_at, e.updated_at, e.last_synced_at,
+    e.needs_push, e.is_conflicted, e.deleted_at
   FROM public.employees e
   WHERE e.updated_at > since_timestamp
   ORDER BY e.updated_at ASC;
@@ -269,6 +300,9 @@ BEGIN
     hours_worked INTEGER,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ,
+    last_synced_at TIMESTAMPTZ,
+    needs_push BOOLEAN,
+    is_conflicted BOOLEAN,
     deleted_at TIMESTAMPTZ
   )
   LOOP
@@ -278,7 +312,7 @@ BEGIN
         id, employee_number, name, email, phone, password_hash, pin,
         role, access_levels, is_active, hire_date, total_sales,
         transaction_count, average_transaction, hours_worked,
-        created_at, updated_at, deleted_at
+        created_at, updated_at, last_synced_at, needs_push, is_conflicted, deleted_at
       ) VALUES (
         COALESCE(emp_record.id, gen_random_uuid()),
         emp_record.employee_number,
@@ -297,6 +331,9 @@ BEGIN
         emp_record.hours_worked,
         COALESCE(emp_record.created_at, NOW()),
         NOW(), -- Always update the updated_at to current time
+        emp_record.last_synced_at,
+        COALESCE(emp_record.needs_push, false),
+        COALESCE(emp_record.is_conflicted, false),
         emp_record.deleted_at
       )
       ON CONFLICT (employee_number) 
@@ -315,6 +352,9 @@ BEGIN
         average_transaction = EXCLUDED.average_transaction,
         hours_worked = EXCLUDED.hours_worked,
         updated_at = NOW(),
+        last_synced_at = EXCLUDED.last_synced_at,
+        needs_push = EXCLUDED.needs_push,
+        is_conflicted = EXCLUDED.is_conflicted,
         deleted_at = EXCLUDED.deleted_at
       RETURNING employees.id INTO result_id;
 
