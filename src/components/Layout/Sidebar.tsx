@@ -10,16 +10,17 @@ import {
   BarChart3,
   CreditCard,
   UserCircle,
-  LogOut
+  LogOut,
+  Database
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
 interface SidebarProps {
   isCollapsed: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
-  const { user, logout, hasPermission } = useAuth();
+  const { employee, signOut, hasPermission } = useSupabaseAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const menuItems = [
@@ -29,7 +30,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
     { path: '/employees', icon: Users, label: 'Employees', permission: 'employees' },
     { path: '/reports', icon: BarChart3, label: 'Reports', permission: 'reports' },
     { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'transactions' },
-    { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' }
+    { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' },
+    { path: '/setup', icon: Database, label: 'Data Setup', permission: 'settings' }
   ];
 
   const handleLogout = () => {
@@ -37,7 +39,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
   };
 
   const confirmLogout = () => {
-    logout();
+    signOut();
     setShowLogoutConfirm(false);
   };
 
@@ -104,8 +106,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
             </div>
             {!isCollapsed && (
               <div className="flex-1">
-                <p className="font-medium text-sm">{user?.name}</p>
-                <p className="text-slate-400 text-xs">{user?.role.toUpperCase()}</p>
+                <p className="font-medium text-sm">{employee?.name}</p>
+                <p className="text-slate-400 text-xs">{employee?.role.toUpperCase()}</p>
               </div>
             )}
           </div>

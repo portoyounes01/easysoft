@@ -22,6 +22,7 @@ vi.mock('../src/services/employeeService', () => ({
 
 // Import the mocked service
 import { employeeService } from '../src/services/employeeService';
+import { sha256 } from 'js-sha256';
 
 // Mock employees data
 const mockEmployees: Employee[] = [
@@ -51,7 +52,8 @@ const mockEmployees: Employee[] = [
         employee_number: 'EMP003',
         name: 'Cashier',
         role: 'cashier',
-        pin: '1234',
+        pin: sha256('1234'), // SHA-256 hash of '1234'
+        // pin: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', // SHA-256 hash of '1234'
         password_hash: null,
         access_levels: ['sales'],
         email: null,
@@ -140,4 +142,4 @@ describe('AuthContext', () => {
         expect(result.current.isAuthenticated).toBe(true);
         expect(result.current.user?.role).toBe('cashier');
     });
-}); 
+});

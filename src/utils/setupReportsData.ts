@@ -1,7 +1,7 @@
 // Utility script to set up reports data
 // This can be run to populate the database with sample transaction data
 
-import { populateTransactionData, populateAdditionalProducts, checkTransactionDataExists, clearTransactionData } from './populateTransactionData';
+import { populateTransactionData, checkTransactionDataExists, clearTransactionData } from './populateTransactionData';
 import { supabase } from '../lib/supabase';
 
 export async function setupReportsData(options: {
@@ -42,15 +42,9 @@ export async function setupReportsData(options: {
             };
         }
 
-        // Populate additional products first (if needed)
+        // Populate transaction data (includes all dependencies)
         if (verbose) {
-            console.log('📦 Adding additional products for transactions...');
-        }
-        await populateAdditionalProducts();
-
-        // Populate transaction data
-        if (verbose) {
-            console.log('💰 Populating transaction data...');
+            console.log('� Populating all data (employees, categories, products, customers, transactions)...');
         }
         const result = await populateTransactionData();
 

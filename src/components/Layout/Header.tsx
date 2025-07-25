@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Bell, Search, Clock, DollarSign, LogOut, User, Menu } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import LanguageSwitcher from '../LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
 
@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isSidebarCollapsed }) => {
-  const { user, logout } = useAuth();
+  const { employee, signOut } = useSupabaseAuth();
   const { t } = useTranslation();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -30,7 +30,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isSidebarCollapsed }) 
   };
 
   const confirmLogout = () => {
-    logout();
+    signOut();
     setShowLogoutConfirm(false);
   };
 
@@ -89,12 +89,12 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isSidebarCollapsed }) 
                 >
                   <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-sm font-bold">
-                      {user?.name.split(' ').map(n => n[0]).join('')}
+                      {employee?.name.split(' ').map((n: string) => n[0]).join('')}
                     </span>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">{user?.name}</p>
-                    <p className="text-xs text-gray-500">{user?.employee_number}</p>
+                    <p className="text-sm font-semibold text-gray-800">{employee?.name}</p>
+                    <p className="text-xs text-gray-500">{employee?.employee_number}</p>
                   </div>
                 </button>
 

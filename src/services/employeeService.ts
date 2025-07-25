@@ -47,6 +47,15 @@ export class EmployeeService {
             }
         } catch (error) {
             console.error('Failed to initialize EmployeeService:', error);
+            
+            // Provide user-friendly error message for database issues
+            if (error instanceof Error && 
+                (error.message.includes('Database is corrupted') ||
+                 error.message.includes('object store') ||
+                 error.message.includes('IndexedDB'))) {
+                throw new Error('Database initialization failed. Please refresh the page or clear browser data.');
+            }
+            
             throw error;
         }
     }
@@ -373,9 +382,21 @@ export class EmployeeService {
             case 'CREATE':
                 if (operation.data) {
                     const insertData: EmployeeInsert = {
-                        id: operation.employeeId,
-                        ...operation.data,
-                        created_at: operation.data.created_at || new Date().toISOString(),
+                        employee_number: operation.data.employee_number,
+                        name: operation.data.name,
+                        email: operation.data.email,
+                        phone: operation.data.phone,
+                        password_hash: operation.data.password_hash,
+                        pin: operation.data.pin,
+                        role: operation.data.role,
+                        access_levels: operation.data.access_levels,
+                        is_active: operation.data.is_active,
+                        hire_date: operation.data.hire_date,
+                        total_sales: operation.data.total_sales,
+                        transaction_count: operation.data.transaction_count,
+                        average_transaction: operation.data.average_transaction,
+                        hours_worked: operation.data.hours_worked,
+                        created_at: operation.data.created_at instanceof Date ? operation.data.created_at.toISOString() : operation.data.created_at || new Date().toISOString(),
                         updated_at: new Date().toISOString(),
                     };
 
@@ -390,7 +411,20 @@ export class EmployeeService {
             case 'UPDATE':
                 if (operation.data) {
                     const updateData: EmployeeUpdate = {
-                        ...operation.data,
+                        employee_number: operation.data.employee_number,
+                        name: operation.data.name,
+                        email: operation.data.email,
+                        phone: operation.data.phone,
+                        password_hash: operation.data.password_hash,
+                        pin: operation.data.pin,
+                        role: operation.data.role,
+                        access_levels: operation.data.access_levels,
+                        is_active: operation.data.is_active,
+                        hire_date: operation.data.hire_date,
+                        total_sales: operation.data.total_sales,
+                        transaction_count: operation.data.transaction_count,
+                        average_transaction: operation.data.average_transaction,
+                        hours_worked: operation.data.hours_worked,
                         updated_at: new Date().toISOString(),
                     };
 
@@ -465,4 +499,4 @@ export class EmployeeService {
 }
 
 // Export singleton instance
-export const employeeService = new EmployeeService(); 
+export const employeeService = new EmployeeService();

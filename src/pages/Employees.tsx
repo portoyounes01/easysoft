@@ -27,7 +27,7 @@ import {
     Banknote
 } from 'lucide-react';
 import { useEmployees } from '../contexts/EmployeesContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { EmployeeFormData, EmployeeRole, AccessLevel, Employee, AccessLevels } from '../types/supabase';
 import DatabaseReset from '../components/DatabaseReset';
 
@@ -42,7 +42,7 @@ const Employees: React.FC = () => {
         deleteEmployee
     } = useEmployees();
 
-    const { user: currentUser } = useAuth();
+    const { employee: currentUser } = useSupabaseAuth();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedRole, setSelectedRole] = useState('all');

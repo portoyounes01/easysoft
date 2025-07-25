@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, LogIn, User, Settings, Users } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { useEmployees } from '../../contexts/EmployeesContext';
-import { Employee } from '../../types/supabase';
 import VirtualKeyboard from '../VirtualKeyboard';
 
 // Employee display interface for the UI
@@ -31,7 +30,8 @@ const LoginForm: React.FC = () => {
   const [showKeyboard, setShowKeyboard] = useState(true);
   const [employeeList, setEmployeeList] = useState<EmployeeDisplay[]>([]);
 
-  const { login, isLoading } = useAuth();
+  // Use employee-based authentication for now (legacy system)
+  const { signInWithEmployeeCredentials, isLoading } = useSupabaseAuth();
   const employeesContext = useEmployees();
 
   // Load employees when component mounts or employees data changes
@@ -81,8 +81,9 @@ const LoginForm: React.FC = () => {
       return;
     }
 
-    const success = await login(selectedEmployee.employeeNumber, password);
-    if (!success) {
+    try {
+      await signInWithEmployeeCredentials(selectedEmployee.employeeNumber, password);
+    } catch (error) {
       const authType = selectedEmployee.role === 'admin' ? 'password' : 'PIN';
       setError(`Invalid employee or ${authType}`);
     }

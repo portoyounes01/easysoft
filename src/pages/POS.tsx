@@ -37,7 +37,7 @@ import {
   FileText
 } from 'lucide-react';
 import { usePOS } from '../contexts/POSContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useProducts } from '../contexts/ProductsContext';
 import VirtualNumpad from '../components/VirtualNumpad';
@@ -137,7 +137,7 @@ let mockCustomers: Customer[] = [
 const POS: React.FC = () => {
   const { t } = useTranslation();
   const { cart, addToCart, removeFromCart, updateQuantity, clearCart, selectedCustomer, selectCustomer } = usePOS();
-  const { user, logout } = useAuth();
+  const { employee, signOut } = useSupabaseAuth();
   const { settings } = useSettings();
   const {
     products: allProducts,
@@ -374,7 +374,7 @@ const POS: React.FC = () => {
     const shouldProtect = settings.autoLogout.protectWhenCartHasItems && cart.length > 0;
     if (!shouldProtect) {
       setShowAutoLogoutWarning(false);
-      logout();
+      signOut();
     }
   };
 
@@ -480,7 +480,7 @@ const POS: React.FC = () => {
   };
 
   const handleLogout = () => {
-    logout();
+    signOut();
   };
 
   const getRoleColor = (role: string) => {
@@ -840,8 +840,8 @@ const POS: React.FC = () => {
                     { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'transactions' },
                     { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' }
                   ].map((item) => {
-                    if (!user) return null;
-                    if (user.role !== 'admin' && !user.access_levels.includes(item.permission) && !user.access_levels.includes('all')) return null;
+                    if (!employee) return null;
+                    if (employee.role !== 'admin' && !employee.access_levels.includes(item.permission) && !employee.access_levels.includes('all')) return null;
 
                     const Icon = item.icon;
                     return (
@@ -867,12 +867,12 @@ const POS: React.FC = () => {
 
               <div className="p-4 border-t border-slate-700">
                 <div className="flex items-center p-3 bg-slate-800 rounded-lg mb-3 space-x-3">
-                  <div className={`bg-gradient-to-r ${getRoleColor(user?.role || '')} p-2 rounded-full flex-shrink-0`}>
+                  <div className={`bg-gradient-to-r ${getRoleColor(employee?.role || '')} p-2 rounded-full flex-shrink-0`}>
                     <UserCircle className="w-5 h-5 text-white" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium text-sm">{user?.name}</p>
-                    <p className="text-slate-400 text-xs">{user?.role.toUpperCase()}</p>
+                    <p className="font-medium text-sm">{employee?.name}</p>
+                    <p className="text-slate-400 text-xs">{employee?.role.toUpperCase()}</p>
                   </div>
                 </div>
 
@@ -1734,12 +1734,12 @@ const POS: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-3xl p-8 w-[400px] max-w-md shadow-2xl">
             <div className="text-center">
-              <div className={`bg-gradient-to-r ${getRoleColor(user?.role || '')} p-4 rounded-full inline-block mb-6`}>
+              <div className={`bg-gradient-to-r ${getRoleColor(employee?.role || '')} p-4 rounded-full inline-block mb-6`}>
                 <UserCircle className="w-12 h-12 text-white" />
               </div>
               <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.confirmLogoutTitle')}</h3>
               <p className="text-lg text-gray-600 mb-2">
-                {t('pos.confirmLogoutQuestion')}, <strong>{user?.name}</strong>?
+                {t('pos.confirmLogoutQuestion')}, <strong>{employee?.name}</strong>?
               </p>
               <p className="text-sm text-gray-500 mb-8">
                 {t('pos.unsavedWork')}
@@ -1821,7 +1821,7 @@ const POS: React.FC = () => {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-1 z-10">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center space-x-3">
-            <p className="text-xs font-medium text-gray-800">{user?.name} • <span className="capitalize text-gray-600">{user?.role}</span></p>
+            <p className="text-xs font-medium text-gray-800">{employee?.name} • <span className="capitalize text-gray-600">{employee?.role}</span></p>
             {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
               <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
                 {t('pos.saleInProgress')}

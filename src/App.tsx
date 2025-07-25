@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SupabaseAuthProvider, useSupabaseAuth } from './contexts/SupabaseAuthContext';
 import { POSProvider } from './contexts/POSContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import Layout from './components/Layout/Layout';
@@ -12,9 +12,10 @@ import Employees from './pages/Employees';
 import Transactions from './pages/Transactions';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import DataSetup from './components/DataSetup';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useSupabaseAuth();
 
   if (isLoading) {
     return (
@@ -36,7 +37,7 @@ const PermissionRoute: React.FC<{
   permission: string;
   fallbackPath?: string;
 }> = ({ children, permission, fallbackPath = '/pos' }) => {
-  const { hasPermission, user } = useAuth();
+  const { hasPermission, employee } = useSupabaseAuth();
 
   if (!hasPermission(permission)) {
     // Show access denied page for unauthorized access attempts
@@ -50,10 +51,10 @@ const PermissionRoute: React.FC<{
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-4">Access Denied</h1>
           <p className="text-gray-600 mb-6">
-            Sorry <strong>{user?.name}</strong>, you don't have permission to access this page.
+            Sorry <strong>{employee?.name}</strong>, you don't have permission to access this page.
             <br />
             <span className="text-sm text-gray-500">
-              Your role: <span className="font-medium capitalize">{user?.role}</span>
+              Your role: <span className="font-medium capitalize">{employee?.role}</span>
             </span>
           </p>
           <div className="space-y-3">
@@ -83,15 +84,15 @@ const getRoleBasedRedirect = (role: string): string => {
 };
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, employee } = useSupabaseAuth();
 
   return (
     <Routes>
       <Route
         path="/login"
         element={
-          isAuthenticated && user ? (
-            <Navigate to={getRoleBasedRedirect(user.role)} replace />
+          isAuthenticated && employee ? (
+            <Navigate to={getRoleBasedRedirect(employee.role)} replace />
           ) : (
             <LoginForm />
           )
@@ -170,6 +171,14 @@ const AppContent: React.FC = () => {
                       </PermissionRoute>
                     }
                   />
+                  <Route
+                    path="/setup"
+                    element={
+                      <PermissionRoute permission="settings">
+                        <DataSetup />
+                      </PermissionRoute>
+                    }
+                  />
                 </Routes>
               </Layout>
             </POSProvider>
@@ -182,13 +191,13 @@ const AppContent: React.FC = () => {
 
 function App() {
   return (
-    <AuthProvider>
+    <SupabaseAuthProvider>
       <SettingsProvider>
         <Router>
           <AppContent />
         </Router>
       </SettingsProvider>
-    </AuthProvider>
+    </SupabaseAuthProvider>
   );
 }
 

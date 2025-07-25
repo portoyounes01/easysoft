@@ -213,7 +213,7 @@ export class EmployeeLocalService {
     // Filter employees by role
     async getEmployeesByRole(role: string): Promise<LocalEmployee[]> {
         return await localDb.employees
-            .filter(emp => emp.role === role && emp.deleted_at === null && emp.is_active)
+            .filter(emp => emp.role === role && emp.deleted_at === null && emp.is_active === true)
             .toArray();
     }
 
@@ -381,7 +381,7 @@ export class EmployeeLocalService {
 // Export singleton service instance
 export const employeeLocalService = new EmployeeLocalService();
 
-// Initialize the database
+// Initialize the database with error recovery
 export const initializeLocalDatabase = async (): Promise<void> => {
     try {
         await localDb.open();
@@ -389,6 +389,38 @@ export const initializeLocalDatabase = async (): Promise<void> => {
         console.log('Local database initialized successfully');
     } catch (error) {
         console.error('Failed to initialize local database:', error);
+        
+        // Handle specific Dexie errors
+        if (error instanceof Error) {
+            // DexieError2 typically indicates schema mismatch or corruption
+            if (error.name === 'DatabaseClosedError' || 
+                error.name === 'InvalidStateError' ||
+                error.message.includes('object store') ||
+                error.message.includes('NotFoundError') ||
+                error.message.includes('IDBTransaction')) {
+                
+                console.warn('Database schema mismatch detected, attempting recovery...');
+                
+                try {
+                    // Close any existing connection
+                    localDb.close();
+                    
+                    // Delete the corrupted database
+                    await localDb.delete();
+                    
+                    // Reopen with fresh schema
+                    await localDb.open();
+                    await initializeSyncMetadata();
+                    
+                    console.log('Database recovered successfully after reset');
+                    return;
+                } catch (recoveryError) {
+                    console.error('Database recovery failed:', recoveryError);
+                    throw new Error('Database is corrupted and could not be recovered. Please clear browser data or use incognito mode.');
+                }
+            }
+        }
+        
         throw error;
     }
-}; 
+};
