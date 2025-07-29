@@ -531,8 +531,6 @@ const Employees: React.FC = () => {
                 {filteredEmployees.map((employee) => {
                     // Calculate days worked (assuming 8 hours = 1 day)
                     const daysWorked = Math.max(1, Math.round(employee.hours_worked / 8));
-                    // Calculate average sales per day
-                    const avgSalesPerDay = employee.total_sales / daysWorked;
 
                     return (
                         <div key={employee.id} className={`bg-white rounded-xl shadow-lg p-6 border ${employee.is_active ? 'border-gray-100' : 'border-red-200 opacity-75'}`}>
@@ -645,14 +643,10 @@ const Employees: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="mb-4">
                                 <div>
                                     <p className="text-sm text-gray-600">Transactions</p>
                                     <p className="font-semibold text-gray-800">{employee.transaction_count}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Avg Sales per Day</p>
-                                    <p className="font-semibold text-gray-800">€{avgSalesPerDay.toFixed(2)}</p>
                                 </div>
                             </div>
 

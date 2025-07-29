@@ -133,10 +133,12 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Sign in with employee credentials (fallback for existing system)
   const signInWithEmployeeCredentials = async (employeeNumber: string, password: string) => {
+    console.log('🔍 signInWithEmployeeCredentials called with:', { employeeNumber, passwordLength: password.length });
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
       // First, try to find the employee
+      console.log('🔎 Searching for employee in Supabase...');
       const { data: employee, error: employeeError } = await supabase
         .from('employees')
         .select('*')
@@ -144,34 +146,57 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .eq('is_active', true)
         .single();
 
+      console.log('👤 Employee query result:', { employee: !!employee, error: employeeError });
+      if (employee) {
+        console.log('📋 Found employee:', { id: employee.id, number: employee.employee_number, role: employee.role });
+      }
+
       if (employeeError || !employee) {
+        console.log('❌ Employee not found or error:', employeeError);
         setState(prev => ({ ...prev, isLoading: false, error: 'Invalid employee number or account inactive' }));
         return { success: false, error: 'Invalid employee number or account inactive' };
       }
 
       // Verify credentials using proper hash comparison
+      console.log('🔐 Starting credential verification...');
+      console.log('Employee role:', employee.role);
+      console.log('Has password_hash:', !!employee.password_hash);
+      console.log('Has pin:', !!employee.pin);
+      
       let isValidCredentials = false;
 
       if (employee.role === 'admin' || employee.role === 'manager') {
         // For admin/manager, check password_hash
         if (employee.password_hash) {
+          console.log('🔑 Verifying password hash for admin/manager...');
           const { verifyPasswordHash } = await import('../utils/hashUtils');
           isValidCredentials = await verifyPasswordHash(password, employee.password_hash);
+          console.log('Password verification result:', isValidCredentials);
+        } else {
+          console.log('❌ No password_hash found for admin/manager');
         }
       } else {
         // For other employees, check PIN
         if (employee.pin) {
+          console.log('🔢 Verifying PIN for employee...');
           const { verifyPasswordHash } = await import('../utils/hashUtils');
           isValidCredentials = await verifyPasswordHash(password, employee.pin);
+          console.log('PIN verification result:', isValidCredentials);
+        } else {
+          console.log('❌ No PIN found for employee');
         }
       }
 
       if (!isValidCredentials) {
+        console.log('❌ Credential verification failed');
         setState(prev => ({ ...prev, isLoading: false, error: 'Invalid credentials' }));
         return { success: false, error: 'Invalid credentials' };
       }
+      
+      console.log('✅ Credentials verified successfully!');
 
       // Create a mock session for employee login and save it
+      console.log('💾 Setting authentication state...');
       setState(prev => ({
         ...prev,
         user: null, // No Supabase user for employee login
@@ -183,7 +208,9 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }));
 
       // Save session for persistence across page reloads
+      console.log('💾 Saving employee session to localStorage...');
       saveEmployeeSession(employee);
+      console.log('🎉 Login process completed successfully!');
 
       return { success: true };
     } catch (error) {

@@ -655,7 +655,7 @@ export interface TransactionRow {
     payment_method: 'cash' | 'card' | 'mixed';
     amount_paid: number | null;
     change_given: number;
-    status: 'completed' | 'refunded' | 'partial_refund' | 'pending' | 'cancelled';
+    status: 'completed' | 'refunded' | 'pending' | 'cancelled';
     notes: string | null;
     receipt_number: string | null;
     created_at: string; // ISO timestamp
@@ -681,7 +681,7 @@ export interface TransactionInsert {
     payment_method: 'cash' | 'card' | 'mixed';
     amount_paid?: number | null;
     change_given?: number;
-    status?: 'completed' | 'refunded' | 'partial_refund' | 'pending' | 'cancelled';
+    status?: 'completed' | 'refunded' | 'pending' | 'cancelled';
     notes?: string | null;
     receipt_number?: string | null;
     created_at?: string; // Will be auto-generated if not provided
@@ -707,7 +707,7 @@ export interface TransactionUpdate {
     payment_method?: 'cash' | 'card' | 'mixed';
     amount_paid?: number | null;
     change_given?: number;
-    status?: 'completed' | 'refunded' | 'partial_refund' | 'pending' | 'cancelled';
+    status?: 'completed' | 'refunded' | 'pending' | 'cancelled';
     notes?: string | null;
     receipt_number?: string | null;
     updated_at?: string; // Will be auto-generated
@@ -894,7 +894,7 @@ export interface ReportTransaction {
     tax: number;
     total: number;
     paymentMethod: 'cash' | 'card' | 'mixed';
-    status: 'completed' | 'refunded' | 'partial_refund';
+    status: 'completed' | 'refunded';
 }
 
 // Report filters
@@ -968,7 +968,7 @@ export interface TransactionFilters {
     employee_id?: string;
     customer_id?: string;
     payment_method?: 'cash' | 'card' | 'mixed';
-    status?: 'completed' | 'refunded' | 'partial_refund' | 'pending' | 'cancelled';
+    status?: 'completed' | 'refunded' | 'pending' | 'cancelled';
     date_from?: string;
     date_to?: string;
     search?: string; // Search by transaction number, customer name, or employee name
@@ -988,5 +988,5 @@ export interface TransactionSortOptions {
 export const PaymentMethods = ['cash', 'card', 'mixed'] as const;
 export type PaymentMethod = typeof PaymentMethods[number];
 
-export const TransactionStatuses = ['completed', 'refunded', 'partial_refund', 'pending', 'cancelled'] as const;
+export const TransactionStatuses = ['completed', 'refunded', 'pending', 'cancelled'] as const;
 export type TransactionStatus = typeof TransactionStatuses[number]; 

@@ -325,87 +325,85 @@ const Reports: React.FC = () => {
                 {/* Overview Tab */}
                 {activeTab === 'overview' && (
                     <>
-                        {/* Key Metrics */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                        {/* Key Performance Metrics */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {/* Total Revenue */}
+                            <div className="bg-white rounded-xl shadow-lg p-6 border border-blue-200">
                                 <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                                        <p className="text-3xl font-bold text-gray-900">{formatCurrency(overviewMetrics.totalRevenue)}</p>
-                                        <p className="text-sm text-green-600 mt-1">
-                                            <ArrowUpRight className="w-4 h-4 inline mr-1" />
-                                            {formatDate(filters.dateRange.start)} - {formatDate(filters.dateRange.end)}
-                                        </p>
+                                    <div className="bg-blue-500 p-3 rounded-full">
+                                        <DollarSign className="w-6 h-6 text-white" />
                                     </div>
-                                    <div className="bg-green-100 p-3 rounded-full">
-                                        <DollarSign className="w-8 h-8 text-green-600" />
+                                    <div className="text-right">
+                                        <p className="text-sm font-medium text-blue-600">Total Revenue</p>
+                                        <p className="text-2xl font-bold text-blue-900">{formatCurrency(overviewMetrics.totalRevenue)}</p>
                                     </div>
                                 </div>
                             </div>
 
-
-
-                            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                            {/* Total Transactions */}
+                            <div className="bg-white rounded-xl shadow-lg p-6 border border-blue-200">
                                 <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-600">Transactions</p>
-                                        <p className="text-3xl font-bold text-gray-900">{overviewMetrics.totalTransactions}</p>
-                                        <p className="text-sm text-purple-600 mt-1">
-                                            <ShoppingCart className="w-4 h-4 inline mr-1" />
-                                            {formatCurrency(overviewMetrics.avgTransaction)} avg
-                                        </p>
+                                    <div className="bg-blue-500 p-3 rounded-full">
+                                        <BarChart3 className="w-6 h-6 text-white" />
                                     </div>
-                                    <div className="bg-purple-100 p-3 rounded-full">
-                                        <BarChart3 className="w-8 h-8 text-purple-600" />
+                                    <div className="text-right">
+                                        <p className="text-sm font-medium text-blue-600">Transactions</p>
+                                        <p className="text-2xl font-bold text-blue-900">{overviewMetrics.totalTransactions}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Total Items */}
+                            <div className="bg-white rounded-xl shadow-lg p-6 border border-blue-200">
+                                <div className="flex items-center justify-between">
+                                    <div className="bg-blue-500 p-3 rounded-full">
+                                        <ShoppingCart className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-sm font-medium text-blue-600">Items Sold</p>
+                                        <p className="text-2xl font-bold text-blue-900">{overviewMetrics.totalItems}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Daily Average Revenue */}
+                            <div className="bg-white rounded-xl shadow-lg p-6 border border-blue-200">
+                                <div className="flex items-center justify-between">
+                                    <div className="bg-blue-500 p-3 rounded-full">
+                                        <TrendingUp className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-sm font-medium text-blue-600">Daily Avg. Revenue</p>
+                                        <p className="text-2xl font-bold text-blue-900">
+                                            {formatCurrency(overviewMetrics.totalRevenue / (Math.ceil((new Date(filters.dateRange.end).getTime() - new Date(filters.dateRange.start).getTime()) / (1000 * 60 * 60 * 24)) + 1))}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Summary Stats */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Sales Summary</h3>
-                                <div className="space-y-3">
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">Total Items Sold:</span>
-                                        <span className="font-semibold">{overviewMetrics.totalItems}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">Average Transaction:</span>
-                                        <span className="font-semibold">{formatCurrency(overviewMetrics.avgTransaction)}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">Total Transactions:</span>
-                                        <span className="font-semibold">{overviewMetrics.totalTransactions}</span>
-                                    </div>
-
+                        {/* Period Overview */}
+                        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                            <div className="flex items-center mb-4">
+                                <div className="bg-indigo-100 p-2 rounded-lg mr-3">
+                                    <Calendar className="w-5 h-5 text-indigo-600" />
                                 </div>
+                                <h3 className="text-lg font-semibold text-gray-800">Period Overview</h3>
                             </div>
-
-                            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-                                <h3 className="text-lg font-semibold text-gray-800 mb-4">Period Overview</h3>
-                                <div className="space-y-3">
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">Start Date:</span>
-                                        <span className="font-semibold">{formatDate(filters.dateRange.start)}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">End Date:</span>
-                                        <span className="font-semibold">{formatDate(filters.dateRange.end)}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">Days in Period:</span>
-                                        <span className="font-semibold">
-                                            {Math.ceil((new Date(filters.dateRange.end).getTime() - new Date(filters.dateRange.start).getTime()) / (1000 * 60 * 60 * 24)) + 1}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">Daily Average:</span>
-                                        <span className="font-semibold">
-                                            {formatCurrency(overviewMetrics.totalRevenue / (Math.ceil((new Date(filters.dateRange.end).getTime() - new Date(filters.dateRange.start).getTime()) / (1000 * 60 * 60 * 24)) + 1))}
-                                        </span>
-                                    </div>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                                    <span className="text-gray-600 text-sm">Start Date</span>
+                                    <span className="font-medium text-gray-900">{formatDate(filters.dateRange.start)}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                                    <span className="text-gray-600 text-sm">End Date</span>
+                                    <span className="font-medium text-gray-900">{formatDate(filters.dateRange.end)}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2">
+                                    <span className="text-gray-600 text-sm">Total Days</span>
+                                    <span className="font-medium text-gray-900">
+                                        {Math.ceil((new Date(filters.dateRange.end).getTime() - new Date(filters.dateRange.start).getTime()) / (1000 * 60 * 60 * 24)) + 1} days
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -427,7 +425,6 @@ const Reports: React.FC = () => {
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Sales</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transactions</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items Sold</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg. Transaction</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -454,11 +451,6 @@ const Reports: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm text-gray-900">{employee.itemsSold}</div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">
-                                                    {formatCurrency(employee.totalSales / employee.transactionCount)}
-                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -623,4 +615,4 @@ const Reports: React.FC = () => {
     );
 };
 
-export default Reports; 
+export default Reports;

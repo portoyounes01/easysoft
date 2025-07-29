@@ -835,8 +835,33 @@ export async function clearTransactionData() {
                 await localDb.productSyncQueue.clear();
                 await localDb.employeeSyncQueue.clear();
                 await localDb.syncMetadata.clear();
+                
+                // Reinitialize sync metadata after clearing
+                await localDb.syncMetadata.add({
+                    id: 'employees',
+                    lastPulledAt: null,
+                    lastPushedAt: null,
+                    pendingOperations: 0,
+                    conflictCount: 0,
+                });
+                
+                await localDb.syncMetadata.add({
+                    id: 'categories',
+                    lastPulledAt: null,
+                    lastPushedAt: null,
+                    pendingOperations: 0,
+                    conflictCount: 0,
+                });
+                
+                await localDb.syncMetadata.add({
+                    id: 'products',
+                    lastPulledAt: null,
+                    lastPushedAt: null,
+                    pendingOperations: 0,
+                    conflictCount: 0,
+                });
             });
-            console.log('✅ Local database cleared successfully!');
+            console.log('✅ Local database cleared and reinitialized successfully!');
         } catch (localError) {
             console.error('❌ Error clearing local database:', localError);
         }

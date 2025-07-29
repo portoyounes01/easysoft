@@ -40,6 +40,7 @@ const Products: React.FC = () => {
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<LocalCategory | null>(null);
   const [viewingProduct, setViewingProduct] = useState<LocalProduct | null>(null);
+  const [showCategoryAlert, setShowCategoryAlert] = useState(false);
 
   // Filter products based on search and category
   useEffect(() => {
@@ -197,13 +198,36 @@ const Products: React.FC = () => {
           <p className="text-gray-600 mt-1">Manage your inventory and product catalog</p>
         </div>
         <div className="flex items-center space-x-3">
-          <button
-            onClick={handleCreateProduct}
-            className="min-h-[60px] bg-gradient-to-r from-blue-600 to-blue-500 text-white px-8 py-4 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-600 transition-all hover:scale-105 active:scale-95 flex items-center space-x-3 shadow-lg"
-          >
-            <Plus className="w-6 h-6" />
-            <span>Add Product</span>
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => {
+                 if (categories.length === 0) {
+                   setShowCategoryAlert(true);
+                   setTimeout(() => setShowCategoryAlert(false), 3000);
+                 } else {
+                   setShowProductForm(true);
+                 }
+               }}
+              className={`min-h-[60px] px-8 py-4 rounded-lg font-semibold transition-all flex items-center space-x-3 shadow-lg ${
+                categories.length === 0
+                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:scale-105 active:scale-95'
+              }`}
+            >
+              <Plus className="w-6 h-6" />
+              <span>Add Product</span>
+            </button>
+            {showCategoryAlert && categories.length === 0 && (
+               <div className="absolute top-full right-0 mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg shadow-lg z-10 min-w-[280px] max-w-[320px]">
+                 <div className="flex items-start space-x-2">
+                   <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                   <span className="text-sm text-yellow-800 leading-relaxed">
+                     Please create a category first before adding products.
+                   </span>
+                 </div>
+               </div>
+             )}
+          </div>
         </div>
       </div>
 

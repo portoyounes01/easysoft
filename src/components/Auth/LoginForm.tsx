@@ -74,17 +74,34 @@ const LoginForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    console.log('🔐 Login attempt started');
+    console.log('Selected employee:', selectedEmployee);
+    console.log('Password provided:', !!password);
 
     if (!selectedEmployee || !password) {
       const authType = selectedEmployee?.role === 'admin' ? 'password' : 'PIN';
+      console.log('❌ Missing employee or password');
       setError(`Please select an employee and enter ${authType}`);
       return;
     }
 
     try {
-      await signInWithEmployeeCredentials(selectedEmployee.employeeNumber, password);
+      console.log('🔄 Calling signInWithEmployeeCredentials...');
+      const result = await signInWithEmployeeCredentials(selectedEmployee.employeeNumber, password);
+      console.log('📋 Login result:', result);
+      
+      if (!result.success) {
+        const authType = selectedEmployee.role === 'admin' ? 'password' : 'PIN';
+        console.log('❌ Login failed:', result.error);
+        setError(result.error || `Invalid employee or ${authType}`);
+      } else {
+        console.log('✅ Login successful!');
+      }
+      // If successful, the auth context will handle the state change and redirect
     } catch (error) {
       const authType = selectedEmployee.role === 'admin' ? 'password' : 'PIN';
+      console.log('💥 Login exception:', error);
       setError(`Invalid employee or ${authType}`);
     }
   };

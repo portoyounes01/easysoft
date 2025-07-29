@@ -498,7 +498,7 @@ const POS: React.FC = () => {
 
   const renderCategoryIcon = (iconName: string) => {
     const IconComponent = iconMap[iconName as keyof typeof iconMap] || Grid;
-    return <IconComponent className="w-4 h-4 sm:w-5 sm:h-5" />;
+    return <IconComponent className="w-4 h-4" />;
   };
 
   const handleCustomerClick = () => {
@@ -891,60 +891,72 @@ const POS: React.FC = () => {
         {/* Content Area - Left sidebar + Center products */}
         <div className="flex-1 flex overflow-hidden">
           {/* Left Categories Sidebar */}
-          <div className="w-44 bg-white shadow-sm border-r border-gray-200 flex flex-col">
-            {/* All Option */}
-            <button
-              onClick={() => setSelectedCategoryId('')}
-              className={`flex flex-col items-center justify-center p-4 border-b border-gray-200 transition-all duration-200 ${!selectedCategoryId
-                ? 'bg-blue-500 text-white border-l-4 border-l-blue-600'
-                : 'text-gray-600 hover:bg-gray-50'
-                }`}
-            >
-              <div className={`p-3 rounded-lg mb-2 ${!selectedCategoryId ? 'bg-white bg-opacity-20' : 'bg-gray-100'
-                }`}>
-                <Grid className="w-6 h-6" />
-              </div>
-              <span className="text-sm font-medium">All</span>
-            </button>
+          <div className="w-24 bg-gray-100 flex flex-col py-2">
+            {/* All Menu Option */}
+            <div className="px-3 mb-2">
+              <button
+                onClick={() => setSelectedCategoryId('')}
+                className={`w-full aspect-square flex flex-col items-center justify-center p-1 rounded transition-all duration-200 relative ${!selectedCategoryId
+                  ? 'bg-white shadow-sm'
+                  : 'bg-gray-200 hover:bg-gray-50'
+                  }`}
+              >
+                {/* Left indicator for selected state */}
+                {!selectedCategoryId && (
+                  <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-full"></div>
+                )}
+                
+                <div className={`w-6 h-6 flex items-center justify-center mb-1 ${!selectedCategoryId ? 'text-blue-500' : 'text-gray-500'
+                  }`}>
+                  <Grid className="w-4 h-4" />
+                </div>
+                <div className={`text-[10px] font-medium text-center leading-tight px-1 w-full max-w-full ${!selectedCategoryId ? 'text-gray-900' : 'text-gray-500'}`}>{/* category label */}
+                  { 'All Menu'.split(' ').length > 1 ? (
+                    <div className="line-clamp-2 break-words">All Menu</div>
+                  ) : (
+                    <div className="truncate w-full max-w-full overflow-hidden">All Menu</div>
+                  )}
+                </div>
+              </button>
+            </div>
 
             {/* Category Options */}
-            <div className="flex-1 overflow-y-auto">
-              {allCategories.length > 0 ? (
-                allCategories.map((category) => (
+            <div className="flex-1 overflow-y-auto px-3 space-y-2">
+              {allCategories.map((category) => {
+                const isSelected = selectedCategoryId === category.id;
+                return (
                   <button
                     key={category.id}
                     onClick={() => setSelectedCategoryId(category.id)}
-                    className={`w-full flex flex-col items-center justify-center p-4 border-b border-gray-200 transition-all duration-200 ${selectedCategoryId === category.id
-                      ? `bg-gradient-to-r ${category.color} text-white border-l-4 border-l-opacity-60`
-                      : 'text-gray-600 hover:bg-gray-50'
+                    className={`w-full aspect-square flex flex-col items-center justify-center p-1 rounded transition-all duration-200 relative ${isSelected
+                      ? 'bg-white shadow-sm'
+                      : 'bg-gray-200 hover:bg-gray-50'
                       }`}
                   >
-                    <div className={`p-3 rounded-lg mb-2 ${selectedCategoryId === category.id ? 'bg-white bg-opacity-20' : 'bg-gray-100'
-                      }`}>
+                    {/* Left indicator for selected state */}
+                    {isSelected && (
+                      <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-full"></div>
+                    )}
+                    
+                    <div className={`w-6 h-6 flex items-center justify-center mb-1 text-gray-500`}>
                       {renderCategoryIcon(category.icon)}
                     </div>
-                    <span className="text-sm font-medium text-center leading-tight">{category.name}</span>
+                    <div className={`text-[10px] font-medium text-center leading-tight px-1 w-full max-w-full ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{/* category label */}
+                      {category.name.split(' ').length > 1 ? (
+                        <div className="line-clamp-2 break-words">{category.name}</div>
+                      ) : (
+                        <div className="truncate w-full max-w-full overflow-hidden">{category.name}</div>
+                      )}
+                    </div>
                   </button>
-                ))
-              ) : (
-                /* Empty Categories State */
-                <div className="p-4 text-center">
-                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500 mb-4">{t('pos.noCategoriesAvailable')}</p>
-                  <div className="space-y-2">
-                    <button
-                      onClick={handleRetryData}
-                      className="w-full bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-xs font-medium transition-colors"
-                    >
-                      {t('pos.refresh')}
-                    </button>
-                    <button
-                      onClick={handleSyncData}
-                      className="w-full bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-xs font-medium transition-colors"
-                    >
-                      {t('pos.syncData')}
-                    </button>
-                  </div>
+                );
+              })}
+              
+              {/* Show empty state if no categories */}
+              {allCategories.length === 0 && (
+                <div className="text-center py-8">
+                  <Grid className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-xs text-gray-500">No categories available</p>
                 </div>
               )}
             </div>
