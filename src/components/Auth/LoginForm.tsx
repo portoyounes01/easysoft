@@ -249,6 +249,12 @@ const LoginForm: React.FC = () => {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSubmit(e);
+                        }
+                      }}
                       className="w-full px-8 py-6 text-2xl bg-gray-50 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500 focus:border-transparent transition-all"
                       placeholder={selectedEmployee?.role === 'admin' ? 'Enter your password' : 'Enter your PIN'}
                       disabled={isLoading}

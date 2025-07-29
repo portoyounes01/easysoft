@@ -1,0 +1,30 @@
+{
+  "employees": [
+    {
+      "id": "16d51781-8959-4597-8af0-e05d88709dc0",
+      "employee_number": "ADMIN001",
+      "name": "System Administrator",
+      "email": "admin@company.com",
+      "phone": null,
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+      "pin": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",
+      "role": "admin",
+      "access_levels": [
+        "all"
+      ],
+      "is_active": true,
+      "hire_date": "2025-07-29",
+      "total_sales": 0,
+      "transaction_count": 0,
+      "average_transaction": 0,
+      "hours_worked": 0,
+      "created_at": "2025-07-29T13:24:34.496Z",
+      "updated_at": "2025-07-29T13:24:34.496Z",
+      "last_synced_at": null,
+      "deleted_at": null
+    }
+  ],
+  "created_at": "2025-07-29T13:24:34.496Z",
+  "version": "1.0",
+  "description": "Bootstrap admin user for offline initialization"
+}

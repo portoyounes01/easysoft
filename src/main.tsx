@@ -11,15 +11,37 @@ import { ProductsProvider } from './contexts/ProductsContext';
 import './utils/debugDatabase';
 // Import test utilities for browser console access
 import './utils/testScript';
+// Import bootstrap loader for offline initialization
+import { loadBootstrapData } from './utils/bootstrapLoader';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <LanguageProvider>
-      <EmployeesProvider>
-        <ProductsProvider>
-          <App />
-        </ProductsProvider>
-      </EmployeesProvider>
-    </LanguageProvider>
-  </StrictMode>
-);
+// Initialize app with bootstrap support
+async function initializeApp() {
+  try {
+    // Attempt to load bootstrap data (for offline initialization)
+    const bootstrapLoaded = await loadBootstrapData();
+    
+    if (bootstrapLoaded) {
+      console.log('🎉 App initialized with bootstrap data');
+    } else {
+      console.log('📱 App initialized normally');
+    }
+  } catch (error) {
+    console.warn('⚠️ Bootstrap loading failed, continuing with normal startup:', error);
+  }
+
+  // Render the app
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <LanguageProvider>
+        <EmployeesProvider>
+          <ProductsProvider>
+            <App />
+          </ProductsProvider>
+        </EmployeesProvider>
+      </LanguageProvider>
+    </StrictMode>
+  );
+}
+
+// Start the app
+initializeApp();

@@ -131,28 +131,24 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  // Sign in with employee credentials (fallback for existing system)
+  // Sign in with employee credentials (offline-first approach)
   const signInWithEmployeeCredentials = async (employeeNumber: string, password: string) => {
     console.log('🔍 signInWithEmployeeCredentials called with:', { employeeNumber, passwordLength: password.length });
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      // First, try to find the employee
-      console.log('🔎 Searching for employee in Supabase...');
-      const { data: employee, error: employeeError } = await supabase
-        .from('employees')
-        .select('*')
-        .eq('employee_number', employeeNumber)
-        .eq('is_active', true)
-        .single();
+      // Use employeeService for offline-first employee lookup
+      console.log('🔎 Searching for employee using employeeService...');
+      const { employeeService } = await import('../services/employeeService');
+      const employee = await employeeService.getEmployeeByNumber(employeeNumber);
 
-      console.log('👤 Employee query result:', { employee: !!employee, error: employeeError });
+      console.log('👤 Employee query result:', { employee: !!employee });
       if (employee) {
         console.log('📋 Found employee:', { id: employee.id, number: employee.employee_number, role: employee.role });
       }
 
-      if (employeeError || !employee) {
-        console.log('❌ Employee not found or error:', employeeError);
+      if (!employee || !employee.is_active) {
+        console.log('❌ Employee not found or inactive');
         setState(prev => ({ ...prev, isLoading: false, error: 'Invalid employee number or account inactive' }));
         return { success: false, error: 'Invalid employee number or account inactive' };
       }
@@ -215,6 +211,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return { success: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.log('💥 Login exception:', error);
       setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
       return { success: false, error: errorMessage };
     }

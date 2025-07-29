@@ -275,8 +275,22 @@ export class EmployeeLocalService {
                     is_conflicted: false,
                 };
 
-                // Use put to insert or update
-                await localDb.employees.put(localEmployee);
+                // Check if employee already exists by employee_number to prevent duplicates
+                const existing = await localDb.employees
+                    .where('employee_number')
+                    .equals(employee.employee_number)
+                    .first();
+
+                if (existing) {
+                    // Update existing employee but keep the local ID
+                    await localDb.employees.update(existing.id, {
+                        ...localEmployee,
+                        id: existing.id, // Keep the original local ID
+                    });
+                } else {
+                    // Insert new employee with server ID
+                    await localDb.employees.put(localEmployee);
+                }
             }
         });
     }
