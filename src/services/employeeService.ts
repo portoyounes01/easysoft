@@ -3,12 +3,9 @@ import { employeeLocalService, initializeLocalDatabase } from '../lib/localDatab
 import { hashPassword } from '../utils/hashUtils';
 import {
     EmployeeRow,
-    EmployeeInsert,
-    EmployeeUpdate,
     EmployeeFormData,
     EmployeeFilters,
     LocalEmployee,
-    PendingEmployeeOperation,
     SyncMetadata,
     Employee
 } from '../types/supabase';
@@ -349,106 +346,53 @@ export class EmployeeService {
         }
     }
 
-    // Push local changes to Supabase
-    private async pushLocalChanges(): Promise<void> {
-        const pendingOperations = await employeeLocalService.getPendingSyncOperations();
-
-        if (pendingOperations.length === 0) {
-            return;
+    // Check if online (same as products/categories)
+    private async isOnline(): Promise<boolean> {
+        try {
+            const { error } = await supabase.from('employees').select('id').limit(1);
+            return !error;
+        } catch {
+            return false;
         }
-
-        for (const operation of pendingOperations) {
-            try {
-                await this.processPendingOperation(operation);
-                await employeeLocalService.clearSyncOperation(operation.id);
-            } catch (error) {
-                console.error(`Failed to sync operation ${operation.id}:`, error);
-                await employeeLocalService.markSyncOperationFailed(
-                    operation.id,
-                    error instanceof Error ? error.message : 'Unknown error'
-                );
-            }
-        }
-
-        // Update sync metadata
-        await employeeLocalService.updateSyncMetadata({
-            lastPushedAt: new Date().toISOString(),
-        });
     }
 
-    // Process individual pending operation
-    private async processPendingOperation(operation: PendingEmployeeOperation): Promise<void> {
-        switch (operation.type) {
-            case 'CREATE':
-                if (operation.data) {
-                    const insertData: EmployeeInsert = {
-                        employee_number: operation.data.employee_number,
-                        name: operation.data.name,
-                        email: operation.data.email,
-                        phone: operation.data.phone,
-                        password_hash: operation.data.password_hash,
-                        pin: operation.data.pin,
-                        role: operation.data.role,
-                        access_levels: operation.data.access_levels,
-                        is_active: operation.data.is_active,
-                        hire_date: operation.data.hire_date,
-                        total_sales: operation.data.total_sales,
-                        transaction_count: operation.data.transaction_count,
-                        average_transaction: operation.data.average_transaction,
-                        hours_worked: operation.data.hours_worked,
-                        created_at: operation.data.created_at instanceof Date ? operation.data.created_at.toISOString() : operation.data.created_at || new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                    };
+    // Push local changes to Supabase (using bulk upsert like products/categories)
+    private async pushLocalChanges(): Promise<void> {
+        if (!(await this.isOnline())) return;
 
-                    const { error } = await supabase
-                        .from('employees')
-                        .insert(insertData);
+        const pendingEmployees = await employeeLocalService.getEmployeesNeedingPush();
+        if (pendingEmployees.length === 0) return;
 
-                    if (error) throw error;
-                }
-                break;
+        try {
+            // Convert to server format (same as products/categories pattern)
+            const serverEmployees = pendingEmployees.map(emp => ({
+                ...emp,
+                created_at: emp.created_at.toISOString(),
+                updated_at: emp.updated_at.toISOString(),
+                last_synced_at: emp.last_synced_at?.toISOString() || null,
+                deleted_at: emp.deleted_at?.toISOString() || null,
+            }));
 
-            case 'UPDATE':
-                if (operation.data) {
-                    const updateData: EmployeeUpdate = {
-                        employee_number: operation.data.employee_number,
-                        name: operation.data.name,
-                        email: operation.data.email,
-                        phone: operation.data.phone,
-                        password_hash: operation.data.password_hash,
-                        pin: operation.data.pin,
-                        role: operation.data.role,
-                        access_levels: operation.data.access_levels,
-                        is_active: operation.data.is_active,
-                        hire_date: operation.data.hire_date,
-                        total_sales: operation.data.total_sales,
-                        transaction_count: operation.data.transaction_count,
-                        average_transaction: operation.data.average_transaction,
-                        hours_worked: operation.data.hours_worked,
-                        updated_at: new Date().toISOString(),
-                    };
+            // Use bulk upsert RPC (same pattern as products/categories)
+            const { error } = await supabase.rpc('upsert_employees', {
+                employees_data: serverEmployees
+            });
 
-                    const { error } = await supabase
-                        .from('employees')
-                        .update(updateData)
-                        .eq('id', operation.employeeId);
+            if (error) throw error;
 
-                    if (error) throw error;
-                }
-                break;
+            // Mark employees as synced
+            const employeeIds = pendingEmployees.map(emp => emp.id);
+            await employeeLocalService.markEmployeesSynced(employeeIds);
+            
+            // Update sync metadata
+            await employeeLocalService.updateSyncMetadata({
+                lastPushedAt: new Date().toISOString(),
+            });
 
-            case 'DELETE':
-                const { error } = await supabase
-                    .from('employees')
-                    .update({
-                        deleted_at: new Date().toISOString(),
-                        is_active: false,
-                        updated_at: new Date().toISOString(),
-                    })
-                    .eq('id', operation.employeeId);
-
-                if (error) throw error;
-                break;
+            console.log(`✅ Pushed ${pendingEmployees.length} employees to server`);
+        } catch (error) {
+            console.error('Failed to push employees:', error);
+            throw error;
         }
     }
 

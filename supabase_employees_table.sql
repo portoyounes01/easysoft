@@ -117,8 +117,9 @@ CREATE OR REPLACE TRIGGER prevent_employees_unauthorized_changes
 -- Enable Row-Level-Security (RLS)
 ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 
--- Drop all existing policies first
+-- Drop all existing policies first (including any variations)
 DROP POLICY IF EXISTS "Allow read access to active employees" ON public.employees;
+DROP POLICY IF EXISTS "Allow read access to employees" ON public.employees;
 DROP POLICY IF EXISTS "Allow employees to update own info" ON public.employees;
 DROP POLICY IF EXISTS "Allow authenticated users to insert employees" ON public.employees;
 DROP POLICY IF EXISTS "Allow authenticated users to update employees" ON public.employees;
@@ -267,19 +268,10 @@ $$;
 
 -- Create a function for bulk upsert (for syncing local changes to server)
 CREATE OR REPLACE FUNCTION public.upsert_employees(employees_data JSONB)
-RETURNS TABLE (
-  id UUID,
-  success BOOLEAN,
-  error TEXT
-)
-SECURITY DEFINER
-LANGUAGE PLPGSQL
-AS $$
+RETURNS INTEGER AS $$
 DECLARE
   emp_record RECORD;
-  result_id UUID;
-  has_error BOOLEAN := false;
-  error_msg TEXT := '';
+  upserted_count INTEGER := 0;
 BEGIN
   -- Loop through each employee in the JSON array
   FOR emp_record IN SELECT * FROM jsonb_to_recordset(employees_data) AS x(
@@ -306,65 +298,60 @@ BEGIN
     deleted_at TIMESTAMPTZ
   )
   LOOP
-    BEGIN
-      -- Upsert employee record
-      INSERT INTO public.employees (
-        id, employee_number, name, email, phone, password_hash, pin,
-        role, access_levels, is_active, hire_date, total_sales,
-        transaction_count, average_transaction, hours_worked,
-        created_at, updated_at, last_synced_at, needs_push, is_conflicted, deleted_at
-      ) VALUES (
-        COALESCE(emp_record.id, gen_random_uuid()),
-        emp_record.employee_number,
-        emp_record.name,
-        emp_record.email,
-        emp_record.phone,
-        emp_record.password_hash,
-        emp_record.pin,
-        emp_record.role,
-        emp_record.access_levels,
-        emp_record.is_active,
-        emp_record.hire_date,
-        emp_record.total_sales,
-        emp_record.transaction_count,
-        emp_record.average_transaction,
-        emp_record.hours_worked,
-        COALESCE(emp_record.created_at, NOW()),
-        NOW(), -- Always update the updated_at to current time
-        emp_record.last_synced_at,
-        COALESCE(emp_record.needs_push, false),
-        COALESCE(emp_record.is_conflicted, false),
-        emp_record.deleted_at
-      )
-      ON CONFLICT (employee_number) 
-      DO UPDATE SET
-        name = EXCLUDED.name,
-        email = EXCLUDED.email,
-        phone = EXCLUDED.phone,
-        password_hash = EXCLUDED.password_hash,
-        pin = EXCLUDED.pin,
-        role = EXCLUDED.role,
-        access_levels = EXCLUDED.access_levels,
-        is_active = EXCLUDED.is_active,
-        hire_date = EXCLUDED.hire_date,
-        total_sales = EXCLUDED.total_sales,
-        transaction_count = EXCLUDED.transaction_count,
-        average_transaction = EXCLUDED.average_transaction,
-        hours_worked = EXCLUDED.hours_worked,
-        updated_at = NOW(),
-        last_synced_at = EXCLUDED.last_synced_at,
-        needs_push = EXCLUDED.needs_push,
-        is_conflicted = EXCLUDED.is_conflicted,
-        deleted_at = EXCLUDED.deleted_at
-      RETURNING employees.id INTO result_id;
+    -- Upsert employee record (preserve UUID and use employee_number for conflict resolution)
+    INSERT INTO public.employees (
+      id, employee_number, name, email, phone, password_hash, pin,
+      role, access_levels, is_active, hire_date, total_sales,
+      transaction_count, average_transaction, hours_worked,
+      created_at, updated_at, last_synced_at, needs_push, is_conflicted, deleted_at
+    ) VALUES (
+      emp_record.id, -- Use the provided UUID, don't generate new one
+      emp_record.employee_number,
+      emp_record.name,
+      emp_record.email,
+      emp_record.phone,
+      emp_record.password_hash,
+      emp_record.pin,
+      emp_record.role,
+      emp_record.access_levels,
+      emp_record.is_active,
+      emp_record.hire_date,
+      emp_record.total_sales,
+      emp_record.transaction_count,
+      emp_record.average_transaction,
+      emp_record.hours_worked,
+      COALESCE(emp_record.created_at, NOW()),
+      NOW(), -- Always update the updated_at to current time
+      emp_record.last_synced_at,
+      COALESCE(emp_record.needs_push, false),
+      COALESCE(emp_record.is_conflicted, false),
+      emp_record.deleted_at
+    )
+    ON CONFLICT (employee_number) 
+    DO UPDATE SET
+      id = EXCLUDED.id, -- Update UUID too (important!)
+      name = EXCLUDED.name,
+      email = EXCLUDED.email,
+      phone = EXCLUDED.phone,
+      password_hash = EXCLUDED.password_hash,
+      pin = EXCLUDED.pin,
+      role = EXCLUDED.role,
+      access_levels = EXCLUDED.access_levels,
+      is_active = EXCLUDED.is_active,
+      hire_date = EXCLUDED.hire_date,
+      total_sales = EXCLUDED.total_sales,
+      transaction_count = EXCLUDED.transaction_count,
+      average_transaction = EXCLUDED.average_transaction,
+      hours_worked = EXCLUDED.hours_worked,
+      updated_at = NOW(),
+      last_synced_at = EXCLUDED.last_synced_at,
+      needs_push = EXCLUDED.needs_push,
+      is_conflicted = EXCLUDED.is_conflicted,
+      deleted_at = EXCLUDED.deleted_at;
 
-      -- Return success
-      RETURN QUERY SELECT result_id, true, ''::TEXT;
-      
-    EXCEPTION WHEN OTHERS THEN
-      -- Return error
-      RETURN QUERY SELECT emp_record.id, false, SQLERRM;
-    END;
+    upserted_count := upserted_count + 1;
   END LOOP;
+
+  RETURN upserted_count;
 END;
-$$; 
+$$ LANGUAGE plpgsql SECURITY DEFINER; 
