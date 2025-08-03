@@ -402,7 +402,17 @@ const POS: React.FC = () => {
       : 0;
 
   const discountedSubtotal = subtotal - discountAmount;
-  const tax = cart.reduce((sum, item) => sum + (item.product.price * item.quantity * item.product.iva_rate), 0);
+  
+  // Calculate tax extracted from tax-inclusive prices (European style)
+  const tax = cart.reduce((sum, item) => {
+    const itemTotal = item.product.price * item.quantity;
+    const taxAmount = itemTotal - (itemTotal / (1 + item.product.iva_rate));
+    return sum + taxAmount;
+  }, 0);
+
+  // Apply discount to tax as well (proportionally)
+  const discountedTax = tax * (discountedSubtotal / subtotal);
+  const finalTaxAfterDiscount = isNaN(discountedTax) ? 0 : discountedTax;
 
   // NIF validation helper
   const getNifValidationState = (nif: string) => {
@@ -428,7 +438,12 @@ const POS: React.FC = () => {
   const customerDiscount = selectedCustomer ? selectedCustomer.discountLevel : 0;
   const customerDiscountAmount = discountedSubtotal * customerDiscount / 100;
   const finalSubtotal = discountedSubtotal - customerDiscountAmount;
-  const finalTotal = finalSubtotal + tax;
+  
+  // In European style, total = subtotal (since tax is already included in prices)
+  // But we need to adjust tax proportionally with discounts
+  const finalTax = finalTaxAfterDiscount * (finalSubtotal / discountedSubtotal);
+  const adjustedFinalTax = isNaN(finalTax) ? 0 : finalTax;
+  const finalTotal = finalSubtotal;
   const changeAmount = cashReceived > finalTotal ? cashReceived - finalTotal : 0;
 
   const handleCategoryClick = (categoryId: string) => {
@@ -1238,7 +1253,7 @@ const POS: React.FC = () => {
             )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">{t('pos.taxLabel')}</span>
-              <span className="text-gray-800 font-semibold">€{tax.toFixed(2)}</span>
+              <span className="text-gray-800 font-semibold">€{adjustedFinalTax.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-1">
               <span>{t('pos.totalLabel')}</span>

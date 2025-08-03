@@ -557,16 +557,19 @@ export const calculateStockStatus = (product: Pick<ProductRow, 'stock' | 'min_st
     return 'in_stock';
 };
 
-// Tax calculation helpers
-export const calculateTaxAmount = (price: number, ivaRate: number): number => {
-    return price * ivaRate;
+// Tax calculation helpers (European-style: tax-inclusive pricing)
+export const calculateTaxAmount = (priceWithTax: number, ivaRate: number): number => {
+    // Extract tax from a tax-inclusive price
+    return priceWithTax - (priceWithTax / (1 + ivaRate));
 };
 
-export const calculatePriceWithTax = (price: number, ivaRate: number): number => {
-    return price + calculateTaxAmount(price, ivaRate);
+export const calculatePriceWithTax = (priceWithoutTax: number, ivaRate: number): number => {
+    // Add tax to a tax-exclusive price
+    return priceWithoutTax * (1 + ivaRate);
 };
 
 export const calculatePriceWithoutTax = (priceWithTax: number, ivaRate: number): number => {
+    // Extract base price from a tax-inclusive price
     return priceWithTax / (1 + ivaRate);
 };
 

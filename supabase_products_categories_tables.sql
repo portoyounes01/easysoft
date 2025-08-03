@@ -372,7 +372,7 @@ INSERT INTO public.categories (id, name, description, color, icon, display_order
   ('550e8400-e29b-41d4-a716-446655440004', 'Confectionery', 'Chocolates, candies, and sweet treats', 'from-pink-500 to-rose-600', 'candy', 4)
 ON CONFLICT (id) DO NOTHING;
 
--- Insert sample products with Portuguese IVA rates
+-- Insert sample products with Portuguese IVA rates (prices include IVA/tax - European style)
 INSERT INTO public.products (
   id, name, description, sku, category_id, category_name, price, cost, iva_rate, 
   stock, min_stock, image_url, supplier, is_active

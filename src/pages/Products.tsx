@@ -586,7 +586,7 @@ const Products: React.FC = () => {
                       <p className="text-gray-900 font-semibold">€{viewingProduct.cost.toFixed(2)}</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Selling Price</label>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Selling Price (incl. IVA)</label>
                       <p className="text-gray-900 font-semibold">€{viewingProduct.price.toFixed(2)}</p>
                     </div>
                     <div>
@@ -603,9 +603,9 @@ const Products: React.FC = () => {
                         </p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Price with IVA</label>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Price without IVA</label>
                         <p className="text-gray-900 font-semibold">
-                          €{(viewingProduct.price * (1 + viewingProduct.iva_rate)).toFixed(2)}
+                          €{(viewingProduct.price / (1 + viewingProduct.iva_rate)).toFixed(2)}
                         </p>
                       </div>
                     </div>

@@ -378,7 +378,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             {/* Price */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Price (€) *
+                                    Price (incl. IVA) *
                                 </label>
                                 <div className="relative">
                                     <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
