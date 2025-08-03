@@ -14,6 +14,7 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import DataSetup from './components/DataSetup';
 import ReceiptDemoPage from './pages/ReceiptDemo';
+import CashierTesting from './pages/CashierTesting';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useSupabaseAuth();
@@ -185,6 +186,14 @@ const AppContent: React.FC = () => {
                     element={
                       <PermissionRoute permission="settings">
                         <ReceiptDemoPage />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/cashier-testing"
+                    element={
+                      <PermissionRoute permission="settings">
+                        <CashierTesting />
                       </PermissionRoute>
                     }
                   />
