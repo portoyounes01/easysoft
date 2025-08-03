@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
+import { useWebSerialPrinter } from '../utils/webSerialPrinter';
 import { 
   Zap, 
   Printer, 
@@ -10,7 +11,9 @@ import {
   Download,
   Settings,
   RefreshCw,
-  Monitor
+  Monitor,
+  Usb,
+  Send
 } from 'lucide-react';
 
 interface TestResult {
@@ -34,9 +37,12 @@ interface TestSuite {
 
 const CashierTesting: React.FC = () => {
   const { employee } = useSupabaseAuth();
+  const { connectPrinter, sendToPrinter, disconnectPrinter, isConnected, isSupported } = useWebSerialPrinter();
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [lastTestResult, setLastTestResult] = useState<TestSuite | null>(null);
   const [testLogs, setTestLogs] = useState<any[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [settings, setSettings] = useState({
     printerWidth: 48,
     drawerType: 'standard' as 'standard' | 'alternative',
@@ -47,6 +53,9 @@ const CashierTesting: React.FC = () => {
   const fetchTestLogs = async () => {
     if (!employee) return;
 
+    setIsLoadingLogs(true);
+    setFetchError(null);
+
     try {
       const { data, error } = await supabase
         .from('cashier_tests')
@@ -55,16 +64,48 @@ const CashierTesting: React.FC = () => {
         .order('timestamp', { ascending: false })
         .limit(10);
 
-      if (error) throw error;
+      if (error) {
+        // Check if it's a table not found error or permission error
+        if (error.message.includes('relation "cashier_tests" does not exist') || 
+            error.message.includes('permission denied')) {
+          console.warn('Cashier tests table not available:', error.message);
+          setFetchError('Database tables not yet created. Run tests to initialize.');
+          setTestLogs([]);
+          return;
+        }
+        throw error;
+      }
+      
       setTestLogs(data || []);
     } catch (error) {
       console.error('Error fetching test logs:', error);
+      setFetchError('Failed to load test history');
+      setTestLogs([]);
+    } finally {
+      setIsLoadingLogs(false);
     }
   };
 
   useEffect(() => {
-    fetchTestLogs();
-  }, [employee]);
+    let isMounted = true;
+    
+    const loadLogs = async () => {
+      if (employee && isMounted) {
+        // Only try to fetch logs if we haven't already tried and failed
+        if (!fetchError) {
+          await fetchTestLogs();
+        }
+      }
+    };
+
+    // Add a small delay to prevent immediate requests
+    const timeoutId = setTimeout(loadLogs, 500);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [employee?.id, fetchError]); // Include fetchError to prevent retries
 
   // Execute test function
   const runTest = async (testType: string) => {
@@ -89,8 +130,10 @@ const CashierTesting: React.FC = () => {
         simulateHardwareCommand(data.tests[0].commands);
       }
 
-      // Refresh logs
-      setTimeout(fetchTestLogs, 1000);
+      // Refresh logs after a successful test, with a delay to avoid rapid requests
+      setTimeout(() => {
+        fetchTestLogs();
+      }, 1000);
 
     } catch (error) {
       console.error('Error running test:', error);
@@ -101,8 +144,24 @@ const CashierTesting: React.FC = () => {
   };
 
   // Simulate hardware command execution
-  const simulateHardwareCommand = (commands: number[]) => {
+  const simulateHardwareCommand = async (commands: number[]) => {
     console.log('Sending ESC/POS commands to hardware:', commands);
+    
+    // Try to send directly to hardware if connected
+    if (isConnected) {
+      try {
+        const success = await sendToPrinter(commands);
+        if (success) {
+          console.log('✅ Commands sent directly to hardware!');
+          return;
+        }
+      } catch (error) {
+        console.error('❌ Failed to send to hardware:', error);
+      }
+    }
+    
+    // Fallback: show download option
+    console.log('💾 Hardware not connected - generating download file...');
     
     // In a real implementation, this would:
     // 1. Send commands via USB/Serial to printer
@@ -187,10 +246,11 @@ const CashierTesting: React.FC = () => {
             <div className="flex items-center space-x-4">
               <button
                 onClick={fetchTestLogs}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                disabled={isLoadingLogs}
+                className="flex items-center space-x-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <RefreshCw className="w-4 h-4" />
-                <span>Refresh</span>
+                <RefreshCw className={`w-4 h-4 ${isLoadingLogs ? 'animate-spin' : ''}`} />
+                <span>{isLoadingLogs ? 'Loading...' : 'Refresh'}</span>
               </button>
             </div>
           </div>
@@ -199,6 +259,56 @@ const CashierTesting: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Test Controls */}
           <div className="lg:col-span-2">
+            {/* Hardware Connection Panel */}
+            {isSupported && (
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                  <Usb className="w-5 h-5 mr-2" />
+                  Hardware Connection
+                </h2>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <span className="text-gray-700">
+                      {isConnected ? 'Connected to printer/cash drawer' : 'Not connected'}
+                    </span>
+                  </div>
+                  <div className="flex space-x-2">
+                    {!isConnected ? (
+                      <button
+                        onClick={connectPrinter}
+                        className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                      >
+                        <Usb className="w-4 h-4" />
+                        <span>Connect Hardware</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={disconnectPrinter}
+                        className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                      >
+                        <span>Disconnect</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {isConnected && (
+                  <div className="mt-3 p-3 bg-green-50 rounded-lg">
+                    <p className="text-sm text-green-700">
+                      ✅ Hardware connected! Test commands will be sent directly to your printer/cash drawer.
+                    </p>
+                  </div>
+                )}
+                {!isSupported && (
+                  <div className="mt-3 p-3 bg-yellow-50 rounded-lg">
+                    <p className="text-sm text-yellow-700">
+                      ⚠️ Direct hardware control requires Chrome or Edge browser. Commands will be downloaded as files.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Settings Panel */}
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
@@ -297,13 +407,24 @@ const CashierTesting: React.FC = () => {
                         </div>
                         <div className="flex items-center space-x-2">
                           {test.commands && (
-                            <button
-                              onClick={() => downloadCommands(test.commands!, test.testName)}
-                              className="flex items-center space-x-1 px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600 transition-colors"
-                            >
-                              <Download className="w-4 h-4" />
-                              <span>Download</span>
-                            </button>
+                            <>
+                              <button
+                                onClick={() => downloadCommands(test.commands!, test.testName)}
+                                className="flex items-center space-x-1 px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600 transition-colors"
+                              >
+                                <Download className="w-4 h-4" />
+                                <span>Download</span>
+                              </button>
+                              {isConnected && (
+                                <button
+                                  onClick={() => sendToPrinter(test.commands!)}
+                                  className="flex items-center space-x-1 px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors"
+                                >
+                                  <Send className="w-4 h-4" />
+                                  <span>Send to Hardware</span>
+                                </button>
+                              )}
+                            </>
                           )}
                           {test.success ? (
                             <CheckCircle className="w-6 h-6 text-green-500" />
@@ -359,7 +480,22 @@ const CashierTesting: React.FC = () => {
               Test History
             </h2>
             <div className="space-y-3">
-              {testLogs.length === 0 ? (
+              {isLoadingLogs ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                  <p className="text-gray-500 text-sm">Loading test history...</p>
+                </div>
+              ) : fetchError ? (
+                <div className="text-center py-8">
+                  <p className="text-red-500 text-sm mb-2">{fetchError}</p>
+                  <button
+                    onClick={fetchTestLogs}
+                    className="text-blue-500 text-sm hover:underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : testLogs.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">
                   No tests run yet
                 </p>
