@@ -37,7 +37,7 @@ interface TestSuite {
 
 const CashierTesting: React.FC = () => {
   const { employee } = useSupabaseAuth();
-  const { connectPrinter, sendToPrinter, disconnectPrinter, isConnected, isSupported } = useWebSerialPrinter();
+  const { connectPrinter, connectToAnyDevice, sendToPrinter, disconnectPrinter, isConnected, isSupported } = useWebSerialPrinter();
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [lastTestResult, setLastTestResult] = useState<TestSuite | null>(null);
@@ -275,13 +275,21 @@ const CashierTesting: React.FC = () => {
                   </div>
                   <div className="flex space-x-2">
                     {!isConnected ? (
-                      <button
-                        onClick={connectPrinter}
-                        className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                      >
-                        <Usb className="w-4 h-4" />
-                        <span>Connect Hardware</span>
-                      </button>
+                      <>
+                        <button
+                          onClick={() => connectPrinter()}
+                          className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                        >
+                          <Usb className="w-4 h-4" />
+                          <span>Connect Printer</span>
+                        </button>
+                        <button
+                          onClick={() => connectToAnyDevice()}
+                          className="flex items-center space-x-2 px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                        >
+                          <span>Show All Devices</span>
+                        </button>
+                      </>
                     ) : (
                       <button
                         onClick={disconnectPrinter}

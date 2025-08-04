@@ -5,13 +5,14 @@
  * Usage: node send-to-printer.js <command-file.bin> [device]
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 // Try to import serialport, but handle if not installed
 let SerialPort;
 try {
-  SerialPort = require('serialport');
+  const serialportModule = await import('serialport');
+  SerialPort = serialportModule.SerialPort;
 } catch (error) {
   console.error('❌ SerialPort module not found. Please install it:');
   console.error('   npm install serialport');
