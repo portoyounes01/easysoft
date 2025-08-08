@@ -10,12 +10,6 @@ const PrinterManager: React.FC = () => {
   const [selectedPrinter, setSelectedPrinter] = useState<string | null>(null);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState('');
-  const [scanProgress, setScanProgress] = useState({
-    stage: '',
-    progress: 0,
-    total: 0,
-    message: ''
-  });
 
   const roles = [
     { value: 'receipt', label: 'Receipt Printer', description: 'Main customer receipts' },
@@ -33,15 +27,8 @@ const PrinterManager: React.FC = () => {
   ];
 
   useEffect(() => {
-    // On mount, quickly list printers
-    listPrintersOnly().then(() => {
-      // After initial list loads, automatically check statuses
-      setTimeout(() => {
-        console.log('🔄 Auto-starting printer status check...');
-        setAutoUpdating(true);
-        checkAllConnections().finally(() => setAutoUpdating(false));
-      }, 500); // Small delay to let UI render first
-    });
+    // Simple startup: list printers immediately, then check statuses
+    loadPrintersSimple();
 
     // Set up real-time monitoring
     const cleanup = setupRealtimeMonitoring();
@@ -76,8 +63,8 @@ const PrinterManager: React.FC = () => {
         console.log(`🖨️ Printer-like USB device ${changeData.action}, instant refresh!`);
       }
       
-      // Use instant refresh for immediate UI updates (no status checks initially)
-      quickRefreshForHardwareChange();
+      // Instant UI update - no waiting!
+      instantRefresh();
     });
 
     // Set up status change listener (for existing functionality)
@@ -122,7 +109,41 @@ const PrinterManager: React.FC = () => {
     };
   };
 
-  // Manual connection check for all printers
+  // Simple printer loading - fast list + background status check
+  const loadPrintersSimple = async () => {
+    setLoading(true);
+    try {
+      // Get printer list immediately
+      const result = await window.electronAPI?.hardware.listPrinters();
+      if (result?.success) {
+        setPrinters(result.printers);
+        console.log(`📋 Loaded ${result.printers.length} printers`);
+      }
+      
+      // Check statuses in background
+      setTimeout(() => {
+        checkAllConnections();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error loading printers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Instant hardware change response - just refresh the list
+  const instantRefresh = async () => {
+    try {
+      const result = await window.electronAPI?.hardware.listPrinters();
+      if (result?.success) {
+        setPrinters(result.printers);
+        console.log(`⚡ Instant refresh: ${result.printers.length} printers`);
+      }
+    } catch (error) {
+      console.error('Instant refresh failed:', error);
+    }
+  };
   const checkAllConnections = async () => {
     try {
       console.log('🔍 Manually checking all printer connections...');
@@ -154,131 +175,11 @@ const PrinterManager: React.FC = () => {
     }
   };
 
-  // Progressive scan of printers (USB and system) with live updates
-  const loadPrinters = async () => {
-    setLoading(true);
-    setUpdatingPrinters(new Set()); // Clear any previous updating state
-    // Do not clear printers list; update statuses progressively
-    setScanProgress({ stage: '', progress: 0, total: 0, message: 'Starting scan...' });
-    
-    try {
-      // Use progressive scanning
-      const result = await window.electronAPI?.scanPrintersProgressively((updateData: any) => {
-        console.log('🎯 Frontend received update:', updateData.type, updateData.stage, updateData);
-        
-        if (updateData.type === 'progress') {
-          setScanProgress({
-            stage: updateData.stage || '',
-            progress: updateData.progress || 0,
-            total: updateData.total || 0,
-            message: updateData.message || ''
-          });
-        } else if (updateData.type === 'printer-found' && updateData.printer) {
-          console.log('🖨️ Adding printer to UI:', updateData.printer.name);
-          
-          // Mark this printer as currently being updated
-          setUpdatingPrinters(prev => new Set(prev).add(updateData.printer!.name));
-          
-          // Add printer to list progressively
-          setPrinters(prev => {
-            const existing = prev.find(p => p.name === updateData.printer!.name);
-            if (existing) {
-              // Update existing printer
-              return prev.map(p => p.name === updateData.printer!.name ? updateData.printer! : p);
-            } else {
-              // Add new printer
-              return [...prev, updateData.printer!];
-            }
-          });
-          
-          // Remove from updating state after a brief delay to show the update
-          setTimeout(() => {
-            setUpdatingPrinters(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(updateData.printer!.name);
-              return newSet;
-            });
-          }, 1500); // Longer delay to make the update indicator more visible
-        } else if (updateData.type === 'complete') {
-          console.log('✅ Scan complete, final printer count:', updateData.printers?.length);
-          if (updateData.printers) {
-            setPrinters(updateData.printers);
-          }
-          setUpdatingPrinters(new Set()); // Clear all updating states
-          setScanProgress({ stage: '', progress: 0, total: 0, message: 'Scan complete' });
-        }
-      });
-      
-      if (!result?.success) {
-        console.error('Failed to load printers:', result?.error);
-        // Fallback to standard method
-        const fallbackResult = await window.electronAPI?.hardware.getConfiguredPrinters();
-        if (fallbackResult?.success) {
-          setPrinters(fallbackResult.printers || []);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading printers:', error);
-      // Fallback to standard method
-      try {
-        const fallbackResult = await window.electronAPI?.hardware.getConfiguredPrinters();
-        if (fallbackResult?.success) {
-          setPrinters(fallbackResult.printers || []);
-        }
-      } catch (fallbackError) {
-        console.error('Fallback also failed:', fallbackError);
-      }
-    } finally {
-      setLoading(false);
-      setUpdatingPrinters(new Set()); // Clear all updating states
-      setScanProgress({ stage: '', progress: 0, total: 0, message: '' });
-    }
-  };
-
-  // List printers names only (status unknown) on mount
-  const listPrintersOnly = async () => {
-    setLoading(true);
-    try {
-  const result = await window.electronAPI?.hardware.listPrinters();
-      if (result?.success) {
-        setPrinters(result.printers);
-      } else {
-        console.error('Failed to list printers:', result?.error);
-      }
-    } catch (error) {
-      console.error('Error listing printers:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fast refresh for hardware changes - gets list quickly then checks connections
-  const quickRefreshForHardwareChange = async () => {
-    try {
-      console.log('⚡ Instant refresh for hardware change...');
-      
-      // Immediately get the current printer list without ANY status checks
-      const listResult = await window.electronAPI?.hardware.listPrinters();
-      if (listResult?.success) {
-        setPrinters(listResult.printers);
-        console.log(`⚡ Instantly updated printer list with ${listResult.printers.length} printers`);
-      }
-      
-      // Do status checks in background after a delay (non-blocking)
-      setTimeout(() => {
-        checkAllConnections();
-      }, 2000); // 2 second delay so user sees instant list update first
-      
-    } catch (error) {
-      console.error('Instant refresh failed:', error);
-    }
-  };
-
   const handleSetRole = async (printerName: string, role: string) => {
     try {
       const result = await window.electronAPI?.hardware.setPrinterRole(printerName, role);
       if (result?.success) {
-        await loadPrinters(); // Refresh the list
+        await loadPrintersSimple(); // Refresh the list
         setShowRoleModal(false);
         setSelectedPrinter(null);
       } else {
@@ -297,7 +198,7 @@ const PrinterManager: React.FC = () => {
     try {
       const result = await window.electronAPI?.hardware.removePrinter(printerName);
       if (result?.success) {
-        await loadPrinters(); // Refresh the list
+        await loadPrintersSimple(); // Refresh the list
       } else {
         alert(`Failed to remove printer: ${result?.error}`);
       }
@@ -374,28 +275,13 @@ const PrinterManager: React.FC = () => {
     }
   };
 
-  // Only show full-screen loader if no printers yet
+  // Only show simple loader if no printers yet
   if (loading && printers.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center p-8 space-y-4">
         <RefreshCw className="h-6 w-6 animate-spin text-blue-600" />
         <div className="text-center">
-          <div className="text-gray-600">
-            {scanProgress.message || 'Loading printers...'}
-          </div>
-          {scanProgress.stage && (
-            <div className="text-sm text-gray-500 mt-1">
-              Scanning {scanProgress.stage} printers...
-            </div>
-          )}
-          {scanProgress.total > 0 && (
-            <div className="w-64 bg-gray-200 rounded-full h-2 mt-2">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(scanProgress.progress / scanProgress.total) * 100}%` }}
-              ></div>
-            </div>
-          )}
+          <div className="text-gray-600">Loading printers...</div>
         </div>
       </div>
     );
@@ -403,25 +289,6 @@ const PrinterManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Inline progress bar while loading */}
-      {loading && (
-        <div className="flex flex-col items-center justify-center p-4 space-y-2">
-          <div className="text-gray-600">{scanProgress.message}</div>
-          {scanProgress.stage && (
-            <div className="text-sm text-gray-500">
-              Scanning {scanProgress.stage} printers...
-            </div>
-          )}
-          {scanProgress.total > 0 && (
-            <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(scanProgress.progress / scanProgress.total) * 100}%` }}
-              ></div>
-            </div>
-          )}
-        </div>
-      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -453,14 +320,14 @@ const PrinterManager: React.FC = () => {
           </button>
           <button
             onClick={() => {
-              setAutoUpdating(false); // Stop auto-update indicator
-              setUpdatingPrinters(new Set()); // Clear any previous updating state
-              quickRefreshForHardwareChange();
+              setAutoUpdating(false);
+              setUpdatingPrinters(new Set());
+              loadPrintersSimple();
             }}
             className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
           >
             <RefreshCw className="h-4 w-4" />
-            <span>Quick Refresh</span>
+            <span>Refresh</span>
           </button>
         </div>
       </div>
