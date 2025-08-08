@@ -25,21 +25,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   discoverUSBPrinters: () => ipcRenderer.invoke('hardware:discover-usb-printers'),
   connectToUSBPrinter: (uri, printerName) => ipcRenderer.invoke('hardware:connect-usb-printer', uri, printerName),
   
-  // Real-time monitoring
-  startMonitoring: (interval) => ipcRenderer.invoke('hardware:start-monitoring', interval),
-  stopMonitoring: () => ipcRenderer.invoke('hardware:stop-monitoring'),
-  getMonitoringStatus: () => ipcRenderer.invoke('hardware:get-monitoring-status'),
+  // Real-time monitoring (simplified)
   checkAllConnections: () => ipcRenderer.invoke('hardware:check-all-connections'),
-  onStatusChange: (callback) => {
-    const handler = (event, data) => callback(data);
-    ipcRenderer.on('printer-status-change', handler);
-    return () => ipcRenderer.removeListener('printer-status-change', handler);
-  },
-  onHardwareChange: (callback) => {
-    const handler = (event, data) => callback(data);
-    ipcRenderer.on('hardware-change', handler);
-    return () => ipcRenderer.removeListener('hardware-change', handler);
-  },
   
   scanPrintersProgressively: (onProgress) => {
     console.log('📦 Preload: Setting up progressive scan listener');

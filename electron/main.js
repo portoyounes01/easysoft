@@ -233,6 +233,20 @@ ipcMain.handle('hardware:scan-printers-progressively', async (event) => {
   }
 });
 
+ipcMain.handle('hardware:check-all-connections', async () => {
+  try {
+    const changedPrinters = await hardwareController.checkAllPrinterConnections();
+    return { 
+      success: true, 
+      changed: changedPrinters,
+      count: changedPrinters.length
+    };
+  } catch (error) {
+    console.error('Check all connections failed:', error);
+    return { success: false, error: error.message, changed: [] };
+  }
+});
+
 // Real-time monitoring IPC handlers
 ipcMain.handle('hardware:start-monitoring', async (event, interval = 10000) => {
   try {

@@ -155,45 +155,13 @@ interface ElectronAPI {
     error?: string;
   }>;
 
-  // Real-time monitoring and scanning
-  startMonitoring(interval?: number): Promise<{
-    success: boolean;
-    message?: string;
-    error?: string;
-  }>;
-
-  stopMonitoring(): Promise<{
-    success: boolean;
-    message?: string;
-    error?: string;
-  }>;
-
-  getMonitoringStatus(): Promise<{
-    isMonitoring: boolean;
-    status: any;
-  }>;
-
+  // Real-time monitoring and scanning (simplified)
   checkAllConnections(): Promise<{
     success: boolean;
     changed: ConfiguredPrinter[];
     count?: number;
     error?: string;
   }>;
-
-  onStatusChange(callback: (data: {
-    type: 'status-change';
-    printer: ConfiguredPrinter;
-    previousStatus?: ConfiguredPrinter;
-    timestamp: string;
-  }) => void): () => void;
-
-  onHardwareChange(callback: (data: {
-    type: 'usb' | 'network';
-    action: 'connected' | 'disconnected' | 'changed';
-    device?: any;
-    isLikelyPrinter?: boolean;
-    timestamp: string;
-  }) => void): () => void;
 
   scanPrintersProgressively(onProgress?: (data: {
     type: 'start' | 'progress' | 'printer-found' | 'complete';

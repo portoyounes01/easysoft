@@ -11,7 +11,6 @@ const dns = require('dns');
 const NetworkPrinterDiscovery = require('../../discover-network-printers.js');
 const ThermalPrinterIdentifier = require('../../identify-thermal-printers.js');
 const AutoPrinterSetup = require('../../auto-printer-setup.js');
-const HardwareMonitorManager = require('../monitors/hardware-monitor-manager');
 
 const execAsync = promisify(exec);
 
@@ -31,16 +30,9 @@ class HardwareController {
     // Multiple printer management
     this.configuredPrinters = new Map(); // Map of printer name -> printer config
     
-    // Hardware monitoring
-    this.hardwareMonitor = new HardwareMonitorManager();
-    this.isMonitoring = false;
+    // Simple status tracking
     this.activePrinter = null; // Current active printer for compatibility
-    
-    // Real-time monitoring
-    this.monitoringInterval = null;
-    this.monitoringEnabled = false;
     this.lastKnownStatus = new Map(); // Track last known status for each printer
-    this.statusChangeCallbacks = [];
     
     // Initialize discovery classes
     this.discovery = new NetworkPrinterDiscovery();
@@ -1982,45 +1974,6 @@ class HardwareController {
     }
   }
 
-  // Hardware monitoring methods
-  async startRealtimeMonitoring() {
-    if (this.isMonitoring) return;
-    
-    console.log('🚀 Starting real-time hardware monitoring...');
-    
-    // Set up event listeners
-    this.hardwareMonitor.on('hardware-change', (event) => {
-      console.log('Hardware change detected:', event);
-      // Trigger printer list refresh when hardware changes
-      this.onHardwareChange && this.onHardwareChange(event);
-    });
-    
-    this.hardwareMonitor.on('error', (error) => {
-      console.error('Hardware monitor error:', error);
-    });
-    
-    await this.hardwareMonitor.start();
-    this.isMonitoring = true;
-  }
-
-  async stopRealtimeMonitoring() {
-    if (!this.isMonitoring) return;
-    
-    console.log('⏹️ Stopping real-time hardware monitoring...');
-    this.hardwareMonitor.stop();
-    this.isMonitoring = false;
-  }
-
-  setHardwareChangeCallback(callback) {
-    this.onHardwareChange = callback;
-  }
-
-  getMonitoringStatus() {
-    return {
-      isMonitoring: this.isMonitoring,
-      status: this.hardwareMonitor.getStatus()
-    };
-  }
 }
 
 module.exports = HardwareController;
