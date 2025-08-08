@@ -14,14 +14,18 @@ import {
     Bell,
     Eye,
     Users,
+    Printer,
 } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
+import PrinterSetup from '../components/PrinterSetup';
 
 const Settings: React.FC = () => {
     const { settings, updateSettings, resetToDefaults, isLoading } = useSettings();
     const [activeTab, setActiveTab] = useState('security');
     const [pendingChanges, setPendingChanges] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const [showPrinterSetup, setShowPrinterSetup] = useState(false);
+    const [printerStatus, setPrinterStatus] = useState<any>(null);
 
     const tabs = [
         {
@@ -41,6 +45,12 @@ const Settings: React.FC = () => {
             label: 'Display & Interface',
             icon: Monitor,
             description: 'UI preferences and display options'
+        },
+        {
+            id: 'hardware',
+            label: 'Hardware & Printers',
+            icon: Printer,
+            description: 'Thermal printer and cash drawer setup'
         },
     ];
 

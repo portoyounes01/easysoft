@@ -12,7 +12,8 @@ import {
   UserCircle,
   LogOut,
   Database,
-  Zap
+  Zap,
+  Printer
 } from 'lucide-react';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
@@ -32,8 +33,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
     { path: '/reports', icon: BarChart3, label: 'Reports', permission: 'reports' },
     { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'transactions' },
     { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' },
+    { path: '/printer-test', icon: Printer, label: 'Printer Setup', permission: 'settings' },
     { path: '/setup', icon: Database, label: 'Data Setup', permission: 'settings' },
-    { path: '/cashier-testing', icon: Zap, label: 'Cashier Testing', permission: 'settings' }
+    { path: '/cashier-testing', icon: Zap, label: 'Cashier Testing', permission: 'settings' },
+    { path: '/electron-testing', icon: Zap, label: 'Electron Testing', permission: 'settings' }
   ];
 
   const handleLogout = () => {

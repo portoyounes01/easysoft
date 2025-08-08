@@ -4,11 +4,19 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  base: process.env.NODE_ENV === 'production' ? './' : '/',
   server: {
     // Allow access from other machines on the network
     host: '0.0.0.0',
+    port: 5173,
     // Enable HTTPS when HTTPS=true environment variable is set
     https: process.env.HTTPS === 'true' ? {} : undefined,
+  },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    // Generate source maps for debugging
+    sourcemap: process.env.NODE_ENV === 'development',
   },
   optimizeDeps: {
     exclude: ['lucide-react'],
