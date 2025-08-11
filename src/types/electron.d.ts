@@ -95,6 +95,24 @@ interface ElectronAPI {
       error?: string;
     }>;
 
+    instantListPrinters(): Promise<{
+      success: boolean;
+      printers: ConfiguredPrinter[];
+      error?: string;
+    }>;
+
+    quickListPrinters(): Promise<{
+      success: boolean;
+      printers: ConfiguredPrinter[];
+      error?: string;
+    }>;
+
+    quickListPrintersWithStatus(checkConnectivity?: boolean): Promise<{
+      success: boolean;
+      printers: ConfiguredPrinter[];
+      error?: string;
+    }>;
+
     getConfiguredPrinters(): Promise<{
       success: boolean;
       printers: ConfiguredPrinter[];
@@ -155,13 +173,46 @@ interface ElectronAPI {
     error?: string;
   }>;
 
-  // Real-time monitoring and scanning (simplified)
+  // Real-time monitoring and scanning
+  startMonitoring(interval?: number): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }>;
+
+  stopMonitoring(): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }>;
+
+  getMonitoringStatus(): Promise<{
+    isMonitoring: boolean;
+    status: any;
+  }>;
+
   checkAllConnections(): Promise<{
     success: boolean;
     changed: ConfiguredPrinter[];
     count?: number;
     error?: string;
   }>;
+
+  onStatusChange(callback: (data: {
+    type: 'status-change';
+    printer: ConfiguredPrinter;
+    previousStatus?: ConfiguredPrinter;
+    timestamp: string;
+  }) => void): () => void;
+
+  onHardwareChange(callback: (data: {
+    type: 'usb' | 'network';
+    action: 'connected' | 'disconnected' | 'changed';
+    device?: any;
+    timestamp: string;
+    isLikelyPrinter?: boolean;
+    isDelayedVerification?: boolean;
+  }) => void): () => void;
 
   scanPrintersProgressively(onProgress?: (data: {
     type: 'start' | 'progress' | 'printer-found' | 'complete';

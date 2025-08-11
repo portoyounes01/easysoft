@@ -16,7 +16,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     removePrinter: (printerName) => ipcRenderer.invoke('hardware:remove-printer', printerName),
   testPrinterByName: (printerName, testType) => ipcRenderer.invoke('hardware:test-printer-by-name', printerName, testType),
   // Quick list of printers without status checks
-  listPrinters: () => ipcRenderer.invoke('hardware:list-printers')
+  listPrinters: () => ipcRenderer.invoke('hardware:list-printers'),
+  // Instant list from cache - truly instant
+  instantListPrinters: () => ipcRenderer.invoke('hardware:instant-list-printers'),
+  // Fast list of printers without connectivity checks
+  quickListPrinters: () => ipcRenderer.invoke('hardware:quick-list-printers'),
+  // Enhanced quick list with optional connectivity check
+  quickListPrintersWithStatus: (checkConnectivity) => ipcRenderer.invoke('hardware:quick-list-printers-with-status', checkConnectivity)
   },
 
   // Printer discovery methods
@@ -25,8 +31,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   discoverUSBPrinters: () => ipcRenderer.invoke('hardware:discover-usb-printers'),
   connectToUSBPrinter: (uri, printerName) => ipcRenderer.invoke('hardware:connect-usb-printer', uri, printerName),
   
-  // Real-time monitoring (simplified)
+  // Real-time monitoring
+  startMonitoring: (interval) => ipcRenderer.invoke('hardware:start-monitoring', interval),
+  stopMonitoring: () => ipcRenderer.invoke('hardware:stop-monitoring'),
+  getMonitoringStatus: () => ipcRenderer.invoke('hardware:get-monitoring-status'),
   checkAllConnections: () => ipcRenderer.invoke('hardware:check-all-connections'),
+  onStatusChange: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('printer-status-change', handler);
+    return () => ipcRenderer.removeListener('printer-status-change', handler);
+  },
+  onHardwareChange: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('hardware-change', handler);
+    return () => ipcRenderer.removeListener('hardware-change', handler);
+  },
   
   scanPrintersProgressively: (onProgress) => {
     console.log('📦 Preload: Setting up progressive scan listener');

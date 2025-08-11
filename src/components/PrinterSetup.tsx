@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Wifi, Printer, Search, CheckCircle, AlertCircle, Loader, Usb } from 'lucide-react';
+import { Wifi, Printer, Search, CheckCircle, AlertCircle, Loader, Usb, RefreshCw } from 'lucide-react';
 
 interface NetworkPrinter {
   ip: string;
@@ -34,7 +34,9 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
   const [isConnecting, setIsConnecting] = useState(false);
   const [manualIP, setManualIP] = useState('');
   const [manualPort, setManualPort] = useState('9100');
-  const [activeTab, setActiveTab] = useState<'auto' | 'usb' | 'manual'>('auto');
+  const [activeTab, setActiveTab] = useState<'auto' | 'usb' | 'manual' | 'system'>('auto');
+  const [systemPrinters, setSystemPrinters] = useState<any[]>([]);
+  const [systemLoading, setSystemLoading] = useState(false);
 
   const scanForPrinters = async () => {
     setIsScanning(true);
@@ -79,6 +81,27 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
       setCurrentStatus('Scan failed: Unable to communicate with hardware controller');
     } finally {
       setIsScanning(false);
+    }
+  };
+
+  const listSystemPrinters = async () => {
+    setSystemLoading(true);
+    setCurrentStatus('Listing system printers...');
+    try {
+      const result = await window.electronAPI?.hardware.listPrinters();
+      if (result?.success) {
+        setSystemPrinters(result.printers || []);
+        setCurrentStatus(`Found ${result.printers?.length || 0} system printer(s)`);
+      } else {
+        setSystemPrinters([]);
+        setCurrentStatus(`Listing failed: ${result?.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('System printers listing failed:', error);
+      setSystemPrinters([]);
+      setCurrentStatus('Listing failed: Unable to communicate with hardware controller');
+    } finally {
+      setSystemLoading(false);
     }
   };
 
@@ -186,7 +209,44 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
       setCurrentStatus('');
     } else if (activeTab === 'manual') {
       setCurrentStatus('');
+    } else if (activeTab === 'system') {
+      setSystemPrinters([]);
+      setCurrentStatus('');
+      // Immediately list printers when opening the System tab
+      listSystemPrinters();
     }
+  }, [activeTab]);
+
+  // Instant hardware monitoring updates inside the setup modal
+  useEffect(() => {
+    const removeHardwareListener = window.electronAPI?.onHardwareChange?.((changeData: {
+      type: 'usb' | 'network';
+      action: 'connected' | 'disconnected' | 'changed';
+      device?: any;
+      timestamp: string;
+      isLikelyPrinter?: boolean;
+      isDelayedVerification?: boolean;
+    }) => {
+      console.log('🔌 Hardware change detected in PrinterSetup:', changeData);
+      
+      // If the USB tab is active and a USB change occurred, rescan USB list quickly
+      if (activeTab === 'usb' && (changeData?.type === 'usb' || changeData?.isLikelyPrinter)) {
+        // Light debounce to avoid double triggers
+        setTimeout(() => {
+          scanForUSBPrinters();
+        }, 150);
+      }
+      // If the System tab is active, refresh system printers list
+      if (activeTab === 'system') {
+        setTimeout(() => {
+          listSystemPrinters();
+        }, 150);
+      }
+    });
+
+    return () => {
+      if (removeHardwareListener) removeHardwareListener();
+    };
   }, [activeTab]);
 
   return (
@@ -245,6 +305,19 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               <div className="flex items-center justify-center space-x-2">
                 <Wifi className="h-4 w-4" />
                 <span>Manual</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('system')}
+              className={`flex-1 py-2 px-4 rounded-md transition-colors ${
+                activeTab === 'system'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <div className="flex items-center justify-center space-x-2">
+                <Printer className="h-4 w-4" />
+                <span>System</span>
               </div>
             </button>
           </div>
@@ -470,6 +543,81 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {activeTab === 'system' && (
+            <div>
+              {/* System Printers Tab */}
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-gray-600">
+                  Printers available to your OS (CUPS/Windows). Select a printer to use or verify connectivity.
+                </p>
+                <button
+                  onClick={listSystemPrinters}
+                  disabled={systemLoading}
+                  className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {systemLoading ? (
+                    <Loader className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  <span>{systemLoading ? 'Refreshing...' : 'Refresh'}</span>
+                </button>
+              </div>
+
+              {/* Status */}
+              {currentStatus && activeTab === 'system' && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-700">{currentStatus}</p>
+                </div>
+              )}
+
+              {systemPrinters.length > 0 ? (
+                <div className="space-y-3">
+                  <h3 className="font-medium text-gray-900">System Printers:</h3>
+                  {systemPrinters.map((p: any) => (
+                    <div key={p.name} className={`p-4 border rounded-lg ${p.connected ? 'border-gray-200 bg-white' : 'border-orange-200 bg-orange-50'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-lg">🖨️</span>
+                            <span className="font-medium">{p.name}</span>
+                            {p.connected ? (
+                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Connected</span>
+                            ) : (
+                              <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">Offline</span>
+                            )}
+                          </div>
+                          <div className="mt-1 space-y-1 text-sm text-gray-600">
+                            <p>Device: <span className="font-mono">{p.device}</span></p>
+                            <p>Type: {p.type?.toUpperCase?.() || 'UNKNOWN'}</p>
+                            {p.hasQueuedJobs && (
+                              <p className="text-orange-700">Queued jobs: {p.queueCount}</p>
+                            )}
+                            {p.isStale && (
+                              <p className="text-red-600">Marked as stale/ghost</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <button
+                            onClick={() => onPrinterConnected({ success: true, message: `Selected system printer: ${p.name}`, printerName: p.name })}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          >
+                            Use This
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                !systemLoading && (
+                  <div className="p-4 border border-dashed rounded-lg text-gray-500 text-sm">No system printers found.</div>
+                )
+              )}
             </div>
           )}
 

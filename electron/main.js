@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 // Import our hardware controllers
 const HardwareController = require('./hardware/hardwareController');
@@ -28,11 +28,14 @@ function createWindow() {
   console.log('🛠️ hardwareController methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(hardwareController)));
 
   // Load the app
+  console.log('🔍 isDev:', isDev, 'NODE_ENV:', process.env.NODE_ENV, 'isPackaged:', app.isPackaged);
   if (isDev) {
+    console.log('📡 Loading development URL: http://localhost:5173');
     mainWindow.loadURL('http://localhost:5173');
     // Open DevTools in development
     mainWindow.webContents.openDevTools();
   } else {
+    console.log('📁 Loading production file:', path.join(__dirname, '../dist/index.html'));
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
@@ -192,6 +195,48 @@ ipcMain.handle('hardware:list-printers', async () => {
   }
 });
 
+// Instant list of printers from cache - truly instant
+ipcMain.handle('hardware:instant-list-printers', async () => {
+  try {
+    const printers = hardwareController.getInstantPrinterList();
+    return { success: true, printers };
+  } catch (error) {
+    console.error('Instant list printers failed:', error);
+    return { success: false, error: error.message, printers: [] };
+  }
+});
+
+// Fast list of printers without connectivity checks
+ipcMain.handle('hardware:quick-list-printers', async () => {
+  try {
+    // First try instant cache
+    const instantPrinters = hardwareController.getInstantPrinterList();
+    if (instantPrinters.length > 0) {
+      // Return cached instantly, but also update in background
+      hardwareController.quickListPrinters().catch(console.error);
+      return { success: true, printers: instantPrinters };
+    }
+    
+    // No cache, do full scan
+    const printers = await hardwareController.quickListPrinters();
+    return { success: true, printers };
+  } catch (error) {
+    console.error('Quick list printers failed:', error);
+    return { success: false, error: error.message, printers: [] };
+  }
+});
+
+// Enhanced quick list with optional connectivity check
+ipcMain.handle('hardware:quick-list-printers-with-status', async (event, checkConnectivity = false) => {
+  try {
+    const printers = await hardwareController.quickListPrintersWithStatus(checkConnectivity);
+    return { success: true, printers };
+  } catch (error) {
+    console.error('Quick list printers with status failed:', error);
+    return { success: false, error: error.message, printers: [] };
+  }
+});
+
 ipcMain.handle('hardware:set-printer-role', async (event, printerName, role) => {
   try {
     return await hardwareController.setPrinterRole(printerName, role);
@@ -230,20 +275,6 @@ ipcMain.handle('hardware:scan-printers-progressively', async (event) => {
   } catch (error) {
     console.error('Progressive printer scan failed:', error);
     return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('hardware:check-all-connections', async () => {
-  try {
-    const changedPrinters = await hardwareController.checkAllPrinterConnections();
-    return { 
-      success: true, 
-      changed: changedPrinters,
-      count: changedPrinters.length
-    };
-  } catch (error) {
-    console.error('Check all connections failed:', error);
-    return { success: false, error: error.message, changed: [] };
   }
 });
 

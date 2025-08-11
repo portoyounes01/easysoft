@@ -11,6 +11,7 @@ const dns = require('dns');
 const NetworkPrinterDiscovery = require('../../discover-network-printers.js');
 const ThermalPrinterIdentifier = require('../../identify-thermal-printers.js');
 const AutoPrinterSetup = require('../../auto-printer-setup.js');
+// const HardwareMonitorManager = require('../monitors/hardware-monitor-manager');
 
 const execAsync = promisify(exec);
 
@@ -30,9 +31,20 @@ class HardwareController {
     // Multiple printer management
     this.configuredPrinters = new Map(); // Map of printer name -> printer config
     
-    // Simple status tracking
+    // Cached printer list for instant display
+    this.cachedPrinterList = [];
+    this.lastCacheUpdate = null;
+    
+    // Hardware monitoring
+    // this.hardwareMonitor = new HardwareMonitorManager();
+    this.isMonitoring = false;
     this.activePrinter = null; // Current active printer for compatibility
+    
+    // Real-time monitoring
+    this.monitoringInterval = null;
+    this.monitoringEnabled = false;
     this.lastKnownStatus = new Map(); // Track last known status for each printer
+    this.statusChangeCallbacks = [];
     
     // Initialize discovery classes
     this.discovery = new NetworkPrinterDiscovery();
@@ -67,9 +79,303 @@ class HardwareController {
   * This enables the UI to differentiate stale/removed (ghost) printers that still
   * exist in CUPS or have queued jobs from actually reachable printers.
    */
+  // Universal connectivity check for any printer type
+  async checkPrinterConnectivityUniversal(printer) {
+    try {
+      if (printer.type === 'usb') {
+        // Check USB device using serial number (universal approach)
+        if (printer.device && printer.device.startsWith('usb://')) {
+          // Extract serial number from URI (more reliable than vendor name)
+          const serialMatch = printer.device.match(/serial=([^&]+)/);
+          if (serialMatch) {
+            const expectedSerial = serialMatch[1];
+            
+            // Get all USB devices and look for matching serial
+            const { stdout } = await execAsync('system_profiler SPUSBDataType -json');
+            const usbData = JSON.parse(stdout);
+            
+            const findBySerial = (items, targetSerial) => {
+              if (!items) return false;
+              return items.some(item => {
+                if (item.serial_num && item.serial_num === targetSerial) {
+                  return true;
+                }
+                return findBySerial(item._items, targetSerial);
+              });
+            };
+            
+            const connected = findBySerial(usbData.SPUSBDataType, expectedSerial);
+            return {
+              connected,
+              status: connected ? 'connected' : 'offline',
+              lastSeen: connected ? new Date().toISOString() : null
+            };
+          } else {
+            // Fallback to vendor-based check if no serial
+            const { stdout } = await execAsync('system_profiler SPUSBDataType -json');
+            const usbData = JSON.parse(stdout);
+            
+            const findUSBDevice = (items, vendorName) => {
+              if (!items) return false;
+              return items.some(item => {
+                if (item._name && item._name.toLowerCase().includes(vendorName.toLowerCase())) {
+                  return true;
+                }
+                if (item.manufacturer && item.manufacturer.toLowerCase().includes(vendorName.toLowerCase())) {
+                  return true;
+                }
+                return findUSBDevice(item._items, vendorName);
+              });
+            };
+            
+            const vendorMatch = printer.device.match(/usb:\/\/([^\/]+)/);
+            if (vendorMatch) {
+              const vendor = vendorMatch[1];
+              const connected = findUSBDevice(usbData.SPUSBDataType, vendor);
+              return {
+                connected,
+                status: connected ? 'connected' : 'offline',
+                lastSeen: connected ? new Date().toISOString() : null
+              };
+            }
+          }
+        }
+        
+      } else if (printer.type === 'network') {
+        // Network connectivity check with timeout
+        const net = require('net');
+        const match = printer.device.match(/(\d+\.\d+\.\d+\.\d+):(\d+)/);
+        if (match) {
+          const [_, ip, port] = match;
+          
+          return new Promise((resolve) => {
+            const socket = net.createConnection({ host: ip, port: Number(port) }, () => {
+              socket.destroy();
+              resolve({
+                connected: true,
+                status: 'connected',
+                lastSeen: new Date().toISOString()
+              });
+            });
+            
+            socket.on('error', () => {
+              resolve({
+                connected: false,
+                status: 'offline',
+                lastSeen: null
+              });
+            });
+            
+            setTimeout(() => {
+              socket.destroy();
+              resolve({
+                connected: false,
+                status: 'timeout',
+                lastSeen: null
+              });
+            }, 500); // 0.5s timeout
+          });
+        }
+      }
+      
+      // Default for unknown types
+      return {
+        connected: false,
+        status: 'unknown',
+        lastSeen: null
+      };
+      
+    } catch (error) {
+      return {
+        connected: false,
+        status: 'error',
+        lastSeen: null,
+        error: error.message
+      };
+    }
+  }
+
+  // Enhanced quick list with optional connectivity check
+  async quickListPrintersWithStatus(checkConnectivity = false) {
+    try {
+      // First get the quick list
+      const quickPrinters = await this.quickListPrinters();
+      
+      if (!checkConnectivity) {
+        return quickPrinters;
+      }
+      
+      // Then check connectivity for each printer
+      const printersWithStatus = await Promise.all(
+        quickPrinters.map(async (printer) => {
+          const connectivity = await this.checkPrinterConnectivityUniversal(printer);
+          return {
+            ...printer,
+            connected: connectivity.connected,
+            connectionStatus: connectivity.status,
+            lastSeen: connectivity.lastSeen,
+            isStale: !connectivity.connected
+          };
+        })
+      );
+      
+      return printersWithStatus;
+      
+    } catch (error) {
+      console.error('Quick list with status failed:', error);
+      return [];
+    }
+  }
+
+  // Instant printer list from cache - truly instant for UI
+  getInstantPrinterList() {
+    if (this.cachedPrinterList.length > 0) {
+      // Return cached list with 'quick_list' status
+      return this.cachedPrinterList.map(printer => ({
+        ...printer,
+        connectionStatus: 'quick_list',
+        connected: true,
+        status: 'unknown'
+      }));
+    }
+    
+    // If no cache, return empty array (will trigger async load)
+    return [];
+  }
+
+  // Update cache when we get printer data
+  updatePrinterCache(printers) {
+    this.cachedPrinterList = printers.map(p => ({ ...p })); // Deep copy
+    this.lastCacheUpdate = new Date();
+  }
+
+  // Quick list without connectivity checks - for instant UI display
+  async quickListPrinters() {
+    try {
+      let stdout = '';
+      try {
+        ({ stdout } = await execAsync('lpstat -p'));
+      } catch (e) {
+        // Non-CUPS environment (likely Windows). Fallback to PowerShell.
+        if (process.platform === 'win32') {
+          const ps = 'Get-Printer | Select-Object -Property Name, DriverName, PortName | ConvertTo-Json';
+          const { stdout: winOut } = await execAsync(`powershell -NoProfile -Command "${ps}"`);
+          const list = JSON.parse(winOut);
+          const arr = Array.isArray(list) ? list : [list];
+          return arr.map(p => ({
+            name: p.Name,
+            status: 'unknown',
+            device: p.PortName || p.DriverName || 'unknown',
+            type: (p.PortName || '').toLowerCase().includes('usb') ? 'usb' : ((p.PortName || '').match(/\d+\.\d+\.\d+\.\d+/) ? 'network' : 'system'),
+            role: this.configuredPrinters.get(p.Name)?.role || 'unassigned',
+            isActive: this.activePrinter === p.Name,
+            lastConnected: this.configuredPrinters.get(p.Name)?.lastConnected || null,
+            connected: true, // Assume connected for quick list
+            connectionStatus: 'unknown',
+            lastSeen: null,
+            hasQueuedJobs: false,
+            queueCount: 0,
+            isStale: false,
+            source: 'system'
+          }));
+        }
+        throw e;
+      }
+      
+      const printerLines = stdout
+        .split('\n')
+        .filter(line => line.trim().startsWith('printer '));
+
+      const names = printerLines.map(line => {
+        const match = line.match(/printer\s+(\S+)/);
+        return match ? match[1] : null;
+      }).filter(Boolean);
+
+      // Quick enrichment without connectivity checks
+      const quickList = await Promise.all(
+        names.map(async (name) => {
+          let device = 'unknown';
+          let type = 'unknown';
+          let accepting = null;
+
+          // Only get device URI (fast)
+          try {
+            const { stdout: deviceInfo } = await execAsync(`lpstat -v "${name}"`);
+            const deviceMatch = deviceInfo.match(/device for\s+\S+:\s*(.+)/);
+            device = deviceMatch ? deviceMatch[1].trim() : 'unknown';
+            type = this.detectPrinterType(device);
+          } catch (e) {
+            // ignore, leave defaults
+          }
+
+          // Quick accepting status check (fast)
+          try {
+            const { stdout: acceptingInfo } = await execAsync(`lpstat -a "${name}"`);
+            accepting = acceptingInfo.includes('accepting requests');
+          } catch (e) {
+            accepting = null;
+          }
+
+          return {
+            name,
+            status: 'default', // Use default status for quick list
+            device,
+            type,
+            role: this.configuredPrinters.get(name)?.role || 'unassigned',
+            isActive: this.activePrinter === name,
+            lastConnected: this.configuredPrinters.get(name)?.lastConnected || null,
+            connected: false, // Unknown status for quick display
+            connectionStatus: 'quick_list',
+            lastSeen: null,
+            hasQueuedJobs: false, // Skip queue check for speed
+            queueCount: 0,
+            isStale: false,
+            source: 'system'
+          };
+        })
+      );
+
+      // Cache the results for instant access
+      this.updatePrinterCache(quickList);
+      
+      return quickList;
+    } catch (error) {
+      console.error('Quick list printers failed:', error);
+      return [];
+    }
+  }
+
   async listPrinters() {
     try {
-      const { stdout } = await execAsync('lpstat -p');
+      let stdout = '';
+      try {
+        ({ stdout } = await execAsync('lpstat -p'));
+      } catch (e) {
+        // Non-CUPS environment (likely Windows). Fallback to PowerShell.
+        if (process.platform === 'win32') {
+          const ps = 'Get-Printer | Select-Object -Property Name, DriverName, PortName | ConvertTo-Json';
+          const { stdout: winOut } = await execAsync(`powershell -NoProfile -Command "${ps}"`);
+          const list = JSON.parse(winOut);
+          const arr = Array.isArray(list) ? list : [list];
+          return arr.map(p => ({
+            name: p.Name,
+            status: 'unknown',
+            device: p.PortName || p.DriverName || 'unknown',
+            type: (p.PortName || '').toLowerCase().includes('usb') ? 'usb' : ((p.PortName || '').match(/\d+\.\d+\.\d+\.\d+/) ? 'network' : 'system'),
+            role: this.configuredPrinters.get(p.Name)?.role || 'unassigned',
+            isActive: this.activePrinter === p.Name,
+            lastConnected: this.configuredPrinters.get(p.Name)?.lastConnected || null,
+            connected: true,
+            connectionStatus: 'unknown',
+            lastSeen: null,
+            hasQueuedJobs: false,
+            queueCount: 0,
+            isStale: false,
+            source: 'system'
+          }));
+        }
+        throw e;
+      }
       const printerLines = stdout
         .split('\n')
         .filter(line => line.trim().startsWith('printer '));
@@ -1974,6 +2280,48 @@ class HardwareController {
     }
   }
 
+  // Hardware monitoring methods
+  async startRealtimeMonitoring() {
+    if (this.isMonitoring) return;
+    
+    console.log('🚀 Hardware monitoring temporarily disabled (missing hardware-monitor-manager)');
+    this.isMonitoring = true;
+    
+    // TODO: Re-enable when hardware-monitor-manager is available
+    /*
+    // Set up event listeners
+    this.hardwareMonitor.on('hardware-change', (event) => {
+      console.log('Hardware change detected:', event);
+      // Trigger printer list refresh when hardware changes
+      this.onHardwareChange && this.onHardwareChange(event);
+    });
+    
+    this.hardwareMonitor.on('error', (error) => {
+      console.error('Hardware monitor error:', error);
+    });
+    
+    await this.hardwareMonitor.start();
+    */
+  }
+
+  async stopRealtimeMonitoring() {
+    if (!this.isMonitoring) return;
+    
+    console.log('⏹️ Stopping real-time hardware monitoring...');
+    // this.hardwareMonitor.stop();
+    this.isMonitoring = false;
+  }
+
+  setHardwareChangeCallback(callback) {
+    this.onHardwareChange = callback;
+  }
+
+  getMonitoringStatus() {
+    return {
+      isMonitoring: this.isMonitoring,
+      status: null // this.hardwareMonitor.getStatus()
+    };
+  }
 }
 
 module.exports = HardwareController;
