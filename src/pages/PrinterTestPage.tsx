@@ -39,6 +39,11 @@ const PrinterTestPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="max-w-4xl mx-auto">
+        {/* Printer Manager Section */}
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <PrinterManager />
+        </div>
+
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex items-center space-x-3 mb-6">
             <Printer className="h-8 w-8 text-blue-600" />
@@ -140,11 +145,6 @@ const PrinterTestPage: React.FC = () => {
               <li>Use individual test buttons to verify each printer's functionality</li>
             </ol>
           </div>
-        </div>
-
-        {/* Printer Manager Section */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mt-6">
-          <PrinterManager />
         </div>
       </div>
 
