@@ -34,6 +34,8 @@ interface ImageUploaderProps {
     onChange: (url: string) => void;
     onError?: (error: string) => void;
     className?: string;
+    onUploadMeta?: (meta: { path: string; url: string }) => void; // reports storage path + url of newly uploaded image
+    onRequestDelete?: (meta: { path?: string; url: string; isSupabase: boolean }) => void; // request parent to delete on save
 }
 
 interface ImageUploadState {
@@ -47,13 +49,16 @@ interface ImageUploadState {
     imageWidth?: number;
     imageHeight?: number;
     storageMethod?: 'supabase' | 'base64' | 'url';
+    lastUploadedPath?: string;
 }
 
 const ImageUploader: React.FC<ImageUploaderProps> = ({
     value,
     onChange,
     onError,
-    className = ''
+    className = '',
+    onUploadMeta,
+    onRequestDelete
 }) => {
     // Note: Permission checks should be done at the component usage level
     // This component assumes the user already has inventory access
@@ -278,7 +283,47 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         const { data: urlData } = supabase.storage
             .from('product-images')
             .getPublicUrl(path);
-        return urlData.publicUrl || path;
+        const finalUrl = urlData.publicUrl || path;
+        try {
+            onUploadMeta?.({ path, url: finalUrl });
+        } catch { }
+        setState(prev => ({ ...prev, lastUploadedPath: path }));
+        return finalUrl;
+    };
+
+    const deleteFromSupabaseIfNeeded = async () => {
+        // Delete if this image is from our Supabase storage bucket
+        let pathToDelete = state.lastUploadedPath;
+        if (!pathToDelete && state.previewUrl) {
+            try {
+                const url = new URL(state.previewUrl);
+                // Match public object path for our bucket
+                const marker = '/storage/v1/object/public/product-images/';
+                const idx = url.pathname.indexOf(marker);
+                if (idx !== -1) {
+                    pathToDelete = url.pathname.substring(idx + marker.length);
+                }
+            } catch { }
+        }
+        if (!pathToDelete) return;
+
+        const { data: { session } } = await supabase.auth.getSession();
+        const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-image`;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+
+        try {
+            await fetch(fnUrl, {
+                method: 'DELETE',
+                headers,
+                body: JSON.stringify({
+                    path: pathToDelete,
+                    employee_id: employee?.id,
+                    employee_number: employee?.employee_number,
+                    proof_hash: credentialHash || undefined,
+                })
+            });
+        } catch { }
     };
 
     // Handle file selection
@@ -484,6 +529,23 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
 
     // Clear image
     const clearImage = () => {
+        // Ask parent to schedule deletion on Update for Supabase images
+        let pathFromUrl: string | undefined;
+        let isSupabase = state.storageMethod === 'supabase';
+        if (state.previewUrl) {
+            try {
+                const url = new URL(state.previewUrl);
+                const marker = '/storage/v1/object/public/product-images/';
+                const idx = url.pathname.indexOf(marker);
+                if (idx !== -1) {
+                    pathFromUrl = url.pathname.substring(idx + marker.length);
+                    isSupabase = true;
+                }
+            } catch { }
+        }
+        try {
+            onRequestDelete?.({ path: state.lastUploadedPath || pathFromUrl, url: state.previewUrl || '', isSupabase });
+        } catch { }
         onChange('');
         setUrlInput('');
         setState(prev => ({
@@ -493,7 +555,9 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
             originalSize: undefined,
             optimizedSize: undefined,
             imageWidth: undefined,
-            imageHeight: undefined
+            imageHeight: undefined,
+            storageMethod: undefined,
+            lastUploadedPath: undefined
         }));
         if (fileInputRef.current) {
             fileInputRef.current.value = '';

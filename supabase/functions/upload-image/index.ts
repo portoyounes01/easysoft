@@ -95,7 +95,7 @@ function isAllowedContentType(ct: string | undefined): boolean {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, DELETE, OPTIONS',
 };
 
 async function handleUpload(req: Request) {
@@ -103,7 +103,7 @@ async function handleUpload(req: Request) {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  if (req.method !== 'POST') {
+  if (req.method !== 'POST' && req.method !== 'DELETE') {
     return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });
   }
 
@@ -134,8 +134,16 @@ async function handleUpload(req: Request) {
   const contentType = (body.content_type || '').toString();
 
   if (!employeeNumber && !employeeIdFromBody) return new Response(JSON.stringify({ error: 'employee_number or employee_id is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-  if (!fileName) return badRequest('file_name is required');
-  if (!isAllowedContentType(contentType)) return badRequest('Unsupported content_type');
+  // For DELETE, we expect a path to delete in file_name (re-using field) or a dedicated "path"
+  const deletePath = (body as any).path as string | undefined;
+  if (req.method === 'DELETE') {
+    const targetPath = deletePath || fileName;
+    if (!targetPath) return new Response(JSON.stringify({ error: 'path required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    // continue to auth then delete at the bottom
+  } else {
+    if (!fileName) return badRequest('file_name is required');
+    if (!isAllowedContentType(contentType)) return badRequest('Unsupported content_type');
+  }
 
   // Try to resolve employee via multiple strategies
   let employee: any = null;
@@ -217,24 +225,33 @@ async function handleUpload(req: Request) {
     }
   }
 
-  // Build storage path
-  const objectPath = buildObjectPath(employee.id, fileName);
+  if (req.method === 'DELETE') {
+    const targetPath = deletePath || fileName; // file_name used as path alias
+    const { error: delErr } = await admin.storage
+      .from(BUCKET_ID)
+      .remove([targetPath!]);
+    if (delErr) {
+      return new Response(JSON.stringify({ success: false, error: delErr.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ success: true, path: targetPath }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  } else {
+    // POST: create signed upload URL
+    const objectPath = buildObjectPath(employee.id, fileName);
+    const { data: signedData, error: signErr } = await admin.storage
+      .from(BUCKET_ID)
+      .createSignedUploadUrl(objectPath, { expiresIn: SIGNED_EXPIRY_SECONDS, contentType });
 
-  // Create a signed upload URL (v2 API provides createSignedUploadUrl + uploadToSignedUrl)
-  const { data: signedData, error: signErr } = await admin.storage
-    .from(BUCKET_ID)
-    .createSignedUploadUrl(objectPath, { expiresIn: SIGNED_EXPIRY_SECONDS, contentType });
+    if (signErr || !signedData) {
+      return new Response(JSON.stringify({ error: `Failed to create signed upload URL: ${signErr?.message}` }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
-  if (signErr || !signedData) {
-    return new Response(JSON.stringify({ error: `Failed to create signed upload URL: ${signErr?.message}` }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({
+      uploadUrl: signedData.signedUrl,
+      token: signedData.token,
+      path: objectPath,
+      expiresIn: SIGNED_EXPIRY_SECONDS
+    }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
-
-  return new Response(JSON.stringify({
-    uploadUrl: signedData.signedUrl,
-    token: signedData.token,
-    path: objectPath,
-    expiresIn: SIGNED_EXPIRY_SECONDS
-  }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
 // Deno entrypoint

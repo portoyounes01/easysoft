@@ -21,6 +21,8 @@ import {
 import VirtualKeyboard from './VirtualKeyboard';
 import VirtualNumpad from './VirtualNumpad';
 import ImageUploader from './ImageUploader';
+import { supabase } from '../lib/supabase';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 
 interface ProductFormProps {
     isOpen: boolean;
@@ -76,6 +78,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
     const [showKeyboard, setShowKeyboard] = useState(false);
     const [showNumpad, setShowNumpad] = useState(false);
     const [activeField, setActiveField] = useState<string>('');
+    const [pendingUploadPaths, setPendingUploadPaths] = useState<string[]>([]);
+    const [pendingDeletes, setPendingDeletes] = useState<string[]>([]);
+    const { employee, credentialHash } = useSupabaseAuth();
 
     // Populate form when editing
     useEffect(() => {
@@ -159,9 +164,47 @@ const ProductForm: React.FC<ProductFormProps> = ({
             if (product) {
                 // Update existing product
                 await updateProduct(product.id, productDataWithBarcode);
+                // Process pending deletes after successful update
+                if (pendingDeletes.length > 0) {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-image`;
+                    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+                    await Promise.all(pendingDeletes.map(async (path) => {
+                        await fetch(fnUrl, {
+                            method: 'DELETE',
+                            headers,
+                            body: JSON.stringify({
+                                path,
+                                employee_id: employee?.id || undefined,
+                                employee_number: employee?.employee_number || undefined,
+                                proof_hash: credentialHash || undefined,
+                            })
+                        });
+                    }));
+                }
             } else {
                 // Create new product
                 await createProduct(productDataWithBarcode);
+                // Process pending deletes after successful create
+                if (pendingDeletes.length > 0) {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-image`;
+                    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+                    await Promise.all(pendingDeletes.map(async (path) => {
+                        await fetch(fnUrl, {
+                            method: 'DELETE',
+                            headers,
+                            body: JSON.stringify({
+                                path,
+                                employee_id: employee?.id || undefined,
+                                employee_number: employee?.employee_number || undefined,
+                                proof_hash: credentialHash || undefined,
+                            })
+                        });
+                    }));
+                }
             }
 
             onSuccess?.();
@@ -171,6 +214,38 @@ const ProductForm: React.FC<ProductFormProps> = ({
             // Handle error (could show toast notification)
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // Delete any pending uploaded images that weren't saved
+    const handleCancel = async () => {
+        try {
+            if (pendingUploadPaths.length > 0) {
+                // Call edge function to delete each path
+                const { data: { session } } = await supabase.auth.getSession();
+                const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-image`;
+                const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+
+                await Promise.all(pendingUploadPaths.map(async (path) => {
+                    const resp = await fetch(fnUrl, {
+                        method: 'DELETE',
+                        headers,
+                        body: JSON.stringify({
+                            path,
+                            employee_id: employee?.id || undefined,
+                            employee_number: employee?.employee_number || undefined,
+                            proof_hash: credentialHash || undefined,
+                        })
+                    });
+                    // Ignore errors on cleanup
+                    void resp;
+                }));
+            }
+        } catch (_) {
+            // ignore cleanup errors
+        } finally {
+            onClose();
         }
     };
 
@@ -535,6 +610,15 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     value={formData.image_url}
                                     onChange={(url: string) => handleFieldChange('image_url', url)}
                                     onError={(error: string) => setErrors(prev => ({ ...prev, image_url: error }))}
+                                    onUploadMeta={({ path }) => {
+                                        // Track path as pending only if form is not yet saved
+                                        setPendingUploadPaths(prev => [...prev, path]);
+                                    }}
+                                    onRequestDelete={({ path, isSupabase }) => {
+                                        if (isSupabase && path) {
+                                            setPendingDeletes(prev => Array.from(new Set([...prev, path!])));
+                                        }
+                                    }}
                                 />
                                 {errors.image_url && (
                                     <p className="text-red-500 text-xs mt-1">{errors.image_url}</p>
@@ -612,7 +696,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     <div className="flex space-x-3">
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={handleCancel}
                             className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                         >
                             Cancel
