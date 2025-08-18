@@ -1,0 +1,11 @@
+<svg width="300" height="300" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="300" height="300" fill="#F3F4F6"/>
+  <g opacity="0.4">
+    <path d="M225 100H75C63.9543 100 55 108.954 55 120V180C55 191.046 63.9543 200 75 200H225C236.046 200 245 191.046 245 180V120C245 108.954 236.046 100 225 100Z" stroke="#9CA3AF" stroke-width="2"/>
+    <path d="M85 130C91.6274 130 97 124.627 97 118C97 111.373 91.6274 106 85 106C78.3726 106 73 111.373 73 118C73 124.627 78.3726 130 85 130Z" fill="#9CA3AF"/>
+    <path d="M73 170L97 146L121 170L169 122L227 180V170L169 122L121 170L97 146L73 170Z" fill="#9CA3AF"/>
+  </g>
+  <text x="150" y="230" text-anchor="middle" fill="#9CA3AF" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="500">
+    No Image
+  </text>
+</svg>

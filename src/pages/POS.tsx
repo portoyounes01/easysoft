@@ -1058,7 +1058,7 @@ const POS: React.FC = () => {
                                 {/* Product Image */}
                                 <div className="aspect-square relative">
                                   <img
-                                    src={product.image_url || '/placeholder-product.jpg'}
+                                    src={product.image_url || '/placeholder-product.svg'}
                                     alt={product.name}
                                     className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale' : ''}`}
                                   />

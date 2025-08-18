@@ -446,9 +446,32 @@ const Products: React.FC = () => {
               {filteredProducts.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
-                    <div>
-                      <div className="font-semibold text-gray-800">{product.name}</div>
-                      <div className="text-sm text-gray-500">SKU: {product.sku}</div>
+                    <div className="flex items-center space-x-3">
+                      {/* Product Image */}
+                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
+                        {product.image_url ? (
+                          <img
+                            src={product.image_url}
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              // Fallback to placeholder if image fails to load
+                              const target = e.target as HTMLImageElement;
+                              target.src = '/placeholder-product.svg';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                            <Package className="w-6 h-6 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Product Info */}
+                      <div>
+                        <div className="font-semibold text-gray-800">{product.name}</div>
+                        <div className="text-sm text-gray-500">SKU: {product.sku}</div>
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -545,6 +568,26 @@ const Products: React.FC = () => {
 
               {/* Content */}
               <div className="p-6 space-y-6">
+                {/* Product Image */}
+                {viewingProduct.image_url && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Product Image</h3>
+                    <div className="max-w-sm">
+                      <div className="aspect-square rounded-lg overflow-hidden border border-gray-200">
+                        <img
+                          src={viewingProduct.image_url}
+                          alt={viewingProduct.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Basic Information */}
                 <div>
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h3>

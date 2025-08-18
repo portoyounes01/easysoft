@@ -6,8 +6,6 @@ import {
     Package,
     DollarSign,
     Hash,
-    Tag,
-    Image,
     Building,
     MapPin,
     ToggleLeft,
@@ -18,11 +16,11 @@ import { useProducts } from '../contexts/ProductsContext';
 import {
     ProductFormData,
     LocalProduct,
-    IVA_RATES,
-    IVARate
+    IVA_RATES
 } from '../types/supabase';
 import VirtualKeyboard from './VirtualKeyboard';
 import VirtualNumpad from './VirtualNumpad';
+import ImageUploader from './ImageUploader';
 
 interface ProductFormProps {
     isOpen: boolean;
@@ -34,8 +32,13 @@ interface ProductFormProps {
 interface FormErrors {
     name?: string;
     price?: string;
+    cost?: string;
     iva_rate?: string;
     category_id?: string;
+    sku?: string;
+    stock?: string;
+    min_stock?: string;
+    image_url?: string;
 }
 
 const ProductForm: React.FC<ProductFormProps> = ({
@@ -523,22 +526,19 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                 />
                             </div>
 
-                            {/* Image URL */}
+                            {/* Image */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Image URL
+                                    Product Image
                                 </label>
-                                <div className="relative">
-                                    <Image className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
-                                    <textarea
-                                        value={formData.image_url}
-                                        onChange={(e) => handleFieldChange('image_url', e.target.value)}
-                                        onClick={() => handleTextFieldClick('image_url')}
-                                        rows={3}
-                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                                        placeholder="Enter image URL"
-                                    />
-                                </div>
+                                <ImageUploader
+                                    value={formData.image_url}
+                                    onChange={(url: string) => handleFieldChange('image_url', url)}
+                                    onError={(error: string) => setErrors(prev => ({ ...prev, image_url: error }))}
+                                />
+                                {errors.image_url && (
+                                    <p className="text-red-500 text-xs mt-1">{errors.image_url}</p>
+                                )}
                             </div>
 
                             {/* Supplier */}
