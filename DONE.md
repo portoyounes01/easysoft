@@ -509,7 +509,7 @@ This enhancement streamlines the employee creation process by automatically hand
 
 - **Email Field Completely Removed:** Eliminated email field entirely from all forms and interfaces
 - **Phone-Only for Managers/Admins:** Only phone numbers are collected for managers and admins, nothing for cashiers
-- **Mandatory PIN System:** All employees now require a 6+ digit PIN that is securely hashed
+- **Mandatory PIN System:** All employees now require a 4+ digit PIN that is securely hashed
 - **Fixed Password vs PIN Logic:** Clarified that passwords are only for admin login, PINs for all employee authentication
 - **Permission System Overhaul:** Complete restructure of access levels and route protection
 
@@ -530,7 +530,7 @@ This enhancement streamlines the employee creation process by automatically hand
 
 **Technical Implementation:**
 
-- **Form Validation:** PIN validation requires 6+ digits, numbers only
+- **Form Validation:** PIN validation requires 4+ digits, numbers only
 - **Hash Integration:** Both PIN creation and authentication use secure hashing
 - **Type Safety:** Updated all TypeScript interfaces to reflect new structure
 - **Database Compatibility:** SQL sample data updated with new permission structure

@@ -400,7 +400,7 @@ export interface EmployeeFormData {
     access_levels: AccessLevel[];
     hire_date: string; // ISO date string
     password?: string; // Raw password (will be hashed) - for admin login only
-    pin: string; // Mandatory PIN for all roles (6+ chars, will be hashed)
+    pin: string; // Mandatory PIN for all roles (4+ digits, will be hashed)
     is_active: boolean;
 }
 
