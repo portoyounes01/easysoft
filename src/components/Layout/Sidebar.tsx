@@ -33,6 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
     { path: '/reports', icon: BarChart3, label: 'Reports', permission: 'reports' },
     { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'transactions' },
     { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' },
+    { path: '/receipt-demo', icon: FileText, label: 'Receipt Template', permission: 'settings' },
     { path: '/printer-test', icon: Printer, label: 'Printer Setup', permission: 'settings' },
     { path: '/setup', icon: Database, label: 'Data Setup', permission: 'settings' },
     { path: '/cashier-testing', icon: Zap, label: 'Cashier Testing', permission: 'settings' },
