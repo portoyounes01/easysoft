@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import ThermalReceipt from './ThermalReceipt';
+import ThermalReceipt, { ReceiptProps } from './ThermalReceipt';
 
-const ReceiptDemo: React.FC = () => {
-  const [documentType, setDocumentType] = useState<'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO'>('FATURA_SIMPLIFICADA');
+const ReceiptDemo: React.FC<{ initialData?: ReceiptProps }> = ({ initialData }) => {
+  const [documentType, setDocumentType] = useState<'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO'>(initialData?.documentType || 'FATURA_SIMPLIFICADA');
 
   // Mock data for invoice
   const mockInvoiceData = {
@@ -149,7 +149,8 @@ const ReceiptDemo: React.FC = () => {
     }
   };
 
-  const getCurrentData = () => {
+  const getCurrentData = (): ReceiptProps => {
+    if (initialData) return initialData;
     switch (documentType) {
       case 'FATURA':
         return mockFullInvoiceData;
@@ -168,12 +169,12 @@ const ReceiptDemo: React.FC = () => {
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
       <div style={{ marginBottom: '20px', textAlign: 'center' }}>
         <h2>Demo de Recibo Térmico</h2>
-        
+
         {/* Document Type Selector */}
         <div style={{ marginBottom: '20px' }}>
           <label style={{ marginRight: '10px' }}>Tipo de Documento:</label>
-          <select 
-            value={documentType} 
+          <select
+            value={documentType}
             onChange={(e) => setDocumentType(e.target.value as any)}
             style={{ padding: '5px', fontSize: '14px' }}
           >
@@ -184,7 +185,7 @@ const ReceiptDemo: React.FC = () => {
         </div>
 
         {/* Print Button */}
-        <button 
+        <button
           onClick={handlePrint}
           style={{
             backgroundColor: '#007bff',
@@ -201,10 +202,10 @@ const ReceiptDemo: React.FC = () => {
         </button>
 
         {/* Instructions */}
-        <div style={{ 
-          backgroundColor: '#f8f9fa', 
-          padding: '15px', 
-          borderRadius: '5px', 
+        <div style={{
+          backgroundColor: '#f8f9fa',
+          padding: '15px',
+          borderRadius: '5px',
           marginBottom: '20px',
           textAlign: 'left',
           maxWidth: '600px',
@@ -221,8 +222,8 @@ const ReceiptDemo: React.FC = () => {
       </div>
 
       {/* Receipt Component */}
-      <div style={{ 
-        display: 'flex', 
+      <div style={{
+        display: 'flex',
         justifyContent: 'center',
         backgroundColor: '#f5f5f5',
         padding: '20px',
@@ -232,18 +233,18 @@ const ReceiptDemo: React.FC = () => {
       </div>
 
       {/* Data Preview */}
-      <div style={{ 
-        marginTop: '30px', 
-        padding: '20px', 
-        backgroundColor: '#f8f9fa', 
-        borderRadius: '5px' 
+      <div style={{
+        marginTop: '30px',
+        padding: '20px',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '5px'
       }}>
         <h3>📊 Dados Utilizados ({documentType}):</h3>
-        <pre style={{ 
-          fontSize: '12px', 
-          overflow: 'auto', 
-          backgroundColor: 'white', 
-          padding: '15px', 
+        <pre style={{
+          fontSize: '12px',
+          overflow: 'auto',
+          backgroundColor: 'white',
+          padding: '15px',
           borderRadius: '5px',
           border: '1px solid #ddd'
         }}>

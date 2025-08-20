@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { NavLink } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -14,7 +15,6 @@ import {
   Cake,
   Candy,
   Percent,
-  Calculator,
   LogOut,
   UserCircle,
   Search,
@@ -22,7 +22,6 @@ import {
   Mail,
   Users,
   Save,
-  MapPin,
   CreditCard as TaxIcon,
   Check,
   AlertCircle,
@@ -43,7 +42,7 @@ import { useProducts } from '../contexts/ProductsContext';
 import VirtualNumpad from '../components/VirtualNumpad';
 import VirtualKeyboard from '../components/VirtualKeyboard';
 import { Customer } from '../types';
-import { LocalProduct, LocalCategory, calculateStockStatus } from '../types/supabase';
+import { LocalProduct } from '../types/supabase';
 import { useTranslation } from 'react-i18next';
 
 // Icon mapping for categories
@@ -136,11 +135,11 @@ let mockCustomers: Customer[] = [
 
 const POS: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { cart, addToCart, removeFromCart, updateQuantity, clearCart, selectedCustomer, selectCustomer } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
   const { settings } = useSettings();
   const {
-    products: allProducts,
     categories: allCategories,
     getProductsByCategory,
     getActiveProducts,
@@ -209,19 +208,12 @@ const POS: React.FC = () => {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    const saved = localStorage.getItem('pos-sidebar-collapsed');
-    return saved ? JSON.parse(saved) : false;
-  });
+  // POS uses a temporary navigation overlay instead of a persistent sidebar
   const [showNavigation, setShowNavigation] = useState(false);
   const [discount, setDiscount] = useState({ type: 'none', value: 0 });
 
   // Toggle sidebar and persist state
-  const toggleSidebar = () => {
-    const newCollapsed = !isSidebarCollapsed;
-    setIsSidebarCollapsed(newCollapsed);
-    localStorage.setItem('pos-sidebar-collapsed', JSON.stringify(newCollapsed));
-  };
+  // Collapsed state preserved; toggled via showNavigation overlay only in POS
 
   // Toggle navigation overlay
   const toggleNavigation = () => {
@@ -243,7 +235,7 @@ const POS: React.FC = () => {
   const [numpadConfig, setNumpadConfig] = useState({
     isOpen: false,
     title: '',
-    onConfirm: (value: string) => { },
+    onConfirm: (_value: string) => { },
     prefix: '',
     suffix: '',
     placeholder: '0.00',
@@ -254,7 +246,7 @@ const POS: React.FC = () => {
     isOpen: false,
     title: '',
     field: '',
-    onConfirm: (value: string) => { },
+    onConfirm: (_value: string) => { },
     maxLength: 50,
     allowNumbers: true,
     allowLetters: true
@@ -402,7 +394,7 @@ const POS: React.FC = () => {
       : 0;
 
   const discountedSubtotal = subtotal - discountAmount;
-  
+
   // Calculate tax extracted from tax-inclusive prices (European style)
   const tax = cart.reduce((sum, item) => {
     const itemTotal = item.product.price * item.quantity;
@@ -438,7 +430,7 @@ const POS: React.FC = () => {
   const customerDiscount = selectedCustomer ? selectedCustomer.discountLevel : 0;
   const customerDiscountAmount = discountedSubtotal * customerDiscount / 100;
   const finalSubtotal = discountedSubtotal - customerDiscountAmount;
-  
+
   // In European style, total = subtotal (since tax is already included in prices)
   // But we need to adjust tax proportionally with discounts
   const finalTax = finalTaxAfterDiscount * (finalSubtotal / discountedSubtotal);
@@ -446,9 +438,7 @@ const POS: React.FC = () => {
   const finalTotal = finalSubtotal;
   const changeAmount = cashReceived > finalTotal ? cashReceived - finalTotal : 0;
 
-  const handleCategoryClick = (categoryId: string) => {
-    setSelectedCategoryId(categoryId);
-  };
+  // (category selection handled inline where used)
 
   const handlePayment = () => {
     setShowPayment(true);
@@ -535,13 +525,7 @@ const POS: React.FC = () => {
     selectCustomer(null);
   };
 
-  const handleCustomerSearch = () => {
-    // Focus on the search input
-    const searchInput = document.querySelector('input[placeholder*="Search by NIF"]') as HTMLInputElement;
-    if (searchInput) {
-      searchInput.focus();
-    }
-  };
+  // Removed unused handleCustomerSearch helper
 
   const handleAddNewCustomer = () => {
     // Prefill form based on search term
@@ -670,7 +654,7 @@ const POS: React.FC = () => {
       isOpen: false,
       title: '',
       field: '',
-      onConfirm: (value: string) => { },
+      onConfirm: (_value: string) => { },
       maxLength: 50,
       allowNumbers: true,
       allowLetters: true
@@ -697,7 +681,7 @@ const POS: React.FC = () => {
       isOpen: false,
       title: '',
       field: '',
-      onConfirm: (value: string) => { },
+      onConfirm: (_value: string) => { },
       maxLength: 50,
       allowNumbers: true,
       allowLetters: true
@@ -920,13 +904,13 @@ const POS: React.FC = () => {
                 {!selectedCategoryId && (
                   <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-full"></div>
                 )}
-                
+
                 <div className={`w-6 h-6 flex items-center justify-center mb-1 ${!selectedCategoryId ? 'text-blue-500' : 'text-gray-500'
                   }`}>
                   <Grid className="w-4 h-4" />
                 </div>
                 <div className={`text-[10px] font-medium text-center leading-tight px-1 w-full max-w-full ${!selectedCategoryId ? 'text-gray-900' : 'text-gray-500'}`}>{/* category label */}
-                  { 'All Menu'.split(' ').length > 1 ? (
+                  {'All Menu'.split(' ').length > 1 ? (
                     <div className="line-clamp-2 break-words">All Menu</div>
                   ) : (
                     <div className="truncate w-full max-w-full overflow-hidden">All Menu</div>
@@ -952,7 +936,7 @@ const POS: React.FC = () => {
                     {isSelected && (
                       <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-full"></div>
                     )}
-                    
+
                     <div className={`w-6 h-6 flex items-center justify-center mb-1 text-gray-500`}>
                       {renderCategoryIcon(category.icon)}
                     </div>
@@ -966,7 +950,7 @@ const POS: React.FC = () => {
                   </button>
                 );
               })}
-              
+
               {/* Show empty state if no categories */}
               {allCategories.length === 0 && (
                 <div className="text-center py-8">
@@ -1747,6 +1731,59 @@ const POS: React.FC = () => {
                 <button
                   className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 rounded-2xl min-h-[60px]"
                   disabled={cashReceived > 0 && cashReceived < finalTotal}
+                  onClick={() => {
+                    // Build receipt data
+                    const receiptData = {
+                      documentNumber: `FS ${new Date().getFullYear()}/${String(Date.now()).slice(-5)}`,
+                      documentType: 'FATURA_SIMPLIFICADA' as const,
+                      date: new Date(),
+                      counter: 'BALCÃO 1',
+                      verificationCode: 'ATCUD-XXXX-XXXXX',
+                      company: {
+                        name: 'Querido Menu Unip. Lda',
+                        address: 'Rua Luis Adelino Fonseca Lt 4, CC EVORA Plaza',
+                        postalCode: '7005-345',
+                        city: 'Évora',
+                        taxNumber: '514524391',
+                        phone: '+351 266 123 456',
+                        email: 'geral@queridmenu.pt'
+                      },
+                      customer: selectedCustomer ? {
+                        taxNumber: selectedCustomer.taxId,
+                        name: selectedCustomer.name
+                      } : undefined,
+                      items: cart.map(ci => ({
+                        id: ci.product.id,
+                        description: ci.product.name,
+                        quantity: ci.quantity,
+                        unitPrice: ci.product.price,
+                        vatRate: Math.round((ci.product.iva_rate || 0) * 100),
+                        // price is tax-included already; total line value equals unit*qty
+                        total: Number((ci.product.price * ci.quantity).toFixed(2))
+                      })),
+                      totals: {
+                        subtotal: Number(subtotal.toFixed(2)),
+                        discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
+                        discountPercentage: discount.type === 'percentage' ? discount.value : 0,
+                        net: Number(finalSubtotal.toFixed(2)),
+                        vat: Number(adjustedFinalTax.toFixed(2)),
+                        total: Number(finalTotal.toFixed(2))
+                      },
+                      payment: {
+                        method: cashReceived > 0 ? 'Numerário' : 'Multibanco',
+                        amountGiven: Number(cashReceived.toFixed(2)),
+                        change: Number(changeAmount.toFixed(2))
+                      },
+                      slogan: 'THE WORLD NEEDS NATA',
+                      softwareInfo: 'Software ZSRest - www.zsrest.com',
+                      certificationNumber: '196/AT'
+                    };
+
+                    // Close payment modal, clear cart, navigate to receipt page
+                    setShowPayment(false);
+                    clearCart();
+                    navigate('/receipt-demo', { state: { receiptData } });
+                  }}
                 >
                   {t('pos.completeSale')}
                 </button>

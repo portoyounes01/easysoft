@@ -63,6 +63,7 @@
   - [ ] **Credit note creation**
   - [ ] **Invoice generation with tax ID**
   - [ ] **Receipt numbering system**
+  - [ ] **Receipt Data Integration** – see `RECEIPT_INTEGRATION_PLAN.md`
 
 ## Medium Priority Features
 

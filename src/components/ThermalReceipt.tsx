@@ -39,7 +39,7 @@ interface ReceiptTotals {
   total: number;
 }
 
-interface ReceiptProps {
+export interface ReceiptProps {
   documentNumber: string;
   documentType: 'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO';
   date: Date;
@@ -202,16 +202,16 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       {/* Logo/Header */}
       <div className="center company-logo">[LOGO]</div>
-      
+
       {/* Company Info */}
       <div className="center bold">{company.name}</div>
       <div className="center small-text">{company.address}</div>
       <div className="center small-text">{company.postalCode} {company.city}</div>
       {company.phone && <div className="center small-text">Tel: {company.phone}</div>}
       {company.email && <div className="center small-text">{company.email}</div>}
-      
+
       <div className="separator"></div>
-      
+
       {/* Customer Info */}
       {customer?.taxNumber && (
         <>
@@ -219,20 +219,20 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
           <div className="separator"></div>
         </>
       )}
-      
+
       {/* Verification Code */}
       <div className="center small-text">{verificationCode}</div>
-      
+
       {/* QR Code Placeholder */}
       <div className="qr-placeholder center">QR CODE</div>
-      
+
       <div className="separator"></div>
-      
+
       {/* Document Header */}
       <div className="center bold">{getDocumentTitle()}</div>
       <div className="center">{documentNumber} Original</div>
       <div className="center">Data: {formatDate(date)} {counter}</div>
-      
+
       {/* Credit Note Specific Info */}
       {documentType === 'NOTA_CREDITO' && originalInvoice && (
         <div className="credit-note-info">
@@ -240,12 +240,12 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
           {creditReason && <div className="small-text">Motivo: {creditReason}</div>}
         </div>
       )}
-      
+
       <div className="separator"></div>
-      
+
       {/* Items Header */}
       <div className="header-info">QTD UNI Descrição       IVA  Valor</div>
-      
+
       {/* Items */}
       {items.map((item, index) => (
         <div key={item.id || index}>
@@ -256,9 +256,9 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
           <div className="small-text">Preço unitário: {formatCurrency(item.unitPrice)} €/Unidade</div>
         </div>
       ))}
-      
+
       <div className="separator"></div>
-      
+
       {/* VAT Info */}
       <div className="center small-text">IVA Incluído à taxa indicada</div>
       <div className="item-row small-text">
@@ -282,7 +282,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
           </div>
         ));
       })()}
-      
+
       {/* Totals */}
       <div className="total-row">
         <span>ILÍQUIDO</span>
@@ -302,17 +302,17 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         <span>IVA</span>
         <span>{formatCurrency(totals.vat)}</span>
       </div>
-      
+
       <div className="double-separator"></div>
-      
+
       {/* Final Total */}
       <div className="total-row final-total">
         <span>TOTAL</span>
         <span>{formatCurrency(totals.total)}</span>
       </div>
-      
+
       <div className="separator"></div>
-      
+
       {/* Slogan */}
       {slogan && (
         <>
@@ -320,12 +320,12 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
           <div className="separator"></div>
         </>
       )}
-      
+
       {/* Software Info */}
       {softwareInfo && <div className="center small-text">{softwareInfo}</div>}
-      
+
       <div className="separator"></div>
-      
+
       {/* Payment Info */}
       <div className="left">Pago em {payment.method}</div>
       <div className="item-row">
@@ -336,9 +336,9 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         <span>Troco:</span>
         <span>{formatCurrency(payment.change)}</span>
       </div>
-      
+
       <div className="separator"></div>
-      
+
       {/* Legal Info */}
       {certificationNumber && (
         <>
@@ -346,19 +346,19 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
           <div className="center small-text">certificado n° {certificationNumber}</div>
         </>
       )}
-      
+
       <div style={{ margin: '10px 0' }}></div>
-      
+
       <div className="small-text">
-        Os serviços e/ou bens foram realizados e/ou colocados à disposição do 
+        Os serviços e/ou bens foram realizados e/ou colocados à disposição do
         adquirente nesta data (Art 36 do CIVA, N°5 alínea F)
       </div>
-      
+
       <div style={{ margin: '10px 0' }}></div>
-      
+
       <div className="center small-text">Licenciado a: {company.name}</div>
       <div className="center small-text">Contribuinte: {company.taxNumber} (empresa)</div>
-      
+
       {/* Extra space for cutting */}
       <div style={{ height: '20px' }}></div>
     </div>
