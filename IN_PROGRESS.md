@@ -1,3 +1,17 @@
+- Implemented guarded Supabase auth to prevent unwanted 400 password grant calls
+  - Updated `src/types/supabase.ts` to reflect schema: added `auth_id` (optional) and included `'trainee'` in roles
+  - Updated `src/contexts/SupabaseAuthContext.tsx` to:
+    - Gate `signInWithEmailAndPassword` behind `isSupabaseConfigured()`
+    - Attempt Supabase sign-in for inventory/all only if: configured, online, and `auth_id` exists on employee
+  - No hacks added; follows `DEVELOPMENT_GUIDE.md` conventions
+
+- Provisioning improvements
+  - `setup-supabase-auth-users.js` now:
+    - Loads env from root `.env` (app) and `supabase/.env` (service role)
+    - Auto-detects employees with `inventory` or `all` access (any role)
+    - Creates auth users and links `auth_id`
+    - Supports password strategy via `PROVISION_PASSWORD_SOURCE` and `DEFAULT_SUPABASE_PASSWORD`
+  - `SUPABASE_AUTH_SETUP.md` updated with dual .env locations and password provisioning options
 # Currently In Progress 🚧
 
 ## ⚡️ CRITICAL SECURITY FIXES (IMMEDIATE PRIORITY) ⚡️
@@ -42,10 +56,28 @@
 
 1. **Security Critical Fixes** (This Week)
 2. **Backend API Development** (Planning Phase)
-3. **Advanced POS Features** (Future Development)
+3. **Receipt Integration Phase 1 (Active)**
+   - Company & receipt settings UI
+   - POS → build `receiptData` and navigate to `/receipt-demo`
+   - Counter increments via settings persistence
+4. **Advanced POS Features** (Future Development)
 4. **Performance Optimization** (Ongoing)
 
 ---
 
 **Last Updated**: 2024-12-19  
 **Next Review**: 2024-12-20 (Daily security progress check)
+
+---
+
+## Connectivity & Sync Reliability
+- Status: ACTIVE (2025-08-20)
+- Description: Replace ad-hoc table probes with a lightweight heartbeat and centralize connectivity state to stop request storms.
+- Changes in progress:
+  - Switched `checkSupabaseConnection` to RPC `ping` instead of `from('employees').select('id')`
+  - Deduplicated concurrent connectivity checks in `ConnectionStatus` and added in-flight guard
+  - Standardized `isOnline()` in `employeeService` and `productService` to use centralized status/heartbeat
+  - Added heartbeat RPC to `supabase/migrations/20250803_cashier_functions_tables.sql`
+- Next steps:
+  - Audit other services/hooks for direct table probes and migrate to centralized heartbeat
+  - Monitor logs on receipt navigation to confirm no repeated PostgREST 429/ERR_INSUFFICIENT_RESOURCES

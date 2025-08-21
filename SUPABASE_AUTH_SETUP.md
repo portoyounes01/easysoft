@@ -1,30 +1,35 @@
 # Supabase Authentication Setup for Image Uploads
 
-This guide explains how to properly set up Supabase authentication for employees with inventory management permissions to upload images to cloud storage.
+This guide explains how to properly set up Supabase authentication for any employees whose access includes inventory management (access level `inventory` or `all`) to upload images to cloud storage.
 
 ## Overview
 
 The POS system now uses a **dual authentication approach**:
 
 1. **Employee Authentication** - For general POS operations (all employees)
-2. **Supabase Authentication** - For cloud storage access (inventory managers only)
+2. **Supabase Authentication** - For cloud storage access (any employee with `inventory` or `all` access)
 
 ## Required Setup Steps
 
 ### 1. Add Service Role Key to Environment
 
-Add your Supabase service role key to `.env`:
+Add your Supabase environment values:
 
 ```bash
-# Add this to your .env file
+# App runtime (root .env)
+VITE_SUPABASE_URL=your_project_url
+VITE_SUPABASE_ANON_KEY=your_anon_key
+
+# Provisioning script (supabase/.env)
+SUPABASE_URL=your_project_url
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 ```
 
-You can find this key in your Supabase dashboard under Settings > API.
+You can find these keys in your Supabase dashboard under Settings > API. The script will automatically load both `.env` files (root `.env` and `supabase/.env`). The script now verifies the presence of the `auth_id` column (does not attempt to create it over REST). If missing, it prints the SQL you need to run.
 
 ### 2. Run the Auth User Setup Script
 
-Execute the setup script to create Supabase auth users for employees with inventory access:
+Execute the setup script to create Supabase auth users for employees with inventory/all access:
 
 ```bash
 node setup-supabase-auth-users.js
@@ -33,9 +38,11 @@ node setup-supabase-auth-users.js
 This script will:
 
 - Add `auth_id` column to the employees table if needed
-- Create Supabase auth users for Admin and Manager employees
-- Link the auth users to employee records
-- **Skip cashiers** (they don't need cloud storage access)
+- Auto-detect employees whose `access_levels` include `inventory` or `all` (role-agnostic, includes cashiers)
+- Create Supabase auth users and link them to employee records via `auth_id`
+- Password provisioning:
+  - Use `PROVISION_PASSWORD_SOURCE=PIN` to attempt using the employee PIN when it looks like plaintext numeric (not a hash), otherwise fallback
+  - Set `DEFAULT_SUPABASE_PASSWORD=ChangeMe123!` (or your own) for fallback or when using `PROVISION_PASSWORD_SOURCE=FIXED` (default)
 
 ### 3. Apply Storage Policies
 
@@ -48,17 +55,13 @@ Run the updated SQL in your Supabase SQL Editor:
 
 ### 4. Test the Implementation
 
-**Admin/Manager Login:**
+**Inventory-enabled Employee Login (any role):**
 
 1. Login with admin (`EMP001`) or manager (`EMP002`) credentials
 2. Go to Products page and try to add/edit a product with image
 3. Should see **green "Cloud Storage"** indicator when uploading images
 
-**Cashier Login:**
-
-1. Login with cashier (`EMP003`) credentials
-2. Try to upload an image (if they have access to products page)
-3. Should see **yellow "Local Data (Base64)"** with permission message
+If a cashier does not have `inventory` access, the app will not attempt Supabase auth and image uploads will fall back to base64/local behavior.
 
 ## How It Works
 
@@ -91,7 +94,7 @@ if (!user) {
 
 ## Security Features
 
-✅ **UI-level access control** - Only inventory managers can access upload interface  
+✅ **UI-level access control** - Only employees with inventory access can access upload interface  
 ✅ **Proper Supabase authentication** - Uses real auth users, not service keys  
 ✅ **RLS policies enforced** - Database-level security for storage  
 ✅ **Technical fallback only** - Base64 storage only for server/network issues  

@@ -86,3 +86,9 @@
 - `secure_rls_policies.sql` - Secure row-level security policies for production use
 - `SupabaseAuthContext.tsx` - New authentication context with Supabase Auth integration
 - Updated authentication throughout app while maintaining backward compatibility
+
+## Reliability and Performance
+
+- [ ] Replace remaining table-based connectivity probes with centralized heartbeat (`supabase.rpc('ping')`)
+- [ ] Ensure all services use `connectionStatus` for online/offline detection
+- [ ] Add regression test to assert no repeated GETs to `/employees?select=id&limit=1` during navigation to receipt

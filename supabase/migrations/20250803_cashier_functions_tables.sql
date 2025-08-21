@@ -128,3 +128,16 @@ CREATE TRIGGER update_print_logs_updated_at BEFORE UPDATE ON print_logs
 
 CREATE TRIGGER update_cashier_tests_updated_at BEFORE UPDATE ON cashier_tests
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Heartbeat RPC for lightweight connectivity checks
+CREATE OR REPLACE FUNCTION public.ping()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT true;
+$$;
+
+REVOKE ALL ON FUNCTION public.ping() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.ping() TO anon, authenticated, service_role;

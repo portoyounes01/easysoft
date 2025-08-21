@@ -186,7 +186,15 @@ const AppContent: React.FC = () => {
                   <Route
                     path="/receipt-demo"
                     element={
-                      <PermissionRoute permission="settings">
+                      <PermissionRoute permission="sales">
+                        <ReceiptDemoPage />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/receipt-demo/:id"
+                    element={
+                      <PermissionRoute permission="sales">
                         <ReceiptDemoPage />
                       </PermissionRoute>
                     }

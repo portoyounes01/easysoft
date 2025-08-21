@@ -329,7 +329,7 @@ BEGIN
     )
     ON CONFLICT (employee_number) 
     DO UPDATE SET
-      id = EXCLUDED.id, -- Update UUID too (important!)
+      -- Preserve existing primary key; never update id to avoid FK breaks
       name = EXCLUDED.name,
       email = EXCLUDED.email,
       phone = EXCLUDED.phone,
@@ -355,3 +355,156 @@ BEGIN
   RETURN upserted_count;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER; 
+
+-- ======================================================================
+-- Prevent primary key updates on employees (robust FK integrity)
+-- ======================================================================
+DROP FUNCTION IF EXISTS public.prevent_employee_id_update();
+CREATE OR REPLACE FUNCTION public.prevent_employee_id_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.id IS DISTINCT FROM OLD.id THEN
+    RAISE EXCEPTION 'Cannot update primary key id for employees';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_prevent_employee_id_update ON public.employees;
+CREATE TRIGGER trg_prevent_employee_id_update
+  BEFORE UPDATE ON public.employees
+  FOR EACH ROW
+  EXECUTE FUNCTION public.prevent_employee_id_update();
+
+-- ======================================================================
+-- Upsert with canonical ID mapping for clients to reconcile IDs
+-- ======================================================================
+DROP FUNCTION IF EXISTS public.upsert_employees_with_mapping(JSONB);
+CREATE OR REPLACE FUNCTION public.upsert_employees_with_mapping(employees_data JSONB)
+RETURNS TABLE (
+  input_id UUID,
+  employee_number TEXT,
+  persisted_id UUID,
+  was_inserted BOOLEAN
+) AS $$
+DECLARE
+  emp_record RECORD;
+  existed BOOLEAN;
+BEGIN
+  FOR emp_record IN SELECT * FROM jsonb_to_recordset(employees_data) AS x(
+    id UUID,
+    employee_number TEXT,
+    name TEXT,
+    email TEXT,
+    phone TEXT,
+    password_hash TEXT,
+    pin TEXT,
+    role TEXT,
+    access_levels TEXT[],
+    is_active BOOLEAN,
+    hire_date DATE,
+    total_sales NUMERIC(10, 2),
+    transaction_count INTEGER,
+    average_transaction NUMERIC(10, 2),
+    hours_worked INTEGER,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
+    last_synced_at TIMESTAMPTZ,
+    needs_push BOOLEAN,
+    is_conflicted BOOLEAN,
+    deleted_at TIMESTAMPTZ
+  )
+  LOOP
+    -- Track existence prior to upsert
+    SELECT EXISTS(
+      SELECT 1 FROM public.employees e WHERE e.employee_number = emp_record.employee_number
+    ) INTO existed;
+
+    INSERT INTO public.employees (
+      id, employee_number, name, email, phone, password_hash, pin,
+      role, access_levels, is_active, hire_date, total_sales,
+      transaction_count, average_transaction, hours_worked,
+      created_at, updated_at, last_synced_at, needs_push, is_conflicted, deleted_at
+    ) VALUES (
+      emp_record.id,
+      emp_record.employee_number,
+      emp_record.name,
+      emp_record.email,
+      emp_record.phone,
+      emp_record.password_hash,
+      emp_record.pin,
+      emp_record.role,
+      emp_record.access_levels,
+      emp_record.is_active,
+      emp_record.hire_date,
+      emp_record.total_sales,
+      emp_record.transaction_count,
+      emp_record.average_transaction,
+      emp_record.hours_worked,
+      COALESCE(emp_record.created_at, NOW()),
+      NOW(),
+      emp_record.last_synced_at,
+      COALESCE(emp_record.needs_push, false),
+      COALESCE(emp_record.is_conflicted, false),
+      emp_record.deleted_at
+    )
+    ON CONFLICT (employee_number)
+    DO UPDATE SET
+      name = EXCLUDED.name,
+      email = EXCLUDED.email,
+      phone = EXCLUDED.phone,
+      password_hash = EXCLUDED.password_hash,
+      pin = EXCLUDED.pin,
+      role = EXCLUDED.role,
+      access_levels = EXCLUDED.access_levels,
+      is_active = EXCLUDED.is_active,
+      hire_date = EXCLUDED.hire_date,
+      total_sales = EXCLUDED.total_sales,
+      transaction_count = EXCLUDED.transaction_count,
+      average_transaction = EXCLUDED.average_transaction,
+      hours_worked = EXCLUDED.hours_worked,
+      updated_at = NOW(),
+      last_synced_at = EXCLUDED.last_synced_at,
+      needs_push = EXCLUDED.needs_push,
+      is_conflicted = EXCLUDED.is_conflicted,
+      deleted_at = EXCLUDED.deleted_at;
+
+    -- Return mapping to the client: provided id vs canonical persisted id
+    RETURN QUERY
+    SELECT emp_record.id AS input_id,
+           emp_record.employee_number AS employee_number,
+           e.id AS persisted_id,
+           (NOT existed) AS was_inserted
+    FROM public.employees e
+    WHERE e.employee_number = emp_record.employee_number;
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ======================================================================
+-- Admin helper to merge duplicate employees safely (optional tool)
+-- ======================================================================
+DROP FUNCTION IF EXISTS public.merge_employee_records(UUID, UUID);
+CREATE OR REPLACE FUNCTION public.merge_employee_records(source_id UUID, target_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  IF source_id = target_id THEN
+    RETURN;
+  END IF;
+
+  -- Repoint FKs in dependent tables
+  UPDATE public.transactions SET employee_id = target_id WHERE employee_id = source_id;
+  UPDATE public.daily_sales_summary SET employee_id = target_id WHERE employee_id = source_id;
+
+  -- Optionally merge aggregates
+  UPDATE public.employees tgt
+  SET total_sales = COALESCE(tgt.total_sales, 0) + COALESCE(src.total_sales, 0),
+      transaction_count = COALESCE(tgt.transaction_count, 0) + COALESCE(src.transaction_count, 0),
+      average_transaction = COALESCE(tgt.average_transaction, 0)
+  FROM public.employees src
+  WHERE src.id = source_id AND tgt.id = target_id;
+
+  -- Soft-delete source
+  UPDATE public.employees SET deleted_at = NOW(), is_active = false WHERE id = source_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -21,7 +21,33 @@ export interface SystemSettings {
         showEmployeePhotos: boolean;
         compactMode: boolean;
     };
+    company: {
+        name: string;
+        address: string;
+        postalCode: string;
+        city: string;
+        taxNumber: string;
+        phone?: string;
+        email?: string;
+        slogan?: string;
+        softwareInfo?: string;
+        certificationNumber?: string;
+    };
+    receipt: {
+        seriesPrefix: string; // e.g., 'ABC'
+        numericWidth: number; // e.g., 4 → 1000 minimum
+        resetPolicy: 'monthly' | 'yearly';
+        lastSeriesKey: string; // e.g., 'ABC-202508'
+        currentNumber: number; // last allocated; starts at 999 so first becomes 1000
+        defaultDocumentType: 'FATURA' | 'FATURA_SIMPLIFICADA';
+        counterLabel: string; // e.g., 'BALCÃO 1'
+        atcudPrefix: string; // e.g., 'ATCUD'
+    };
 }
+
+type DeepPartial<T> = {
+    [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
+};
 
 interface SettingsState {
     settings: SystemSettings;
@@ -29,7 +55,7 @@ interface SettingsState {
 }
 
 interface SettingsContextType extends SettingsState {
-    updateSettings: (settings: Partial<SystemSettings>) => void;
+    updateSettings: (settings: DeepPartial<SystemSettings>) => void;
     resetToDefaults: () => void;
 }
 
@@ -54,11 +80,33 @@ const defaultSettings: SystemSettings = {
         showEmployeePhotos: true,
         compactMode: false,
     },
+    company: {
+        name: 'Your Company Lda',
+        address: 'Your Address, 123',
+        postalCode: '1000-001',
+        city: 'Lisboa',
+        taxNumber: '000000000',
+        phone: '',
+        email: '',
+        slogan: 'Your slogan here',
+        softwareInfo: 'Software ZSRest - www.zsrest.com',
+        certificationNumber: '196/AT',
+    },
+    receipt: {
+        seriesPrefix: 'ABC',
+        numericWidth: 4,
+        resetPolicy: 'monthly',
+        lastSeriesKey: '',
+        currentNumber: 999, // start so that first allocation becomes 1000
+        defaultDocumentType: 'FATURA_SIMPLIFICADA',
+        counterLabel: 'BALCÃO 1',
+        atcudPrefix: 'ATCUD',
+    },
 };
 
 type SettingsAction =
     | { type: 'LOAD_SETTINGS'; payload: SystemSettings }
-    | { type: 'UPDATE_SETTINGS'; payload: Partial<SystemSettings> }
+    | { type: 'UPDATE_SETTINGS'; payload: DeepPartial<SystemSettings> }
     | { type: 'RESET_SETTINGS' }
     | { type: 'SET_LOADING'; payload: boolean };
 
@@ -93,6 +141,14 @@ const settingsReducer = (state: SettingsState, action: SettingsAction): Settings
                         ...state.settings.display,
                         ...(action.payload.display || {}),
                     },
+                    company: {
+                        ...state.settings.company,
+                        ...(action.payload.company || {}),
+                    },
+                    receipt: {
+                        ...state.settings.receipt,
+                        ...(action.payload.receipt || {}),
+                    },
                 },
             };
         case 'RESET_SETTINGS':
@@ -118,7 +174,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         isLoading: true,
     });
 
-    const updateSettings = (newSettings: Partial<SystemSettings>) => {
+    const updateSettings = (newSettings: DeepPartial<SystemSettings>) => {
         dispatch({ type: 'UPDATE_SETTINGS', payload: newSettings });
 
         // Save to localStorage
@@ -141,6 +197,14 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             display: {
                 ...state.settings.display,
                 ...(newSettings.display || {}),
+            },
+            company: {
+                ...state.settings.company,
+                ...(newSettings.company || {}),
+            },
+            receipt: {
+                ...state.settings.receipt,
+                ...(newSettings.receipt || {}),
             },
         };
 
@@ -178,6 +242,14 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                         display: {
                             ...defaultSettings.display,
                             ...(parsedSettings.display || {}),
+                        },
+                        company: {
+                            ...defaultSettings.company,
+                            ...(parsedSettings.company || {}),
+                        },
+                        receipt: {
+                            ...defaultSettings.receipt,
+                            ...(parsedSettings.receipt || {}),
                         },
                     };
                     dispatch({ type: 'LOAD_SETTINGS', payload: mergedSettings });

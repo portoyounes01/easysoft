@@ -4,6 +4,19 @@
 - Replace static receipt fields with real, configurable data while keeping the demo page usable with mock data when visited directly.
 - After completing a sale in POS, redirect to the receipt page with full, accurate data (and enable re-printing later).
 
+### Progress Update (2025-08-20)
+- ✅ Implemented receipt numbering in POS using monthly series and letter prefix
+  - Series format: `<seriesPrefix>-YYYYMM-<paddedNumber>` (e.g., `ABC-202508-1000`)
+  - Counter starts at 1000 (config via `numericWidth` and initial `currentNumber = 999`)
+  - Resets automatically on series change (monthly)
+  - Persisted via `SettingsContext` (localStorage-backed): `receipt.lastSeriesKey`, `receipt.currentNumber`
+- ✅ Receipt page now receives real sale data on completion; demo still works when opened directly
+- ✅ Added `company` and extended `receipt` settings in `SettingsContext` and UI
+  - Company fields: name, address, postalCode, city, taxNumber, phone, email, slogan, softwareInfo, certificationNumber
+  - Receipt fields: defaultDocumentType, seriesPrefix, numericWidth, resetPolicy, counterLabel, atcudPrefix, lastSeriesKey, currentNumber
+- ✅ POS completes sale by sourcing company and receipt values from settings, generates document number and ATCUD placeholder, increments counter via `updateSettings`, and navigates to `/receipt-demo` with `state: { receiptData }`
+- ⏭ Pending in Phase 1: optional QR
+
 ### Current State Summary
 - Static/hardcoded now: company info (name, address, tax), slogan, software info, certification number, counter label, document number, ATCUD/verification code, QR placeholder, document type.
 - Dynamic from sale: items, totals (subtotal/discount/net/vat/total), payment (method/amount/change), customer (if selected), date/time.
@@ -68,11 +81,12 @@
 - QR payload standard (define minimal v1; align later)
 
 ### Task Checklist (Phase 1)
-- [ ] Extend `SettingsContext` types and defaults with `company` and `receipt`
-- [ ] Settings UI section for Company & Receipt
-- [ ] POS sale completion: source company/receipt fields from settings
-- [ ] Generate document number + ATCUD placeholder; increment `nextNumber`
-- [ ] Navigate to `/receipt-demo` with `receiptData`
+- [x] Extend `SettingsContext` types and defaults with `receipt` numbering (series, width, reset, counters)
+- [x] Extend `SettingsContext` with `company` fields (name, address, tax, contacts)
+- [x] Settings UI section for Company & Receipt
+- [x] POS sale completion: source receipt numbering from settings
+- [x] Generate document number + ATCUD placeholder; increment counter and persist
+- [x] Navigate to `/receipt-demo` with `receiptData`
 - [ ] Optional: QR generation
 - [ ] Unit tests: receipt payload build; settings persistence
 

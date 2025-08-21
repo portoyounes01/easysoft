@@ -1,3 +1,11 @@
+- Prevented spurious Supabase password grant (400) during login by adding proper guards
+  - Types aligned with DB: `auth_id` optional on `Employee`, include `'trainee'` role
+  - Supabase sign-in now only runs when configured, online, and employee is provisioned
+
+- Provisioning script enhanced for auto-detection and dual .env
+  - Auto-provisions all employees with `inventory`/`all` access and links `auth_id`
+  - Loads env from root `.env` and `supabase/.env`
+  - Configurable password provisioning via `PROVISION_PASSWORD_SOURCE` and `DEFAULT_SUPABASE_PASSWORD`
 # DONE ✅
 
 ## Reports Backend Implementation (December 2024)
@@ -430,6 +438,18 @@ This implementation provides enterprise-level image management capabilities whil
 ✅ **Documentation**: Complete style guide and development standards
 ✅ **Architecture**: Clean TypeScript/React structure with proper state management
 ✅ **Version Control**: Git repository initialized with clean history
+
+## Latest Completed (2025-08-20)
+
+### ✅ Receipt Numbering (Monthly Series, Start at 1000)
+
+- Implemented configurable receipt numbering in POS:
+  - Series key: `<seriesPrefix>-YYYYMM` (default `ABC` prefix)
+  - Counter starts at 1000 and resets when series changes (monthly)
+  - Number format: `<seriesKey>-<padded counter>` (e.g., `ABC-202508-1000`)
+  - Persisted in `SettingsContext` (`receipt.lastSeriesKey`, `receipt.currentNumber`) via localStorage
+- Receipt demo page continues to support mock display; on sale completion, it now receives real payload
+- Next: move company fields to settings and expose UI for editing
 
 **Working Credentials**:
 

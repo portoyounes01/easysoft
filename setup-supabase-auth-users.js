@@ -8,15 +8,20 @@
  */
 
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const path = require('path');
+const dotenv = require('dotenv');
+
+// Load root .env (VITE_SUPABASE_URL for app) and supabase/.env (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), 'supabase', '.env') });
 
 // Supabase configuration
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // You'll need to add this to .env
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // defined in supabase/.env
 
 if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('❌ Missing Supabase configuration in .env file');
-    console.error('Required: VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+    console.error('❌ Missing Supabase configuration in environment');
+    console.error('Required: SUPABASE_URL (or VITE_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY');
     process.exit(1);
 }
 
@@ -28,55 +33,71 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
     }
 });
 
-// Employees who should have Supabase auth accounts (those with inventory access)
-const employeesWithInventoryAccess = [
-    {
-        employee_number: 'EMP001',
-        name: 'Carlos Ferreira',
-        email: 'carlos@company.com',
-        password: 'admin123',
-        role: 'admin',
-        access_levels: ['all']
-    },
-    {
-        employee_number: 'EMP002', 
-        name: 'João Santos',
-        email: 'joao@company.com',
-        password: 'manager123',
-        role: 'manager',
-        access_levels: ['inventory', 'reports', 'dashboard']
+// Password provisioning strategy
+// PROVISION_PASSWORD_SOURCE: 'PIN' to attempt using employee PIN when plausible, otherwise 'FIXED'
+// DEFAULT_SUPABASE_PASSWORD: used when PIN unavailable/invalid or when source is FIXED
+const PASSWORD_SOURCE = (process.env.PROVISION_PASSWORD_SOURCE || 'FIXED').toUpperCase();
+const DEFAULT_PASSWORD = process.env.DEFAULT_SUPABASE_PASSWORD || 'ChangeMe123!';
+
+function isLikelyBcrypt(value) {
+    return typeof value === 'string' && value.startsWith('$2');
+}
+
+function chooseProvisionPassword(employee) {
+    if (PASSWORD_SOURCE === 'PIN') {
+        // Use PIN only if it looks like plaintext numeric (avoid using hashes)
+        if (employee.pin && !isLikelyBcrypt(employee.pin) && /^[0-9]{4,10}$/.test(employee.pin)) {
+            return String(employee.pin);
+        }
+        // Optional: attempt password_hash if it seems plaintext (rare); otherwise fallback
+        if (employee.password_hash && !isLikelyBcrypt(employee.password_hash) && employee.password_hash.length >= 4 && employee.password_hash.length <= 50) {
+            return String(employee.password_hash);
+        }
     }
-    // Note: EMP003 (Maria Oliveira) is a cashier with only 'sales' access, so no Supabase auth needed
-];
+    return DEFAULT_PASSWORD;
+}
 
 async function setupSupabaseAuthUsers() {
-    console.log('🚀 Setting up Supabase auth users for employees with inventory access...\n');
+    console.log('🚀 Setting up Supabase auth users for employees with inventory/all access...\n');
 
-    for (const employee of employeesWithInventoryAccess) {
+    // Auto-detect employees requiring Supabase auth
+    const { data: employees, error: listError } = await supabase
+        .from('employees')
+        .select('id, employee_number, name, email, role, access_levels, auth_id, pin, password_hash, deleted_at, is_active')
+        .or('access_levels.cs.{inventory},access_levels.cs.{all}')
+        .eq('is_active', true)
+        .is('deleted_at', null);
+
+    if (listError) {
+        console.error('❌ Failed to list employees with inventory/all access:', listError.message);
+        process.exit(1);
+    }
+
+    if (!employees || employees.length === 0) {
+        console.log('ℹ️  No employees with inventory/all access found. Nothing to do.');
+        return;
+    }
+
+    for (const employee of employees) {
         try {
             console.log(`👤 Processing ${employee.name} (${employee.employee_number})...`);
 
-            // Check if user already exists
-            const { data: existingEmployee } = await supabase
-                .from('employees')
-                .select('id, auth_id')
-                .eq('employee_number', employee.employee_number)
-                .single();
-
-            if (!existingEmployee) {
-                console.log(`❌ Employee ${employee.employee_number} not found in database`);
+            if (employee.auth_id) {
+                console.log(`✅ Already provisioned (auth_id exists)`);
                 continue;
             }
 
-            if (existingEmployee.auth_id) {
-                console.log(`✅ Employee ${employee.name} already has Supabase auth user`);
+            if (!employee.email) {
+                console.log('⚠️  Skipping: employee has no email set. Set an email to provision.');
                 continue;
             }
+
+            const provisionPassword = chooseProvisionPassword(employee);
 
             // Create Supabase auth user
             const { data: authData, error: authError } = await supabase.auth.admin.createUser({
                 email: employee.email,
-                password: employee.password,
+                password: provisionPassword,
                 email_confirm: true,
                 user_metadata: {
                     name: employee.name,
@@ -90,15 +111,15 @@ async function setupSupabaseAuthUsers() {
                 continue;
             }
 
-            // Update employee record with auth_id
+            // Update employee record with auth_id (and ensure email persisted)
             const { error: updateError } = await supabase
                 .from('employees')
-                .update({ 
+                .update({
                     auth_id: authData.user.id,
                     email: employee.email,
                     updated_at: new Date().toISOString()
                 })
-                .eq('id', existingEmployee.id);
+                .eq('id', employee.id);
 
             if (updateError) {
                 console.log(`❌ Failed to update employee record for ${employee.name}: ${updateError.message}`);
@@ -108,7 +129,14 @@ async function setupSupabaseAuthUsers() {
 
             console.log(`✅ Created Supabase auth user for ${employee.name}`);
             console.log(`   📧 Email: ${employee.email}`);
-            console.log(`   🔐 Password: ${employee.password}`);
+            if (PASSWORD_SOURCE === 'PIN') {
+                console.log(`   🔐 Password source: PIN (fallback to default if unavailable)`);
+            } else {
+                console.log(`   🔐 Password source: FIXED`);
+            }
+            if (provisionPassword === DEFAULT_PASSWORD) {
+                console.log(`   🔑 Provisioned with DEFAULT_SUPABASE_PASSWORD`);
+            }
             console.log(`   🆔 Auth ID: ${authData.user.id}\n`);
 
         } catch (error) {
@@ -118,55 +146,42 @@ async function setupSupabaseAuthUsers() {
 
     console.log('🎉 Supabase auth user setup complete!');
     console.log('\n📝 Next steps:');
-    console.log('1. Run the updated SQL in Supabase SQL Editor (supabase_storage_setup.sql)');
-    console.log('2. Test image uploads with admin/manager accounts');
-    console.log('3. Verify cashiers see base64 fallback with permission message');
+    console.log('1. Ensure app .env has VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+    console.log('2. Test image uploads with any inventory-enabled account');
+    console.log('3. If Supabase sign-in fails in POS, align Supabase password with POS credential');
 }
 
 // Add auth_id column to employees table if it doesn't exist
-async function addAuthIdColumn() {
-    try {
-        console.log('🔧 Ensuring auth_id column exists in employees table...');
-        
-        const { error } = await supabase.rpc('exec_sql', {
-            sql: `
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT column_name 
-                        FROM information_schema.columns 
-                        WHERE table_name='employees' AND column_name='auth_id'
-                    ) THEN
-                        ALTER TABLE public.employees ADD COLUMN auth_id UUID REFERENCES auth.users(id);
-                        CREATE INDEX IF NOT EXISTS idx_employees_auth_id ON public.employees(auth_id);
-                    END IF;
-                END $$;
-            `
-        });
+async function ensureAuthIdColumnExistsOrExit() {
+    console.log('🔧 Checking that auth_id column exists in employees table...');
+    // We cannot run DDL via REST. Detect column presence by selecting it.
+    const { error } = await supabase
+        .from('employees')
+        .select('auth_id')
+        .limit(1);
 
-        if (error) {
-            console.log('❌ Failed to add auth_id column:', error.message);
-            return false;
+    if (error) {
+        const msg = String(error.message || error);
+        const missingColumn = msg.includes('column') && msg.includes('auth_id') && msg.includes('does not exist');
+        if (missingColumn) {
+            console.error('❌ Missing column auth_id on public.employees.');
+            console.error('   Please run this SQL in Supabase SQL editor (or add a migration):');
+            console.error('   ALTER TABLE public.employees ADD COLUMN auth_id UUID REFERENCES auth.users(id);');
+            console.error('   CREATE INDEX IF NOT EXISTS idx_employees_auth_id ON public.employees(auth_id);');
+            process.exit(1);
         }
-
-        console.log('✅ auth_id column ready\n');
-        return true;
-    } catch (error) {
-        console.log('💥 Error setting up database:', error.message);
-        return false;
+        console.error('❌ Failed to verify employees.auth_id:', msg);
+        process.exit(1);
     }
+    console.log('✅ auth_id column detected\n');
 }
 
 // Main execution
 async function main() {
     console.log('🏗️  Setting up proper Supabase authentication for inventory management\n');
-    
-    // First ensure the database schema is ready
-    const schemaReady = await addAuthIdColumn();
-    if (!schemaReady) {
-        console.log('❌ Database schema setup failed. Exiting.');
-        process.exit(1);
-    }
+
+    // First ensure the database schema is ready (without attempting DDL via REST)
+    await ensureAuthIdColumnExistsOrExit();
 
     // Then create the auth users
     await setupSupabaseAuthUsers();
@@ -186,4 +201,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { setupSupabaseAuthUsers, addAuthIdColumn };
+module.exports = { setupSupabaseAuthUsers, ensureAuthIdColumnExistsOrExit };

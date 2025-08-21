@@ -44,6 +44,8 @@ import VirtualKeyboard from '../components/VirtualKeyboard';
 import { Customer } from '../types';
 import { LocalProduct } from '../types/supabase';
 import { useTranslation } from 'react-i18next';
+import { transactionService } from '../services/transactionService';
+import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
 
 // Icon mapping for categories
 const iconMap = {
@@ -138,7 +140,7 @@ const POS: React.FC = () => {
   const navigate = useNavigate();
   const { cart, addToCart, removeFromCart, updateQuantity, clearCart, selectedCustomer, selectCustomer } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const {
     categories: allCategories,
     getProductsByCategory,
@@ -1731,22 +1733,52 @@ const POS: React.FC = () => {
                 <button
                   className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 rounded-2xl min-h-[60px]"
                   disabled={cashReceived > 0 && cashReceived < finalTotal}
-                  onClick={() => {
+                  onClick={async () => {
                     // Build receipt data
+                    // Build series key per settings (monthly/yearly)
+                    const now = new Date();
+                    const y = now.getFullYear();
+                    const m = String(now.getMonth() + 1).padStart(2, '0');
+                    const seriesKey = settings.receipt.resetPolicy === 'monthly'
+                      ? `${settings.receipt.seriesPrefix}-${y}${m}`
+                      : `${settings.receipt.seriesPrefix}-${y}`;
+
+                    // Compute next number (starting from 1000 via currentNumber default 999)
+                    let nextNumber = settings.receipt.currentNumber;
+                    let lastSeriesKey = settings.receipt.lastSeriesKey;
+                    if (lastSeriesKey !== seriesKey) {
+                      nextNumber = 999; // reset so first becomes 1000
+                      lastSeriesKey = seriesKey;
+                    }
+                    nextNumber += 1;
+
+                    const padded = String(nextNumber).padStart(settings.receipt.numericWidth, '0');
+                    const documentNumber = `${seriesKey}-${padded}`; // reserved for future persistence in transaction
+
+                    // Persist updated counter using settings updater
+                    updateSettings({
+                      receipt: {
+                        lastSeriesKey,
+                        currentNumber: nextNumber,
+                      }
+                    });
+
                     const receiptData = {
-                      documentNumber: `FS ${new Date().getFullYear()}/${String(Date.now()).slice(-5)}`,
-                      documentType: 'FATURA_SIMPLIFICADA' as const,
+                      documentType: settings.receipt.defaultDocumentType as 'FATURA' | 'FATURA_SIMPLIFICADA',
                       date: new Date(),
-                      counter: 'BALCÃO 1',
-                      verificationCode: 'ATCUD-XXXX-XXXXX',
+                      counter: settings.receipt.counterLabel,
+                      verificationCode: `${settings.receipt.atcudPrefix}-${seriesKey}-${padded}`,
+                      // Replace FS placeholder number with our generated document number
+                      // Downstream receipt component prints documentNumber value
+                      documentNumber: documentNumber,
                       company: {
-                        name: 'Querido Menu Unip. Lda',
-                        address: 'Rua Luis Adelino Fonseca Lt 4, CC EVORA Plaza',
-                        postalCode: '7005-345',
-                        city: 'Évora',
-                        taxNumber: '514524391',
-                        phone: '+351 266 123 456',
-                        email: 'geral@queridmenu.pt'
+                        name: settings.company.name,
+                        address: settings.company.address,
+                        postalCode: settings.company.postalCode,
+                        city: settings.company.city,
+                        taxNumber: settings.company.taxNumber,
+                        phone: settings.company.phone || undefined,
+                        email: settings.company.email || undefined,
                       },
                       customer: selectedCustomer ? {
                         taxNumber: selectedCustomer.taxId,
@@ -1774,15 +1806,81 @@ const POS: React.FC = () => {
                         amountGiven: Number(cashReceived.toFixed(2)),
                         change: Number(changeAmount.toFixed(2))
                       },
-                      slogan: 'THE WORLD NEEDS NATA',
-                      softwareInfo: 'Software ZSRest - www.zsrest.com',
-                      certificationNumber: '196/AT'
+                      slogan: settings.company.slogan || undefined,
+                      softwareInfo: settings.company.softwareInfo || undefined,
+                      certificationNumber: settings.company.certificationNumber || undefined,
                     };
 
-                    // Close payment modal, clear cart, navigate to receipt page
-                    setShowPayment(false);
-                    clearCart();
-                    navigate('/receipt-demo', { state: { receiptData } });
+                    // Try to persist transaction to Supabase
+                    let navigated = false;
+                    try {
+                      if (isSupabaseConfigured() && await checkSupabaseConnection()) {
+                        const employeeId = employee?.id || 'unknown-employee';
+                        const employeeName = employee?.name || 'Employee';
+                        const transactionDate = now.toISOString().slice(0, 10); // YYYY-MM-DD
+                        const transactionTime = now.toTimeString().slice(0, 8); // HH:MM:SS
+
+                        const paymentMethod = cashReceived > 0 ? 'cash' : 'card' as const;
+
+                        const transactionInsert = {
+                          employee_id: employeeId,
+                          employee_name: employeeName,
+                          customer_id: selectedCustomer?.id || null,
+                          customer_name: selectedCustomer?.name || null,
+                          transaction_date: transactionDate,
+                          transaction_time: transactionTime,
+                          subtotal: Number(subtotal.toFixed(2)),
+                          discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
+                          tax: Number(adjustedFinalTax.toFixed(2)),
+                          total: Number(finalTotal.toFixed(2)),
+                          payment_method: paymentMethod,
+                          amount_paid: cashReceived > 0 ? Number(cashReceived.toFixed(2)) : Number(finalTotal.toFixed(2)),
+                          change_given: Number(changeAmount.toFixed(2)),
+                          status: 'completed' as const,
+                          notes: null,
+                          receipt_number: documentNumber,
+                        };
+
+                        const itemsInsert = cart.map(ci => {
+                          const lineTotal = Number((ci.product.price * ci.quantity).toFixed(2));
+                          const taxAmount = Number((lineTotal - (lineTotal / (1 + (ci.product.iva_rate || 0)))).toFixed(2));
+                          return {
+                            transaction_id: 'placeholder', // will be set by service
+                            product_id: ci.product.id,
+                            product_name: ci.product.name,
+                            product_sku: ci.product.sku,
+                            category_id: ci.product.category_id || null,
+                            category_name: ci.product.category_name || null,
+                            quantity: ci.quantity,
+                            unit_price: ci.product.price,
+                            unit_cost: ci.product.cost || 0,
+                            iva_rate: ci.product.iva_rate || 0,
+                            line_total: lineTotal,
+                            tax_amount: taxAmount,
+                            profit_amount: 0,
+                            discount_amount: 0,
+                            discount_percentage: 0,
+                          };
+                        });
+
+                        const result = await transactionService.createTransaction(transactionInsert as any, itemsInsert as any);
+                        if (result?.transaction?.id) {
+                          setShowPayment(false);
+                          clearCart();
+                          navigate(`/receipt-demo/${result.transaction.id}`);
+                          navigated = true;
+                        }
+                      }
+                    } catch (e) {
+                      console.warn('Transaction persistence failed, falling back to local receipt view.', e);
+                    }
+
+                    // Fallback: navigate with state if not navigated via DB id
+                    if (!navigated) {
+                      setShowPayment(false);
+                      clearCart();
+                      navigate('/receipt-demo', { state: { receiptData } });
+                    }
                   }}
                 >
                   {t('pos.completeSale')}

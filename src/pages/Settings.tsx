@@ -10,22 +10,19 @@ import {
     CheckCircle,
     Monitor,
     DollarSign,
-    Package,
     Bell,
-    Eye,
-    Users,
     Printer,
 } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
-import PrinterSetup from '../components/PrinterSetup';
+// import PrinterSetup from '../components/PrinterSetup';
 
 const Settings: React.FC = () => {
     const { settings, updateSettings, resetToDefaults, isLoading } = useSettings();
     const [activeTab, setActiveTab] = useState('security');
     const [pendingChanges, setPendingChanges] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-    const [showPrinterSetup, setShowPrinterSetup] = useState(false);
-    const [printerStatus, setPrinterStatus] = useState<any>(null);
+    // const [showPrinterSetup, setShowPrinterSetup] = useState(false);
+    // const [printerStatus, setPrinterStatus] = useState<any>(null);
 
     const tabs = [
         {
@@ -52,17 +49,15 @@ const Settings: React.FC = () => {
             icon: Printer,
             description: 'Thermal printer and cash drawer setup'
         },
+        {
+            id: 'company',
+            label: 'Company & Fiscal',
+            icon: SettingsIcon,
+            description: 'Company details and receipt numbering'
+        },
     ];
 
     const handleSettingsChange = (category: string, field: string, value: any) => {
-        const newSettings = {
-            ...settings,
-            [category]: {
-                ...settings[category as keyof typeof settings],
-                [field]: value,
-            },
-        };
-
         updateSettings({ [category]: { [field]: value } } as any);
         setPendingChanges(true);
     };
@@ -475,6 +470,197 @@ const Settings: React.FC = () => {
                                             />
                                             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                                         </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Company & Fiscal Tab */}
+                    {activeTab === 'company' && (
+                        <div className="space-y-6">
+                            <div className="flex items-center space-x-3 mb-6">
+                                <SettingsIcon className="w-6 h-6 text-slate-600" />
+                                <h2 className="text-2xl font-bold text-gray-800">Company & Fiscal</h2>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="p-6 bg-slate-50 rounded-xl border border-slate-200">
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Company Information</h3>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
+                                            <input
+                                                type="text"
+                                                value={settings.company.name}
+                                                onChange={(e) => handleSettingsChange('company', 'name', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                                            <input
+                                                type="text"
+                                                value={settings.company.address}
+                                                onChange={(e) => handleSettingsChange('company', 'address', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div className="md:col-span-1">
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Postal Code</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.company.postalCode}
+                                                    onChange={(e) => handleSettingsChange('company', 'postalCode', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.company.city}
+                                                    onChange={(e) => handleSettingsChange('company', 'city', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Tax Number (NIF)</label>
+                                            <input
+                                                type="text"
+                                                value={settings.company.taxNumber}
+                                                onChange={(e) => handleSettingsChange('company', 'taxNumber', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.company.phone || ''}
+                                                    onChange={(e) => handleSettingsChange('company', 'phone', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                                <input
+                                                    type="email"
+                                                    value={settings.company.email || ''}
+                                                    onChange={(e) => handleSettingsChange('company', 'email', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Slogan (optional)</label>
+                                            <input
+                                                type="text"
+                                                value={settings.company.slogan || ''}
+                                                onChange={(e) => handleSettingsChange('company', 'slogan', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Software Info (optional)</label>
+                                            <input
+                                                type="text"
+                                                value={settings.company.softwareInfo || ''}
+                                                onChange={(e) => handleSettingsChange('company', 'softwareInfo', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Certification Number (optional)</label>
+                                            <input
+                                                type="text"
+                                                value={settings.company.certificationNumber || ''}
+                                                onChange={(e) => handleSettingsChange('company', 'certificationNumber', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 bg-blue-50 rounded-xl border border-blue-200">
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Receipt Numbering</h3>
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Series Prefix</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.receipt.seriesPrefix}
+                                                    onChange={(e) => handleSettingsChange('receipt', 'seriesPrefix', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Numeric Width</label>
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    value={settings.receipt.numericWidth}
+                                                    onChange={(e) => handleSettingsChange('receipt', 'numericWidth', parseInt(e.target.value))}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Reset Policy</label>
+                                                <select
+                                                    value={settings.receipt.resetPolicy}
+                                                    onChange={(e) => handleSettingsChange('receipt', 'resetPolicy', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                >
+                                                    <option value="monthly">Monthly</option>
+                                                    <option value="yearly">Yearly</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Default Document Type</label>
+                                                <select
+                                                    value={settings.receipt.defaultDocumentType}
+                                                    onChange={(e) => handleSettingsChange('receipt', 'defaultDocumentType', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                >
+                                                    <option value="FATURA_SIMPLIFICADA">Fatura Simplificada</option>
+                                                    <option value="FATURA">Fatura</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Counter Label</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.receipt.counterLabel}
+                                                    onChange={(e) => handleSettingsChange('receipt', 'counterLabel', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">ATCUD Prefix</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.receipt.atcudPrefix}
+                                                    onChange={(e) => handleSettingsChange('receipt', 'atcudPrefix', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Current Series Preview */}
+                                        <div className="p-4 bg-white rounded-lg border border-gray-200">
+                                            <h4 className="font-medium text-gray-800 mb-2">Current Series Status</h4>
+                                            <p className="text-sm text-gray-600">Last series key: <strong>{settings.receipt.lastSeriesKey || '—'}</strong></p>
+                                            <p className="text-sm text-gray-600">Current number: <strong>{settings.receipt.currentNumber}</strong></p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

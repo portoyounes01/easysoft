@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, connectionStatus, isSupabaseConfigured } from '../lib/supabase';
 import { Employee } from '../types/supabase';
 
 interface AuthState {
@@ -129,6 +129,12 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
+      // Guard: only attempt Supabase auth when properly configured
+      if (!isSupabaseConfigured()) {
+        const msg = 'Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.';
+        setState(prev => ({ ...prev, isLoading: false, error: msg }));
+        return { success: false, error: msg };
+      }
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -206,6 +212,18 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return { success: false, error: 'Invalid credentials' };
       }
 
+      // 🌐 Ensure the employee record is synchronized with the server before proceeding.
+      //    This avoids foreign-key errors (e.g., when creating transactions) if the local
+      //    employee has not yet been pushed to Supabase.
+      if (connectionStatus.getStatus().isSupabaseOnline) {
+        try {
+          console.log('🔄 Performing employee forceSync to ensure server record…');
+          await employeeService.forceSync();
+        } catch (syncError) {
+          console.warn('⚠️  Employee sync failed (continuing anyway):', syncError);
+        }
+      }
+
       console.log('✅ Credentials verified successfully!');
 
       // If employee has inventory access and has a linked auth_id, also sign in with Supabase
@@ -214,8 +232,17 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (employee.access_levels.includes('inventory') || employee.access_levels.includes('all')) {
         console.log('📧 Employee has inventory access, checking for Supabase auth...');
+        const isOnline = connectionStatus.getStatus().isSupabaseOnline;
+        const isConfigured = isSupabaseConfigured();
+        const hasAuthLink = Boolean((employee as any).auth_id); // optional field
 
-        if (employee.email) {
+        if (!isConfigured) {
+          console.log('ℹ️  Skipping Supabase auth: not configured');
+        } else if (!isOnline) {
+          console.log('ℹ️  Skipping Supabase auth: Supabase appears offline');
+        } else if (!hasAuthLink) {
+          console.log('ℹ️  Skipping Supabase auth: employee not provisioned (no auth_id)');
+        } else if (employee.email) {
           try {
             console.log('🔐 Attempting Supabase authentication...');
             const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
