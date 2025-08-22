@@ -65,6 +65,16 @@
   - [ ] **Receipt numbering system**
   - [ ] **Receipt Data Integration** – see `RECEIPT_INTEGRATION_PLAN.md`
 
+### Database Architecture
+- [ ] Multi-tenant migration (Supabase single project)
+  - [ ] Review `MULTI_TENANT_MIGRATION_PLAN.md`
+  - [ ] Implement tenancy bootstrap (app schema, organizations, memberships)
+  - [ ] Add and backfill `organization_id` across domain tables
+  - [ ] Create tenant-scoped uniques and indexes
+  - [ ] Replace policies with tenant+role RLS
+  - [ ] Update RPCs/views and flip NOT NULL
+  - [ ] Storage policies per organization
+
 ## Medium Priority Features
 
 - [ ] **Printing & Hardware**

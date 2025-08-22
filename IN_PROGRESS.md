@@ -81,3 +81,15 @@
 - Next steps:
   - Audit other services/hooks for direct table probes and migrate to centralized heartbeat
   - Monitor logs on receipt navigation to confirm no repeated PostgREST 429/ERR_INSUFFICIENT_RESOURCES
+
+---
+
+## Multi-Tenant Database Migration (Planning)
+- Status: ACTIVE (planning and documentation)
+- Description: Designing and documenting the shift to a single Supabase project with tenant isolation via RLS and tenant-scoped constraints.
+- Artifacts:
+  - `MULTI_TENANT_MIGRATION_PLAN.md` added with end-to-end phases, schema changes, RLS patterns, RPC updates, tests, and rollback.
+- Next Steps:
+  - Review plan with stakeholders
+  - Prepare staged SQL migration bundle
+  - Create seed organization and membership mapping approach
