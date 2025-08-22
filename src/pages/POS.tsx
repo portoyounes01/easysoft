@@ -1042,12 +1042,21 @@ const POS: React.FC = () => {
                                 )}
 
                                 {/* Product Image */}
-                                <div className="aspect-square relative">
-                                  <img
-                                    src={product.image_url || '/placeholder-product.svg'}
-                                    alt={product.name}
-                                    className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale' : ''}`}
-                                  />
+                                <div className="aspect-square relative bg-gray-100 flex items-center justify-center">
+                                  {/* Default icon (visible under image or when image hidden) */}
+                                  <Package className={`w-10 h-10 text-gray-400 ${isOutOfStock ? 'grayscale' : ''}`} />
+                                  {/* Product image overlays the icon when available */}
+                                  {product.image_url && (
+                                    <img
+                                      src={product.image_url}
+                                      alt={product.name}
+                                      className={`absolute inset-0 w-full h-full object-cover ${isOutOfStock ? 'grayscale' : ''}`}
+                                      onError={(e) => {
+                                        const target = e.currentTarget as HTMLImageElement;
+                                        target.style.display = 'none';
+                                      }}
+                                    />
+                                  )}
 
                                   {/* Out of Stock Overlay */}
                                   {isOutOfStock && (

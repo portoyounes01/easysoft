@@ -8,7 +8,6 @@ import {
   Package,
   AlertTriangle,
   Eye,
-  BarChart3,
   Loader2,
   Tag,
   X,
@@ -27,7 +26,6 @@ const Products: React.FC = () => {
     isLoading,
     error,
     searchProducts,
-    filterProducts,
     deleteProduct,
     deleteCategory
   } = useProducts();
@@ -129,11 +127,7 @@ const Products: React.FC = () => {
     }
   };
 
-  // Handle create product
-  const handleCreateProduct = () => {
-    setEditingProduct(null);
-    setShowProductForm(true);
-  };
+  // (unused helper removed)
 
   // Handle edit product
   const handleEditProduct = (product: LocalProduct) => {
@@ -201,32 +195,31 @@ const Products: React.FC = () => {
           <div className="relative">
             <button
               onClick={() => {
-                 if (categories.length === 0) {
-                   setShowCategoryAlert(true);
-                   setTimeout(() => setShowCategoryAlert(false), 3000);
-                 } else {
-                   setShowProductForm(true);
-                 }
-               }}
-              className={`min-h-[60px] px-8 py-4 rounded-lg font-semibold transition-all flex items-center space-x-3 shadow-lg ${
-                categories.length === 0
-                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:scale-105 active:scale-95'
-              }`}
+                if (categories.length === 0) {
+                  setShowCategoryAlert(true);
+                  setTimeout(() => setShowCategoryAlert(false), 3000);
+                } else {
+                  setShowProductForm(true);
+                }
+              }}
+              className={`min-h-[60px] px-8 py-4 rounded-lg font-semibold transition-all flex items-center space-x-3 shadow-lg ${categories.length === 0
+                ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:scale-105 active:scale-95'
+                }`}
             >
               <Plus className="w-6 h-6" />
               <span>Add Product</span>
             </button>
             {showCategoryAlert && categories.length === 0 && (
-               <div className="absolute top-full right-0 mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg shadow-lg z-10 min-w-[280px] max-w-[320px]">
-                 <div className="flex items-start space-x-2">
-                   <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                   <span className="text-sm text-yellow-800 leading-relaxed">
-                     Please create a category first before adding products.
-                   </span>
-                 </div>
-               </div>
-             )}
+              <div className="absolute top-full right-0 mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg shadow-lg z-10 min-w-[280px] max-w-[320px]">
+                <div className="flex items-start space-x-2">
+                  <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-yellow-800 leading-relaxed">
+                    Please create a category first before adding products.
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -448,25 +441,23 @@ const Products: React.FC = () => {
                   <td className="px-6 py-4">
                     <div className="flex items-center space-x-3">
                       {/* Product Image */}
-                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0">
-                        {product.image_url ? (
+                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0 bg-gray-100 relative flex items-center justify-center">
+                        {/* Default icon shows by default */}
+                        <Package className="w-6 h-6 text-gray-400" />
+                        {/* If product has an image, overlay it. Hide on error to reveal icon. */}
+                        {product.image_url && (
                           <img
                             src={product.image_url}
                             alt={product.name}
-                            className="w-full h-full object-cover"
+                            className="absolute inset-0 w-full h-full object-cover"
                             onError={(e) => {
-                              // Fallback to placeholder if image fails to load
-                              const target = e.target as HTMLImageElement;
-                              target.src = '/placeholder-product.svg';
+                              const target = e.currentTarget as HTMLImageElement;
+                              target.style.display = 'none';
                             }}
                           />
-                        ) : (
-                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                            <Package className="w-6 h-6 text-gray-400" />
-                          </div>
                         )}
                       </div>
-                      
+
                       {/* Product Info */}
                       <div>
                         <div className="font-semibold text-gray-800">{product.name}</div>
