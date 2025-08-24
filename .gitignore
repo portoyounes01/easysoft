@@ -28,3 +28,7 @@ dist-ssr
 TEMP_TASKS_*.md
 SESSION_NOTES_*.md
 TEMP_DEBUG_*.md
+ 
+# Build artifacts and caches (Electron)
+dist-electron/
+electron-cache/
