@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { NavLink } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -46,6 +45,7 @@ import { LocalProduct } from '../types/supabase';
 import { useTranslation } from 'react-i18next';
 import { transactionService } from '../services/transactionService';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
+import ThermalReceipt, { ReceiptProps } from '../components/ThermalReceipt';
 
 // Icon mapping for categories
 const iconMap = {
@@ -137,7 +137,6 @@ let mockCustomers: Customer[] = [
 
 const POS: React.FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { cart, addToCart, removeFromCart, updateQuantity, clearCart, selectedCustomer, selectCustomer } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
   const { settings, updateSettings } = useSettings();
@@ -150,6 +149,10 @@ const POS: React.FC = () => {
     syncData,
     refreshData
   } = useProducts();
+
+  // Receipt preview modal state
+  const [showReceiptPreview, setShowReceiptPreview] = useState(false);
+  const [receiptPreviewData, setReceiptPreviewData] = useState<ReceiptProps | null>(null);
 
   // Stock validation helper function
   const canAddToCart = (product: LocalProduct, requestedQuantity = 1): boolean => {
@@ -1821,7 +1824,6 @@ const POS: React.FC = () => {
                     };
 
                     // Try to persist transaction to Supabase
-                    let navigated = false;
                     try {
                       if (isSupabaseConfigured() && await checkSupabaseConnection()) {
                         const employeeId = employee?.id || 'unknown-employee';
@@ -1872,29 +1874,50 @@ const POS: React.FC = () => {
                           };
                         });
 
-                        const result = await transactionService.createTransaction(transactionInsert as any, itemsInsert as any);
-                        if (result?.transaction?.id) {
-                          setShowPayment(false);
-                          clearCart();
-                          navigate(`/receipt-demo/${result.transaction.id}`);
-                          navigated = true;
-                        }
+                        await transactionService.createTransaction(transactionInsert as any, itemsInsert as any);
                       }
                     } catch (e) {
                       console.warn('Transaction persistence failed, falling back to local receipt view.', e);
                     }
 
-                    // Fallback: navigate with state if not navigated via DB id
-                    if (!navigated) {
-                      setShowPayment(false);
-                      clearCart();
-                      navigate('/receipt-demo', { state: { receiptData } });
-                    }
+                    // Show receipt preview modal instead of navigation
+                    setShowPayment(false);
+                    clearCart();
+                    setReceiptPreviewData(receiptData);
+                    setShowReceiptPreview(true);
                   }}
                 >
                   {t('pos.completeSale')}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Preview Modal */}
+      {showReceiptPreview && receiptPreviewData && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white rounded-3xl w-[800px] max-w-[95vw] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] min-h-0">
+            <div className="px-8 py-6 border-b">
+              <h3 className="text-2xl font-bold text-center text-gray-800">{t('pos.receiptPreview') || 'Receipt Preview'}</h3>
+            </div>
+            <div className="px-6 py-6 flex-1 min-h-0 overflow-y-auto bg-gray-50">
+              <ThermalReceipt {...receiptPreviewData} />
+            </div>
+            <div className="px-6 py-6 border-t bg-white flex items-center justify-end space-x-4">
+              <button
+                onClick={() => setShowReceiptPreview(false)}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-4 px-6 rounded-2xl min-h-[60px] transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-8 rounded-2xl min-h-[60px] transition-colors"
+              >
+                {t('common.print') || 'Print'}
+              </button>
             </div>
           </div>
         </div>

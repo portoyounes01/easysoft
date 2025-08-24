@@ -8,6 +8,27 @@
   - Configurable password provisioning via `PROVISION_PASSWORD_SOURCE` and `DEFAULT_SUPABASE_PASSWORD`
 # DONE ✅
 
+## Latest Completed (2025-08-22)
+
+### ✅ Inventory Admin Separation: Products & Categories
+
+**Status:** ✅ COMPLETED  
+**Files Modified/Created:**
+
+- `src/pages/Categories.tsx` — New dedicated Categories management page
+- `src/components/Layout/Sidebar.tsx` — Added "Categories" nav item (Tag icon)
+- `src/App.tsx` — Added `/categories` route protected by `inventory` permission
+- `src/pages/Products.tsx` — Removed category management UI and modals; fixed category display
+
+**Implementation Details:**
+
+- Split category CRUD from Products into a new `Categories` page per admin UX request
+- Render product category using a computed `categoryIdToName` map for reliable display
+- Ensured UI follows `STYLE_GUIDE.md` (60px touch targets, button patterns, spacing)
+- Ensured code follows `DEVELOPMENT_GUIDE.md` (component structure, TypeScript interfaces)
+
+**Outcome:** Cleaner admin navigation with separate tabs for Products and Categories; correct category names shown in Products list and product detail view.
+
 ## Reports Backend Implementation (December 2024)
 
 - [x] **Transactions Database Schema** - Created comprehensive SQL schema for transactions, transaction items, customers, and daily sales summary tables with proper relationships, indexes, and triggers

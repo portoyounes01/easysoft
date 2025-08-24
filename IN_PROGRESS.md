@@ -1,3 +1,10 @@
+## POS Receipt Preview Modal
+
+- Implemented receipt preview modal on `src/pages/POS.tsx` following DEVELOPMENT_GUIDE and STYLE_GUIDE
+- Replaced navigation to `'/receipt-demo'` with in-place modal preview using `ThermalReceipt`
+- Added actions: Print and Cancel with 60px+ touch targets and gradient per style guide
+- Persist transaction when possible; preview still shows even if offline
+
 - Implemented guarded Supabase auth to prevent unwanted 400 password grant calls
   - Updated `src/types/supabase.ts` to reflect schema: added `auth_id` (optional) and included `'trainee'` in roles
   - Updated `src/contexts/SupabaseAuthContext.tsx` to:

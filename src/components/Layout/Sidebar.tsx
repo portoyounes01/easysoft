@@ -13,7 +13,8 @@ import {
   LogOut,
   Database,
   Zap,
-  Printer
+  Printer,
+  Tag
 } from 'lucide-react';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
@@ -29,6 +30,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
     { path: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard' },
     { path: '/pos', icon: ShoppingCart, label: 'Point of Sale', permission: 'sales' },
     { path: '/products', icon: Package, label: 'Products', permission: 'inventory' },
+    { path: '/categories', icon: Tag, label: 'Categories', permission: 'inventory' },
     { path: '/employees', icon: Users, label: 'Employees', permission: 'employees' },
     { path: '/reports', icon: BarChart3, label: 'Reports', permission: 'reports' },
     { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'transactions' },

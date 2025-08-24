@@ -13,6 +13,12 @@
 - [x] **App Integration Started** - Updated `App.tsx` to use new authentication context
 - [x] **Integration Plan Created** - Detailed roadmap in `SUPABASE_AUTH_INTEGRATION_PLAN.md`
 
+#### Inventory Admin UX (2025-08-22)
+- [x] Separated Products and Categories into distinct admin pages
+- [x] Added `/categories` route and "Categories" sidebar item (permission: `inventory`)
+- [x] Refactored `Products.tsx` to remove category management UI (moved to `Categories.tsx`)
+- [x] Fixed Products list to display correct category names via `categoryIdToName` map
+
 ### 🔄 In Progress
 
 - [ ] **Authentication Migration** - Currently implementing secure Supabase Auth integration

@@ -82,6 +82,30 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
     return amount.toFixed(2).replace('.', ',') + ' €';
   };
 
+  // Helpers for precise totals based on discount policy (apply discount first, then split VAT)
+  const round2 = (n: number): number => Math.round(n * 100) / 100;
+  const discountPct = totals.discountPercentage || 0;
+  const discountFactor = 1 - discountPct / 100;
+
+  // Aggregate recomputed totals from items after discount
+  const recomputed = items.reduce(
+    (acc, item) => {
+      const rate = (item.vatRate || 0) / 100;
+      const grossAfterDiscount = item.total * discountFactor; // tax-included
+      const base = grossAfterDiscount / (1 + rate);
+      const vat = grossAfterDiscount - base;
+      acc.gross += grossAfterDiscount;
+      acc.base += base;
+      acc.vat += vat;
+      return acc;
+    },
+    { gross: 0, base: 0, vat: 0 }
+  );
+  const totalGross = round2(recomputed.gross);
+  const totalBase = round2(recomputed.base);
+  const totalVat = round2(recomputed.vat);
+  const subtotalBeforeDiscount = round2(totalBase + (totals.discount || 0));
+
   const getDocumentTitle = (): string => {
     switch (documentType) {
       case 'FATURA':
@@ -105,9 +129,19 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
           width: 80mm;
           margin: 0 auto;
           padding: 5mm;
-          background: white;
+          background: #ffffff;
           color: black;
           border: 1px solid #ddd;
+          box-sizing: border-box;
+          display: block;
+          overflow: hidden; /* contain margins and ensure background covers entire content */
+        }
+
+        /* Ensure content never exceeds receipt width and wraps correctly */
+        .thermal-receipt * {
+          box-sizing: border-box;
+          max-width: 100%;
+          word-break: break-word;
         }
 
         @media print {
@@ -144,6 +178,23 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
           justify-content: space-between;
           margin: 2px 0;
         }
+
+        /* Grid-based alignment for items */
+        .receipt-grid {
+          display: grid;
+          grid-template-columns: auto auto 1fr auto auto; /* avoid mm subpixel rounding */
+          column-gap: 8px;
+          align-items: baseline;
+          white-space: nowrap;
+          justify-items: start;
+        }
+        .receipt-grid > span { padding-left: 0; }
+        .grid-span-all { grid-column: 1 / -1; }
+        .grid-from-desc { grid-column: 3 / -1; }
+        .right { text-align: right; }
+        .cell-end { justify-self: end; }
+        .spacer-row { grid-column: 1 / -1; height: 6px; }
+        /* Default left alignment keeps content starting at column labels */
 
         .item-desc {
           flex: 1;
@@ -243,50 +294,69 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       <div className="separator"></div>
 
-      {/* Items Header */}
-      <div className="header-info">QTD UNI Descrição       IVA  Valor</div>
+      {/* Items Grid: header + rows share the same grid tracks for perfect alignment */}
+      <div className="receipt-grid header-info">
+        <span className="small-text bold">QTD</span>
+        <span className="small-text bold">UNI</span>
+        <span className="small-text bold">Descrição</span>
+        <span className="small-text bold">IVA</span>
+        <span className="small-text bold cell-end">Valor</span>
 
-      {/* Items */}
-      {items.map((item, index) => (
-        <div key={item.id || index}>
-          <div className="item-row">
-            <span>{item.quantity} Uni {item.description} {item.vatRate}%</span>
-            <span>{formatCurrency(item.total)}</span>
-          </div>
-          <div className="small-text">Preço unitário: {formatCurrency(item.unitPrice)} €/Unidade</div>
-        </div>
-      ))}
+        {items.map((item, index) => (
+          <React.Fragment key={item.id || index}>
+            <span>{item.quantity}</span>
+            <span>Uni</span>
+            <span className="item-desc">{item.description}</span>
+            <span>{item.vatRate}%</span>
+            <span className="cell-end">{formatCurrency(round2(item.total * discountFactor))}</span>
+            <span className="small-text grid-from-desc">Preço unitário: {formatCurrency(item.unitPrice)} €/Unidade</span>
+            {index < items.length - 1 && <span className="spacer-row"></span>}
+          </React.Fragment>
+        ))}
+      </div>
 
       <div className="separator"></div>
 
-      {/* VAT Info */}
+      {/* VAT Info aligned with a single grid container (header + rows) to keep tracks identical */}
       <div className="center small-text">IVA Incluído à taxa indicada</div>
-      <div className="item-row small-text">
-        <span>% IVA Incidência</span>
-      </div>
-      {/* Group items by VAT rate */}
-      {(() => {
-        const vatGroups = items.reduce((acc, item) => {
-          const key = item.vatRate;
-          if (!acc[key]) {
-            acc[key] = { incidence: 0, vat: 0 };
-          }
-          acc[key].incidence += item.total;
-          acc[key].vat += (item.total * item.vatRate) / (100 + item.vatRate);
-          return acc;
-        }, {} as Record<number, { incidence: number; vat: number }>);
+      <div className="receipt-grid small-text">
+        <span className="bold">%</span>
+        <span></span>
+        <span></span>
+        <span className="bold">IVA</span>
+        <span className="bold cell-end">Incidência</span>
 
-        return Object.entries(vatGroups).map(([rate, amounts]) => (
-          <div key={rate} className="item-row">
-            <span>{rate}  {formatCurrency(amounts.vat)} {formatCurrency(amounts.incidence)}</span>
-          </div>
-        ));
-      })()}
+        {(() => {
+          const vatGroups = items.reduce((acc, item) => {
+            const key = item.vatRate;
+            if (!acc[key]) {
+              acc[key] = { incidence: 0, vat: 0 };
+            }
+            const rateFraction = (item.vatRate || 0) / 100;
+            const grossAfterDiscount = item.total * discountFactor;
+            const base = grossAfterDiscount / (1 + rateFraction);
+            const vat = grossAfterDiscount - base;
+            acc[key].incidence += base;
+            acc[key].vat += vat;
+            return acc;
+          }, {} as Record<number, { incidence: number; vat: number }>);
+
+          return Object.entries(vatGroups).map(([rate, amounts]) => (
+            <React.Fragment key={rate}>
+              <span>{rate}</span>
+              <span></span>
+              <span></span>
+              <span>{formatCurrency(amounts.vat)}</span>
+              <span className="cell-end">{formatCurrency(amounts.incidence)}</span>
+            </React.Fragment>
+          ));
+        })()}
+      </div>
 
       {/* Totals */}
       <div className="total-row">
         <span>ILÍQUIDO</span>
-        <span>{formatCurrency(totals.subtotal)}</span>
+        <span>{formatCurrency(subtotalBeforeDiscount)}</span>
       </div>
       {totals.discount > 0 && (
         <div className="total-row">
@@ -296,11 +366,11 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       )}
       <div className="total-row">
         <span>LÍQUIDO</span>
-        <span>{formatCurrency(totals.net)}</span>
+        <span>{formatCurrency(totalBase)}</span>
       </div>
       <div className="total-row">
         <span>IVA</span>
-        <span>{formatCurrency(totals.vat)}</span>
+        <span>{formatCurrency(totalVat)}</span>
       </div>
 
       <div className="double-separator"></div>
@@ -308,7 +378,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       {/* Final Total */}
       <div className="total-row final-total">
         <span>TOTAL</span>
-        <span>{formatCurrency(totals.total)}</span>
+        <span>{formatCurrency(totalGross)}</span>
       </div>
 
       <div className="separator"></div>
@@ -328,14 +398,18 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       {/* Payment Info */}
       <div className="left">Pago em {payment.method}</div>
-      <div className="item-row">
-        <span>Valor entregue:</span>
-        <span>{formatCurrency(payment.amountGiven)}</span>
-      </div>
-      <div className="item-row">
-        <span>Troco:</span>
-        <span>{formatCurrency(payment.change)}</span>
-      </div>
+      {payment.method === 'Numerário' && (
+        <>
+          <div className="item-row">
+            <span>Valor entregue:</span>
+            <span>{formatCurrency(payment.amountGiven)}</span>
+          </div>
+          <div className="item-row">
+            <span>Troco:</span>
+            <span>{formatCurrency(payment.change)}</span>
+          </div>
+        </>
+      )}
 
       <div className="separator"></div>
 
@@ -357,7 +431,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       <div style={{ margin: '10px 0' }}></div>
 
       <div className="center small-text">Licenciado a: {company.name}</div>
-      <div className="center small-text">Contribuinte: {company.taxNumber} (empresa)</div>
+      <div className="center small-text">Contribuinte: {company.taxNumber}</div>
 
       {/* Extra space for cutting */}
       <div style={{ height: '20px' }}></div>

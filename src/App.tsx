@@ -8,6 +8,7 @@ import LoginForm from './components/Auth/LoginForm';
 import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
 import Products from './pages/Products';
+import Categories from './pages/Categories';
 import Employees from './pages/Employees';
 import Transactions from './pages/Transactions';
 import Reports from './pages/Reports';
@@ -141,6 +142,14 @@ const AppContent: React.FC = () => {
                     element={
                       <PermissionRoute permission="inventory">
                         <Products />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/categories"
+                    element={
+                      <PermissionRoute permission="inventory">
+                        <Categories />
                       </PermissionRoute>
                     }
                   />
