@@ -1,3 +1,10 @@
+### POS Right Panel Redesign (Order Summary Panel)
+
+- Implementing a new `OrderSummaryPanel` in `src/components/OrderSummaryPanel.tsx` following STYLE_GUIDE.md and DEVELOPMENT_GUIDE.md
+- Integrated into `src/pages/POS.tsx`, replacing legacy cart sidebar UI
+- Added i18n keys for: orderDetails, dineIn, takeAway, saveBill, tables, clearAllOrder
+- Pending: refine styles to match touch target/typography specs; add tests; update DONE.md after verification
+
 ## POS Receipt Preview Modal
 
 - Implemented receipt preview modal on `src/pages/POS.tsx` following DEVELOPMENT_GUIDE and STYLE_GUIDE

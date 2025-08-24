@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom';
 import {
   ShoppingCart,
   Plus,
-  Minus,
   X,
   CreditCard,
   Banknote,
@@ -39,6 +38,7 @@ import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useProducts } from '../contexts/ProductsContext';
 import VirtualNumpad from '../components/VirtualNumpad';
+import OrderSummaryPanel from '../components/OrderSummaryPanel';
 import VirtualKeyboard from '../components/VirtualKeyboard';
 import { Customer } from '../types';
 import { LocalProduct } from '../types/supabase';
@@ -137,7 +137,7 @@ let mockCustomers: Customer[] = [
 
 const POS: React.FC = () => {
   const { t } = useTranslation();
-  const { cart, addToCart, removeFromCart, updateQuantity, clearCart, selectedCustomer, selectCustomer } = usePOS();
+  const { cart, addToCart, clearCart, selectedCustomer, selectCustomer } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
   const { settings, updateSettings } = useSettings();
   const {
@@ -179,35 +179,7 @@ const POS: React.FC = () => {
     }
   };
 
-  // Enhanced updateQuantity with stock validation
-  const handleUpdateQuantity = (productId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      // Always allow removal
-      updateQuantity(productId, newQuantity);
-      return;
-    }
-
-    // Find the product and current cart item
-    const cartItem = cart.find(item => item.product.id === productId);
-    if (!cartItem) return;
-
-    const product = cartItem.product;
-    const currentQuantity = cartItem.quantity;
-    const quantityDifference = newQuantity - currentQuantity;
-
-    // If decreasing quantity, always allow
-    if (quantityDifference <= 0) {
-      updateQuantity(productId, newQuantity);
-      return;
-    }
-
-    // If increasing, check stock validation
-    if (settings.pos.allowNegativeStock || newQuantity <= product.stock) {
-      updateQuantity(productId, newQuantity);
-    } else {
-      alert(`Only ${product.stock} "${product.name}" available in stock.`);
-    }
-  };
+  // Quantity edits handled in product grid; order panel is read-only summary
   const [showPayment, setShowPayment] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -445,10 +417,6 @@ const POS: React.FC = () => {
 
   // (category selection handled inline where used)
 
-  const handlePayment = () => {
-    setShowPayment(true);
-  };
-
   const handleDiscountClick = (type: 'percentage' | 'fixed') => {
     setNumpadConfig({
       isOpen: true,
@@ -485,9 +453,7 @@ const POS: React.FC = () => {
     });
   };
 
-  const handleRemoveDiscount = () => {
-    setDiscount({ type: 'none', value: 0 });
-  };
+  // Legacy discount removal kept for previous UI; not used in new summary panel
 
   const handleLogout = () => {
     signOut();
@@ -526,9 +492,7 @@ const POS: React.FC = () => {
     setKeyboardConfig(prev => ({ ...prev, isOpen: false }));
   };
 
-  const handleCustomerRemove = () => {
-    selectCustomer(null);
-  };
+  // Legacy customer remove kept for previous UI; not used in new summary panel
 
   // Removed unused handleCustomerSearch helper
 
@@ -1106,191 +1070,15 @@ const POS: React.FC = () => {
         </div>
       </div>
 
-      {/* Right Cart Sidebar - Full Height */}
-      <div className="w-96 bg-white shadow-xl border-l border-gray-200 flex flex-col h-screen">
-        {/* Top Half - Cart Items */}
-        <div className="h-1/2 overflow-y-auto p-4 sm:p-6 border-b-2 border-gray-200">
-          {/* Customer Info */}
-          {selectedCustomer && (
-            <div className="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-2">
-                  <UserCircle className="w-5 h-5 text-blue-600" />
-                  <span className="font-semibold text-blue-800">{t('pos.cartCustomerHeader')}</span>
-                </div>
-                <button
-                  onClick={handleCustomerRemove}
-                  className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="space-y-1">
-                {selectedCustomer.name && (
-                  <p className="font-bold text-gray-800">{selectedCustomer.name}</p>
-                )}
-                <p className="text-sm text-gray-600">{selectedCustomer.taxId}</p>
-                {selectedCustomer.discountLevel > 0 && (
-                  <p className="text-sm font-semibold text-green-600">
-                    {selectedCustomer.discountLevel}% Customer Discount
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Cart Items */}
-          {cart.length === 0 ? (
-            <div className="text-center py-12">
-              <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-xl text-gray-500 mb-2">{t('pos.noCartItemsTitle')}</p>
-              <p className="text-gray-400">{t('pos.noCartItemsMessage')}</p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {cart.map((item) => (
-                <div key={item.product.id} className="flex items-center justify-between py-2 border-b border-gray-100">
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-gray-800 truncate block">{item.product.name}</span>
-                  </div>
-
-                  <div className="flex items-center space-x-2 ml-2">
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleUpdateQuantity(item.product.id, item.quantity - 1)}
-                        className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white p-2 rounded-xl transition-all duration-200 min-h-[20px] min-w-[20px] flex items-center justify-center shadow-lg hover:shadow-xl"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="text-sm font-semibold text-gray-800 min-w-[20px] text-center">{item.quantity}</span>
-                      <button
-                        onClick={() => handleUpdateQuantity(item.product.id, item.quantity + 1)}
-                        className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white p-2 rounded-xl transition-all duration-200 min-h-[20px] min-w-[20px] flex items-center justify-center shadow-lg hover:shadow-xl"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <span className="text-sm font-bold text-gray-800 min-w-[60px] text-right">€{(item.product.price * item.quantity).toFixed(2)}</span>
-
-                    <button
-                      onClick={() => removeFromCart(item.product.id)}
-                      className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Bottom Half - Payment Section */}
-        <div className="h-1/2 p-4 bg-white flex flex-col">
-          {/* Discount Section - 25% */}
-          <div className="flex-none h-[25%] flex flex-col justify-start space-y-2 mb-4">
-            <div className="flex items-center justify-end">
-              <div className="flex space-x-2 w-full">
-                <button
-                  onClick={() => handleDiscountClick('percentage')}
-                  className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-3 py-2 rounded-xl transition-colors flex items-center justify-center flex-1 min-w-0"
-                >
-                  <span className="text-sm font-medium truncate">{t('pos.discountPercentage')}</span>
-                </button>
-                <button
-                  onClick={() => handleDiscountClick('fixed')}
-                  className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-3 py-2 rounded-xl transition-colors flex items-center justify-center flex-1 min-w-0"
-                >
-                  <span className="text-sm font-medium truncate">{t('pos.discountFixed')}</span>
-                </button>
-              </div>
-            </div>
-
-            {discount.type !== 'none' && (
-              <div className="flex items-center justify-between bg-purple-50 p-2 rounded-lg">
-                <span className="text-purple-700 font-medium text-sm">
-                  {discount.type === 'percentage' ? `${discount.value}%` : `€${discount.value.toFixed(2)}`} off
-                </span>
-                <button
-                  onClick={handleRemoveDiscount}
-                  className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-
-            {selectedCustomer && selectedCustomer.discountLevel > 0 && (
-              <div className="flex items-center justify-between bg-green-50 p-2 rounded-lg">
-                <span className="text-green-700 font-medium text-sm">
-                  Customer: {selectedCustomer.discountLevel}% off
-                </span>
-                <UserCircle className="w-4 h-4 text-green-600" />
-              </div>
-            )}
-          </div>
-
-          {/* Totals - 35% */}
-          <div className="flex-none h-[35%] flex flex-col justify-center space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">{t('pos.subtotalLabel')}</span>
-              <span className="text-gray-800 font-semibold">€{subtotal.toFixed(2)}</span>
-            </div>
-            {discount.type !== 'none' && (
-              <div className="flex justify-between text-sm text-purple-600">
-                <span>{t('pos.discountLabel')}</span>
-                <span className="font-semibold">-€{discountAmount.toFixed(2)}</span>
-              </div>
-            )}
-            {selectedCustomer && selectedCustomer.discountLevel > 0 && (
-              <div className="flex justify-between text-sm text-green-600">
-                <span>{t('pos.customerDiscountLabel')}</span>
-                <span className="font-semibold">-€{customerDiscountAmount.toFixed(2)}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">{t('pos.taxLabel')}</span>
-              <span className="text-gray-800 font-semibold">€{adjustedFinalTax.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-1">
-              <span>{t('pos.totalLabel')}</span>
-              <span className="text-green-600">€{finalTotal.toFixed(2)}</span>
-            </div>
-          </div>
-
-          {/* Buttons - 40% */}
-          <div className="flex-none h-[40%] flex flex-col justify-center space-y-2">
-            {cart.length > 0 && (
-              <>
-                <button
-                  onClick={handlePayment}
-                  className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-2 rounded-2xl font-semibold text-base transition-all duration-200 flex items-center justify-center space-x-2 h-12"
-                >
-                  <CreditCard className="w-4 h-4" />
-                  <span>{t('pos.processPayment')}</span>
-                </button>
-
-                <div className="grid grid-cols-2 gap-2 h-8">
-                  <button
-                    onClick={handleCustomerClick}
-                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-medium flex items-center justify-center space-x-1"
-                  >
-                    <User className="w-3 h-3" />
-                    <span className="text-xs">{t('pos.customer')}</span>
-                  </button>
-                  <button
-                    onClick={clearCart}
-                    className="bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-xl font-medium text-xs"
-                  >
-                    {t('pos.clearCart')}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* Right Order Summary Panel */}
+      <OrderSummaryPanel
+        items={cart.map(ci => ({ product: ci.product, quantity: ci.quantity }))}
+        onClearAll={clearCart}
+        onCustomer={handleCustomerClick}
+        onDiscount={() => handleDiscountClick('percentage')}
+        onTables={() => { }}
+        onSaveBill={() => { }}
+      />
 
       {/* Customer Selection Modal */}
       {showCustomerModal && (

@@ -58,6 +58,13 @@ const resources = {
                 discountPercentage: 'Discount %',
                 discountFixed: 'Discount €',
                 search: 'Search',
+                // New right panel strings
+                orderDetails: 'Order Details',
+                dineIn: 'Dine In',
+                takeAway: 'Take Away',
+                saveBill: 'Save Bill',
+                tables: 'Tables',
+                clearAllOrder: 'Clear All Order',
                 // Empty state messages
                 noCategoriesAvailable: 'No Categories Available',
                 emptyCatalogMessage: 'Your product catalog is empty. Add some categories to get started.',
@@ -123,6 +130,13 @@ const resources = {
                 discountPercentage: 'Desconto %',
                 discountFixed: 'Desconto €',
                 search: 'Pesquisar',
+                // New right panel strings
+                orderDetails: 'Detalhes do Pedido',
+                dineIn: 'Consumir no Local',
+                takeAway: 'Levar',
+                saveBill: 'Guardar Conta',
+                tables: 'Mesas',
+                clearAllOrder: 'Limpar Pedido',
                 // Empty state messages
                 noCategoriesAvailable: 'Nenhuma Categoria Disponível',
                 emptyCatalogMessage: 'Seu catálogo de produtos está vazio. Adicione algumas categorias para começar.',
