@@ -1,3 +1,38 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom scrollbars for scrollable lists */
+.scrollbar-light {
+    scrollbar-width: thin;
+    scrollbar-color: #D7D7D7 #F7F7F7;
+    scrollbar-gutter: stable both-edges;
+}
+
+.scrollbar-light::-webkit-scrollbar {
+    width: 10px;
+}
+
+.scrollbar-light::-webkit-scrollbar-track {
+    background: #F7F7F7;
+    border-radius: 8px;
+}
+
+.scrollbar-light::-webkit-scrollbar-thumb {
+    background-color: #D7D7D7;
+    border-radius: 8px;
+    border: 2px solid #F7F7F7;
+}
+
+/* Hide native scrollbar when using custom indicator */
+.hide-native-scrollbar {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+.hide-native-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}

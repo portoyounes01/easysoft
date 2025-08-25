@@ -65,6 +65,8 @@ const resources = {
                 saveBill: 'Save Bill',
                 tables: 'Tables',
                 clearAllOrder: 'Clear All Order',
+                processTransaction: 'Process Transaction',
+                voucherLabel: 'Voucher',
                 // Empty state messages
                 noCategoriesAvailable: 'No Categories Available',
                 emptyCatalogMessage: 'Your product catalog is empty. Add some categories to get started.',
@@ -137,6 +139,8 @@ const resources = {
                 saveBill: 'Guardar Conta',
                 tables: 'Mesas',
                 clearAllOrder: 'Limpar Pedido',
+                processTransaction: 'Processar Transação',
+                voucherLabel: 'Voucher',
                 // Empty state messages
                 noCategoriesAvailable: 'Nenhuma Categoria Disponível',
                 emptyCatalogMessage: 'Seu catálogo de produtos está vazio. Adicione algumas categorias para começar.',

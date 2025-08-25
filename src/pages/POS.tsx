@@ -1078,6 +1078,7 @@ const POS: React.FC = () => {
         onDiscount={() => handleDiscountClick('percentage')}
         onTables={() => { }}
         onSaveBill={() => { }}
+        onProcess={() => setShowPayment(true)}
       />
 
       {/* Customer Selection Modal */}
@@ -1805,7 +1806,7 @@ const POS: React.FC = () => {
           <div className="flex items-center space-x-3">
             <p className="text-xs font-medium text-gray-800">{employee?.name} • <span className="capitalize text-gray-600">{employee?.role}</span></p>
             {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
-              <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
+              <span className="text-green-600 text-xs font-medium">
                 {t('pos.saleInProgress')}
               </span>
             )}
