@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, connectionStatus, isSupabaseConfigured } from '../lib/supabase';
 import { Employee } from '../types/supabase';
 
 interface AuthState {
@@ -10,6 +10,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  credentialHash?: string | null; // ephemeral hash of PIN/password for edge function proofs
 }
 
 interface AuthContextType extends AuthState {
@@ -31,11 +32,13 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     isAuthenticated: false,
     isLoading: true,
     error: null,
+    credentialHash: null,
   });
 
   // Session persistence keys
   const EMPLOYEE_SESSION_KEY = 'employee_session';
   const EMPLOYEE_SESSION_TIMESTAMP_KEY = 'employee_session_timestamp';
+  const EMPLOYEE_CREDENTIAL_HASH_KEY = 'employee_credential_hash';
   const SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
 
   // Save employee session to localStorage
@@ -45,6 +48,19 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       localStorage.setItem(EMPLOYEE_SESSION_TIMESTAMP_KEY, Date.now().toString());
     } catch (error) {
       console.error('Error saving employee session:', error);
+    }
+  };
+
+  // Save credential hash (PIN/password hash) for edge-function proofs (never store plaintext)
+  const saveCredentialHash = (hash: string | null) => {
+    try {
+      if (hash) {
+        localStorage.setItem(EMPLOYEE_CREDENTIAL_HASH_KEY, hash);
+      } else {
+        localStorage.removeItem(EMPLOYEE_CREDENTIAL_HASH_KEY);
+      }
+    } catch (error) {
+      console.error('Error saving credential hash:', error);
     }
   };
 
@@ -61,7 +77,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Check if session has expired
       const sessionTime = parseInt(timestamp);
       const currentTime = Date.now();
-      
+
       if (currentTime - sessionTime > SESSION_TIMEOUT) {
         // Session expired, clear it
         clearEmployeeSession();
@@ -81,6 +97,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       localStorage.removeItem(EMPLOYEE_SESSION_KEY);
       localStorage.removeItem(EMPLOYEE_SESSION_TIMESTAMP_KEY);
+      localStorage.removeItem(EMPLOYEE_CREDENTIAL_HASH_KEY);
     } catch (error) {
       console.error('Error clearing employee session:', error);
     }
@@ -112,6 +129,12 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
+      // Guard: only attempt Supabase auth when properly configured
+      if (!isSupabaseConfigured()) {
+        const msg = 'Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.';
+        setState(prev => ({ ...prev, isLoading: false, error: msg }));
+        return { success: false, error: msg };
+      }
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -158,7 +181,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.log('Employee role:', employee.role);
       console.log('Has password_hash:', !!employee.password_hash);
       console.log('Has pin:', !!employee.pin);
-      
+
       let isValidCredentials = false;
 
       if (employee.role === 'admin' || employee.role === 'manager') {
@@ -188,24 +211,88 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setState(prev => ({ ...prev, isLoading: false, error: 'Invalid credentials' }));
         return { success: false, error: 'Invalid credentials' };
       }
-      
+
+      // 🌐 Ensure the employee record is synchronized with the server before proceeding.
+      //    This avoids foreign-key errors (e.g., when creating transactions) if the local
+      //    employee has not yet been pushed to Supabase.
+      if (connectionStatus.getStatus().isSupabaseOnline) {
+        try {
+          console.log('🔄 Performing employee forceSync to ensure server record…');
+          await employeeService.forceSync();
+        } catch (syncError) {
+          console.warn('⚠️  Employee sync failed (continuing anyway):', syncError);
+        }
+      }
+
       console.log('✅ Credentials verified successfully!');
 
-      // Create a mock session for employee login and save it
+      // If employee has inventory access and has a linked auth_id, also sign in with Supabase
+      let supabaseUser = null;
+      let supabaseSession = null;
+
+      if (employee.access_levels.includes('inventory') || employee.access_levels.includes('all')) {
+        console.log('📧 Employee has inventory access, checking for Supabase auth...');
+        const isOnline = connectionStatus.getStatus().isSupabaseOnline;
+        const isConfigured = isSupabaseConfigured();
+        const hasAuthLink = Boolean((employee as any).auth_id); // optional field
+
+        if (!isConfigured) {
+          console.log('ℹ️  Skipping Supabase auth: not configured');
+        } else if (!isOnline) {
+          console.log('ℹ️  Skipping Supabase auth: Supabase appears offline');
+        } else if (!hasAuthLink) {
+          console.log('ℹ️  Skipping Supabase auth: employee not provisioned (no auth_id)');
+        } else if (employee.email) {
+          try {
+            console.log('🔐 Attempting Supabase authentication...');
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+              email: employee.email,
+              password: password
+            });
+
+            if (!authError && authData.user) {
+              console.log('✅ Supabase authentication successful');
+              supabaseUser = authData.user;
+              supabaseSession = authData.session;
+            } else {
+              console.log('⚠️ Supabase authentication failed, but continuing with employee auth:', authError?.message);
+            }
+          } catch (supabaseError) {
+            console.log('⚠️ Supabase authentication error, continuing with employee auth:', supabaseError);
+          }
+        } else {
+          console.log('⚠️ Employee has inventory access but no email configured for Supabase auth');
+        }
+      }
+
+      // Create a session for employee login and save it
       console.log('💾 Setting authentication state...');
+      // Compute credential hash equal to stored hash to avoid sending raw pin/password later
+      let credentialHash: string | null = null;
+      try {
+        const { hashPassword } = await import('../utils/hashUtils');
+        credentialHash = employee.role === 'admin' || employee.role === 'manager'
+          ? (employee.password_hash ? employee.password_hash : await hashPassword(password))
+          : (employee.pin ? employee.pin : await hashPassword(password));
+      } catch (e) {
+        console.warn('Failed to compute credential hash, proceeding without it');
+      }
+
       setState(prev => ({
         ...prev,
-        user: null, // No Supabase user for employee login
+        user: supabaseUser, // Include Supabase user if authenticated
         employee,
-        session: null,
+        session: supabaseSession, // Include Supabase session if available
         isAuthenticated: true,
         isLoading: false,
         error: null,
+        credentialHash,
       }));
 
       // Save session for persistence across page reloads
       console.log('💾 Saving employee session to localStorage...');
       saveEmployeeSession(employee);
+      saveCredentialHash(credentialHash);
       console.log('🎉 Login process completed successfully!');
 
       return { success: true };
@@ -272,7 +359,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (event === 'SIGNED_IN' && session) {
         // Fetch employee data for the authenticated user
         const employee = await fetchEmployeeData(session.user.id);
-        
+
         setState({
           user: session.user,
           employee,
@@ -280,6 +367,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           isAuthenticated: true,
           isLoading: false,
           error: null,
+          credentialHash: null,
         });
       } else if (event === 'SIGNED_OUT') {
         setState({
@@ -313,6 +401,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
             isAuthenticated: false,
             isLoading: false,
             error: null,
+            credentialHash: null,
           });
         }
       }
@@ -322,7 +411,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const initializeAuth = async () => {
       // First, check for Supabase auth session
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (session) {
         const employee = await fetchEmployeeData(session.user.id);
         setState({
@@ -332,12 +421,20 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           isAuthenticated: true,
           isLoading: false,
           error: null,
+          credentialHash: null,
         });
       } else {
         // Check for employee session in localStorage
         const employeeSession = loadEmployeeSession();
-        
+
         if (employeeSession) {
+          // Load saved credential hash for PIN/password proof
+          let savedHash: string | null = null;
+          try {
+            savedHash = localStorage.getItem(EMPLOYEE_CREDENTIAL_HASH_KEY);
+          } catch (e) {
+            savedHash = null;
+          }
           setState({
             user: null,
             employee: employeeSession,
@@ -345,6 +442,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
             isAuthenticated: true,
             isLoading: false,
             error: null,
+            credentialHash: savedHash,
           });
         } else {
           setState(prev => ({ ...prev, isLoading: false }));

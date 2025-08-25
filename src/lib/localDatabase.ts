@@ -128,10 +128,10 @@ export const initializeSyncMetadata = async (): Promise<void> => {
 // Database operations with sync queue management
 export class EmployeeLocalService {
 
-    // Get all active employees (excluding soft-deleted)
+    // Get all non-deleted employees (includes active and inactive)
     async getAllEmployees(): Promise<LocalEmployee[]> {
         return await localDb.employees
-            .filter(emp => emp.deleted_at === null && emp.is_active)
+            .filter(emp => emp.deleted_at === null)
             .toArray();
     }
 
@@ -205,7 +205,7 @@ export class EmployeeLocalService {
                 emp.deleted_at === null &&
                 (emp.name.toLowerCase().includes(normalizedQuery) ||
                     emp.employee_number.toLowerCase().includes(normalizedQuery) ||
-                    (emp.email && emp.email.toLowerCase().includes(normalizedQuery)))
+                    ((emp.email ?? '').toLowerCase().includes(normalizedQuery)))
             )
             .toArray();
     }

@@ -1,19 +1,13 @@
-import { supabase } from '../lib/supabase';
+import { supabase, connectionStatus } from '../lib/supabase';
 import { localDb } from '../lib/localDatabase';
 import { generateUUID } from '../utils/uuid';
 import {
     ProductRow,
-    ProductInsert,
-    ProductUpdate,
     CategoryRow,
-    CategoryInsert,
-    CategoryUpdate,
     LocalProduct,
     LocalCategory,
     PendingProductOperation,
     PendingCategoryOperation,
-    ProductSyncResponse,
-    CategorySyncResponse,
     calculateStockStatus,
     calculateTaxAmount,
     calculatePriceWithTax
@@ -93,7 +87,7 @@ export class CategoryService {
             .filter(cat =>
                 cat.deleted_at === null &&
                 (cat.name.toLowerCase().includes(normalizedQuery) ||
-                    (cat.description && cat.description.toLowerCase().includes(normalizedQuery)))
+                    (!!cat.description && cat.description.toLowerCase().includes(normalizedQuery)))
             )
             .toArray();
     }
@@ -259,8 +253,8 @@ export class ProductService {
                 prod.deleted_at === null &&
                 (prod.name.toLowerCase().includes(normalizedQuery) ||
                     prod.sku.toLowerCase().includes(normalizedQuery) ||
-                    (prod.barcode && prod.barcode.toLowerCase().includes(normalizedQuery)) ||
-                    (prod.description && prod.description.toLowerCase().includes(normalizedQuery)))
+                    (!!prod.barcode && prod.barcode.toLowerCase().includes(normalizedQuery)) ||
+                    (!!prod.description && prod.description.toLowerCase().includes(normalizedQuery)))
             )
             .toArray();
     }
@@ -301,7 +295,7 @@ export class ProductService {
 
         if (filters.supplier) {
             collection = collection.filter(prod =>
-                prod.supplier && prod.supplier.toLowerCase().includes(filters.supplier!.toLowerCase())
+                !!prod.supplier && prod.supplier.toLowerCase().includes(filters.supplier!.toLowerCase())
             );
         }
 
@@ -375,8 +369,11 @@ export class ProductSyncService {
     // Check if online
     private async isOnline(): Promise<boolean> {
         try {
-            const { data, error } = await supabase.from('categories').select('id').limit(1);
-            return !error;
+            const status = connectionStatus.getStatus();
+            if (!status.isOnline) return false;
+            if (status.isSupabaseOnline) return true;
+            const { checkSupabaseConnection } = await import('../lib/supabase');
+            return await checkSupabaseConnection();
         } catch {
             return false;
         }

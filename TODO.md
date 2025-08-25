@@ -13,6 +13,12 @@
 - [x] **App Integration Started** - Updated `App.tsx` to use new authentication context
 - [x] **Integration Plan Created** - Detailed roadmap in `SUPABASE_AUTH_INTEGRATION_PLAN.md`
 
+#### Inventory Admin UX (2025-08-22)
+- [x] Separated Products and Categories into distinct admin pages
+- [x] Added `/categories` route and "Categories" sidebar item (permission: `inventory`)
+- [x] Refactored `Products.tsx` to remove category management UI (moved to `Categories.tsx`)
+- [x] Fixed Products list to display correct category names via `categoryIdToName` map
+
 ### 🔄 In Progress
 
 - [ ] **Authentication Migration** - Currently implementing secure Supabase Auth integration
@@ -63,6 +69,17 @@
   - [ ] **Credit note creation**
   - [ ] **Invoice generation with tax ID**
   - [ ] **Receipt numbering system**
+  - [ ] **Receipt Data Integration** – see `RECEIPT_INTEGRATION_PLAN.md`
+
+### Database Architecture
+- [ ] Multi-tenant migration (Supabase single project)
+  - [ ] Review `MULTI_TENANT_MIGRATION_PLAN.md`
+  - [ ] Implement tenancy bootstrap (app schema, organizations, memberships)
+  - [ ] Add and backfill `organization_id` across domain tables
+  - [ ] Create tenant-scoped uniques and indexes
+  - [ ] Replace policies with tenant+role RLS
+  - [ ] Update RPCs/views and flip NOT NULL
+  - [ ] Storage policies per organization
 
 ## Medium Priority Features
 
@@ -85,3 +102,9 @@
 - `secure_rls_policies.sql` - Secure row-level security policies for production use
 - `SupabaseAuthContext.tsx` - New authentication context with Supabase Auth integration
 - Updated authentication throughout app while maintaining backward compatibility
+
+## Reliability and Performance
+
+- [ ] Replace remaining table-based connectivity probes with centralized heartbeat (`supabase.rpc('ping')`)
+- [ ] Ensure all services use `connectionStatus` for online/offline detection
+- [ ] Add regression test to assert no repeated GETs to `/employees?select=id&limit=1` during navigation to receipt

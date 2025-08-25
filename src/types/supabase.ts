@@ -247,7 +247,7 @@ export interface EmployeeRow {
     phone: string | null;
     password_hash: string | null;
     pin: string | null;
-    role: 'admin' | 'manager' | 'cashier';
+    role: 'admin' | 'manager' | 'cashier' | 'trainee';
     access_levels: string[];
     is_active: boolean;
     hire_date: string; // ISO date string
@@ -255,6 +255,7 @@ export interface EmployeeRow {
     transaction_count: number;
     average_transaction: number;
     hours_worked: number;
+    auth_id?: string | null; // Linked Supabase auth user id (if provisioned)
     created_at: string; // ISO timestamp
     updated_at: string; // ISO timestamp
     last_synced_at: string | null; // ISO timestamp
@@ -270,7 +271,7 @@ export interface EmployeeInsert {
     phone?: string | null;
     password_hash?: string | null;
     pin?: string | null;
-    role: 'admin' | 'manager' | 'cashier';
+    role: 'admin' | 'manager' | 'cashier' | 'trainee';
     access_levels?: string[];
     is_active?: boolean;
     hire_date: string; // ISO date string
@@ -278,6 +279,7 @@ export interface EmployeeInsert {
     transaction_count?: number;
     average_transaction?: number;
     hours_worked?: number;
+    auth_id?: string | null;
     created_at?: string; // Will be auto-generated if not provided
     updated_at?: string; // Will be auto-generated
     last_synced_at?: string | null;
@@ -293,7 +295,7 @@ export interface EmployeeUpdate {
     phone?: string | null;
     password_hash?: string | null;
     pin?: string | null;
-    role?: 'admin' | 'manager' | 'cashier';
+    role?: 'admin' | 'manager' | 'cashier' | 'trainee';
     access_levels?: string[];
     is_active?: boolean;
     hire_date?: string;
@@ -301,6 +303,7 @@ export interface EmployeeUpdate {
     transaction_count?: number;
     average_transaction?: number;
     hours_worked?: number;
+    auth_id?: string | null;
     updated_at?: string; // Will be auto-generated
     last_synced_at?: string | null;
     deleted_at?: string | null;
@@ -376,7 +379,7 @@ export interface LocalEmployee extends Omit<EmployeeRow, 'created_at' | 'updated
 }
 
 // Validation schemas (for runtime type checking)
-export const EmployeeRoles = ['admin', 'manager', 'cashier'] as const;
+export const EmployeeRoles = ['admin', 'manager', 'cashier', 'trainee'] as const;
 export type EmployeeRole = typeof EmployeeRoles[number];
 
 export const AccessLevels = [
@@ -400,7 +403,7 @@ export interface EmployeeFormData {
     access_levels: AccessLevel[];
     hire_date: string; // ISO date string
     password?: string; // Raw password (will be hashed) - for admin login only
-    pin: string; // Mandatory PIN for all roles (6+ chars, will be hashed)
+    pin: string; // Mandatory PIN for all roles (4+ digits, will be hashed)
     is_active: boolean;
 }
 

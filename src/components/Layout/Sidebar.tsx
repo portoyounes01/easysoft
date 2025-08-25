@@ -13,7 +13,8 @@ import {
   LogOut,
   Database,
   Zap,
-  Printer
+  Printer,
+  Tag
 } from 'lucide-react';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 
@@ -29,11 +30,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
     { path: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard' },
     { path: '/pos', icon: ShoppingCart, label: 'Point of Sale', permission: 'sales' },
     { path: '/products', icon: Package, label: 'Products', permission: 'inventory' },
+    { path: '/categories', icon: Tag, label: 'Categories', permission: 'inventory' },
     { path: '/employees', icon: Users, label: 'Employees', permission: 'employees' },
     { path: '/reports', icon: BarChart3, label: 'Reports', permission: 'reports' },
     { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'transactions' },
     { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' },
+    { path: '/receipt-demo', icon: FileText, label: 'Receipt Template', permission: 'settings' },
     { path: '/printer-test', icon: Printer, label: 'Printer Setup', permission: 'settings' },
+    { path: '/pair-device', icon: Zap, label: 'Device Pairing', permission: 'settings' },
     { path: '/setup', icon: Database, label: 'Data Setup', permission: 'settings' },
     { path: '/cashier-testing', icon: Zap, label: 'Cashier Testing', permission: 'settings' },
     { path: '/electron-testing', icon: Zap, label: 'Electron Testing', permission: 'settings' }
@@ -54,7 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
 
   return (
     <>
-      <div className={`bg-gradient-to-b from-slate-900 to-slate-800 text-white min-h-screen flex flex-col shadow-2xl transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'
+      <div className={`bg-gradient-to-b from-slate-900 to-slate-800 text-white h-screen overflow-y-auto flex flex-col shadow-2xl transition-[width] duration-300 z-20 ${isCollapsed ? 'w-20' : 'w-64'
         }`}>
         <div className="p-6 border-b border-slate-700">
           <div className="flex items-center space-x-3">

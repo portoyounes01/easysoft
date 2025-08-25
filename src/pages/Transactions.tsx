@@ -63,7 +63,7 @@ const Transactions: React.FC = () => {
                 setLoading(true);
                 setError(null);
                 const data = await transactionService.getTransactions();
-                
+
                 // Transform database data to UI format
                 const transformedTransactions: Transaction[] = data.map((dbTransaction: any) => ({
                     id: dbTransaction.id,
@@ -84,7 +84,7 @@ const Transactions: React.FC = () => {
                     employeeName: dbTransaction.employee_name,
                     employeeId: dbTransaction.employee_id
                 }));
-                
+
                 setTransactions(transformedTransactions);
             } catch (err) {
                 console.error('Error fetching transactions:', err);
@@ -203,54 +203,54 @@ const Transactions: React.FC = () => {
             {/* Summary Stats */}
             {!loading && !error && (
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-gray-600">Total Transactions</p>
-                            <p className="text-2xl font-bold text-gray-900">{totalTransactions}</p>
-                        </div>
-                        <div className="bg-blue-100 p-3 rounded-full">
-                            <Receipt className="w-6 h-6 text-blue-600" />
+                    <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Total Transactions</p>
+                                <p className="text-2xl font-bold text-gray-900">{totalTransactions}</p>
+                            </div>
+                            <div className="bg-blue-100 p-3 rounded-full">
+                                <Receipt className="w-6 h-6 text-blue-600" />
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                            <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</p>
-                        </div>
-                        <div className="bg-green-100 p-3 rounded-full">
-                            <TrendingUp className="w-6 h-6 text-green-600" />
+                    <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+                                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</p>
+                            </div>
+                            <div className="bg-green-100 p-3 rounded-full">
+                                <TrendingUp className="w-6 h-6 text-green-600" />
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-gray-600">Average Transaction</p>
-                            <p className="text-2xl font-bold text-gray-900">{formatCurrency(averageTransaction)}</p>
-                        </div>
-                        <div className="bg-purple-100 p-3 rounded-full">
-                            <ShoppingCart className="w-6 h-6 text-purple-600" />
+                    <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Average Transaction</p>
+                                <p className="text-2xl font-bold text-gray-900">{formatCurrency(averageTransaction)}</p>
+                            </div>
+                            <div className="bg-purple-100 p-3 rounded-full">
+                                <ShoppingCart className="w-6 h-6 text-purple-600" />
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-gray-600">Completed</p>
-                            <p className="text-2xl font-bold text-gray-900">{completedTransactions}</p>
-                        </div>
-                        <div className="bg-green-100 p-3 rounded-full">
-                            <CheckCircle className="w-6 h-6 text-green-600" />
+                    <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Completed</p>
+                                <p className="text-2xl font-bold text-gray-900">{completedTransactions}</p>
+                            </div>
+                            <div className="bg-green-100 p-3 rounded-full">
+                                <CheckCircle className="w-6 h-6 text-green-600" />
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
             )}
 
             {/* Filters */}

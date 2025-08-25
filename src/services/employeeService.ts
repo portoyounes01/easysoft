@@ -2,7 +2,6 @@ import { supabase, isSupabaseConfigured, connectionStatus } from '../lib/supabas
 import { employeeLocalService, initializeLocalDatabase } from '../lib/localDatabase';
 import { hashPassword } from '../utils/hashUtils';
 import {
-    EmployeeRow,
     EmployeeFormData,
     EmployeeFilters,
     LocalEmployee,
@@ -346,11 +345,16 @@ export class EmployeeService {
         }
     }
 
-    // Check if online (same as products/categories)
+    // Check if online (use centralized connection status / heartbeat)
     private async isOnline(): Promise<boolean> {
         try {
-            const { error } = await supabase.from('employees').select('id').limit(1);
-            return !error;
+            const status = connectionStatus.getStatus();
+            if (!status.isOnline) return false;
+            // Fast path: trust recent status
+            if (status.isSupabaseOnline) return true;
+            // Slow path: ask the heartbeat once
+            const { checkSupabaseConnection } = await import('../lib/supabase');
+            return await checkSupabaseConnection();
         } catch {
             return false;
         }
@@ -364,14 +368,19 @@ export class EmployeeService {
         if (pendingEmployees.length === 0) return;
 
         try {
-            // Convert to server format (same as products/categories pattern)
-            const serverEmployees = pendingEmployees.map(emp => ({
-                ...emp,
-                created_at: emp.created_at.toISOString(),
-                updated_at: emp.updated_at.toISOString(),
-                last_synced_at: emp.last_synced_at?.toISOString() || null,
-                deleted_at: emp.deleted_at?.toISOString() || null,
-            }));
+            // Convert to server format (avoid hard-deletes to preserve FK integrity)
+            const serverEmployees = pendingEmployees.map(emp => {
+                const isSoftDeleted = Boolean(emp.deleted_at);
+                return {
+                    ...emp,
+                    // Never ask server to hard-delete employees; mark inactive instead
+                    is_active: isSoftDeleted ? false : emp.is_active,
+                    deleted_at: null,
+                    created_at: emp.created_at.toISOString(),
+                    updated_at: emp.updated_at.toISOString(),
+                    last_synced_at: emp.last_synced_at?.toISOString() || null,
+                };
+            });
 
             // Use bulk upsert RPC (same pattern as products/categories)
             const { error } = await supabase.rpc('upsert_employees', {

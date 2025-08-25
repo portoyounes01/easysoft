@@ -8,6 +8,7 @@ import LoginForm from './components/Auth/LoginForm';
 import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
 import Products from './pages/Products';
+import Categories from './pages/Categories';
 import Employees from './pages/Employees';
 import Transactions from './pages/Transactions';
 import Reports from './pages/Reports';
@@ -17,6 +18,7 @@ import ReceiptDemoPage from './pages/ReceiptDemo';
 import CashierTesting from './pages/CashierTesting';
 import ElectronCashierTesting from './pages/ElectronCashierTesting';
 import PrinterTestPage from './pages/PrinterTestPage';
+import DevicePairing from './pages/DevicePairing';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useSupabaseAuth();
@@ -144,6 +146,14 @@ const AppContent: React.FC = () => {
                     }
                   />
                   <Route
+                    path="/categories"
+                    element={
+                      <PermissionRoute permission="inventory">
+                        <Categories />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
                     path="/employees"
                     element={
                       <PermissionRoute permission="employees">
@@ -186,7 +196,15 @@ const AppContent: React.FC = () => {
                   <Route
                     path="/receipt-demo"
                     element={
-                      <PermissionRoute permission="settings">
+                      <PermissionRoute permission="sales">
+                        <ReceiptDemoPage />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/receipt-demo/:id"
+                    element={
+                      <PermissionRoute permission="sales">
                         <ReceiptDemoPage />
                       </PermissionRoute>
                     }
@@ -212,6 +230,14 @@ const AppContent: React.FC = () => {
                     element={
                       <PermissionRoute permission="settings">
                         <PrinterTestPage />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/pair-device"
+                    element={
+                      <PermissionRoute permission="settings">
+                        <DevicePairing />
                       </PermissionRoute>
                     }
                   />

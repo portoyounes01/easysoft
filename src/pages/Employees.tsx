@@ -6,9 +6,7 @@ import {
     Edit,
     Trash2,
     Shield,
-    User,
     Clock,
-    DollarSign,
     MoreVertical,
     X,
     Save,
@@ -16,13 +14,11 @@ import {
     Eye,
     EyeOff,
     Calendar,
-    Mail,
     Phone,
     KeyRound,
     Loader2,
     UserCheck,
     UserX,
-    BarChart3,
     Copy,
     Banknote
 } from 'lucide-react';
@@ -120,7 +116,16 @@ const Employees: React.FC = () => {
         });
     }, [employees, searchTerm, selectedRole]);
 
-    const getRoleBadge = (role: string) => {
+    const getRoleBadge = (role: string, isActive: boolean) => {
+        if (!isActive) {
+            return (
+                <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700`}>
+                    <Shield className="w-3 h-3" />
+                    <span>{role.toUpperCase()}</span>
+                </span>
+            );
+        }
+
         const colors: Record<string, string> = {
             admin: 'bg-red-100 text-red-800',
             manager: 'bg-blue-100 text-blue-800',
@@ -262,8 +267,8 @@ const Employees: React.FC = () => {
         if ((formData.role === 'manager' || formData.role === 'cashier')) {
             if (!editingEmployee && !formData.pin?.trim()) {
                 errors.pin = 'PIN is required for new employees';
-            } else if (formData.pin?.trim() && formData.pin.length < 6) {
-                errors.pin = 'PIN must be at least 6 characters';
+            } else if (formData.pin?.trim() && formData.pin.length < 4) {
+                errors.pin = 'PIN must be at least 4 digits';
             } else if (formData.pin?.trim() && !/^\d+$/.test(formData.pin)) {
                 errors.pin = 'PIN must contain only numbers';
             }
@@ -533,22 +538,22 @@ const Employees: React.FC = () => {
                     const daysWorked = Math.max(1, Math.round(employee.hours_worked / 8));
 
                     return (
-                        <div key={employee.id} className={`bg-white rounded-xl shadow-lg p-6 border ${employee.is_active ? 'border-gray-100' : 'border-red-200 opacity-75'}`}>
+                        <div key={employee.id} className={`bg-white rounded-xl shadow-lg p-6 border ${employee.is_active ? 'border-gray-100' : 'border-gray-200'}`}>
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center space-x-4">
-                                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${employee.is_active ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-gray-300'}`}>
                                         <span className="text-white text-lg font-bold">
                                             {employee.name.split(' ').map(n => n[0]).join('')}
                                         </span>
                                     </div>
                                     <div>
-                                        <h3 className="text-lg font-bold text-gray-800">{employee.name}</h3>
-                                        <p className="text-sm text-gray-600">{employee.employee_number}</p>
-                                        <p className="text-sm text-gray-500">{employee.email}</p>
+                                        <h3 className={`text-lg font-bold ${employee.is_active ? 'text-gray-800' : 'text-gray-700'}`}>{employee.name}</h3>
+                                        <p className={`text-sm ${employee.is_active ? 'text-gray-600' : 'text-gray-500'}`}>{employee.employee_number}</p>
+                                        <p className={`text-sm ${employee.is_active ? 'text-gray-500' : 'text-gray-400'}`}>{employee.email}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-2">
-                                    {getRoleBadge(employee.role)}
+                                    {getRoleBadge(employee.role, employee.is_active)}
                                     {/* Show lock icon for admin employees when viewed by non-admins */}
                                     {employee.role === 'admin' && currentUser?.role !== 'admin' && (
                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600" title="Admin access restricted">
@@ -556,7 +561,7 @@ const Employees: React.FC = () => {
                                         </span>
                                     )}
                                     {!employee.is_active && (
-                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700">
                                             Inactive
                                         </span>
                                     )}
@@ -602,7 +607,7 @@ const Employees: React.FC = () => {
                                                     ) : (
                                                         <>
                                                             <UserCheck className="w-4 h-4" />
-                                                            <span>Activate</span>
+                                                            <span>Reactivate</span>
                                                         </>
                                                     )}
                                                 </button>
@@ -626,27 +631,27 @@ const Employees: React.FC = () => {
                             </div>
 
                             <div className="grid grid-cols-2 gap-4 mb-4">
-                                <div className="bg-green-50 p-3 rounded-lg">
+                                <div className={`${employee.is_active ? 'bg-green-50' : 'bg-gray-100'} p-3 rounded-lg`}>
                                     <div className="flex items-center space-x-2 mb-1">
-                                        <Banknote className="w-4 h-4 text-green-600" />
-                                        <span className="text-sm font-medium text-green-800">Total Sales</span>
+                                        <Banknote className={`w-4 h-4 ${employee.is_active ? 'text-green-600' : 'text-gray-500'}`} />
+                                        <span className={`text-sm font-medium ${employee.is_active ? 'text-green-800' : 'text-gray-600'}`}>Total Sales</span>
                                     </div>
-                                    <p className="text-lg font-bold text-green-700">€{employee.total_sales.toFixed(2)}</p>
+                                    <p className={`text-lg font-bold ${employee.is_active ? 'text-green-700' : 'text-gray-700'}`}>€{employee.total_sales.toFixed(2)}</p>
                                 </div>
 
-                                <div className="bg-blue-50 p-3 rounded-lg">
+                                <div className={`${employee.is_active ? 'bg-blue-50' : 'bg-gray-100'} p-3 rounded-lg`}>
                                     <div className="flex items-center space-x-2 mb-1">
-                                        <Clock className="w-4 h-4 text-blue-600" />
-                                        <span className="text-sm font-medium text-blue-800">Days Worked</span>
+                                        <Clock className={`w-4 h-4 ${employee.is_active ? 'text-blue-600' : 'text-gray-500'}`} />
+                                        <span className={`text-sm font-medium ${employee.is_active ? 'text-blue-800' : 'text-gray-600'}`}>Days Worked</span>
                                     </div>
-                                    <p className="text-lg font-bold text-blue-700">{daysWorked}</p>
+                                    <p className={`text-lg font-bold ${employee.is_active ? 'text-blue-700' : 'text-gray-700'}`}>{daysWorked}</p>
                                 </div>
                             </div>
 
                             <div className="mb-4">
                                 <div>
-                                    <p className="text-sm text-gray-600">Transactions</p>
-                                    <p className="font-semibold text-gray-800">{employee.transaction_count}</p>
+                                    <p className={`text-sm ${employee.is_active ? 'text-gray-600' : 'text-gray-500'}`}>Transactions</p>
+                                    <p className={`font-semibold ${employee.is_active ? 'text-gray-800' : 'text-gray-700'}`}>{employee.transaction_count}</p>
                                 </div>
                             </div>
 
@@ -659,7 +664,7 @@ const Employees: React.FC = () => {
                                     {(currentUser?.role === 'admin' || employee.role !== 'admin') ? (
                                         <button
                                             onClick={() => handleEditEmployee(employee)}
-                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                            className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-500 hover:bg-gray-100'}`}
                                             title="Edit Employee"
                                         >
                                             <Edit className="w-4 h-4" />
@@ -678,7 +683,7 @@ const Employees: React.FC = () => {
                                     {(currentUser?.role === 'admin' || employee.role !== 'admin') ? (
                                         <button
                                             onClick={() => setShowDeleteConfirm(employee)}
-                                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                            className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-red-600 hover:bg-red-50' : 'text-gray-500 hover:bg-gray-100'}`}
                                             title="Delete Employee"
                                         >
                                             <Trash2 className="w-4 h-4" />
@@ -791,8 +796,8 @@ const Employees: React.FC = () => {
                                                     onChange={(e) => handleFormChange('role', e.target.value as EmployeeRole)}
                                                     disabled={editingEmployee?.role === 'admin' && currentUser?.role !== 'admin'}
                                                     className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editingEmployee?.role === 'admin' && currentUser?.role !== 'admin'
-                                                            ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed'
-                                                            : 'border-gray-300'
+                                                        ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed'
+                                                        : 'border-gray-300'
                                                         }`}
                                                 >
                                                     <option value="cashier">Cashier</option>
@@ -874,7 +879,7 @@ const Employees: React.FC = () => {
                                                         onChange={(e) => handleFormChange('pin', e.target.value.replace(/\D/g, '').slice(0, 8))}
                                                         className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.pin ? 'border-red-500' : 'border-gray-300'
                                                             }`}
-                                                        placeholder={editingEmployee ? 'Leave empty to keep current PIN' : 'Enter 6+ digit PIN'}
+                                                        placeholder={editingEmployee ? 'Leave empty to keep current PIN' : 'Enter 4+ digit PIN'}
                                                         maxLength={8}
                                                     />
                                                     {formErrors.pin && (
@@ -885,8 +890,8 @@ const Employees: React.FC = () => {
                                                     )}
                                                     <p className="mt-1 text-xs text-gray-500">
                                                         {editingEmployee
-                                                            ? 'Leave empty to keep current PIN, or enter new 6+ digit PIN'
-                                                            : 'PIN must be at least 6 digits, will be securely hashed'
+                                                            ? 'Leave empty to keep current PIN, or enter new 4+ digit PIN'
+                                                            : 'PIN must be at least 4 digits, will be securely hashed'
                                                         }
                                                     </p>
                                                 </div>

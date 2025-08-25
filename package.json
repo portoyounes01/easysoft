@@ -17,6 +17,10 @@
     "electron:dev-debug": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron . --inspect=9229\"",
     "electron:pack": "npm run build && electron-builder",
     "electron:dist": "npm run build && electron-builder --publish=never",
+    "electron:dist:win": "echo '❌ Use GitHub Actions for Windows builds with hardware support. Run: ./trigger-github-build.sh'",
+    "electron:dist:win32": "echo '❌ Use GitHub Actions for Windows builds with hardware support. Run: ./trigger-github-build.sh'",
+    "electron:dist:all": "npm run build && electron-builder --win --mac --linux",
+    "build:github": "echo 'Push to GitHub to trigger cross-platform builds with hardware support!'",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -36,6 +40,7 @@
     "usb": "^2.16.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.1",
     "@eslint/js": "^9.9.1",
     "@testing-library/jest-dom": "^6.4.2",
     "@testing-library/react": "^14.1.2",
@@ -72,15 +77,72 @@
       "electron/**/*",
       "node_modules/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "public/",
+        "to": "public/",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "electronDownload": {
+      "cache": "./electron-cache"
+    },
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
     "mac": {
       "category": "public.app-category.business",
-      "target": "dmg"
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icon.ico"
     },
     "linux": {
-      "target": "AppImage"
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   }
 }

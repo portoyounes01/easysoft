@@ -6,7 +6,7 @@
 - ✅ Updated `App.tsx` to use new auth context
 - 🔄 LoginForm needs dual mode support
 - ❌ RLS policies need to be updated to use `auth.uid()`
-- ❌ Employee records need to be linked to Supabase auth users
+- ❌ Employee records need to be linked to Supabase auth users (for anyone with `inventory` or `all` access, including cashiers)
 
 ## Phase 1: Database Setup for Supabase Auth Integration
 

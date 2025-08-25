@@ -74,7 +74,7 @@ const LoginForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
+
     console.log('🔐 Login attempt started');
     console.log('Selected employee:', selectedEmployee);
     console.log('Password provided:', !!password);
@@ -90,7 +90,7 @@ const LoginForm: React.FC = () => {
       console.log('🔄 Calling signInWithEmployeeCredentials...');
       const result = await signInWithEmployeeCredentials(selectedEmployee.employeeNumber, password);
       console.log('📋 Login result:', result);
-      
+
       if (!result.success) {
         const authType = selectedEmployee.role === 'admin' ? 'password' : 'PIN';
         console.log('❌ Login failed:', result.error);
@@ -294,7 +294,7 @@ const LoginForm: React.FC = () => {
                     onConfirm={(value: string) => setPassword(value)}
                     title=""
                     initialValue={password}
-                    maxLength={selectedEmployee?.role === 'admin' ? 50 : 6}
+                    maxLength={selectedEmployee?.role === 'admin' ? 50 : 8}
                     allowNumbers={true}
                     allowLetters={selectedEmployee?.role === 'admin'}
                   />

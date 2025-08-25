@@ -36,14 +36,10 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
     }
 
     try {
-        // Using a lightweight GET instead of HEAD because some PostgREST
-        // versions return 500 for HEAD requests with select=count.
-        const { error } = await supabase
-            .from('employees')
-            .select('id')
-            .limit(1);
-
-        return !error;
+        // Use a very lightweight RPC heartbeat to avoid hitting tables and RLS
+        const { data, error } = await supabase.rpc('ping');
+        if (error) return false;
+        return Boolean(data) || data === null; // some PostgREST versions return null for void returns
     } catch (error) {
         console.warn('Supabase connection check failed:', error);
         return false;
@@ -57,6 +53,7 @@ export class ConnectionStatus {
     private isSupabaseOnline: boolean = false;
     private listeners: Array<(status: { isOnline: boolean; isSupabaseOnline: boolean }) => void> = [];
     private checkInterval: number | null = null;
+    private checkInFlight: Promise<boolean> | null = null;
 
     private constructor() {
         // Listen for browser online/offline events
@@ -88,20 +85,29 @@ export class ConnectionStatus {
     };
 
     private startConnectionChecks() {
-        // Check Supabase connection every 30 seconds
+        // Check Supabase connection every 5 seconds
         this.checkInterval = window.setInterval(() => {
             if (this.isOnline) {
                 this.checkSupabaseConnectionStatus();
             }
-        }, 30000);
+        }, 5000);
 
         // Initial check
         this.checkSupabaseConnectionStatus();
     }
 
     private async checkSupabaseConnectionStatus() {
+        // Deduplicate concurrent checks
+        if (!this.checkInFlight) {
+            this.checkInFlight = checkSupabaseConnection()
+                .catch(() => false)
+                .finally(() => {
+                    this.checkInFlight = null;
+                });
+        }
+
         const wasOnline = this.isSupabaseOnline;
-        this.isSupabaseOnline = await checkSupabaseConnection();
+        this.isSupabaseOnline = await this.checkInFlight;
 
         if (wasOnline !== this.isSupabaseOnline) {
             this.notifyListeners();

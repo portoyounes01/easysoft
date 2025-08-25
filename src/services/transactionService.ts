@@ -1,12 +1,11 @@
 import { supabase } from '../lib/supabase';
+
+// Coalesce concurrent getTransactionById calls per id
+const getTransactionByIdInFlight = new Map<string, Promise<any>>();
 import {
-    TransactionRow,
     TransactionInsert,
     TransactionUpdate,
-    TransactionItemRow,
     TransactionItemInsert,
-    TransactionItemUpdate,
-    CustomerRow,
     CustomerInsert,
     CustomerUpdate,
     ReportTransaction,
@@ -110,69 +109,78 @@ export const transactionService = {
         }));
     },
 
-    // Get a single transaction by ID
+    // Get a single transaction by ID (coalesces concurrent calls per id)
     async getTransactionById(id: string) {
-        const { data: transaction, error: transactionError } = await supabase
-            .from('transactions')
-            .select('*')
-            .eq('id', id)
-            .is('deleted_at', null)
-            .single();
+        if (!getTransactionByIdInFlight.has(id)) {
+            const p = (async () => {
+                const { data: transaction, error: transactionError } = await supabase
+                    .from('transactions')
+                    .select('*')
+                    .eq('id', id)
+                    .is('deleted_at', null)
+                    .single();
 
-        if (transactionError) {
-            console.error('Error fetching transaction:', transactionError);
-            throw transactionError;
+                if (transactionError) {
+                    throw transactionError;
+                }
+
+                const { data: transactionItems, error: itemsError } = await supabase
+                    .from('transaction_items')
+                    .select('*')
+                    .eq('transaction_id', id)
+                    .is('deleted_at', null);
+
+                if (itemsError) {
+                    throw itemsError;
+                }
+
+                let customer = null as any;
+                if (transaction.customer_id) {
+                    const { data: customerData } = await supabase
+                        .from('customers')
+                        .select('*')
+                        .eq('id', transaction.customer_id)
+                        .is('deleted_at', null)
+                        .single();
+                    customer = customerData;
+                }
+
+                return {
+                    ...transaction,
+                    transaction_items: transactionItems || [],
+                    customers: customer
+                };
+            })().finally(() => {
+                getTransactionByIdInFlight.delete(id);
+            });
+
+            getTransactionByIdInFlight.set(id, p);
         }
 
-        // Get transaction items
-        const { data: transactionItems, error: itemsError } = await supabase
-            .from('transaction_items')
-            .select('*')
-            .eq('transaction_id', id)
-            .is('deleted_at', null);
-
-        if (itemsError) {
-            console.error('Error fetching transaction items:', itemsError);
-            throw itemsError;
-        }
-
-        // Get customer if exists
-        let customer = null;
-        if (transaction.customer_id) {
-            const { data: customerData, error: customerError } = await supabase
-                .from('customers')
-                .select('*')
-                .eq('id', transaction.customer_id)
-                .is('deleted_at', null)
-                .single();
-
-            if (!customerError) {
-                customer = customerData;
-            }
-        }
-
-        return {
-            ...transaction,
-            transaction_items: transactionItems || [],
-            customers: customer
-        };
+        return await getTransactionByIdInFlight.get(id)!;
     },
 
     // Create a new transaction with items
     async createTransaction(transactionData: TransactionInsert, items: TransactionItemInsert[]) {
-        const { data: { user } } = await supabase.auth.getUser();
+        // Generate transaction number with fallback
+        let transactionNumber: string;
+        
+        try {
+            const { data: rpcNumber, error: numberError } = await supabase
+                .rpc('generate_transaction_number');
 
-        if (!user) {
-            throw new Error('User not authenticated');
-        }
-
-        // Generate transaction number
-        const { data: transactionNumber, error: numberError } = await supabase
-            .rpc('generate_transaction_number');
-
-        if (numberError) {
-            console.error('Error generating transaction number:', numberError);
-            throw numberError;
+            if (numberError || !rpcNumber) {
+                throw new Error('RPC failed: ' + (numberError?.message || 'null result'));
+            }
+            transactionNumber = rpcNumber;
+        } catch (error) {
+            console.warn('RPC generate_transaction_number failed, using client fallback:', error);
+            // Client-side fallback with timestamp + random
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+            const timeStr = now.getTime().toString().slice(-4);
+            const randomStr = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+            transactionNumber = `TXN${dateStr}${timeStr}${randomStr}`;
         }
 
         // Create the transaction

@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom';
 import {
   ShoppingCart,
   Plus,
-  Minus,
   X,
   CreditCard,
   Banknote,
@@ -14,7 +13,6 @@ import {
   Cake,
   Candy,
   Percent,
-  Calculator,
   LogOut,
   UserCircle,
   Search,
@@ -22,7 +20,6 @@ import {
   Mail,
   Users,
   Save,
-  MapPin,
   CreditCard as TaxIcon,
   Check,
   AlertCircle,
@@ -41,10 +38,14 @@ import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useProducts } from '../contexts/ProductsContext';
 import VirtualNumpad from '../components/VirtualNumpad';
+import OrderSummaryPanel from '../components/OrderSummaryPanel';
 import VirtualKeyboard from '../components/VirtualKeyboard';
 import { Customer } from '../types';
-import { LocalProduct, LocalCategory, calculateStockStatus } from '../types/supabase';
+import { LocalProduct } from '../types/supabase';
 import { useTranslation } from 'react-i18next';
+import { transactionService } from '../services/transactionService';
+import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
+import ThermalReceipt, { ReceiptProps } from '../components/ThermalReceipt';
 
 // Icon mapping for categories
 const iconMap = {
@@ -136,11 +137,10 @@ let mockCustomers: Customer[] = [
 
 const POS: React.FC = () => {
   const { t } = useTranslation();
-  const { cart, addToCart, removeFromCart, updateQuantity, clearCart, selectedCustomer, selectCustomer } = usePOS();
+  const { cart, addToCart, clearCart, selectedCustomer, selectCustomer } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const {
-    products: allProducts,
     categories: allCategories,
     getProductsByCategory,
     getActiveProducts,
@@ -149,6 +149,10 @@ const POS: React.FC = () => {
     syncData,
     refreshData
   } = useProducts();
+
+  // Receipt preview modal state
+  const [showReceiptPreview, setShowReceiptPreview] = useState(false);
+  const [receiptPreviewData, setReceiptPreviewData] = useState<ReceiptProps | null>(null);
 
   // Stock validation helper function
   const canAddToCart = (product: LocalProduct, requestedQuantity = 1): boolean => {
@@ -175,53 +179,18 @@ const POS: React.FC = () => {
     }
   };
 
-  // Enhanced updateQuantity with stock validation
-  const handleUpdateQuantity = (productId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      // Always allow removal
-      updateQuantity(productId, newQuantity);
-      return;
-    }
-
-    // Find the product and current cart item
-    const cartItem = cart.find(item => item.product.id === productId);
-    if (!cartItem) return;
-
-    const product = cartItem.product;
-    const currentQuantity = cartItem.quantity;
-    const quantityDifference = newQuantity - currentQuantity;
-
-    // If decreasing quantity, always allow
-    if (quantityDifference <= 0) {
-      updateQuantity(productId, newQuantity);
-      return;
-    }
-
-    // If increasing, check stock validation
-    if (settings.pos.allowNegativeStock || newQuantity <= product.stock) {
-      updateQuantity(productId, newQuantity);
-    } else {
-      alert(`Only ${product.stock} "${product.name}" available in stock.`);
-    }
-  };
+  // Quantity edits handled in product grid; order panel is read-only summary
   const [showPayment, setShowPayment] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    const saved = localStorage.getItem('pos-sidebar-collapsed');
-    return saved ? JSON.parse(saved) : false;
-  });
+  // POS uses a temporary navigation overlay instead of a persistent sidebar
   const [showNavigation, setShowNavigation] = useState(false);
   const [discount, setDiscount] = useState({ type: 'none', value: 0 });
 
   // Toggle sidebar and persist state
-  const toggleSidebar = () => {
-    const newCollapsed = !isSidebarCollapsed;
-    setIsSidebarCollapsed(newCollapsed);
-    localStorage.setItem('pos-sidebar-collapsed', JSON.stringify(newCollapsed));
-  };
+  // Collapsed state preserved; toggled via showNavigation overlay only in POS
 
   // Toggle navigation overlay
   const toggleNavigation = () => {
@@ -243,7 +212,7 @@ const POS: React.FC = () => {
   const [numpadConfig, setNumpadConfig] = useState({
     isOpen: false,
     title: '',
-    onConfirm: (value: string) => { },
+    onConfirm: (_value: string) => { },
     prefix: '',
     suffix: '',
     placeholder: '0.00',
@@ -254,7 +223,7 @@ const POS: React.FC = () => {
     isOpen: false,
     title: '',
     field: '',
-    onConfirm: (value: string) => { },
+    onConfirm: (_value: string) => { },
     maxLength: 50,
     allowNumbers: true,
     allowLetters: true
@@ -402,7 +371,7 @@ const POS: React.FC = () => {
       : 0;
 
   const discountedSubtotal = subtotal - discountAmount;
-  
+
   // Calculate tax extracted from tax-inclusive prices (European style)
   const tax = cart.reduce((sum, item) => {
     const itemTotal = item.product.price * item.quantity;
@@ -438,7 +407,7 @@ const POS: React.FC = () => {
   const customerDiscount = selectedCustomer ? selectedCustomer.discountLevel : 0;
   const customerDiscountAmount = discountedSubtotal * customerDiscount / 100;
   const finalSubtotal = discountedSubtotal - customerDiscountAmount;
-  
+
   // In European style, total = subtotal (since tax is already included in prices)
   // But we need to adjust tax proportionally with discounts
   const finalTax = finalTaxAfterDiscount * (finalSubtotal / discountedSubtotal);
@@ -446,13 +415,7 @@ const POS: React.FC = () => {
   const finalTotal = finalSubtotal;
   const changeAmount = cashReceived > finalTotal ? cashReceived - finalTotal : 0;
 
-  const handleCategoryClick = (categoryId: string) => {
-    setSelectedCategoryId(categoryId);
-  };
-
-  const handlePayment = () => {
-    setShowPayment(true);
-  };
+  // (category selection handled inline where used)
 
   const handleDiscountClick = (type: 'percentage' | 'fixed') => {
     setNumpadConfig({
@@ -490,9 +453,7 @@ const POS: React.FC = () => {
     });
   };
 
-  const handleRemoveDiscount = () => {
-    setDiscount({ type: 'none', value: 0 });
-  };
+  // Legacy discount removal kept for previous UI; not used in new summary panel
 
   const handleLogout = () => {
     signOut();
@@ -531,17 +492,9 @@ const POS: React.FC = () => {
     setKeyboardConfig(prev => ({ ...prev, isOpen: false }));
   };
 
-  const handleCustomerRemove = () => {
-    selectCustomer(null);
-  };
+  // Legacy customer remove kept for previous UI; not used in new summary panel
 
-  const handleCustomerSearch = () => {
-    // Focus on the search input
-    const searchInput = document.querySelector('input[placeholder*="Search by NIF"]') as HTMLInputElement;
-    if (searchInput) {
-      searchInput.focus();
-    }
-  };
+  // Removed unused handleCustomerSearch helper
 
   const handleAddNewCustomer = () => {
     // Prefill form based on search term
@@ -670,7 +623,7 @@ const POS: React.FC = () => {
       isOpen: false,
       title: '',
       field: '',
-      onConfirm: (value: string) => { },
+      onConfirm: (_value: string) => { },
       maxLength: 50,
       allowNumbers: true,
       allowLetters: true
@@ -697,7 +650,7 @@ const POS: React.FC = () => {
       isOpen: false,
       title: '',
       field: '',
-      onConfirm: (value: string) => { },
+      onConfirm: (_value: string) => { },
       maxLength: 50,
       allowNumbers: true,
       allowLetters: true
@@ -920,13 +873,13 @@ const POS: React.FC = () => {
                 {!selectedCategoryId && (
                   <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-full"></div>
                 )}
-                
+
                 <div className={`w-6 h-6 flex items-center justify-center mb-1 ${!selectedCategoryId ? 'text-blue-500' : 'text-gray-500'
                   }`}>
                   <Grid className="w-4 h-4" />
                 </div>
                 <div className={`text-[10px] font-medium text-center leading-tight px-1 w-full max-w-full ${!selectedCategoryId ? 'text-gray-900' : 'text-gray-500'}`}>{/* category label */}
-                  { 'All Menu'.split(' ').length > 1 ? (
+                  {'All Menu'.split(' ').length > 1 ? (
                     <div className="line-clamp-2 break-words">All Menu</div>
                   ) : (
                     <div className="truncate w-full max-w-full overflow-hidden">All Menu</div>
@@ -952,7 +905,7 @@ const POS: React.FC = () => {
                     {isSelected && (
                       <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-full"></div>
                     )}
-                    
+
                     <div className={`w-6 h-6 flex items-center justify-center mb-1 text-gray-500`}>
                       {renderCategoryIcon(category.icon)}
                     </div>
@@ -966,7 +919,7 @@ const POS: React.FC = () => {
                   </button>
                 );
               })}
-              
+
               {/* Show empty state if no categories */}
               {allCategories.length === 0 && (
                 <div className="text-center py-8">
@@ -1056,12 +1009,21 @@ const POS: React.FC = () => {
                                 )}
 
                                 {/* Product Image */}
-                                <div className="aspect-square relative">
-                                  <img
-                                    src={product.image_url || '/placeholder-product.jpg'}
-                                    alt={product.name}
-                                    className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale' : ''}`}
-                                  />
+                                <div className="aspect-square relative bg-gray-100 flex items-center justify-center">
+                                  {/* Default icon (visible under image or when image hidden) */}
+                                  <Package className={`w-10 h-10 text-gray-400 ${isOutOfStock ? 'grayscale' : ''}`} />
+                                  {/* Product image overlays the icon when available */}
+                                  {product.image_url && (
+                                    <img
+                                      src={product.image_url}
+                                      alt={product.name}
+                                      className={`absolute inset-0 w-full h-full object-cover ${isOutOfStock ? 'grayscale' : ''}`}
+                                      onError={(e) => {
+                                        const target = e.currentTarget as HTMLImageElement;
+                                        target.style.display = 'none';
+                                      }}
+                                    />
+                                  )}
 
                                   {/* Out of Stock Overlay */}
                                   {isOutOfStock && (
@@ -1108,191 +1070,16 @@ const POS: React.FC = () => {
         </div>
       </div>
 
-      {/* Right Cart Sidebar - Full Height */}
-      <div className="w-96 bg-white shadow-xl border-l border-gray-200 flex flex-col h-screen">
-        {/* Top Half - Cart Items */}
-        <div className="h-1/2 overflow-y-auto p-4 sm:p-6 border-b-2 border-gray-200">
-          {/* Customer Info */}
-          {selectedCustomer && (
-            <div className="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-2">
-                  <UserCircle className="w-5 h-5 text-blue-600" />
-                  <span className="font-semibold text-blue-800">{t('pos.cartCustomerHeader')}</span>
-                </div>
-                <button
-                  onClick={handleCustomerRemove}
-                  className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="space-y-1">
-                {selectedCustomer.name && (
-                  <p className="font-bold text-gray-800">{selectedCustomer.name}</p>
-                )}
-                <p className="text-sm text-gray-600">{selectedCustomer.taxId}</p>
-                {selectedCustomer.discountLevel > 0 && (
-                  <p className="text-sm font-semibold text-green-600">
-                    {selectedCustomer.discountLevel}% Customer Discount
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Cart Items */}
-          {cart.length === 0 ? (
-            <div className="text-center py-12">
-              <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-xl text-gray-500 mb-2">{t('pos.noCartItemsTitle')}</p>
-              <p className="text-gray-400">{t('pos.noCartItemsMessage')}</p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {cart.map((item) => (
-                <div key={item.product.id} className="flex items-center justify-between py-2 border-b border-gray-100">
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-gray-800 truncate block">{item.product.name}</span>
-                  </div>
-
-                  <div className="flex items-center space-x-2 ml-2">
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleUpdateQuantity(item.product.id, item.quantity - 1)}
-                        className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white p-2 rounded-xl transition-all duration-200 min-h-[20px] min-w-[20px] flex items-center justify-center shadow-lg hover:shadow-xl"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="text-sm font-semibold text-gray-800 min-w-[20px] text-center">{item.quantity}</span>
-                      <button
-                        onClick={() => handleUpdateQuantity(item.product.id, item.quantity + 1)}
-                        className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white p-2 rounded-xl transition-all duration-200 min-h-[20px] min-w-[20px] flex items-center justify-center shadow-lg hover:shadow-xl"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <span className="text-sm font-bold text-gray-800 min-w-[60px] text-right">€{(item.product.price * item.quantity).toFixed(2)}</span>
-
-                    <button
-                      onClick={() => removeFromCart(item.product.id)}
-                      className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Bottom Half - Payment Section */}
-        <div className="h-1/2 p-4 bg-white flex flex-col">
-          {/* Discount Section - 25% */}
-          <div className="flex-none h-[25%] flex flex-col justify-start space-y-2 mb-4">
-            <div className="flex items-center justify-end">
-              <div className="flex space-x-2 w-full">
-                <button
-                  onClick={() => handleDiscountClick('percentage')}
-                  className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-3 py-2 rounded-xl transition-colors flex items-center justify-center flex-1 min-w-0"
-                >
-                  <span className="text-sm font-medium truncate">{t('pos.discountPercentage')}</span>
-                </button>
-                <button
-                  onClick={() => handleDiscountClick('fixed')}
-                  className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-3 py-2 rounded-xl transition-colors flex items-center justify-center flex-1 min-w-0"
-                >
-                  <span className="text-sm font-medium truncate">{t('pos.discountFixed')}</span>
-                </button>
-              </div>
-            </div>
-
-            {discount.type !== 'none' && (
-              <div className="flex items-center justify-between bg-purple-50 p-2 rounded-lg">
-                <span className="text-purple-700 font-medium text-sm">
-                  {discount.type === 'percentage' ? `${discount.value}%` : `€${discount.value.toFixed(2)}`} off
-                </span>
-                <button
-                  onClick={handleRemoveDiscount}
-                  className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-
-            {selectedCustomer && selectedCustomer.discountLevel > 0 && (
-              <div className="flex items-center justify-between bg-green-50 p-2 rounded-lg">
-                <span className="text-green-700 font-medium text-sm">
-                  Customer: {selectedCustomer.discountLevel}% off
-                </span>
-                <UserCircle className="w-4 h-4 text-green-600" />
-              </div>
-            )}
-          </div>
-
-          {/* Totals - 35% */}
-          <div className="flex-none h-[35%] flex flex-col justify-center space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">{t('pos.subtotalLabel')}</span>
-              <span className="text-gray-800 font-semibold">€{subtotal.toFixed(2)}</span>
-            </div>
-            {discount.type !== 'none' && (
-              <div className="flex justify-between text-sm text-purple-600">
-                <span>{t('pos.discountLabel')}</span>
-                <span className="font-semibold">-€{discountAmount.toFixed(2)}</span>
-              </div>
-            )}
-            {selectedCustomer && selectedCustomer.discountLevel > 0 && (
-              <div className="flex justify-between text-sm text-green-600">
-                <span>{t('pos.customerDiscountLabel')}</span>
-                <span className="font-semibold">-€{customerDiscountAmount.toFixed(2)}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">{t('pos.taxLabel')}</span>
-              <span className="text-gray-800 font-semibold">€{adjustedFinalTax.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-1">
-              <span>{t('pos.totalLabel')}</span>
-              <span className="text-green-600">€{finalTotal.toFixed(2)}</span>
-            </div>
-          </div>
-
-          {/* Buttons - 40% */}
-          <div className="flex-none h-[40%] flex flex-col justify-center space-y-2">
-            {cart.length > 0 && (
-              <>
-                <button
-                  onClick={handlePayment}
-                  className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-2 rounded-2xl font-semibold text-base transition-all duration-200 flex items-center justify-center space-x-2 h-12"
-                >
-                  <CreditCard className="w-4 h-4" />
-                  <span>{t('pos.processPayment')}</span>
-                </button>
-
-                <div className="grid grid-cols-2 gap-2 h-8">
-                  <button
-                    onClick={handleCustomerClick}
-                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl font-medium flex items-center justify-center space-x-1"
-                  >
-                    <User className="w-3 h-3" />
-                    <span className="text-xs">{t('pos.customer')}</span>
-                  </button>
-                  <button
-                    onClick={clearCart}
-                    className="bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white rounded-xl font-medium text-xs"
-                  >
-                    {t('pos.clearCart')}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* Right Order Summary Panel */}
+      <OrderSummaryPanel
+        items={cart.map(ci => ({ product: ci.product, quantity: ci.quantity }))}
+        onClearAll={clearCart}
+        onCustomer={handleCustomerClick}
+        onDiscount={() => handleDiscountClick('percentage')}
+        onTables={() => { }}
+        onSaveBill={() => { }}
+        onProcess={() => setShowPayment(true)}
+      />
 
       {/* Customer Selection Modal */}
       {showCustomerModal && (
@@ -1747,10 +1534,179 @@ const POS: React.FC = () => {
                 <button
                   className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 rounded-2xl min-h-[60px]"
                   disabled={cashReceived > 0 && cashReceived < finalTotal}
+                  onClick={async () => {
+                    // Build receipt data
+                    // Build series key per settings (monthly/yearly)
+                    const now = new Date();
+                    const y = now.getFullYear();
+                    const m = String(now.getMonth() + 1).padStart(2, '0');
+                    const seriesKey = settings.receipt.resetPolicy === 'monthly'
+                      ? `${settings.receipt.seriesPrefix}-${y}${m}`
+                      : `${settings.receipt.seriesPrefix}-${y}`;
+
+                    // Compute next number (starting from 1000 via currentNumber default 999)
+                    let nextNumber = settings.receipt.currentNumber;
+                    let lastSeriesKey = settings.receipt.lastSeriesKey;
+                    if (lastSeriesKey !== seriesKey) {
+                      nextNumber = 999; // reset so first becomes 1000
+                      lastSeriesKey = seriesKey;
+                    }
+                    nextNumber += 1;
+
+                    const padded = String(nextNumber).padStart(settings.receipt.numericWidth, '0');
+                    const documentNumber = `${seriesKey}-${padded}`; // reserved for future persistence in transaction
+
+                    // Persist updated counter using settings updater
+                    updateSettings({
+                      receipt: {
+                        lastSeriesKey,
+                        currentNumber: nextNumber,
+                      }
+                    });
+
+                    const receiptData = {
+                      documentType: settings.receipt.defaultDocumentType as 'FATURA' | 'FATURA_SIMPLIFICADA',
+                      date: new Date(),
+                      counter: settings.receipt.counterLabel,
+                      verificationCode: `${settings.receipt.atcudPrefix}-${seriesKey}-${padded}`,
+                      // Replace FS placeholder number with our generated document number
+                      // Downstream receipt component prints documentNumber value
+                      documentNumber: documentNumber,
+                      company: {
+                        name: settings.company.name,
+                        address: settings.company.address,
+                        postalCode: settings.company.postalCode,
+                        city: settings.company.city,
+                        taxNumber: settings.company.taxNumber,
+                        phone: settings.company.phone || undefined,
+                        email: settings.company.email || undefined,
+                      },
+                      customer: selectedCustomer ? {
+                        taxNumber: selectedCustomer.taxId,
+                        name: selectedCustomer.name
+                      } : undefined,
+                      items: cart.map(ci => ({
+                        id: ci.product.id,
+                        description: ci.product.name,
+                        quantity: ci.quantity,
+                        unitPrice: ci.product.price,
+                        vatRate: Math.round((ci.product.iva_rate || 0) * 100),
+                        // price is tax-included already; total line value equals unit*qty
+                        total: Number((ci.product.price * ci.quantity).toFixed(2))
+                      })),
+                      totals: {
+                        subtotal: Number(subtotal.toFixed(2)),
+                        discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
+                        discountPercentage: discount.type === 'percentage' ? discount.value : 0,
+                        net: Number(finalSubtotal.toFixed(2)),
+                        vat: Number(adjustedFinalTax.toFixed(2)),
+                        total: Number(finalTotal.toFixed(2))
+                      },
+                      payment: {
+                        method: cashReceived > 0 ? 'Numerário' : 'Multibanco',
+                        amountGiven: Number(cashReceived.toFixed(2)),
+                        change: Number(changeAmount.toFixed(2))
+                      },
+                      slogan: settings.company.slogan || undefined,
+                      softwareInfo: settings.company.softwareInfo || undefined,
+                      certificationNumber: settings.company.certificationNumber || undefined,
+                    };
+
+                    // Try to persist transaction to Supabase
+                    try {
+                      if (isSupabaseConfigured() && await checkSupabaseConnection()) {
+                        const employeeId = employee?.id || 'unknown-employee';
+                        const employeeName = employee?.name || 'Employee';
+                        const transactionDate = now.toISOString().slice(0, 10); // YYYY-MM-DD
+                        const transactionTime = now.toTimeString().slice(0, 8); // HH:MM:SS
+
+                        const paymentMethod = cashReceived > 0 ? 'cash' : 'card' as const;
+
+                        const transactionInsert = {
+                          employee_id: employeeId,
+                          employee_name: employeeName,
+                          customer_id: selectedCustomer?.id || null,
+                          customer_name: selectedCustomer?.name || null,
+                          transaction_date: transactionDate,
+                          transaction_time: transactionTime,
+                          subtotal: Number(subtotal.toFixed(2)),
+                          discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
+                          tax: Number(adjustedFinalTax.toFixed(2)),
+                          total: Number(finalTotal.toFixed(2)),
+                          payment_method: paymentMethod,
+                          amount_paid: cashReceived > 0 ? Number(cashReceived.toFixed(2)) : Number(finalTotal.toFixed(2)),
+                          change_given: Number(changeAmount.toFixed(2)),
+                          status: 'completed' as const,
+                          notes: null,
+                          receipt_number: documentNumber,
+                        };
+
+                        const itemsInsert = cart.map(ci => {
+                          const lineTotal = Number((ci.product.price * ci.quantity).toFixed(2));
+                          const taxAmount = Number((lineTotal - (lineTotal / (1 + (ci.product.iva_rate || 0)))).toFixed(2));
+                          return {
+                            transaction_id: 'placeholder', // will be set by service
+                            product_id: ci.product.id,
+                            product_name: ci.product.name,
+                            product_sku: ci.product.sku,
+                            category_id: ci.product.category_id || null,
+                            category_name: ci.product.category_name || null,
+                            quantity: ci.quantity,
+                            unit_price: ci.product.price,
+                            unit_cost: ci.product.cost || 0,
+                            iva_rate: ci.product.iva_rate || 0,
+                            line_total: lineTotal,
+                            tax_amount: taxAmount,
+                            profit_amount: 0,
+                            discount_amount: 0,
+                            discount_percentage: 0,
+                          };
+                        });
+
+                        await transactionService.createTransaction(transactionInsert as any, itemsInsert as any);
+                      }
+                    } catch (e) {
+                      console.warn('Transaction persistence failed, falling back to local receipt view.', e);
+                    }
+
+                    // Show receipt preview modal instead of navigation
+                    setShowPayment(false);
+                    clearCart();
+                    setReceiptPreviewData(receiptData);
+                    setShowReceiptPreview(true);
+                  }}
                 >
                   {t('pos.completeSale')}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Preview Modal */}
+      {showReceiptPreview && receiptPreviewData && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white rounded-3xl w-[800px] max-w-[95vw] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] min-h-0">
+            <div className="px-8 py-6 border-b">
+              <h3 className="text-2xl font-bold text-center text-gray-800">{t('pos.receiptPreview') || 'Receipt Preview'}</h3>
+            </div>
+            <div className="px-6 py-6 flex-1 min-h-0 overflow-y-auto bg-gray-50">
+              <ThermalReceipt {...receiptPreviewData} />
+            </div>
+            <div className="px-6 py-6 border-t bg-white flex items-center justify-end space-x-4">
+              <button
+                onClick={() => setShowReceiptPreview(false)}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-4 px-6 rounded-2xl min-h-[60px] transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-8 rounded-2xl min-h-[60px] transition-colors"
+              >
+                {t('common.print') || 'Print'}
+              </button>
             </div>
           </div>
         </div>
@@ -1850,7 +1806,7 @@ const POS: React.FC = () => {
           <div className="flex items-center space-x-3">
             <p className="text-xs font-medium text-gray-800">{employee?.name} • <span className="capitalize text-gray-600">{employee?.role}</span></p>
             {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
-              <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">
+              <span className="text-green-600 text-xs font-medium">
                 {t('pos.saleInProgress')}
               </span>
             )}
