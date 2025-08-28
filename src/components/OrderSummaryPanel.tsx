@@ -94,62 +94,66 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
 
     // 5. Render
     return (
-        <aside className={`w-96 bg-white shadow-xl border-l border-gray-200 flex flex-col h-screen ${className}`}>
-            {/* Top quick actions */}
-            <div className="grid grid-cols-2 gap-2 p-3">
-                <button
-                    onClick={onCustomer}
-                    className="bg-white border border-gray-200 rounded-xl p-2 min-h-[64px] flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
-                >
-                    <Users className="w-4 h-4 text-gray-800 mb-2" />
-                    <span className="text-gray-800 text-sm font-medium">{t('pos.customer')}</span>
-                </button>
-                <button
-                    onClick={onTables}
-                    className="bg-white border border-gray-200 rounded-xl p-2 min-h-[64px] flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
-                >
-                    <Table className="w-4 h-4 text-gray-800 mb-2" />
-                    <span className="text-gray-800 text-sm font-medium">{t('pos.tables')}</span>
-                </button>
-                <button
-                    onClick={onDiscount}
-                    className="bg-white border border-gray-200 rounded-xl p-2 min-h-[64px] flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
-                >
-                    <TicketPercent className="w-4 h-4 text-gray-800 mb-2" />
-                    <span className="text-gray-800 text-sm font-medium">{t('pos.discountHeader')}</span>
-                </button>
-                <button
-                    onClick={onSaveBill}
-                    className="bg-white border border-gray-200 rounded-xl p-2 min-h-[64px] flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
-                >
-                    <Save className="w-4 h-4 text-gray-800 mb-2" />
-                    <span className="text-gray-800 text-sm font-medium">{t('pos.saveBill')}</span>
-                </button>
-            </div>
-
-            {/* Order details header + tabs */}
-            <div className="px-4">
-                <h2 className="text-lg font-bold text-gray-900 mb-2">{t('pos.orderDetails')}</h2>
-                <div className="bg-gray-100 rounded-2xl p-1 flex w-full mb-4">
+        <aside className={`w-[27vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[60%_40%] h-screen overflow-hidden ${className}`}>
+            {/* Top content: actions + header (60% row) */}
+            <div className="row-start-1 overflow-hidden">
+                {/* Top quick actions */}
+                <div className="grid grid-cols-2 gap-2 p-2">
                     <button
-                        onClick={() => handleSetServiceType('dine-in')}
-                        className={`flex-1 py-1.5 rounded-xl text-xs font-semibold transition-all ${serviceType === 'dine-in' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'
-                            }`}
+                        onClick={onCustomer}
+                        className="bg-white border border-gray-200 rounded-xl p-1.5 min-h-[60px] flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
                     >
-                        {t('pos.dineIn')}
+                        <Users className="w-3 h-3 text-gray-800 mb-1" />
+                        <span className="text-gray-800 text-xs font-medium">{t('pos.customer')}</span>
                     </button>
                     <button
-                        onClick={() => handleSetServiceType('take-away')}
-                        className={`flex-1 py-1.5 rounded-xl text-xs font-semibold transition-all ${serviceType === 'take-away' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'
-                            }`}
+                        onClick={onTables}
+                        className="bg-white border border-gray-200 rounded-xl p-1.5 min-h-[60px] flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
                     >
-                        {t('pos.takeAway')}
+                        <Table className="w-3 h-3 text-gray-800 mb-1" />
+                        <span className="text-gray-800 text-xs font-medium">{t('pos.tables')}</span>
+                    </button>
+                    <button
+                        onClick={onDiscount}
+                        className="bg-white border border-gray-200 rounded-xl p-1.5 min-h-[60px] flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
+                    >
+                        <TicketPercent className="w-3 h-3 text-gray-800 mb-1" />
+                        <span className="text-gray-800 text-xs font-medium">{t('pos.discountHeader')}</span>
+                    </button>
+                    <button
+                        onClick={onSaveBill}
+                        className="bg-white border border-gray-200 rounded-xl p-1.5 min-h-[60px] flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
+                    >
+                        <Save className="w-3 h-3 text-gray-800 mb-1" />
+                        <span className="text-gray-800 text-xs font-medium">{t('pos.saveBill')}</span>
                     </button>
                 </div>
+
+                {/* Order details header + tabs */}
+                <div className="px-3">
+                    <h2 className="text-base font-bold text-gray-900 mb-1.5">{t('pos.orderDetails')}</h2>
+                    <div className="bg-gray-100 rounded-2xl p-1 flex w-full mb-2">
+                        <button
+                            onClick={() => handleSetServiceType('dine-in')}
+                            className={`flex-1 py-1 rounded-xl text-xs font-semibold transition-all ${serviceType === 'dine-in' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'
+                                }`}
+                        >
+                            {t('pos.dineIn')}
+                        </button>
+                        <button
+                            onClick={() => handleSetServiceType('take-away')}
+                            className={`flex-1 py-1 rounded-xl text-xs font-semibold transition-all ${serviceType === 'take-away' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'
+                                }`}
+                        >
+                            {t('pos.takeAway')}
+                        </button>
+                    </div>
+                </div>
+
             </div>
 
-            {/* Items list */}
-            <div className="relative flex-1 bg-white min-h-0 overflow-hidden">
+            {/* Items list (40% row) */}
+            <div className="relative row-start-2 h-full bg-white overflow-hidden">
                 {/* Scrollable content with native scrollbar hidden */}
                 <div
                     ref={scrollRef}
@@ -187,8 +191,8 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                 </div>
             </div>
 
-            {/* Footer actions */}
-            <div className="p-4 pb-8 space-y-4">
+            {/* Footer actions (anchored at bottom of 60% row) */}
+            <div className="row-start-1 self-end p-3 pb-3 space-y-3">
                 {items.length > 0 && (
                     <button
                         onClick={onClearAll}
@@ -198,23 +202,23 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                     </button>
                 )}
 
-                <div className="bg-gray-50 rounded-3xl border border-gray-200 p-5">
-                    <div className="flex items-center justify-between mb-3">
-                        <span className="text-gray-600 text-lg font-medium">{t('pos.subtotalLabel')}</span>
-                        <span className="text-gray-700 text-lg font-semibold">{formatCurrency(subtotal)}</span>
+                <div className="bg-gray-50 rounded-3xl border border-gray-200 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-gray-600 text-base font-medium">{t('pos.subtotalLabel')}</span>
+                        <span className="text-gray-700 text-base font-semibold">{formatCurrency(subtotal)}</span>
                     </div>
-                    <div className="flex items-center justify-between mb-3">
-                        <span className="text-gray-600 text-lg font-medium">{t('pos.taxLabel')}</span>
-                        <span className="text-gray-700 text-lg font-semibold">{formatCurrency(tax)}</span>
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-gray-600 text-base font-medium">{t('pos.taxLabel')}</span>
+                        <span className="text-gray-700 text-base font-semibold">{formatCurrency(tax)}</span>
                     </div>
-                    <div className="flex items-center justify-between mb-4 opacity-50">
-                        <span className="text-gray-600 text-lg font-medium">{t('pos.voucherLabel')}</span>
-                        <span className="text-gray-700 text-lg font-semibold">{formatCurrency(0)}</span>
+                    <div className="flex items-center justify-between mb-3 opacity-50">
+                        <span className="text-gray-600 text-base font-medium">{t('pos.voucherLabel')}</span>
+                        <span className="text-gray-700 text-base font-semibold">{formatCurrency(0)}</span>
                     </div>
                     <div className="border-t border-gray-200 my-2"></div>
                     <div className="flex items-center justify-between">
-                        <span className="text-gray-800 text-lg font-semibold">{t('pos.totalLabel')}</span>
-                        <span className="text-2xl font-extrabold text-gray-900">{formatCurrency(total)}</span>
+                        <span className="text-gray-800 text-base font-semibold">{t('pos.totalLabel')}</span>
+                        <span className="text-xl font-extrabold text-gray-900">{formatCurrency(total)}</span>
                     </div>
                 </div>
 

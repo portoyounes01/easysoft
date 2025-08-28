@@ -38,7 +38,8 @@ import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useProducts } from '../contexts/ProductsContext';
 import VirtualNumpad from '../components/VirtualNumpad';
-import OrderSummaryPanel from '../components/OrderSummaryPanel';
+// import OrderSummaryPanel from '../components/OrderSummaryPanel';
+import DebugOrderSummaryPannel from '../components/debugordersummarypannel';
 import VirtualKeyboard from '../components/VirtualKeyboard';
 import { Customer } from '../types';
 import { LocalProduct } from '../types/supabase';
@@ -1070,16 +1071,8 @@ const POS: React.FC = () => {
         </div>
       </div>
 
-      {/* Right Order Summary Panel */}
-      <OrderSummaryPanel
-        items={cart.map(ci => ({ product: ci.product, quantity: ci.quantity }))}
-        onClearAll={clearCart}
-        onCustomer={handleCustomerClick}
-        onDiscount={() => handleDiscountClick('percentage')}
-        onTables={() => { }}
-        onSaveBill={() => { }}
-        onProcess={() => setShowPayment(true)}
-      />
+      {/* Right Order Summary Panel (DEBUG 30/40/30) */}
+      <DebugOrderSummaryPannel />
 
       {/* Customer Selection Modal */}
       {showCustomerModal && (
@@ -1801,7 +1794,7 @@ const POS: React.FC = () => {
       />
 
       {/* Bottom User Status Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-1 z-10">
+      <div id="pos-status-bar" className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 py-1 z-10">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center space-x-3">
             <p className="text-xs font-medium text-gray-800">{employee?.name} • <span className="capitalize text-gray-600">{employee?.role}</span></p>
