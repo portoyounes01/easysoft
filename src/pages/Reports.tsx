@@ -26,6 +26,7 @@ import {
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useProducts } from '../contexts/ProductsContext';
 import { useTranslation } from 'react-i18next';
+import { useLanguage } from '../contexts/LanguageContext';
 import { reportingService } from '../services/transactionService';
 import {
     ReportTransaction,
@@ -45,6 +46,7 @@ interface DateRange {
 
 const Reports: React.FC = () => {
     const { t } = useTranslation();
+    const { language } = useLanguage();
     const { employees } = useEmployees();
     const { products, categories } = useProducts();
 
@@ -77,7 +79,7 @@ const Reports: React.FC = () => {
                 setReportData(data);
             } catch (err) {
                 console.error('Error loading report data:', err);
-                setError(err instanceof Error ? err.message : 'Failed to load report data');
+                setError(err instanceof Error ? err.message : t('reports.error.title'));
             } finally {
                 setIsLoading(false);
             }
@@ -143,21 +145,21 @@ const Reports: React.FC = () => {
     };
 
     const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('pt-PT', {
+        return new Intl.NumberFormat(language?.startsWith('pt') ? 'pt-PT' : 'en-US', {
             style: 'currency',
             currency: 'EUR'
         }).format(amount);
     };
 
     const formatDate = (date: string) => {
-        return new Date(date).toLocaleDateString('pt-PT');
+        return new Date(date).toLocaleDateString(language?.startsWith('pt') ? 'pt-PT' : 'en-US');
     };
 
     const tabs = [
-        { id: 'overview', label: 'Overview', icon: BarChart3 },
-        { id: 'employees', label: 'Employee Performance', icon: Users },
-        { id: 'products', label: 'Product Analysis', icon: Package },
-        { id: 'inventory', label: 'Inventory Report', icon: ShoppingCart }
+        { id: 'overview', label: t('reports.tabs.overview'), icon: BarChart3 },
+        { id: 'employees', label: t('reports.tabs.employees'), icon: Users },
+        { id: 'products', label: t('reports.tabs.products'), icon: Package },
+        { id: 'inventory', label: t('reports.tabs.inventory'), icon: ShoppingCart }
     ];
 
     // Show loading state
@@ -166,14 +168,14 @@ const Reports: React.FC = () => {
             <div className="space-y-6">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-800">Advanced Reports</h1>
-                        <p className="text-gray-600 mt-1">Comprehensive business analytics and insights</p>
+                        <h1 className="text-3xl font-bold text-gray-800">{t('reports.header.title')}</h1>
+                        <p className="text-gray-600 mt-1">{t('reports.header.subtitle')}</p>
                     </div>
                 </div>
                 <div className="flex items-center justify-center h-64">
                     <div className="flex items-center space-x-2">
                         <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                        <span className="text-gray-600">Loading report data...</span>
+                        <span className="text-gray-600">{t('reports.loading.loadingData')}</span>
                     </div>
                 </div>
             </div>
@@ -186,8 +188,8 @@ const Reports: React.FC = () => {
             <div className="space-y-6">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-800">Advanced Reports</h1>
-                        <p className="text-gray-600 mt-1">Comprehensive business analytics and insights</p>
+                        <h1 className="text-3xl font-bold text-gray-800">{t('reports.header.title')}</h1>
+                        <p className="text-gray-600 mt-1">{t('reports.header.subtitle')}</p>
                     </div>
                 </div>
                 <div className="bg-red-50 border border-red-200 rounded-lg p-6">
@@ -212,8 +214,8 @@ const Reports: React.FC = () => {
             {/* Header */}
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-800">Advanced Reports</h1>
-                    <p className="text-gray-600 mt-1">Comprehensive business analytics and insights</p>
+                    <h1 className="text-3xl font-bold text-gray-800">{t('reports.header.title')}</h1>
+                    <p className="text-gray-600 mt-1">{t('reports.header.subtitle')}</p>
                 </div>
                 <div className="flex items-center space-x-3">
                     <button
@@ -221,7 +223,7 @@ const Reports: React.FC = () => {
                         className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2"
                     >
                         <Filter className="w-4 h-4" />
-                        <span>Filters</span>
+                        <span>{t('reports.header.filters')}</span>
                         {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
                     <button
@@ -232,12 +234,12 @@ const Reports: React.FC = () => {
                         {isExporting ? (
                             <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>Exporting...</span>
+                                <span>{t('reports.header.exporting')}</span>
                             </>
                         ) : (
                             <>
                                 <Download className="w-4 h-4" />
-                                <span>Export Excel</span>
+                                <span>{t('reports.header.exportExcel')}</span>
                             </>
                         )}
                     </button>
@@ -249,7 +251,7 @@ const Reports: React.FC = () => {
                 <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('reports.filters.startDate')}</label>
                             <input
                                 type="date"
                                 value={filters.dateRange.start}
@@ -258,7 +260,7 @@ const Reports: React.FC = () => {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('reports.filters.endDate')}</label>
                             <input
                                 type="date"
                                 value={filters.dateRange.end}
@@ -273,7 +275,7 @@ const Reports: React.FC = () => {
                                 onChange={(e) => handleFilterChange('employeeId', e.target.value || undefined)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
-                                <option value="">All Employees</option>
+                                <option value="">{t('reports.filters.allEmployees')}</option>
                                 {employees.filter(emp => emp.is_active && !emp.deleted_at).map(employee => (
                                     <option key={employee.id} value={employee.id}>
                                         {employee.name}
@@ -282,16 +284,16 @@ const Reports: React.FC = () => {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('reports.filters.paymentMethod')}</label>
                             <select
                                 value={filters.paymentMethod || ''}
                                 onChange={(e) => handleFilterChange('paymentMethod', e.target.value || undefined)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
-                                <option value="">All Payment Methods</option>
-                                <option value="cash">Cash</option>
-                                <option value="card">Card</option>
-                                <option value="mixed">Mixed</option>
+                                <option value="">{t('reports.filters.allPaymentMethods')}</option>
+                                <option value="cash">{t('reports.filters.cash')}</option>
+                                <option value="card">{t('reports.filters.card')}</option>
+                                <option value="mixed">{t('reports.filters.mixed')}</option>
                             </select>
                         </div>
                     </div>
@@ -334,7 +336,7 @@ const Reports: React.FC = () => {
                                         <DollarSign className="w-6 h-6 text-white" />
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-medium text-blue-600">Total Revenue</p>
+                                        <p className="text-sm font-medium text-blue-600">{t('reports.overview.totalRevenue')}</p>
                                         <p className="text-2xl font-bold text-blue-900">{formatCurrency(overviewMetrics.totalRevenue)}</p>
                                     </div>
                                 </div>
@@ -360,7 +362,7 @@ const Reports: React.FC = () => {
                                         <ShoppingCart className="w-6 h-6 text-white" />
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-medium text-blue-600">Items Sold</p>
+                                        <p className="text-sm font-medium text-blue-600">{t('reports.overview.itemsSold')}</p>
                                         <p className="text-2xl font-bold text-blue-900">{overviewMetrics.totalItems}</p>
                                     </div>
                                 </div>
@@ -373,7 +375,7 @@ const Reports: React.FC = () => {
                                         <TrendingUp className="w-6 h-6 text-white" />
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-medium text-blue-600">Daily Avg. Revenue</p>
+                                        <p className="text-sm font-medium text-blue-600">{t('reports.overview.dailyAvgRevenue')}</p>
                                         <p className="text-2xl font-bold text-blue-900">
                                             {formatCurrency(overviewMetrics.totalRevenue / (Math.ceil((new Date(filters.dateRange.end).getTime() - new Date(filters.dateRange.start).getTime()) / (1000 * 60 * 60 * 24)) + 1))}
                                         </p>
@@ -388,21 +390,21 @@ const Reports: React.FC = () => {
                                 <div className="bg-indigo-100 p-2 rounded-lg mr-3">
                                     <Calendar className="w-5 h-5 text-indigo-600" />
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-800">Period Overview</h3>
+                                <h3 className="text-lg font-semibold text-gray-800">{t('reports.overview.periodOverview')}</h3>
                             </div>
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                                    <span className="text-gray-600 text-sm">Start Date</span>
+                                    <span className="text-gray-600 text-sm">{t('reports.overview.startDate')}</span>
                                     <span className="font-medium text-gray-900">{formatDate(filters.dateRange.start)}</span>
                                 </div>
                                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                                    <span className="text-gray-600 text-sm">End Date</span>
+                                    <span className="text-gray-600 text-sm">{t('reports.overview.endDate')}</span>
                                     <span className="font-medium text-gray-900">{formatDate(filters.dateRange.end)}</span>
                                 </div>
                                 <div className="flex justify-between items-center py-2">
-                                    <span className="text-gray-600 text-sm">Total Days</span>
+                                    <span className="text-gray-600 text-sm">{t('reports.overview.totalDays')}</span>
                                     <span className="font-medium text-gray-900">
-                                        {Math.ceil((new Date(filters.dateRange.end).getTime() - new Date(filters.dateRange.start).getTime()) / (1000 * 60 * 60 * 24)) + 1} days
+                                        {Math.ceil((new Date(filters.dateRange.end).getTime() - new Date(filters.dateRange.start).getTime()) / (1000 * 60 * 60 * 24)) + 1} {t('reports.overview.days')}
                                     </span>
                                 </div>
                             </div>
@@ -414,17 +416,17 @@ const Reports: React.FC = () => {
                 {activeTab === 'employees' && (
                     <div className="bg-white rounded-xl shadow-lg border border-gray-100">
                         <div className="px-6 py-4 border-b border-gray-200">
-                            <h2 className="text-xl font-semibold text-gray-800">Employee Performance Report</h2>
-                            <p className="text-gray-600 text-sm mt-1">Individual employee sales and performance metrics</p>
+                            <h2 className="text-xl font-semibold text-gray-800">{t('reports.employees.title')}</h2>
+                            <p className="text-gray-600 text-sm mt-1">{t('reports.employees.subtitle')}</p>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Sales</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transactions</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items Sold</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.employees.table.employee')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.employees.table.totalSales')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.employees.table.transactions')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.employees.table.itemsSold')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -464,18 +466,18 @@ const Reports: React.FC = () => {
                 {activeTab === 'products' && (
                     <div className="bg-white rounded-xl shadow-lg border border-gray-100">
                         <div className="px-6 py-4 border-b border-gray-200">
-                            <h2 className="text-xl font-semibold text-gray-800">Product Sales Analysis</h2>
-                            <p className="text-gray-600 text-sm mt-1">Detailed product performance with quantities and revenue</p>
+                            <h2 className="text-xl font-semibold text-gray-800">{t('reports.products.title')}</h2>
+                            <p className="text-gray-600 text-sm mt-1">{t('reports.products.subtitle')}</p>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity Sold</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transactions</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.products.table.product')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.products.table.category')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.products.table.quantitySold')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.products.table.totalRevenue')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.products.table.transactions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -515,19 +517,19 @@ const Reports: React.FC = () => {
                 {activeTab === 'inventory' && (
                     <div className="bg-white rounded-xl shadow-lg border border-gray-100">
                         <div className="px-6 py-4 border-b border-gray-200">
-                            <h2 className="text-xl font-semibold text-gray-800">Inventory Status Report</h2>
-                            <p className="text-gray-600 text-sm mt-1">Current stock levels and inventory analysis - prioritized by urgency</p>
+                            <h2 className="text-xl font-semibold text-gray-800">{t('reports.inventory.title')}</h2>
+                            <p className="text-gray-600 text-sm mt-1">{t('reports.inventory.subtitle')}</p>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Stock</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Min Stock</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Value</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action Required</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.product')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.currentStock')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.minStock')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.stockValue')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.status')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.actionRequired')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">

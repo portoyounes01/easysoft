@@ -26,6 +26,8 @@ import { useEmployees } from '../contexts/EmployeesContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { EmployeeFormData, EmployeeRole, AccessLevel, Employee, AccessLevels } from '../types/supabase';
 import DatabaseReset from '../components/DatabaseReset';
+import { useTranslation } from 'react-i18next';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const Employees: React.FC = () => {
     const {
@@ -51,6 +53,8 @@ const Employees: React.FC = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const roles = ['all', 'admin', 'manager', 'cashier'];
+    const { t } = useTranslation();
+    const { language } = useLanguage();
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -96,14 +100,14 @@ const Employees: React.FC = () => {
 
     // Available access levels
     const accessLevels: { value: AccessLevel; label: string; description: string }[] = [
-        { value: 'all', label: 'All Access', description: 'Full system access' },
-        { value: 'sales', label: 'Sales', description: 'Point of sale operations' },
-        { value: 'inventory', label: 'Inventory', description: 'Product and category management' },
-        { value: 'reports', label: 'Reports', description: 'View reports and analytics' },
-        { value: 'dashboard', label: 'Dashboard', description: 'Main dashboard access' },
-        { value: 'employees', label: 'Employees', description: 'Employee management' },
-        { value: 'settings', label: 'Settings', description: 'System configuration' },
-        { value: 'transactions', label: 'Transactions', description: 'Transaction history (separate from sales)' }
+        { value: 'all', label: t('employees.accessLevels.all.label'), description: t('employees.accessLevels.all.description') },
+        { value: 'sales', label: t('employees.accessLevels.sales.label'), description: t('employees.accessLevels.sales.description') },
+        { value: 'inventory', label: t('employees.accessLevels.inventory.label'), description: t('employees.accessLevels.inventory.description') },
+        { value: 'reports', label: t('employees.accessLevels.reports.label'), description: t('employees.accessLevels.reports.description') },
+        { value: 'dashboard', label: t('employees.accessLevels.dashboard.label'), description: t('employees.accessLevels.dashboard.description') },
+        { value: 'employees', label: t('employees.accessLevels.employees.label'), description: t('employees.accessLevels.employees.description') },
+        { value: 'settings', label: t('employees.accessLevels.settings.label'), description: t('employees.accessLevels.settings.description') },
+        { value: 'transactions', label: t('employees.accessLevels.transactions.label'), description: t('employees.accessLevels.transactions.description') }
     ];
 
     // Memo-compute filtered list to avoid re-render churn
@@ -444,8 +448,8 @@ const Employees: React.FC = () => {
         return (
             <div className="space-y-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-800">Employee Management</h1>
-                    <p className="text-gray-600 mt-1">Database requires reset due to schema changes</p>
+                    <h1 className="text-3xl font-bold text-gray-800">{t('employees.header.title')}</h1>
+                    <p className="text-gray-600 mt-1">{t('employees.errors.dbResetNeeded')}</p>
                 </div>
                 <DatabaseReset onComplete={() => window.location.reload()} />
             </div>
@@ -465,12 +469,12 @@ const Employees: React.FC = () => {
             <div className="flex flex-col items-center justify-center h-full p-12 space-y-4">
                 <p className="text-red-600 font-semibold">{error}</p>
                 <div className="flex space-x-3">
-                    <button onClick={refreshEmployees} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Retry</button>
+                    <button onClick={refreshEmployees} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">{t('employees.errors.retry')}</button>
                     <button
                         onClick={() => setShowDatabaseReset(true)}
                         className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
                     >
-                        Reset Database
+                        {t('employees.errors.resetDb')}
                     </button>
                 </div>
             </div>
@@ -482,15 +486,15 @@ const Employees: React.FC = () => {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-800">Employee Management</h1>
-                    <p className="text-gray-600 mt-1">Manage staff, track performance, and set permissions</p>
+                    <h1 className="text-3xl font-bold text-gray-800">{t('employees.header.title')}</h1>
+                    <p className="text-gray-600 mt-1">{t('employees.header.subtitle')}</p>
                 </div>
                 <button
                     onClick={handleAddEmployee}
                     className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-600 transition-all flex items-center space-x-2 shadow-lg"
                 >
                     <Plus className="w-5 h-5" />
-                    <span>Add Employee</span>
+                    <span>{t('employees.header.addEmployee')}</span>
                 </button>
             </div>
 
@@ -502,7 +506,7 @@ const Employees: React.FC = () => {
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                             <input
                                 type="text"
-                                placeholder="Search employees..."
+                                placeholder={t('employees.header.searchPlaceholder')}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
@@ -516,7 +520,7 @@ const Employees: React.FC = () => {
                         >
                             {roles.map(role => (
                                 <option key={role} value={role}>
-                                    {role === 'all' ? 'All Roles' : role.charAt(0).toUpperCase() + role.slice(1)}
+                                    {role === 'all' ? t('employees.header.allRoles') : role.charAt(0).toUpperCase() + role.slice(1)}
                                 </option>
                             ))}
                         </select>
@@ -525,7 +529,7 @@ const Employees: React.FC = () => {
                     <div className="flex items-center space-x-2">
                         <button className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                             <Filter className="w-4 h-4" />
-                            <span>Filters</span>
+                            <span>{t('employees.header.filters')}</span>
                         </button>
                     </div>
                 </div>
@@ -556,13 +560,13 @@ const Employees: React.FC = () => {
                                     {getRoleBadge(employee.role, employee.is_active)}
                                     {/* Show lock icon for admin employees when viewed by non-admins */}
                                     {employee.role === 'admin' && currentUser?.role !== 'admin' && (
-                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600" title="Admin access restricted">
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600" title={t('employees.badges.adminAccessRestricted')}>
                                             <KeyRound className="w-3 h-3" />
                                         </span>
                                     )}
                                     {!employee.is_active && (
                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700">
-                                            Inactive
+                                            {t('employees.badges.inactive')}
                                         </span>
                                     )}
                                     <div className="relative" ref={openDropdown === employee.id ? dropdownRef : null}>
@@ -584,7 +588,7 @@ const Employees: React.FC = () => {
                                                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                                                 >
                                                     <Edit className="w-4 h-4" />
-                                                    <span>Edit Employee</span>
+                                                    <span>{t('employees.actions.edit')}</span>
                                                 </button>
 
                                                 <button
@@ -592,7 +596,7 @@ const Employees: React.FC = () => {
                                                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                                                 >
                                                     <Copy className="w-4 h-4" />
-                                                    <span>Copy Employee #</span>
+                                                    <span>{t('employees.actions.copyNumber')}</span>
                                                 </button>
 
                                                 <button
@@ -602,12 +606,12 @@ const Employees: React.FC = () => {
                                                     {employee.is_active ? (
                                                         <>
                                                             <UserX className="w-4 h-4" />
-                                                            <span>Deactivate</span>
+                                                            <span>{t('employees.actions.deactivate')}</span>
                                                         </>
                                                     ) : (
                                                         <>
                                                             <UserCheck className="w-4 h-4" />
-                                                            <span>Reactivate</span>
+                                                            <span>{t('employees.actions.reactivate')}</span>
                                                         </>
                                                     )}
                                                 </button>
@@ -622,7 +626,7 @@ const Employees: React.FC = () => {
                                                     className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
-                                                    <span>Delete Employee</span>
+                                                    <span>{t('employees.actions.delete')}</span>
                                                 </button>
                                             </div>
                                         )}
@@ -634,7 +638,7 @@ const Employees: React.FC = () => {
                                 <div className={`${employee.is_active ? 'bg-green-50' : 'bg-gray-100'} p-3 rounded-lg`}>
                                     <div className="flex items-center space-x-2 mb-1">
                                         <Banknote className={`w-4 h-4 ${employee.is_active ? 'text-green-600' : 'text-gray-500'}`} />
-                                        <span className={`text-sm font-medium ${employee.is_active ? 'text-green-800' : 'text-gray-600'}`}>Total Sales</span>
+                                        <span className={`text-sm font-medium ${employee.is_active ? 'text-green-800' : 'text-gray-600'}`}>{t('employees.card.totalSales')}</span>
                                     </div>
                                     <p className={`text-lg font-bold ${employee.is_active ? 'text-green-700' : 'text-gray-700'}`}>€{employee.total_sales.toFixed(2)}</p>
                                 </div>
@@ -642,7 +646,7 @@ const Employees: React.FC = () => {
                                 <div className={`${employee.is_active ? 'bg-blue-50' : 'bg-gray-100'} p-3 rounded-lg`}>
                                     <div className="flex items-center space-x-2 mb-1">
                                         <Clock className={`w-4 h-4 ${employee.is_active ? 'text-blue-600' : 'text-gray-500'}`} />
-                                        <span className={`text-sm font-medium ${employee.is_active ? 'text-blue-800' : 'text-gray-600'}`}>Days Worked</span>
+                                        <span className={`text-sm font-medium ${employee.is_active ? 'text-blue-800' : 'text-gray-600'}`}>{t('employees.card.daysWorked')}</span>
                                     </div>
                                     <p className={`text-lg font-bold ${employee.is_active ? 'text-blue-700' : 'text-gray-700'}`}>{daysWorked}</p>
                                 </div>
@@ -650,14 +654,14 @@ const Employees: React.FC = () => {
 
                             <div className="mb-4">
                                 <div>
-                                    <p className={`text-sm ${employee.is_active ? 'text-gray-600' : 'text-gray-500'}`}>Transactions</p>
+                                    <p className={`text-sm ${employee.is_active ? 'text-gray-600' : 'text-gray-500'}`}>{t('employees.card.transactions')}</p>
                                     <p className={`font-semibold ${employee.is_active ? 'text-gray-800' : 'text-gray-700'}`}>{employee.transaction_count}</p>
                                 </div>
                             </div>
 
                             <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                                 <span className="text-sm text-gray-500">
-                                    Hire Date: {new Date(employee.hire_date).toLocaleDateString('pt-PT')}
+                                    {t('employees.card.hireDate')} {new Date(employee.hire_date).toLocaleDateString(language?.startsWith('pt') ? 'pt-PT' : 'en-US')}
                                 </span>
                                 <div className="flex items-center space-x-2">
                                     {/* Only admins can edit other admins */}
@@ -665,7 +669,7 @@ const Employees: React.FC = () => {
                                         <button
                                             onClick={() => handleEditEmployee(employee)}
                                             className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-500 hover:bg-gray-100'}`}
-                                            title="Edit Employee"
+                                            title={t('employees.actions.edit')}
                                         >
                                             <Edit className="w-4 h-4" />
                                         </button>
@@ -673,7 +677,7 @@ const Employees: React.FC = () => {
                                         <button
                                             disabled
                                             className="p-2 text-gray-400 cursor-not-allowed rounded-lg"
-                                            title="Only admins can edit other admins"
+                                            title={t('employees.actions.onlyAdminsEditAdmins')}
                                         >
                                             <Edit className="w-4 h-4" />
                                         </button>
@@ -684,7 +688,7 @@ const Employees: React.FC = () => {
                                         <button
                                             onClick={() => setShowDeleteConfirm(employee)}
                                             className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-red-600 hover:bg-red-50' : 'text-gray-500 hover:bg-gray-100'}`}
-                                            title="Delete Employee"
+                                            title={t('employees.actions.delete')}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
@@ -692,7 +696,7 @@ const Employees: React.FC = () => {
                                         <button
                                             disabled
                                             className="p-2 text-gray-400 cursor-not-allowed rounded-lg"
-                                            title="Only admins can delete other admins"
+                                            title={t('employees.actions.onlyAdminsDeleteAdmins')}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
@@ -719,11 +723,11 @@ const Employees: React.FC = () => {
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <h2 className="text-xl font-bold">
-                                                {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
+                                                {editingEmployee ? t('employees.actions.editTitle') : t('employees.actions.addTitle')}
                                             </h2>
                                             {formData.employee_number && (
                                                 <p className="text-blue-100 text-sm mt-1">
-                                                    Employee Number: {formData.employee_number}
+                                                    {t('employees.form.employeeNumber')} {formData.employee_number}
                                                 </p>
                                             )}
                                         </div>
@@ -740,20 +744,18 @@ const Employees: React.FC = () => {
                                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
                                     {/* Basic Information */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h3>
+                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.basicInfo')}</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {/* 1. Full Name */}
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Full Name *
-                                                </label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.fullName')} *</label>
                                                 <input
                                                     type="text"
                                                     value={formData.name}
                                                     onChange={(e) => handleFormChange('name', e.target.value)}
                                                     className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.name ? 'border-red-500' : 'border-gray-300'
                                                         }`}
-                                                    placeholder="John Doe"
+                                                    placeholder={t('employees.form.placeholderName')}
                                                 />
                                                 {formErrors.name && (
                                                     <p className="mt-1 text-sm text-red-600 flex items-center">
@@ -765,9 +767,7 @@ const Employees: React.FC = () => {
 
                                             {/* 2. Hire Date */}
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Hire Date *
-                                                </label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.hireDate')} *</label>
                                                 <div className="relative">
                                                     <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                                                     <input
@@ -788,9 +788,7 @@ const Employees: React.FC = () => {
 
                                             {/* 3. Role */}
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    Role *
-                                                </label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.role')} *</label>
                                                 <select
                                                     value={formData.role}
                                                     onChange={(e) => handleFormChange('role', e.target.value as EmployeeRole)}
@@ -812,9 +810,7 @@ const Employees: React.FC = () => {
                                             {/* 4. Phone field - only for managers and admins */}
                                             {(formData.role === 'manager' || formData.role === 'admin') && (
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Phone
-                                                    </label>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.phone')}</label>
                                                     <div className="relative">
                                                         <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                                                         <input
@@ -832,23 +828,20 @@ const Employees: React.FC = () => {
 
                                     {/* Security */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Security</h3>
+                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.security')}</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {/* Password field - only for admins */}
                                             {formData.role === 'admin' && (
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Password {!editingEmployee && '*'}
-                                                    </label>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.password')} {!editingEmployee && '*'}</label>
                                                     <div className="relative">
                                                         <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                                                         <input
                                                             type={showPassword ? 'text' : 'password'}
                                                             value={formData.password}
                                                             onChange={(e) => handleFormChange('password', e.target.value)}
-                                                            className={`w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.password ? 'border-red-500' : 'border-gray-300'
-                                                                }`}
-                                                            placeholder={editingEmployee ? 'Leave empty to keep current' : 'Enter password'}
+                                                            className={`w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.password ? 'border-red-500' : 'border-gray-300'}`}
+                                                            placeholder={editingEmployee ? t('employees.form.placeholderPasswordKeep') : t('employees.form.placeholderPassword')}
                                                         />
                                                         <button
                                                             type="button"
@@ -870,16 +863,13 @@ const Employees: React.FC = () => {
                                             {/* PIN field - for managers and cashiers */}
                                             {(formData.role === 'manager' || formData.role === 'cashier') && (
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        PIN {!editingEmployee && '*'}
-                                                    </label>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.pin')} {!editingEmployee && '*'}</label>
                                                     <input
                                                         type="text"
                                                         value={formData.pin}
                                                         onChange={(e) => handleFormChange('pin', e.target.value.replace(/\D/g, '').slice(0, 8))}
-                                                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.pin ? 'border-red-500' : 'border-gray-300'
-                                                            }`}
-                                                        placeholder={editingEmployee ? 'Leave empty to keep current PIN' : 'Enter 4+ digit PIN'}
+                                                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.pin ? 'border-red-500' : 'border-gray-300'}`}
+                                                        placeholder={editingEmployee ? t('employees.form.placeholderPinKeep') : 'PIN'}
                                                         maxLength={8}
                                                     />
                                                     {formErrors.pin && (
@@ -888,12 +878,7 @@ const Employees: React.FC = () => {
                                                             {formErrors.pin}
                                                         </p>
                                                     )}
-                                                    <p className="mt-1 text-xs text-gray-500">
-                                                        {editingEmployee
-                                                            ? 'Leave empty to keep current PIN, or enter new 4+ digit PIN'
-                                                            : 'PIN must be at least 4 digits, will be securely hashed'
-                                                        }
-                                                    </p>
+                                                    <p className="mt-1 text-xs text-gray-500">{editingEmployee ? t('employees.form.pinHelperEdit') : t('employees.form.pinHelperNew')}</p>
                                                 </div>
                                             )}
                                         </div>
@@ -902,7 +887,7 @@ const Employees: React.FC = () => {
                                     {/* Access Levels - Hidden for admins (they get all access automatically) */}
                                     {formData.role !== 'admin' && (
                                         <div>
-                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">Access Levels</h3>
+                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.accessLevels')}</h3>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 {accessLevels.map((level) => (
                                                     <label
@@ -933,7 +918,7 @@ const Employees: React.FC = () => {
 
                                     {/* Status */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Status</h3>
+                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.status')}</h3>
                                         <label className="flex items-center space-x-3">
                                             <input
                                                 type="checkbox"
@@ -941,7 +926,7 @@ const Employees: React.FC = () => {
                                                 onChange={(e) => handleFormChange('is_active', e.target.checked)}
                                                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                                             />
-                                            <span className="text-gray-900">Active Employee</span>
+                                            <span className="text-gray-900">{t('employees.form.activeEmployee')}</span>
                                         </label>
                                     </div>
 
@@ -952,7 +937,7 @@ const Employees: React.FC = () => {
                                             onClick={handleCloseForm}
                                             className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                                         >
-                                            Cancel
+                                            {t('employees.form.cancel')}
                                         </button>
                                         <button
                                             type="submit"
@@ -962,12 +947,12 @@ const Employees: React.FC = () => {
                                             {isSubmitting ? (
                                                 <>
                                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                                    <span>Saving...</span>
+                                                    <span>{t('employees.form.saving')}</span>
                                                 </>
                                             ) : (
                                                 <>
                                                     <Save className="w-4 h-4" />
-                                                    <span>{editingEmployee ? 'Update' : 'Create'}</span>
+                                                    <span>{editingEmployee ? t('employees.form.update') : t('employees.form.create')}</span>
                                                 </>
                                             )}
                                         </button>
