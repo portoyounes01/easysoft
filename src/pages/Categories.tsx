@@ -3,6 +3,7 @@ import { Plus, Tag, Trash2, Package, AlertTriangle, Loader2 } from 'lucide-react
 import { useProducts } from '../contexts/ProductsContext';
 import { LocalCategory, LocalProduct } from '../types/supabase';
 import CategoryForm from '../components/CategoryForm';
+import { useTranslation } from 'react-i18next';
 
 const Categories: React.FC = () => {
     // 1. Hooks (useState, useEffect, useContext)
@@ -13,6 +14,7 @@ const Categories: React.FC = () => {
         error,
         deleteCategory
     } = useProducts();
+    const { t } = useTranslation();
 
     const [showCategoryForm, setShowCategoryForm] = useState(false);
     const [editingCategory, setEditingCategory] = useState<LocalCategory | null>(null);
@@ -40,17 +42,17 @@ const Categories: React.FC = () => {
 
         if (productsInCategory.length > 0) {
             alert(
-                `Cannot delete category "${categoryName}" because it contains ${productsInCategory.length} products. Please move or delete these products first.`
+                t('categories.confirm.cannotDeleteWithProducts', { name: categoryName, count: productsInCategory.length })
             );
             return;
         }
 
-        if (window.confirm(`Delete the category "${categoryName}"? This cannot be undone.`)) {
+        if (window.confirm(t('categories.confirm.deleteCategoryQuestion', { name: categoryName }))) {
             try {
                 await deleteCategory(categoryId);
             } catch (e) {
                 console.error('Failed to delete category:', e);
-                alert('Failed to delete category. Please try again.');
+                alert(t('categories.confirm.failedDelete'));
             }
         }
     };
@@ -62,7 +64,7 @@ const Categories: React.FC = () => {
         return (
             <div className="flex items-center justify-center h-64">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                <span className="ml-2 text-gray-600">Loading categories...</span>
+                <span className="ml-2 text-gray-600">{t('common.loading', { defaultValue: 'Loading...' })}</span>
             </div>
         );
     }
@@ -84,32 +86,32 @@ const Categories: React.FC = () => {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-800">Category Management</h1>
-                    <p className="text-gray-600 mt-1">Create and organize your product categories</p>
+                    <h1 className="text-3xl font-bold text-gray-800">{t('categories.title')}</h1>
+                    <p className="text-gray-600 mt-1">{t('categories.subtitle')}</p>
                 </div>
                 <button
                     onClick={handleCreateCategory}
                     className="min-h-[60px] px-8 py-4 rounded-lg font-semibold transition-all flex items-center space-x-3 shadow-lg bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:scale-105 active:scale-95"
                 >
                     <Plus className="w-6 h-6" />
-                    <span>Add Category</span>
+                    <span>{t('categories.addCategory')}</span>
                 </button>
             </div>
 
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[{
-                    title: 'Total Categories',
+                    title: t('categories.stats.totalCategories'),
                     value: categories.filter(c => !c.deleted_at).length.toString(),
                     icon: Tag,
                     color: 'bg-purple-500'
                 }, {
-                    title: 'Active Categories',
+                    title: t('categories.stats.activeCategories'),
                     value: categories.filter(c => c.is_active && !c.deleted_at).length.toString(),
                     icon: Tag,
                     color: 'bg-green-500'
                 }, {
-                    title: 'Products Without Category',
+                    title: t('categories.stats.productsWithoutCategory'),
                     value: products.filter(p => !p.category_id && p.is_active && !p.deleted_at).length.toString(),
                     icon: Package,
                     color: 'bg-orange-500'
@@ -137,10 +139,10 @@ const Categories: React.FC = () => {
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-semibold text-gray-800 flex items-center space-x-2">
                             <Tag className="w-5 h-5 text-purple-600" />
-                            <span>Categories</span>
+                            <span>{t('categories.grid.title')}</span>
                         </h2>
                         <span className="text-sm text-gray-500">
-                            {categories.filter(c => !c.deleted_at).length} total ({categories.filter(c => c.is_active && !c.deleted_at).length} active)
+                            {t('categories.grid.total', { total: categories.filter(c => !c.deleted_at).length, active: categories.filter(c => c.is_active && !c.deleted_at).length })}
                         </span>
                     </div>
                 </div>
@@ -166,7 +168,7 @@ const Categories: React.FC = () => {
                                     >
                                         {!category.is_active && (
                                             <div className="absolute top-2 left-2 px-2 py-1 bg-gray-500 text-white text-xs rounded-full font-medium">
-                                                Inactive
+                                                {t('categories.grid.inactive')}
                                             </div>
                                         )}
 
@@ -182,16 +184,16 @@ const Categories: React.FC = () => {
 
                                         <div className="space-y-2">
                                             <h3 className={`font-semibold truncate ${category.is_active ? 'text-gray-800' : 'text-gray-500'}`}>{category.name}</h3>
-                                            <p className={`text-sm line-clamp-2 ${category.is_active ? 'text-gray-600' : 'text-gray-400'}`}>{category.description || 'No description'}</p>
+                                            <p className={`text-sm line-clamp-2 ${category.is_active ? 'text-gray-600' : 'text-gray-400'}`}>{category.description || t('categories.grid.noDescription')}</p>
                                             <div className={`flex items-center justify-between text-xs ${category.is_active ? 'text-gray-500' : 'text-gray-400'}`}>
-                                                <span>{productCount} products</span>
+                                                <span>{t('categories.grid.productsCount', { count: productCount })}</span>
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleDeleteCategory(category.id, category.name);
                                                     }}
                                                     className="min-h-[44px] min-w-[44px] p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                    title="Delete Category"
+                                                    title={t('categories.grid.deleteCategoryTitle')}
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
@@ -207,7 +209,7 @@ const Categories: React.FC = () => {
                             className="group border-2 border-dashed border-gray-300 rounded-lg p-6 h-full min-h-[140px] flex flex-col items-center justify-center hover:border-purple-400 hover:bg-purple-50 transition-all hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
                         >
                             <Plus className="w-10 h-10 text-gray-400 group-hover:text-purple-600 mb-3" />
-                            <span className="text-base font-semibold text-gray-600 group-hover:text-purple-600">Add Category</span>
+                            <span className="text-base font-semibold text-gray-600 group-hover:text-purple-600">{t('categories.addCategoryCard')}</span>
                         </button>
                     </div>
                 </div>

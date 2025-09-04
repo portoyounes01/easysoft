@@ -106,6 +106,15 @@
   - Added `tests/dashboard.test.tsx` to verify both languages render correctly
   - Ensured component structure follows `DEVELOPMENT_GUIDE.md`
 
+## Products & Categories Localization
+- Status: ACTIVE (2025-08-25)
+- Description: i18n coverage for Products and Categories admin pages.
+- Changes in progress/completed:
+  - Added `products` and `categories` keys to `src/i18n.ts` (EN/PT)
+  - Refactored `src/pages/Products.tsx` and `src/pages/Categories.tsx` to use `useTranslation`
+  - Localized sort/filter/search placeholders, table headers, status chips, and modals
+  - Added `tests/products-categories-i18n.test.tsx` for basic assertions
+
 
 ## Multi-Tenant Database Migration (Planning)
 - Status: ACTIVE (planning and documentation)
