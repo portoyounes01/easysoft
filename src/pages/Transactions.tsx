@@ -18,6 +18,8 @@ import {
     Users
 } from 'lucide-react';
 import { transactionService } from '../services/transactionService';
+import { useTranslation } from 'react-i18next';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface Transaction {
     id: string;
@@ -46,6 +48,8 @@ interface Transaction {
 }
 
 const Transactions: React.FC = () => {
+    const { t } = useTranslation();
+    const { language } = useLanguage();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedStatus, setSelectedStatus] = useState('all');
@@ -164,13 +168,13 @@ const Transactions: React.FC = () => {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Transactions</h1>
-                    <p className="text-gray-600 mt-1">View and manage sales transactions</p>
+                    <h1 className="text-3xl font-bold text-gray-900">{t('transactions.header.title')}</h1>
+                    <p className="text-gray-600 mt-1">{t('transactions.header.subtitle')}</p>
                 </div>
                 <div className="mt-4 sm:mt-0 flex items-center space-x-3">
                     <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2">
                         <Download className="w-4 h-4" />
-                        <span>Export</span>
+                        <span>{t('transactions.header.export')}</span>
                     </button>
                 </div>
             </div>
@@ -179,7 +183,7 @@ const Transactions: React.FC = () => {
             {loading && (
                 <div className="flex justify-center items-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <span className="ml-3 text-gray-600">Loading transactions...</span>
+                    <span className="ml-3 text-gray-600">{t('transactions.loading')}</span>
                 </div>
             )}
 
@@ -193,7 +197,7 @@ const Transactions: React.FC = () => {
                             </svg>
                         </div>
                         <div>
-                            <h3 className="text-sm font-medium text-red-800">Error loading transactions</h3>
+                            <h3 className="text-sm font-medium text-red-800">{t('transactions.error.title')}</h3>
                             <p className="text-sm text-red-700 mt-1">{error}</p>
                         </div>
                     </div>
@@ -206,7 +210,7 @@ const Transactions: React.FC = () => {
                     <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Total Transactions</p>
+                                <p className="text-sm font-medium text-gray-600">{t('transactions.summary.totalTransactions')}</p>
                                 <p className="text-2xl font-bold text-gray-900">{totalTransactions}</p>
                             </div>
                             <div className="bg-blue-100 p-3 rounded-full">
@@ -218,7 +222,7 @@ const Transactions: React.FC = () => {
                     <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+                                <p className="text-sm font-medium text-gray-600">{t('transactions.summary.totalRevenue')}</p>
                                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalRevenue)}</p>
                             </div>
                             <div className="bg-green-100 p-3 rounded-full">
@@ -230,7 +234,7 @@ const Transactions: React.FC = () => {
                     <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Average Transaction</p>
+                                <p className="text-sm font-medium text-gray-600">{t('transactions.summary.averageTransaction')}</p>
                                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(averageTransaction)}</p>
                             </div>
                             <div className="bg-purple-100 p-3 rounded-full">
@@ -242,7 +246,7 @@ const Transactions: React.FC = () => {
                     <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-medium text-gray-600">Completed</p>
+                                <p className="text-sm font-medium text-gray-600">{t('transactions.summary.completed')}</p>
                                 <p className="text-2xl font-bold text-gray-900">{completedTransactions}</p>
                             </div>
                             <div className="bg-green-100 p-3 rounded-full">
@@ -261,7 +265,7 @@ const Transactions: React.FC = () => {
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
-                                placeholder="Search transactions..."
+                                placeholder={t('transactions.filters.searchPlaceholder')}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -272,7 +276,7 @@ const Transactions: React.FC = () => {
                             className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                         >
                             <Filter className="w-4 h-4" />
-                            <span>Filters</span>
+                            <span>{t('transactions.filters.filters')}</span>
                             {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
                     </div>
@@ -282,7 +286,7 @@ const Transactions: React.FC = () => {
                     <div className="mt-4 pt-4 border-t border-gray-200">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('transactions.filters.date')}</label>
                                 <input
                                     type="date"
                                     value={selectedDate}
@@ -291,28 +295,28 @@ const Transactions: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('transactions.filters.status')}</label>
                                 <select
                                     value={selectedStatus}
                                     onChange={(e) => setSelectedStatus(e.target.value)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
-                                    <option value="all">All Status</option>
-                                    <option value="completed">Completed</option>
-                                    <option value="refunded">Refunded</option>
+                                    <option value="all">{t('transactions.filters.allStatus')}</option>
+                                    <option value="completed">{t('transactions.filters.completed')}</option>
+                                    <option value="refunded">{t('transactions.filters.refunded')}</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('transactions.filters.paymentMethod')}</label>
                                 <select
                                     value={selectedPaymentMethod}
                                     onChange={(e) => setSelectedPaymentMethod(e.target.value)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
-                                    <option value="all">All Methods</option>
-                                    <option value="cash">Cash</option>
-                                    <option value="card">Card</option>
-                                    <option value="mixed">Mixed</option>
+                                    <option value="all">{t('transactions.filters.allMethods')}</option>
+                                    <option value="cash">{t('transactions.filters.cash')}</option>
+                                    <option value="card">{t('transactions.filters.card')}</option>
+                                    <option value="mixed">{t('transactions.filters.mixed')}</option>
                                 </select>
                             </div>
                         </div>
@@ -324,14 +328,14 @@ const Transactions: React.FC = () => {
             {!loading && !error && (
                 <div className="bg-white rounded-xl shadow-lg border border-gray-100">
                     <div className="px-6 py-4 border-b border-gray-200">
-                        <h2 className="text-lg font-semibold text-gray-900">Recent Transactions</h2>
+                        <h2 className="text-lg font-semibold text-gray-900">{t('transactions.list.recentTransactions')}</h2>
                     </div>
 
                     {filteredTransactions.length === 0 ? (
                         <div className="text-center py-12">
                             <Receipt className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <p className="text-xl text-gray-500 mb-2">No transactions found</p>
-                            <p className="text-gray-400">Try adjusting your search or filters</p>
+                            <p className="text-xl text-gray-500 mb-2">{t('transactions.list.emptyTitle')}</p>
+                            <p className="text-gray-400">{t('transactions.list.emptyMessage')}</p>
                         </div>
                     ) : (
                         <div className="divide-y divide-gray-200">
@@ -352,7 +356,7 @@ const Transactions: React.FC = () => {
                                                 <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                                                     <span className="flex items-center space-x-1">
                                                         <Calendar className="w-3 h-3" />
-                                                        <span>{formatDate(transaction.date)} at {transaction.time}</span>
+                                                        <span>{formatDate(transaction.date)} {t('transactions.list.dateAt')} {transaction.time}</span>
                                                     </span>
                                                     {transaction.customerName && (
                                                         <span className="flex items-center space-x-1">
@@ -371,7 +375,7 @@ const Transactions: React.FC = () => {
                                         <div className="flex items-center space-x-4">
                                             <div className="text-right">
                                                 <p className="text-lg font-bold text-gray-900">{formatCurrency(transaction.total)}</p>
-                                                <p className="text-sm text-gray-500">{transaction.items.length} item{transaction.items.length !== 1 ? 's' : ''}</p>
+                                                <p className="text-sm text-gray-500">{transaction.items.length} {transaction.items.length !== 1 ? t('transactions.list.itemPlural') : t('transactions.list.itemSingular')}</p>
                                             </div>
                                             <button
                                                 onClick={() => setExpandedTransaction(
@@ -394,13 +398,13 @@ const Transactions: React.FC = () => {
                                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                                 {/* Items */}
                                                 <div>
-                                                    <h4 className="font-medium text-gray-900 mb-3">Items</h4>
+                                                    <h4 className="font-medium text-gray-900 mb-3">{t('transactions.list.itemsHeader')}</h4>
                                                     <div className="space-y-2">
                                                         {transaction.items.map((item, index) => (
                                                             <div key={index} className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-lg">
                                                                 <div>
                                                                     <p className="font-medium text-gray-900">{item.name}</p>
-                                                                    <p className="text-sm text-gray-500">Qty: {item.quantity} × {formatCurrency(item.price)}</p>
+                                                                    <p className="text-sm text-gray-500">{t('transactions.list.qty')}: {item.quantity} × {formatCurrency(item.price)}</p>
                                                                 </div>
                                                                 <p className="font-medium text-gray-900">{formatCurrency(item.total)}</p>
                                                             </div>
@@ -410,36 +414,36 @@ const Transactions: React.FC = () => {
 
                                                 {/* Payment Details */}
                                                 <div>
-                                                    <h4 className="font-medium text-gray-900 mb-3">Payment Details</h4>
+                                                    <h4 className="font-medium text-gray-900 mb-3">{t('transactions.list.paymentDetails')}</h4>
                                                     <div className="space-y-2">
                                                         <div className="flex justify-between">
-                                                            <span className="text-gray-600">Subtotal:</span>
+                                                            <span className="text-gray-600">{t('transactions.list.subtotal')}</span>
                                                             <span className="text-gray-900">{formatCurrency(transaction.subtotal)}</span>
                                                         </div>
                                                         {transaction.discount > 0 && (
                                                             <div className="flex justify-between">
-                                                                <span className="text-gray-600">Discount:</span>
+                                                                <span className="text-gray-600">{t('transactions.list.discount')}</span>
                                                                 <span className="text-green-600">-{formatCurrency(transaction.discount)}</span>
                                                             </div>
                                                         )}
                                                         <div className="flex justify-between">
-                                                            <span className="text-gray-600">Tax:</span>
+                                                            <span className="text-gray-600">{t('transactions.list.tax')}</span>
                                                             <span className="text-gray-900">{formatCurrency(transaction.tax)}</span>
                                                         </div>
                                                         <div className="flex justify-between font-semibold text-lg pt-2 border-t">
-                                                            <span>Total:</span>
+                                                            <span>{t('transactions.list.total')}</span>
                                                             <span>{formatCurrency(transaction.total)}</span>
                                                         </div>
 
                                                         {transaction.paymentMethod === 'cash' && transaction.cashReceived && (
                                                             <div className="mt-4 pt-4 border-t border-gray-200">
                                                                 <div className="flex justify-between">
-                                                                    <span className="text-gray-600">Cash Received:</span>
+                                                                    <span className="text-gray-600">{t('transactions.list.cashReceived')}</span>
                                                                     <span className="text-gray-900">{formatCurrency(transaction.cashReceived)}</span>
                                                                 </div>
                                                                 {transaction.changeGiven && (
                                                                     <div className="flex justify-between">
-                                                                        <span className="text-gray-600">Change Given:</span>
+                                                                        <span className="text-gray-600">{t('transactions.list.changeGiven')}</span>
                                                                         <span className="text-gray-900">{formatCurrency(transaction.changeGiven)}</span>
                                                                     </div>
                                                                 )}
@@ -452,11 +456,11 @@ const Transactions: React.FC = () => {
                                             <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end space-x-3">
                                                 <button className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center space-x-2">
                                                     <Eye className="w-4 h-4" />
-                                                    <span>View Receipt</span>
+                                                    <span>{t('transactions.list.viewReceipt')}</span>
                                                 </button>
                                                 <button className="px-4 py-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors flex items-center space-x-2">
                                                     <Download className="w-4 h-4" />
-                                                    <span>Download</span>
+                                                    <span>{t('transactions.list.download')}</span>
                                                 </button>
                                             </div>
                                         </div>

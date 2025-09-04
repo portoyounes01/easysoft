@@ -14,10 +14,12 @@ import {
     Printer,
 } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
+import { useTranslation } from 'react-i18next';
 // import PrinterSetup from '../components/PrinterSetup';
 
 const Settings: React.FC = () => {
     const { settings, updateSettings, resetToDefaults, isLoading } = useSettings();
+    const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState('security');
     const [pendingChanges, setPendingChanges] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -98,15 +100,15 @@ const Settings: React.FC = () => {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-800">System Settings</h1>
-                    <p className="text-gray-600 mt-1">Configure system-wide preferences and security settings</p>
+                    <h1 className="text-3xl font-bold text-gray-800">{t('settings.header.title')}</h1>
+                    <p className="text-gray-600 mt-1">{t('settings.header.subtitle')}</p>
                 </div>
 
                 <div className="flex items-center space-x-3">
                     {pendingChanges && (
                         <div className="flex items-center space-x-2 bg-yellow-50 text-yellow-700 px-4 py-2 rounded-lg">
                             <AlertTriangle className="w-4 h-4" />
-                            <span className="text-sm font-medium">Unsaved changes</span>
+                            <span className="text-sm font-medium">{t('settings.header.unsavedChanges')}</span>
                         </div>
                     )}
 
@@ -115,7 +117,7 @@ const Settings: React.FC = () => {
                         className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold transition-all flex items-center space-x-2"
                     >
                         <RotateCcw className="w-4 h-4" />
-                        <span>Reset to Defaults</span>
+                        <span>{t('settings.header.resetToDefaults')}</span>
                     </button>
 
                     <button
@@ -126,17 +128,17 @@ const Settings: React.FC = () => {
                         {saveStatus === 'saving' ? (
                             <>
                                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                <span>Saving...</span>
+                                <span>{t('settings.header.saving')}</span>
                             </>
                         ) : saveStatus === 'saved' ? (
                             <>
                                 <CheckCircle className="w-4 h-4" />
-                                <span>Saved!</span>
+                                <span>{t('settings.header.saved')}</span>
                             </>
                         ) : (
                             <>
                                 <Save className="w-4 h-4" />
-                                <span>Save Changes</span>
+                                <span>{t('settings.header.saveChanges')}</span>
                             </>
                         )}
                     </button>
