@@ -1,19 +1,32 @@
-import React from 'react';
-import { 
-  DollarSign, 
-  ShoppingCart, 
-  Users, 
-  TrendingUp, 
-  Package, 
+import React, { useMemo } from 'react';
+import {
+  DollarSign,
+  ShoppingCart,
+  Users,
+  TrendingUp,
+  Package,
   AlertTriangle,
   Calendar,
   Clock
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const Dashboard: React.FC = () => {
+  // 1. Hooks (useState, useEffect, useContext)
+  const { t } = useTranslation();
+  const { language } = useLanguage();
+
+  // 3. Computed values (useMemo)
+  const locale = useMemo(() => (language?.startsWith('pt') ? 'pt-PT' : 'en-US'), [language]);
+  const todayStr = useMemo(
+    () => new Date().toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric' }),
+    [locale]
+  );
+
   const stats = [
     {
-      title: 'Today\'s Sales',
+      title: t('dashboard.stats.todaySales'),
       value: '€2,847.50',
       change: '+12.5%',
       changeType: 'positive' as const,
@@ -21,7 +34,7 @@ const Dashboard: React.FC = () => {
       bgColor: 'bg-gradient-to-r from-green-500 to-emerald-500'
     },
     {
-      title: 'Transactions',
+      title: t('dashboard.stats.transactions'),
       value: '43',
       change: '+8.2%',
       changeType: 'positive' as const,
@@ -29,7 +42,7 @@ const Dashboard: React.FC = () => {
       bgColor: 'bg-gradient-to-r from-blue-500 to-cyan-500'
     },
     {
-      title: 'Customers',
+      title: t('dashboard.stats.customers'),
       value: '127',
       change: '+5.4%',
       changeType: 'positive' as const,
@@ -37,7 +50,7 @@ const Dashboard: React.FC = () => {
       bgColor: 'bg-gradient-to-r from-purple-500 to-pink-500'
     },
     {
-      title: 'Average Sale',
+      title: t('dashboard.stats.averageSale'),
       value: '€66.22',
       change: '-2.1%',
       changeType: 'negative' as const,
@@ -63,18 +76,12 @@ const Dashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
-          <p className="text-gray-600 mt-1">Welcome back! Here's what's happening today.</p>
+          <h1 className="text-3xl font-bold text-gray-800">{t('dashboard.title')}</h1>
+          <p className="text-gray-600 mt-1">{t('dashboard.welcome')}</p>
         </div>
         <div className="flex items-center space-x-2 bg-blue-50 px-4 py-2 rounded-lg">
           <Calendar className="w-5 h-5 text-blue-600" />
-          <span className="text-blue-800 font-medium">
-            {new Date().toLocaleDateString('pt-PT', { 
-              weekday: 'long', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
-          </span>
+          <span className="text-blue-800 font-medium">{todayStr}</span>
         </div>
       </div>
 
@@ -88,11 +95,10 @@ const Dashboard: React.FC = () => {
                 <div className={`p-3 rounded-lg ${stat.bgColor}`}>
                   <Icon className="w-6 h-6 text-white" />
                 </div>
-                <span className={`text-sm font-semibold px-2 py-1 rounded-full ${
-                  stat.changeType === 'positive' 
-                    ? 'text-green-700 bg-green-100' 
+                <span className={`text-sm font-semibold px-2 py-1 rounded-full ${stat.changeType === 'positive'
+                    ? 'text-green-700 bg-green-100'
                     : 'text-red-700 bg-red-100'
-                }`}>
+                  }`}>
                   {stat.change}
                 </span>
               </div>
@@ -107,9 +113,9 @@ const Dashboard: React.FC = () => {
         {/* Recent Transactions */}
         <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-800">Recent Transactions</h2>
+            <h2 className="text-xl font-bold text-gray-800">{t('dashboard.recentTransactions')}</h2>
             <button className="text-blue-600 hover:text-blue-700 font-medium text-sm">
-              View All
+              {t('dashboard.viewAll')}
             </button>
           </div>
           <div className="space-y-3">
@@ -141,10 +147,10 @@ const Dashboard: React.FC = () => {
         {/* Low Stock Alert */}
         <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-800">Low Stock Alert</h2>
+            <h2 className="text-xl font-bold text-gray-800">{t('dashboard.lowStockAlert')}</h2>
             <div className="flex items-center space-x-1 text-orange-600">
               <AlertTriangle className="w-5 h-5" />
-              <span className="text-sm font-medium">{lowStockItems.length} Items</span>
+              <span className="text-sm font-medium">{t('dashboard.items', { count: lowStockItems.length })}</span>
             </div>
           </div>
           <div className="space-y-3">
@@ -158,12 +164,12 @@ const Dashboard: React.FC = () => {
                   <Package className="w-5 h-5 text-orange-600" />
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Current: {item.current}</span>
-                  <span className="text-sm text-gray-600">Min: {item.minimum}</span>
+                  <span className="text-sm text-gray-600">{t('dashboard.current')} {item.current}</span>
+                  <span className="text-sm text-gray-600">{t('dashboard.minimum')} {item.minimum}</span>
                 </div>
                 <div className="mt-2 bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-orange-500 h-2 rounded-full" 
+                  <div
+                    className="bg-orange-500 h-2 rounded-full"
                     style={{ width: `${(item.current / item.minimum) * 100}%` }}
                   ></div>
                 </div>
@@ -175,13 +181,13 @@ const Dashboard: React.FC = () => {
 
       {/* Quick Actions */}
       <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Quick Actions</h2>
+        <h2 className="text-xl font-bold text-gray-800 mb-4">{t('dashboard.quickActions')}</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'New Sale', icon: ShoppingCart, color: 'bg-green-500' },
-            { label: 'Add Product', icon: Package, color: 'bg-blue-500' },
-            { label: 'View Reports', icon: TrendingUp, color: 'bg-purple-500' },
-            { label: 'Manage Staff', icon: Users, color: 'bg-orange-500' }
+            { label: t('dashboard.actions.newSale'), icon: ShoppingCart, color: 'bg-green-500' },
+            { label: t('dashboard.actions.addProduct'), icon: Package, color: 'bg-blue-500' },
+            { label: t('dashboard.actions.viewReports'), icon: TrendingUp, color: 'bg-purple-500' },
+            { label: t('dashboard.actions.manageStaff'), icon: Users, color: 'bg-orange-500' }
           ].map((action, index) => {
             const Icon = action.icon;
             return (

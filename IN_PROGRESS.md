@@ -97,6 +97,15 @@
   - Monitor logs on receipt navigation to confirm no repeated PostgREST 429/ERR_INSUFFICIENT_RESOURCES
 
 ---
+## Dashboard Localization
+- Status: ACTIVE (2025-08-25)
+- Description: Internationalizing Dashboard page strings and date based on `LanguageContext` using i18next.
+- Changes in progress/completed:
+  - Added `dashboard` keys to `src/i18n.ts` (EN/PT)
+  - Refactored `src/pages/Dashboard.tsx` to use `useTranslation` and localized date
+  - Added `tests/dashboard.test.tsx` to verify both languages render correctly
+  - Ensured component structure follows `DEVELOPMENT_GUIDE.md`
+
 
 ## Multi-Tenant Database Migration (Planning)
 - Status: ACTIVE (planning and documentation)
