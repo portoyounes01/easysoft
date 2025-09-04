@@ -750,19 +750,7 @@ const POS: React.FC = () => {
               </div>
             </div>
 
-            {/* Right - Action Buttons */}
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={handleCustomerClick}
-                className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg transition-colors"
-                title="Customer"
-              >
-                <User className="w-5 h-5" />
-              </button>
-              <button className="bg-gray-200 hover:bg-gray-300 text-gray-700 p-2 rounded-lg transition-colors">
-                <Settings className="w-5 h-5" />
-              </button>
-            </div>
+
           </div>
         </div>
 
@@ -1076,7 +1064,7 @@ const POS: React.FC = () => {
         onClearAll={clearCart}
         onCustomer={() => setShowCustomerModal(true)}
         onTables={() => { }}
-        onDiscount={() => { }}
+        onDiscount={() => handleDiscountClick('percentage')}
         onSaveBill={() => { }}
         onProcess={() => setShowPayment(true)}
       />

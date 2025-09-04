@@ -75,9 +75,11 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
         if (!isScrollable) return;
 
         const ratio = container.scrollTop / (container.scrollHeight - container.clientHeight || 1);
-        const trackHeight = container.clientHeight;
-        const thumbHeight = Math.max(30, (container.clientHeight / container.scrollHeight) * trackHeight);
-        const top = ratio * (trackHeight - thumbHeight);
+        const trackHeight = track.clientHeight; // use actual track height, not container height
+        const bottomInsetPx = 4; // leave a small safe zone to avoid clipping at the bottom
+        const effectiveTrack = Math.max(0, trackHeight - bottomInsetPx);
+        const thumbHeight = Math.max(30, (container.clientHeight / container.scrollHeight) * effectiveTrack);
+        const top = ratio * (effectiveTrack - thumbHeight);
         thumb.style.height = `${thumbHeight}px`;
         thumb.style.transform = `translateY(${top}px)`;
     }, []);
@@ -108,14 +110,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                             <Users style={{ width: '1.8vh', height: '1.8vh', marginBottom: '0.3vh' }} className="text-gray-800" />
                             <span className="text-gray-800 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.customer')}</span>
                         </button>
-                        <button
-                            onClick={onTables}
-                            className="bg-white border border-gray-200 rounded-xl flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
-                            style={{ padding: '0.5vh', height: '6vh' }}
-                        >
-                            <Table style={{ width: '1.8vh', height: '1.8vh', marginBottom: '0.3vh' }} className="text-gray-800" />
-                            <span className="text-gray-800 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.tables')}</span>
-                        </button>
+
                         <button
                             onClick={onDiscount}
                             className="bg-white border border-gray-200 rounded-xl flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
@@ -132,36 +127,60 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                             <Save style={{ width: '1.8vh', height: '1.8vh', marginBottom: '0.3vh' }} className="text-gray-800" />
                             <span className="text-gray-800 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.saveBill')}</span>
                         </button>
+                        <button
+                            disabled
+                            aria-disabled="true"
+                            title="Disabled"
+                            className="bg-gray-200 border border-gray-400 rounded-xl flex flex-col items-center justify-center opacity-50 cursor-not-allowed transition-all duration-200"
+                            style={{ padding: '0.5vh', height: '6vh' }}
+                        >
+                            <Table style={{ width: '1.8vh', height: '1.8vh', marginBottom: '0.3vh' }} className="text-gray-800" />
+                            <span className="text-gray-800 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.tables')}</span>
+                        </button>
                     </div>
                 </div>
             </div>
 
             {/* Middle section: Order details + Items list (58% row) */}
-            <div className="h-full overflow-hidden relative" style={{ paddingTop: '1vh', paddingLeft: '2vh', paddingRight: '2vh' }}>
-                <div className="h-full overflow-hidden flex flex-col" style={{ gap: '1vh' }}>
+            <div className="h-full overflow-visible relative" style={{ paddingTop: '1vh', paddingLeft: '2vh', paddingRight: '2vh' }}>
+                <div className="h-full overflow-visible flex flex-col" style={{ gap: '1vh' }}>
                     {/* Order details header + tabs */}
                     <div>
-                        <h2 className="font-bold text-gray-900" style={{ fontSize: '1.9vh', marginBottom: '1.3vh' }}>{t('pos.orderDetails')}</h2>
-                        <div className="bg-gray-100 rounded-[10px] flex w-full">
-                            <button
-                                onClick={() => handleSetServiceType('dine-in')}
-                                className={`flex-1 rounded-[10px] font-semibold transition-all ${serviceType === 'dine-in' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'}`}
-                                style={{ padding: '1.25vh', fontSize: '1.25vh' }}
-                            >
-                                {t('pos.dineIn')}
-                            </button>
-                            <button
-                                onClick={() => handleSetServiceType('take-away')}
-                                className={`flex-1 rounded-[10px] font-semibold transition-all ${serviceType === 'take-away' ? 'bg-white text-gray-900 shadow' : 'text-gray-600'}`}
-                                style={{ padding: '1.25vh', fontSize: '1.25vh' }}
-                            >
-                                {t('pos.takeAway')}
-                            </button>
+                        <h2 className="font-bold text-gray-900" style={{ fontSize: '2vh', marginBottom: '1.3vh' }}>{t('pos.orderDetails')}</h2>
+                        <div className="bg-gray-100 rounded-[10px] flex w-full border shadow-sm relative">
+                            <div className="flex w-full relative">
+                                <button
+                                    onClick={() => handleSetServiceType('dine-in')}
+                                    className={`flex-1 rounded-[10px] font-semibold transition-all relative ${serviceType === 'dine-in' ? 'bg-white text-gray-900' : 'text-gray-600'}`}
+                                    style={{ padding: '1.25vh', fontSize: '1.5vh' }}
+                                >
+                                    {t('pos.dineIn')}
+                                    {serviceType === 'dine-in' && (
+                                        <span
+                                            className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[0.4vh] bg-gradient-to-r from-green-500 to-green-600 rounded-full"
+                                            style={{ width: '25%' }}
+                                        />
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => handleSetServiceType('take-away')}
+                                    className={`flex-1 rounded-[10px] font-semibold transition-all relative ${serviceType === 'take-away' ? 'bg-white text-gray-900' : 'text-gray-600'}`}
+                                    style={{ padding: '1.25vh', fontSize: '1.5vh' }}
+                                >
+                                    {t('pos.takeAway')}
+                                    {serviceType === 'take-away' && (
+                                        <span
+                                            className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[0.4vh] bg-gradient-to-r from-green-500 to-green-600 rounded-full"
+                                            style={{ width: '25%' }}
+                                        />
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
 
                     {/* Items list - takes most space */}
-                    <div className="flex-1 overflow-y-auto relative" style={{ paddingRight: '1vh' }}>
+                    <div className="flex-1 overflow-y-auto relative" style={{ paddingRight: '2vh' }}>
                         <div
                             ref={scrollRef}
                             className="overflow-y-auto overscroll-contain h-full hide-native-scrollbar"
@@ -192,7 +211,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                         </div>
 
                         {/* Custom scrollbar track */}
-                        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-3 flex">
+                        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-2 flex">
                             <div ref={trackRef} className="scroll-indicator-track w-full bg-[#F7F7F7] rounded-full relative my-2 transition-opacity duration-200 opacity-0">
                                 <div ref={thumbRef} className="scroll-indicator-thumb absolute left-0 right-0 bg-[#D7D7D7] rounded-full" style={{ top: 0, height: 40 }} />
                             </div>
@@ -203,7 +222,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                     {items.length > 0 && (
                         <button
                             onClick={onClearAll}
-                            className="w-full bg-white border-2 border-gray-200 text-gray-900 rounded-2xl font-semibold transition-all duration-200 hover:bg-gray-50"
+                            className="w-full bg-white shadow border border-gray-200 text-gray-900 rounded-2xl font-semibold transition-all duration-200 hover:bg-gray-50"
                             style={{ fontSize: '1.4vh', height: '4vh' }}
                         >
                             {t('pos.clearAllOrder')}
@@ -216,7 +235,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
             <div className="h-full overflow-hidden relative" style={{ paddingLeft: '2vh', paddingRight: '2vh', paddingBottom: '2vh', paddingTop: '1.5vh' }}>
                 <div className="h-full overflow-hidden flex flex-col justify-between">
                     {/* Totals section */}
-                    <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden" style={{ padding: '1vh', height: 'calc(26.5vh - 6.5vh - 2vh)' }}>
+                    <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden" style={{ padding: '1vh', height: 'calc(26.5vh - 8vh - 2vh)' }}>
                         <div className="flex items-center justify-between" style={{ marginBottom: '0.5vh', paddingTop: '0.25vh' }}>
                             <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.subtotalLabel')}</span>
                             <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>{formatCurrency(subtotal)}</span>
