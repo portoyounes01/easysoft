@@ -20,6 +20,7 @@ import {
 import { transactionService } from '../services/transactionService';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNavigate } from 'react-router-dom';
 
 interface Transaction {
     id: string;
@@ -50,6 +51,7 @@ interface Transaction {
 const Transactions: React.FC = () => {
     const { t } = useTranslation();
     const { language } = useLanguage();
+    const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedStatus, setSelectedStatus] = useState('all');
@@ -109,6 +111,8 @@ const Transactions: React.FC = () => {
             transaction.customerNif?.includes(searchTerm) ||
             transaction.employeeName.toLowerCase().includes(searchTerm.toLowerCase());
 
+        // Reference language to trigger re-render on language change (i18n formatting)
+        void language;
         const matchesDate = !selectedDate || transaction.date === selectedDate;
         const matchesStatus = selectedStatus === 'all' || transaction.status === selectedStatus;
         const matchesPayment = selectedPaymentMethod === 'all' || transaction.paymentMethod === selectedPaymentMethod;
@@ -382,6 +386,7 @@ const Transactions: React.FC = () => {
                                                     expandedTransaction === transaction.id ? null : transaction.id
                                                 )}
                                                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                                                aria-label={expandedTransaction === transaction.id ? 'Collapse transaction details' : 'Expand transaction details'}
                                             >
                                                 {expandedTransaction === transaction.id ? (
                                                     <ChevronUp className="w-5 h-5" />
@@ -454,7 +459,10 @@ const Transactions: React.FC = () => {
                                             </div>
 
                                             <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end space-x-3">
-                                                <button className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center space-x-2">
+                                                <button
+                                                    onClick={() => navigate(`/receipt-demo/${transaction.id}`)}
+                                                    className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center space-x-2"
+                                                >
                                                     <Eye className="w-4 h-4" />
                                                     <span>{t('transactions.list.viewReceipt')}</span>
                                                 </button>
