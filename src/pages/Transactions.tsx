@@ -20,7 +20,9 @@ import {
 import { transactionService } from '../services/transactionService';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useNavigate } from 'react-router-dom';
+import { useSettings } from '../contexts/SettingsContext';
+import ReceiptDialog from '../components/ReceiptDialog';
+import type { ReceiptProps } from '../components/ThermalReceipt';
 
 interface Transaction {
     id: string;
@@ -51,7 +53,9 @@ interface Transaction {
 const Transactions: React.FC = () => {
     const { t } = useTranslation();
     const { language } = useLanguage();
-    const navigate = useNavigate();
+    const { settings } = useSettings();
+    const [showReceiptPreview, setShowReceiptPreview] = useState(false);
+    const [receiptPreviewData, setReceiptPreviewData] = useState<ReceiptProps | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedStatus, setSelectedStatus] = useState('all');
@@ -78,7 +82,13 @@ const Transactions: React.FC = () => {
                     time: dbTransaction.transaction_time,
                     customerName: dbTransaction.customer_name,
                     customerNif: dbTransaction.customer_id, // Using customer_id as NIF for now
-                    items: dbTransaction.items || [],
+                    items: (dbTransaction.transaction_items || []).map((it: any) => ({
+                        id: it.id,
+                        name: it.product_name,
+                        quantity: it.quantity,
+                        price: it.unit_price,
+                        total: it.line_total
+                    })),
                     subtotal: dbTransaction.subtotal,
                     discount: dbTransaction.discount,
                     tax: dbTransaction.tax,
@@ -165,6 +175,64 @@ const Transactions: React.FC = () => {
             month: 'short',
             day: 'numeric'
         });
+    };
+
+    const handleViewReceipt = async (id: string) => {
+        try {
+            const trx = await transactionService.getTransactionById(id);
+            if (!trx) return;
+
+            const date = new Date(`${trx.transaction_date}T${trx.transaction_time}`);
+            const receipt: ReceiptProps = {
+                documentNumber: trx.receipt_number || trx.transaction_number,
+                documentType: settings.receipt.defaultDocumentType,
+                date,
+                counter: settings.receipt.counterLabel,
+                verificationCode: `${settings.receipt.atcudPrefix}-${trx.receipt_number || trx.transaction_number}`,
+                company: {
+                    name: settings.company.name,
+                    address: settings.company.address,
+                    postalCode: settings.company.postalCode,
+                    city: settings.company.city,
+                    taxNumber: settings.company.taxNumber,
+                    phone: settings.company.phone || undefined,
+                    email: settings.company.email || undefined,
+                },
+                customer: trx.customer_id ? {
+                    name: trx.customer_name || undefined,
+                    taxNumber: trx.customers?.tax_id || undefined
+                } : undefined,
+                items: (trx.transaction_items || []).map((it: any) => ({
+                    id: it.id,
+                    description: it.product_name,
+                    quantity: it.quantity,
+                    unitPrice: it.unit_price,
+                    vatRate: Math.round(((it.iva_rate || 0) as number) * 100),
+                    total: it.line_total,
+                })),
+                totals: {
+                    subtotal: trx.subtotal,
+                    discount: trx.discount,
+                    discountPercentage: 0,
+                    net: trx.total - trx.tax,
+                    vat: trx.tax,
+                    total: trx.total,
+                },
+                payment: {
+                    method: trx.payment_method === 'cash' ? 'Numerário' : 'Multibanco',
+                    amountGiven: trx.amount_paid || trx.total,
+                    change: trx.change_given || 0,
+                },
+                slogan: settings.company.slogan || undefined,
+                softwareInfo: settings.company.softwareInfo || undefined,
+                certificationNumber: settings.company.certificationNumber || undefined,
+            };
+
+            setReceiptPreviewData(receipt);
+            setShowReceiptPreview(true);
+        } catch (e) {
+            console.error('Failed to build receipt preview:', e);
+        }
     };
 
     return (
@@ -460,7 +528,7 @@ const Transactions: React.FC = () => {
 
                                             <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end space-x-3">
                                                 <button
-                                                    onClick={() => navigate(`/receipt-demo/${transaction.id}`)}
+                                                    onClick={() => handleViewReceipt(transaction.id)}
                                                     className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center space-x-2"
                                                 >
                                                     <Eye className="w-4 h-4" />
@@ -478,6 +546,13 @@ const Transactions: React.FC = () => {
                         </div>
                     )}
                 </div>
+            )}
+            {showReceiptPreview && receiptPreviewData && (
+                <ReceiptDialog
+                    open={showReceiptPreview}
+                    onClose={() => setShowReceiptPreview(false)}
+                    receipt={receiptPreviewData}
+                />
             )}
         </div>
     );

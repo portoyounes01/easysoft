@@ -46,6 +46,7 @@ import { useTranslation } from 'react-i18next';
 import { transactionService } from '../services/transactionService';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
 import ThermalReceipt, { ReceiptProps } from '../components/ThermalReceipt';
+import ReceiptHistorySelector from '../components/ReceiptHistorySelector';
 
 // Icon mapping for categories
 const iconMap = {
@@ -153,6 +154,9 @@ const POS: React.FC = () => {
   // Receipt preview modal state
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
   const [receiptPreviewData, setReceiptPreviewData] = useState<ReceiptProps | null>(null);
+  const [lastCompletedReceipt, setLastCompletedReceipt] = useState<ReceiptProps | null>(null);
+  const [recentReceipts, setRecentReceipts] = useState<ReceiptProps[]>([]);
+  const [showReceiptHistory, setShowReceiptHistory] = useState(false);
 
   // Stock validation helper function
   const canAddToCart = (product: LocalProduct, requestedQuantity = 1): boolean => {
@@ -1065,7 +1069,11 @@ const POS: React.FC = () => {
         onCustomer={() => setShowCustomerModal(true)}
         onTables={() => { }}
         onDiscount={() => handleDiscountClick('percentage')}
-        onSaveBill={() => { }}
+        onSaveBill={() => {
+          if (!lastCompletedReceipt) return;
+          setShowReceiptHistory(true);
+        }}
+        canSaveBill={Boolean(lastCompletedReceipt)}
         onProcess={() => setShowPayment(true)}
       />
 
@@ -1661,6 +1669,8 @@ const POS: React.FC = () => {
                     setShowPayment(false);
                     clearCart();
                     setReceiptPreviewData(receiptData);
+                    setLastCompletedReceipt(receiptData);
+                    setRecentReceipts(prev => [receiptData, ...prev].slice(0, 20));
                     setShowReceiptPreview(true);
                   }}
                 >
@@ -1699,6 +1709,18 @@ const POS: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Receipt History Selector for Segunda via */}
+      <ReceiptHistorySelector
+        open={showReceiptHistory}
+        receipts={recentReceipts}
+        onClose={() => setShowReceiptHistory(false)}
+        onSelect={(r) => {
+          setShowReceiptHistory(false);
+          setReceiptPreviewData({ ...r, documentLabel: 'Segunda via' });
+          setShowReceiptPreview(true);
+        }}
+      />
 
       {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (

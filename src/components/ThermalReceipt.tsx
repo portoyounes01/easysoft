@@ -55,6 +55,7 @@ export interface ReceiptProps {
   certificationNumber?: string;
   originalInvoice?: string; // For credit notes
   creditReason?: string; // For credit notes
+  documentLabel?: string; // e.g., 'Original' (default) or 'Segunda via'
 }
 
 const ThermalReceipt: React.FC<ReceiptProps> = ({
@@ -72,7 +73,8 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   softwareInfo,
   certificationNumber,
   originalInvoice,
-  creditReason
+  creditReason,
+  documentLabel
 }) => {
   const formatDate = (date: Date): string => {
     return date.toLocaleDateString('pt-PT') + ' ' + date.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
@@ -281,7 +283,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       {/* Document Header */}
       <div className="center bold">{getDocumentTitle()}</div>
-      <div className="center">{documentNumber} Original</div>
+      <div className="center">{documentNumber} {documentLabel || 'Original'}</div>
       <div className="center">Data: {formatDate(date)} {counter}</div>
 
       {/* Credit Note Specific Info */}

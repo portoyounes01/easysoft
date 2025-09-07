@@ -16,6 +16,7 @@ export interface OrderSummaryPanelProps {
     onDiscount?: () => void;
     onSaveBill?: () => void;
     onProcess?: () => void;
+    canSaveBill?: boolean;
     className?: string;
 }
 
@@ -29,6 +30,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     onDiscount,
     onSaveBill,
     onProcess,
+    canSaveBill = false,
     className = ''
 }) => {
     // 1. Hooks
@@ -121,7 +123,11 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                         </button>
                         <button
                             onClick={onSaveBill}
-                            className="bg-white border border-gray-200 rounded-xl flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
+                            disabled={!canSaveBill}
+                            aria-disabled={!canSaveBill}
+                            title={!canSaveBill ? 'Disponível após completar a venda' : undefined}
+                            className={`bg-white border rounded-xl flex flex-col items-center justify-center transition-all duration-200 ${canSaveBill ? 'border-gray-200 hover:bg-gray-50' : 'border-gray-300 opacity-50 cursor-not-allowed'
+                                }`}
                             style={{ padding: '0.3vh', height: '6vh' }}
                         >
                             <Save style={{ width: '1.8vh', height: '1.8vh', marginBottom: '0.3vh' }} className="text-gray-800" />
