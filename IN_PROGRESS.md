@@ -131,3 +131,19 @@
   - Review plan with stakeholders
   - Prepare staged SQL migration bundle
   - Create seed organization and membership mapping approach
+
+---
+
+## Offline Sync Coverage & Upgrade
+- Status: ACTIVE (2025-09-07)
+- Description: Audit of local DB + sync coverage and creation of a comprehensive offline-first upgrade plan to include customers and transactions.
+- Artifacts:
+  - `OFFLINE_SYNC_AUDIT_AND_PLAN.md` (audit + step-by-step upgrade plan)
+- Key Findings:
+  - Employees, Products, Categories: already offline-first with queues and delta RPCs
+  - Customers, Transactions, Transaction Items: server-direct only; no local storage or queues
+- Next Steps:
+  - Extend Dexie schema with customers/transactions tables + queues
+  - Implement Customer/Transaction Local + Sync services and orchestrator
+  - Update POS checkout to write local transactions and queue sync
+  - Add delta/upsert RPCs for customers/transactions on Supabase
