@@ -126,7 +126,9 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                             disabled={!canSaveBill}
                             aria-disabled={!canSaveBill}
                             title={!canSaveBill ? 'Disponível após completar a venda' : undefined}
-                            className={`bg-white border rounded-xl flex flex-col items-center justify-center transition-all duration-200 ${canSaveBill ? 'border-gray-200 hover:bg-gray-50' : 'border-gray-300 opacity-50 cursor-not-allowed'
+                            className={`rounded-xl flex flex-col items-center justify-center transition-all duration-200 ${canSaveBill
+                                ? 'bg-white border border-gray-200 hover:bg-gray-50'
+                                : 'bg-gray-200 border border-gray-400 opacity-50 cursor-not-allowed'
                                 }`}
                             style={{ padding: '0.3vh', height: '6vh' }}
                         >
