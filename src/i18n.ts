@@ -15,6 +15,7 @@ const resources = {
                 searchPlaceholder: 'Search products, customers...',
                 select: 'Select',
                 print: 'Print',
+                close: 'Close',
             },
             dashboard: {
                 title: 'Dashboard',
@@ -526,6 +527,10 @@ const resources = {
                 retry: 'Retry',
                 syncData: 'Sync Data',
                 refresh: 'Refresh',
+                receiptHistory: {
+                    title: 'Select Receipt',
+                    empty: 'No receipts yet',
+                },
             },
         },
     },
@@ -540,6 +545,7 @@ const resources = {
                 searchPlaceholder: 'Procurar produtos, clientes...',
                 select: 'Selecionar',
                 print: 'Imprimir',
+                close: 'Fechar',
             },
             dashboard: {
                 title: 'Painel',
