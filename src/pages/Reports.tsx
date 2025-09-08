@@ -27,7 +27,7 @@ import { useEmployees } from '../contexts/EmployeesContext';
 import { useProducts } from '../contexts/ProductsContext';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
-import { reportingService } from '../services/transactionService';
+import { offlineReportingService } from '../services/offlineReportingService';
 import {
     ReportTransaction,
     ReportFilters,
@@ -75,7 +75,7 @@ const Reports: React.FC = () => {
                 setIsLoading(true);
                 setError(null);
 
-                const data = await reportingService.getReportData(filters);
+                const data = await offlineReportingService.getReportData(filters);
                 setReportData(data);
             } catch (err) {
                 console.error('Error loading report data:', err);
@@ -126,7 +126,7 @@ const Reports: React.FC = () => {
         setIsExporting(true);
         try {
             // Generate CSV content using the reporting service
-            const csvContent = reportingService.generateCSVReport(filteredTransactions);
+            const csvContent = await offlineReportingService.generateCSVReport(filters);
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);

@@ -73,6 +73,18 @@ export interface Database {
                 Args: { last_sync_timestamp?: string };
                 Returns: TransactionItemRow[];
             };
+            get_customers_delta: {
+                Args: { since_timestamp?: string };
+                Returns: CustomerRow[];
+            };
+            upsert_customers: {
+                Args: { customers_data: unknown };
+                Returns: { id: string; success: boolean; error: string }[];
+            };
+            upsert_transaction_with_items: {
+                Args: { transaction_data: unknown; items_data: unknown };
+                Returns: { transaction_id: string; success: boolean; error?: string };
+            };
             generate_transaction_number: {
                 Args: Record<PropertyKey, never>;
                 Returns: string;
@@ -995,4 +1007,96 @@ export const PaymentMethods = ['cash', 'card', 'mixed'] as const;
 export type PaymentMethod = typeof PaymentMethods[number];
 
 export const TransactionStatuses = ['completed', 'refunded', 'pending', 'cancelled'] as const;
-export type TransactionStatus = typeof TransactionStatuses[number]; 
+export type TransactionStatus = typeof TransactionStatuses[number];
+
+// =====================================================
+// LOCAL DATABASE TYPES FOR OFFLINE SYNC
+// =====================================================
+
+// Local database interfaces for customers
+export interface LocalCustomer extends Omit<CustomerRow, 'created_at' | 'updated_at' | 'last_synced_at' | 'deleted_at'> {
+    // Local specific fields
+    created_at: Date;
+    updated_at: Date;
+    last_synced_at: Date | null;
+    deleted_at: Date | null;
+
+    // Sync flags
+    needs_push: boolean;
+    is_conflicted: boolean;
+}
+
+// Local database interfaces for transactions
+export interface LocalTransaction extends Omit<TransactionRow, 'created_at' | 'updated_at' | 'last_synced_at' | 'deleted_at'> {
+    // Local specific fields
+    created_at: Date;
+    updated_at: Date;
+    last_synced_at: Date | null;
+    deleted_at: Date | null;
+
+    // Sync flags
+    needs_push: boolean;
+    is_conflicted: boolean;
+}
+
+// Local database interfaces for transaction items
+export interface LocalTransactionItem extends Omit<TransactionItemRow, 'created_at' | 'updated_at' | 'last_synced_at' | 'deleted_at'> {
+    // Local specific fields
+    created_at: Date;
+    updated_at: Date;
+    last_synced_at: Date | null;
+    deleted_at: Date | null;
+
+    // Sync flags
+    needs_push: boolean;
+    is_conflicted: boolean;
+}
+
+// Local database interfaces for daily sales summary
+export interface LocalDailySalesSummary extends Omit<DailySalesSummaryRow, 'created_at' | 'updated_at'> {
+    // Local specific fields
+    created_at: Date;
+    updated_at: Date;
+
+    // Sync flags
+    needs_push: boolean;
+    is_conflicted: boolean;
+}
+
+// =====================================================
+// PENDING SYNC OPERATIONS
+// =====================================================
+
+// Pending customer operations
+export interface PendingCustomerOperation {
+    id: string;
+    type: 'CREATE' | 'UPDATE' | 'DELETE';
+    customerId: string;
+    data: CustomerInsert | CustomerUpdate | null;
+    timestamp: string;
+    retryCount: number;
+    error?: string;
+}
+
+// Pending transaction operations
+export interface PendingTransactionOperation {
+    id: string;
+    type: 'CREATE' | 'UPDATE' | 'DELETE';
+    transactionId: string;
+    data: (TransactionInsert & { items?: TransactionItemInsert[] }) | TransactionUpdate | null;
+    timestamp: string;
+    retryCount: number;
+    error?: string;
+}
+
+// Pending transaction item operations (optional - items usually sync with parent transaction)
+export interface PendingTransactionItemOperation {
+    id: string;
+    type: 'CREATE' | 'UPDATE' | 'DELETE';
+    transactionItemId: string;
+    transactionId: string; // Parent transaction ID
+    data: TransactionItemInsert | TransactionItemUpdate | null;
+    timestamp: string;
+    retryCount: number;
+    error?: string;
+} 

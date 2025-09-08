@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useReducer } from 'react';
 import { Product, Transaction, Customer, CashDrawer } from '../types';
-import { LocalProduct } from '../types/supabase';
+import { LocalProduct, LocalCustomer } from '../types/supabase';
+import { transactionLocalService, customerLocalService } from '../lib/localDatabase';
+import { transactionService } from '../services/transactionService';
+import { connectionStatus } from '../lib/supabase';
+import { calculateTaxAmount, calculatePriceWithoutTax } from '../types/supabase';
 
 interface POSState {
   currentTransaction: Partial<Transaction> | null;
@@ -10,7 +14,7 @@ interface POSState {
     discount: number;
   }>;
   cashDrawer: CashDrawer | null;
-  selectedCustomer: Customer | null;
+  selectedCustomer: LocalCustomer | null;
 }
 
 interface POSContextType extends POSState {
@@ -19,7 +23,7 @@ interface POSContextType extends POSState {
   updateQuantity: (productId: string, quantity: number) => void;
   applyDiscount: (productId: string, discount: number) => void;
   clearCart: () => void;
-  selectCustomer: (customer: Customer | null) => void;
+  selectCustomer: (customer: LocalCustomer | null) => void;
   openDrawer: (initialFloat: number) => void;
   closeDrawer: (finalCount: number) => void;
   processTransaction: (paymentData: any) => Promise<string>;
@@ -33,7 +37,7 @@ type POSAction =
   | { type: 'UPDATE_QUANTITY'; payload: { productId: string; quantity: number } }
   | { type: 'APPLY_DISCOUNT'; payload: { productId: string; discount: number } }
   | { type: 'CLEAR_CART' }
-  | { type: 'SELECT_CUSTOMER'; payload: Customer | null }
+  | { type: 'SELECT_CUSTOMER'; payload: LocalCustomer | null }
   | { type: 'OPEN_DRAWER'; payload: CashDrawer }
   | { type: 'CLOSE_DRAWER'; payload: { finalCount: number } };
 
@@ -132,7 +136,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     dispatch({ type: 'CLEAR_CART' });
   };
 
-  const selectCustomer = (customer: Customer | null) => {
+  const selectCustomer = (customer: LocalCustomer | null) => {
     dispatch({ type: 'SELECT_CUSTOMER', payload: customer });
   };
 
@@ -152,13 +156,134 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     dispatch({ type: 'CLOSE_DRAWER', payload: { finalCount } });
   };
 
-  const processTransaction = async (paymentData: any): Promise<string> => {
-    // Simulate transaction processing
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  const processTransaction = async (paymentData: {
+    paymentMethod: 'cash' | 'card' | 'mixed';
+    amountPaid?: number;
+    employeeId: string;
+    employeeName: string;
+  }): Promise<string> => {
+    try {
+      // Calculate transaction totals
+      const subtotal = state.cart.reduce((sum, item) => {
+        const itemTotal = item.product.price * item.quantity;
+        const discountAmount = (itemTotal * item.discount) / 100;
+        return sum + (itemTotal - discountAmount);
+      }, 0);
 
-    const receiptNumber = `REC-${Date.now()}`;
-    clearCart();
-    return receiptNumber;
+      const totalTax = state.cart.reduce((sum, item) => {
+        const itemTotal = item.product.price * item.quantity;
+        const discountAmount = (itemTotal * item.discount) / 100;
+        const discountedTotal = itemTotal - discountAmount;
+        return sum + calculateTaxAmount(discountedTotal, item.product.iva_rate);
+      }, 0);
+
+      const total = subtotal;
+      const changeGiven = paymentData.paymentMethod === 'cash' && paymentData.amountPaid ? 
+        Math.max(0, paymentData.amountPaid - total) : 0;
+
+      // Generate transaction number (offline fallback)
+      const transactionNumber = transactionLocalService.generateTransactionNumber();
+      const now = new Date();
+      const transactionDate = now.toISOString().split('T')[0];
+      const transactionTime = now.toTimeString().split(' ')[0];
+
+      // Create transaction data
+      const transactionData = {
+        transaction_number: transactionNumber,
+        employee_id: paymentData.employeeId,
+        employee_name: paymentData.employeeName,
+        customer_id: state.selectedCustomer?.id || null,
+        customer_name: state.selectedCustomer?.name || null,
+        transaction_date: transactionDate,
+        transaction_time: transactionTime,
+        subtotal: subtotal,
+        discount: 0, // Could be calculated from cart items
+        tax: totalTax,
+        total: total,
+        payment_method: paymentData.paymentMethod,
+        amount_paid: paymentData.amountPaid || null,
+        change_given: changeGiven,
+        status: 'completed' as const,
+        notes: null,
+        receipt_number: `REC-${transactionNumber}`,
+      };
+
+      // Create transaction items
+      const transactionItems = state.cart.map(item => {
+        const itemTotal = item.product.price * item.quantity;
+        const discountAmount = (itemTotal * item.discount) / 100;
+        const discountedTotal = itemTotal - discountAmount;
+        const taxAmount = calculateTaxAmount(discountedTotal, item.product.iva_rate);
+        const basePrice = calculatePriceWithoutTax(item.product.price, item.product.iva_rate);
+        const profitAmount = (basePrice - item.product.cost) * item.quantity;
+
+        return {
+          product_id: item.product.id,
+          product_name: item.product.name,
+          product_sku: item.product.sku,
+          category_id: item.product.category_id,
+          category_name: item.product.category_name,
+          quantity: item.quantity,
+          unit_price: item.product.price,
+          unit_cost: item.product.cost,
+          iva_rate: item.product.iva_rate,
+          line_total: discountedTotal,
+          tax_amount: taxAmount,
+          profit_amount: profitAmount,
+          discount_amount: discountAmount,
+          discount_percentage: item.discount,
+        };
+      });
+
+      // Check if online and try server first
+      const connectionState = connectionStatus.getStatus();
+      let transactionId: string;
+      let receiptNumber: string = transactionData.receipt_number;
+
+      if (connectionState.isOnline && connectionState.isSupabaseOnline) {
+        try {
+          console.log('POS: Processing transaction online...');
+          
+          // Try to process through server
+          const result = await transactionService.createTransaction(transactionData, transactionItems);
+          transactionId = result.transaction.id;
+          receiptNumber = result.transaction.receipt_number || receiptNumber;
+          
+          console.log('POS: Transaction processed online successfully');
+        } catch (error) {
+          console.warn('POS: Server transaction failed, falling back to offline:', error);
+          
+          // Fallback to offline processing
+          transactionId = await transactionLocalService.createTransaction(transactionData, transactionItems);
+        }
+      } else {
+        console.log('POS: Processing transaction offline...');
+        
+        // Process offline
+        transactionId = await transactionLocalService.createTransaction(transactionData, transactionItems);
+      }
+
+      // Update product stock levels locally
+      await transactionLocalService.updateProductStock(transactionItems);
+
+      // Update customer totals if customer selected
+      if (state.selectedCustomer) {
+        await customerLocalService.updateCustomer(state.selectedCustomer.id, {
+          total_spent: (state.selectedCustomer.total_spent || 0) + total,
+          transaction_count: (state.selectedCustomer.transaction_count || 0) + 1,
+        });
+      }
+
+      // Clear cart after successful transaction
+      clearCart();
+
+      console.log(`POS: Transaction ${transactionNumber} processed successfully`);
+      return receiptNumber;
+
+    } catch (error) {
+      console.error('POS: Transaction processing failed:', error);
+      throw new Error(`Transaction failed: ${error.message}`);
+    }
   };
 
   return (
