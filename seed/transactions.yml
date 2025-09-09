@@ -1,0 +1,40 @@
+# Transaction Data Seed File
+# This file contains historical transaction data for comprehensive testing
+#
+# TRANSACTIONS TO INCLUDE:
+# - 30 completed transactions (last 90 days)
+# - 10 refunded transactions
+# - 5 cancelled transactions
+# - 5 partial refund transactions
+#
+#
+# PAYMENT METHOD DISTRIBUTION:
+# - 40% cash transactions
+# - 60% card transactions
+#
+# EMPLOYEE DISTRIBUTION:
+# - 50% by main cashier (EMP003)
+# - 30% by cashier (EMP004)
+# - 20% by manager (EMP002)
+#
+# CUSTOMER DISTRIBUTION:
+# - 60% registered customers
+# - 40% walk-in customers (null customer_id)
+#
+# AMOUNT DISTRIBUTION:
+# - 50% small transactions (under €15)
+# - 30% medium transactions (€15-€35)
+# - 20% large transactions (€35-€75)
+#
+# DISCOUNT PATTERNS:
+# - 20% transactions with discounts
+# - Mix of percentage and fixed amount discounts
+# - Loyalty discounts, promotional discounts
+#
+# DATA INTEGRITY:
+# - All transactions must link to valid employees
+# - Transaction numbers must be unique and follow format TXN{YYYYMMDD}{0001}
+# - Totals must match sum of transaction items
+# - Tax amounts must be calculated correctly
+
+transactions: []

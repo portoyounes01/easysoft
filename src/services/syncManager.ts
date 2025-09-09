@@ -64,7 +64,7 @@ export class SyncManager {
     // Initialize the sync manager
     private initialize(): void {
         // Listen for connection status changes
-        connectionStatus.addListener(this.handleConnectionChange.bind(this));
+        connectionStatus.subscribe(this.handleConnectionChange.bind(this));
 
         // Start background sync if enabled
         if (this.config.backgroundSyncEnabled) {

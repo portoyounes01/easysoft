@@ -1,3 +1,6 @@
+- 2025-09-08: Added YAML-based seeding under `seed/` with online/offline support, utilities, and `npm run seed` script. Kept existing `/setup` bootstrap intact.
+- 2025-09-08: Added Seed Management UI at `/seed` with navigation, instructions, and environment status display for YAML-based seeding workflow.
+- 2025-09-08: Implemented browser-based YAML seeding that follows offline-first architecture - seeds IndexedDB first, then syncs to Supabase.
 - Prevented spurious Supabase password grant (400) during login by adding proper guards
   - Types aligned with DB: `auth_id` optional on `Employee`, include `'trainee'` role
   - Supabase sign-in now only runs when configured, online, and employee is provisioned

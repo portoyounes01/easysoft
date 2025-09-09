@@ -1,0 +1,71 @@
+# Daily Sales Summary Seed File
+# This file contains pre-aggregated daily sales data for performance
+#
+# SUMMARY ENTRIES TO INCLUDE:
+# - 90 daily summaries (last 90 days)
+# - All active employees represented
+# - Complete sales metrics for each day
+#
+# TIME PERIOD:
+# - Last 90 days of operation
+# - Includes weekends and weekdays
+# - Covers seasonal variations
+# - Represents different business volumes
+#
+# EMPLOYEE BREAKDOWN:
+# - EMP002 (Manager): 30% of summaries (regular shifts)
+# - EMP003 (Main Cashier): 50% of summaries (primary operations)
+# - EMP004 (cashier): 20% of summaries (support operations)
+#
+# SALES VOLUME VARIATION:
+# - Peak days: €800-€1200 (weekends, holidays)
+# - Busy days: €600-€800 (weekdays with events)
+# - Normal days: €400-€600 (regular weekdays)
+# - Slow days: €200-€400 (off-peak, bad weather)
+#
+# TRANSACTION METRICS:
+# - 25-60 transactions per day (depending on volume)
+# - Average transaction: €12-€18
+# - Items per transaction: 3-5 items
+#
+# PAYMENT METHOD BREAKDOWN:
+# - Cash: 40% of sales volume
+# - Card: 60% of sales volume
+#
+# EMPLOYEE PERFORMANCE:
+# - Top performers: 15-20 transactions/day, €150-€250/day
+# - Average performers: 10-15 transactions/day, €120-€180/day
+# - Support staff: 8-12 transactions/day, €80-€150/day
+#
+# SEASONAL PATTERNS:
+# - Summer: Higher beverage sales, lighter meals
+# - Winter: Heavier meals, fewer customers
+# - Holiday periods: Increased volume, special items
+# - Weekends: Higher overall sales
+#
+# PROFIT MARGINS:
+# - Overall margin: 25-35%
+# - Food items: 20-30% margin
+# - Beverages: 40-60% margin (higher markup)
+# - Seasonal variations based on costs
+#
+# TAX BREAKDOWN:
+# - IVA 6%: Basic foods (dairy, bread) - 20% of sales
+# - IVA 13%: Restaurant meals - 70% of sales
+# - IVA 23%: Non-essentials - 10% of sales
+#
+#
+# DATA INTEGRITY:
+# - All employee_ids must exist in employees table
+# - Summary dates must be unique per employee
+# - Financial totals must balance
+# - Transaction counts must match actual transactions
+# - Payment method breakdowns must sum to total sales
+#
+# RELATIONSHIPS:
+# - Must align with transaction data
+# - Employee performance must match transaction assignments
+# - Dates must cover the same period as transactions
+# - Financial calculations must be accurate
+
+daily_sales_summary: []

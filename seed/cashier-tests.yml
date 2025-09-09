@@ -1,0 +1,47 @@
+# Cashier Tests Seed File
+# This file contains hardware and system testing operation logs
+#
+# TEST ENTRIES TO INCLUDE:
+# - 30 full system tests (comprehensive hardware check)
+# - 20 cash drawer tests (drawer mechanism)
+# - 15 printer tests (printing functionality)
+# - 10 hardware check tests (basic connectivity)
+#
+# TEST TYPE DISTRIBUTION:
+# - 40% full-sequence (complete checkout flow)
+# - 30% cash-drawer (drawer open/close mechanism)
+# - 20% printer-test (receipt printing)
+# - 10% hardware-check (basic connectivity)
+#
+# EMPLOYEE DISTRIBUTION:
+# - 50% by manager (EMP002) - system testing
+# - 30% by main cashier (EMP003) - daily checks
+# - 20% by cashier (EMP004) - shift tests
+#
+# SUCCESS/ERROR RATIO:
+# - 80% successful tests
+# - 20% failed/error tests (simulating real-world issues)
+#
+# FAILURE REASONS:
+# - Hardware connectivity issues
+# - Cash drawer stuck/jammed
+# - Printer offline or out of paper
+# - Network communication errors
+#
+# TEST DETAILS STRUCTURE:
+# - Hardware status (online/offline)
+# - Connection latency measurements
+# - Error codes and descriptions
+# - Test duration timing
+#
+# TIME PATTERNS:
+# - Morning: System startup tests (8:00-10:00)
+# - Mid-day: Maintenance checks (14:00-15:00)
+# - Evening: Shift change tests (18:00-19:00)
+#
+# DATA INTEGRITY:
+# - Test types must be valid enum values
+# - Employee references must be valid
+# - Timestamps must be chronological
+
+cashier_tests: []

@@ -1,0 +1,19 @@
+# Customer Data Seed File
+# This file contains customer information for testing the POS system
+#
+# CUSTOMERS TO INCLUDE:
+# - 5 regular customers 
+# - 2 loyalty program members with varying point levels
+#
+# DATA VARIETY:
+# - Complete & incomplete contact information 
+# - Various loyalty points
+# - Different registration dates 
+#
+# RELATIONSHIPS:
+# - Link to transactions for purchase history
+# - Preferred payment methods (cash, card)
+# - Customer categories for segmentation
+#
+
+customers: []

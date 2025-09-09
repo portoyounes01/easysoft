@@ -1,0 +1,55 @@
+# Print Logs Seed File
+# This file contains receipt and document printing operation logs
+#
+# LOG ENTRIES TO INCLUDE:
+# - 50 customer receipt prints (linked to transactions)
+# - 10 merchant receipt prints (for records)
+# - 20 test prints (printer testing and setup)
+# - 8 error/failure records
+#
+# RECEIPT TYPES:
+# - customer: Standard customer receipts
+# - merchant: Duplicate receipts for business records
+# - test: Printer functionality testing
+#
+# PRINT SETTINGS VARIETY:
+# - Standard thermal receipt printing
+# - Different paper sizes
+# - Various print qualities
+# - Logo printing enabled/disabled
+# - Tax information display options
+#
+# EMPLOYEE DISTRIBUTION:
+# - 60% by cashiers (main: EMP003, assistant: EMP004)
+# - 40% by manager (EMP002)
+#
+# SUCCESS/ERROR PATTERNS:
+# - 90% successful prints
+# - 10% failures (paper out, printer offline, connection issues)
+#
+# ERROR TYPES:
+# - Paper jam or out of paper
+# - Printer offline/disconnected
+# - Network connectivity issues
+# - Print head overheating
+# - Invalid print settings
+#
+# TIME DISTRIBUTION:
+# - Peak hours: 12-14, 19-21 (lunch and dinner rushes)
+# - Off-peak: 11-12, 14-19 (setup and cleaning)
+# - Testing: Various times throughout day
+#
+#
+# RELATIONSHIPS:
+# - Customer/merchant receipts link to valid transactions
+# - All employee_ids must exist in employees table
+# - Transaction_ids must be valid for receipt prints
+# - Print settings should be realistic JSON objects
+#
+# DATA INTEGRITY:
+# - Receipt types must be valid enum values
+# - Transaction references must exist for receipt prints
+# - Employee references must be valid
+# - Timestamps must be chronological and realistic
+
+print_logs: []

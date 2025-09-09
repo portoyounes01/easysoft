@@ -1,0 +1,47 @@
+# Cash Drawer Logs Seed File
+# This file contains cash drawer operation logs for hardware testing
+#
+# LOG ENTRIES TO INCLUDE:
+# - 30 daily opening records (last 90 days)
+# - 28 daily closing records (some missed days)
+# - 15 mid-shift cash drop records
+# - 5 emergency access records
+# - 5 hardware malfunction/error records
+#
+# OPERATION TYPES:
+# - open: Daily opening of cash drawer
+# - close: End of day cash count and close
+# - test: Hardware connectivity tests
+# - status: Status checks and monitoring
+#
+# EMPLOYEE DISTRIBUTION:
+# - 50% by main cashier (EMP003)
+# - 30% by manager (EMP002)
+# - 20% by cashier (EMP004)
+#
+# TIME PATTERNS:
+# - Openings: 11:00-12:00 (lunch prep)
+# - Closings: 22:00-23:00 (after dinner rush)
+# - Mid-shift drops: 15:00-16:00 (afternoon slump)
+# - Emergency access: Various times (issues)
+#
+# SUCCESS/ERROR RATIO:
+# - 85% successful operations
+# - 15% failed/error operations (paper jam, connectivity, timeout)
+#
+# REASONS FOR OPERATIONS:
+# - Regular business operations
+# - Cash management procedures
+# - Hardware maintenance
+# - Security protocols
+# - Emergency situations
+#
+#
+# DATA INTEGRITY:
+# - All employee_ids must exist in employees table
+# - Transaction_ids can be null for non-transaction operations
+# - Timestamps must be chronological
+# - Success/error status must be accurate
+# - Reason codes must be valid
+
+cash_drawer_logs: []

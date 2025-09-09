@@ -14,6 +14,7 @@ import Transactions from './pages/Transactions';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import DataSetup from './components/DataSetup';
+import SeedManagement from './pages/SeedManagement';
 import ReceiptDemoPage from './pages/ReceiptDemo';
 import CashierTesting from './pages/CashierTesting';
 import ElectronCashierTesting from './pages/ElectronCashierTesting';
@@ -190,6 +191,14 @@ const AppContent: React.FC = () => {
                     element={
                       <PermissionRoute permission="settings">
                         <DataSetup />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/seed"
+                    element={
+                      <PermissionRoute permission="settings">
+                        <SeedManagement />
                       </PermissionRoute>
                     }
                   />

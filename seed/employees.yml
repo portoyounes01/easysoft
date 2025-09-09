@@ -1,0 +1,138 @@
+# Employees Data Seed File
+# Employee information for POS system
+# Based on database schema
+#
+# EMPLOYEES INCLUDED:
+# - 1 System Administrator (IT support)
+# - 1 Restaurant Owner (Admin)
+# - 1 Restaurant Manager
+# - 2 Cashiers (Main and Assistant)
+#
+# EMPLOYEE ROLES:
+# - admin: Full system access, business owner
+# - manager: Daily operations management
+# - cashier: Transaction processing
+# - admin: System administration (IT)
+#
+# AUTHENTICATION:
+# - Admins have hashed passwords
+# - Cashiers use PIN codes for authentication
+# - All employees have unique employee numbers
+#
+# PERFORMANCE TRACKING:
+# - Realistic sales figures based on role
+# - Transaction counts matching expected volumes
+# - Hours worked appropriate for each role
+#
+# EMPLOYMENT DETAILS:
+# - Portuguese location (Lisbon)
+# - Realistic hire dates
+# - Active status for all employees
+
+employees:
+  - id: "EMP001"
+    employee_number: "SYS001"
+    name: "Carlos Silva"
+    email: "carlos.silva@pos.com"
+    phone: "+351 912 345 678"
+    password_hash: "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"  # This should be properly hashed 'admin123'
+    role: "admin"
+    access_levels: ["all"]
+    is_active: true
+    hire_date: "2024-01-01"
+    total_sales: 0.00
+    transaction_count: 0
+    average_transaction: 0.00
+    hours_worked: 160
+    created_at: "2024-01-01T08:00:00Z"
+    updated_at: "2024-01-01T08:00:00Z"
+
+  - id: "EMP002"
+    employee_number: "ADM001"
+    name: "Maria Santos"
+    email: "maria.santos@kebabhouse.com"
+    phone: "+351 913 456 789"
+    password_hash: "$2b$10$dummy_hash_for_owner"  # This should be properly hashed 'owner123'
+    role: "admin"
+    access_levels: ["sales", "inventory", "reports", "dashboard", "employees", "settings", "transactions", "all"]
+    is_active: true
+    hire_date: "2023-06-15"
+    total_sales: 0.00
+    transaction_count: 0
+    average_transaction: 0.00
+    hours_worked: 200
+    created_at: "2023-06-15T09:00:00Z"
+    updated_at: "2023-06-15T09:00:00Z"
+
+  - id: "EMP003"
+    employee_number: "MGR001"
+    name: "João Pereira"
+    email: "joao.pereira@kebabhouse.com"
+    phone: "+351 914 567 890"
+    pin: "1234"
+    role: "manager"
+    access_levels: ["sales", "inventory", "reports", "dashboard", "employees", "transactions"]
+    is_active: true
+    hire_date: "2023-08-01"
+    total_sales: 25000.00
+    transaction_count: 180
+    average_transaction: 139.00
+    hours_worked: 180
+    created_at: "2023-08-01T10:00:00Z"
+    updated_at: "2024-12-15T18:00:00Z"
+
+  - id: "EMP004"
+    employee_number: "CSH001"
+    name: "Ana Costa"
+    email: "ana.costa@kebabhouse.com"
+    phone: "+351 915 678 901"
+    pin: "5678"
+    role: "cashier"
+    access_levels: ["sales"]
+    is_active: true
+    hire_date: "2024-01-15"
+    total_sales: 18500.00
+    transaction_count: 220
+    average_transaction: 84.00
+    hours_worked: 160
+    created_at: "2024-01-15T11:00:00Z"
+    updated_at: "2024-12-15T22:00:00Z"
+
+  - id: "EMP005"
+    employee_number: "CSH002"
+    name: "Pedro Oliveira"
+    email: "pedro.oliveira@kebabhouse.com"
+    phone: "+351 916 789 012"
+    pin: "9012"
+    role: "cashier"
+    access_levels: ["sales"]
+    is_active: true
+    hire_date: "2024-03-01"
+    total_sales: 12500.00
+    transaction_count: 150
+    average_transaction: 83.00
+    hours_worked: 140
+    created_at: "2024-03-01T12:00:00Z"
+    updated_at: "2024-12-15T21:00:00Z"
+
+# EMPLOYEE ROLE SUMMARY:
+# - EMP001: System Administrator (Carlos Silva) - IT support, full system access
+# - EMP002: Restaurant Owner (Maria Santos) - Business owner, admin access
+# - EMP003: Restaurant Manager (João Pereira) - Daily operations management
+# - EMP004: Main Cashier (Ana Costa) - Primary transaction processing
+# - EMP005: Assistant Cashier (Pedro Oliveira) - Support transaction processing
+#
+# AUTHENTICATION METHODS:
+# - Administrators: Password-based authentication
+# - Cashiers: PIN-based authentication for speed
+# - All: Unique employee numbers for identification
+#
+# PERFORMANCE METRICS:
+# - Managers: Higher transaction volumes with larger averages
+# - Cashiers: Steady transaction processing with consistent averages
+# - Admins: Minimal direct sales (focus on management)
+#
+# CONTACT INFORMATION:
+# - All employees have Portuguese phone numbers (+351)
+# - Professional email addresses
+# - Realistic names for Lisbon area

@@ -1,0 +1,550 @@
+# Products Data Seed File
+# Product catalog for kebab restaurant menu
+# Based on database schema
+
+products:
+  # === KEBABS ===
+  - id: "kebab-101-adana-kebab"
+    name: "Adana Kebab"
+    description: "Spicy minced lamb kebab with peppers and onions, served with rice and salad"
+    sku: "KEB-ADA-001"
+    category_id: "kebab-001-cat-main-dishes"
+    category_name: "Kebabs"
+    price: 12.50
+    cost: 7.50
+    iva_rate: 0.13
+    stock: 25
+    min_stock: 8
+    track_stock: true
+    supplier: "Turkish Meat Suppliers Ltd"
+    location: "Refrigerator Section A"
+    is_active: true
+    display_order: 1
+
+  - id: "kebab-102-iskender-kebab"
+    name: "Iskender Kebab"
+    description: "Thinly sliced lamb döner on flatbread with tomato sauce and yogurt"
+    sku: "KEB-ISK-002"
+    category_id: "kebab-001-cat-main-dishes"
+    category_name: "Kebabs"
+    price: 13.90
+    cost: 8.20
+    iva_rate: 0.13
+    stock: 20
+    min_stock: 6
+    track_stock: true
+    supplier: "Turkish Meat Suppliers Ltd"
+    location: "Refrigerator Section A"
+    is_active: true
+    display_order: 2
+
+  - id: "kebab-103-shish-kebab"
+    name: "Chicken Shish Kebab"
+    description: "Marinated chicken cubes grilled on skewers with vegetables"
+    sku: "KEB-SHI-003"
+    category_id: "kebab-001-cat-main-dishes"
+    category_name: "Kebabs"
+    price: 11.50
+    cost: 6.80
+    iva_rate: 0.13
+    stock: 30
+    min_stock: 10
+    track_stock: true
+    supplier: "Fresh Poultry Co"
+    location: "Refrigerator Section B"
+    is_active: true
+    display_order: 3
+
+  - id: "kebab-104-lamb-shish"
+    name: "Lamb Shish Kebab"
+    description: "Premium lamb cubes marinated in herbs and grilled to perfection"
+    sku: "KEB-LSH-004"
+    category_id: "kebab-001-cat-main-dishes"
+    category_name: "Kebabs"
+    price: 14.90
+    cost: 9.50
+    iva_rate: 0.13
+    stock: 18
+    min_stock: 5
+    track_stock: true
+    supplier: "Turkish Meat Suppliers Ltd"
+    location: "Refrigerator Section A"
+    is_active: true
+    display_order: 4
+
+  - id: "kebab-105-mixed-kebab"
+    name: "Mixed Kebab Platter"
+    description: "Combination of chicken and lamb shish with vegetables"
+    sku: "KEB-MIX-005"
+    category_id: "kebab-001-cat-main-dishes"
+    category_name: "Kebabs"
+    price: 16.50
+    cost: 10.50
+    iva_rate: 0.13
+    stock: 15
+    min_stock: 4
+    track_stock: true
+    supplier: "Mixed Meat Suppliers"
+    location: "Refrigerator Section C"
+    is_active: true
+    display_order: 5
+
+  # === WRAPS & SANDWICHES ===
+  - id: "kebab-201-doner-wrap"
+    name: "Chicken Döner Wrap"
+    description: "Chicken döner wrapped in flatbread with lettuce, tomato, onion and garlic sauce"
+    sku: "WRP-DON-101"
+    category_id: "kebab-002-cat-wraps"
+    category_name: "Wraps & Sandwiches"
+    price: 8.50
+    cost: 4.20
+    iva_rate: 0.13
+    stock: 50
+    min_stock: 15
+    track_stock: true
+    supplier: "Turkish Meat Suppliers Ltd"
+    location: "Refrigerator Section A"
+    is_active: true
+    display_order: 1
+
+  - id: "kebab-202-lamb-doner-wrap"
+    name: "Lamb Döner Wrap"
+    description: "Lamb döner wrapped in flatbread with vegetables and spicy sauce"
+    sku: "WRP-LDN-102"
+    category_id: "kebab-002-cat-wraps"
+    category_name: "Wraps & Sandwiches"
+    price: 9.50
+    cost: 5.00
+    iva_rate: 0.13
+    stock: 40
+    min_stock: 12
+    track_stock: true
+    supplier: "Turkish Meat Suppliers Ltd"
+    location: "Refrigerator Section A"
+    is_active: true
+    display_order: 2
+
+  - id: "kebab-203-shawarma-wrap"
+    name: "Chicken Shawarma Wrap"
+    description: "Marinated chicken shawarma with tahini sauce and pickled vegetables"
+    sku: "WRP-SHA-103"
+    category_id: "kebab-002-cat-wraps"
+    category_name: "Wraps & Sandwiches"
+    price: 8.90
+    cost: 4.50
+    iva_rate: 0.13
+    stock: 45
+    min_stock: 15
+    track_stock: true
+    supplier: "Middle Eastern Imports"
+    location: "Refrigerator Section B"
+    is_active: true
+    display_order: 3
+
+  - id: "kebab-204-kebab-sandwich"
+    name: "Kebab Sandwich"
+    description: "Grilled kebab meat in baguette with salad and sauce"
+    sku: "WRP-KSB-104"
+    category_id: "kebab-002-cat-wraps"
+    category_name: "Wraps & Sandwiches"
+    price: 7.50
+    cost: 3.80
+    iva_rate: 0.13
+    stock: 60
+    min_stock: 20
+    track_stock: true
+    supplier: "Local Bakery"
+    location: "Refrigerator Section C"
+    is_active: true
+    display_order: 4
+
+  # === RICE PLATES ===
+  - id: "kebab-301-chicken-rice"
+    name: "Chicken Rice Plate"
+    description: "Grilled chicken with rice, salad and vegetables"
+    sku: "RCP-CHR-201"
+    category_id: "kebab-003-cat-rice-plates"
+    category_name: "Rice Plates"
+    price: 10.50
+    cost: 5.50
+    iva_rate: 0.13
+    stock: 35
+    min_stock: 10
+    track_stock: true
+    supplier: "Fresh Poultry Co"
+    location: "Refrigerator Section B"
+    is_active: true
+    display_order: 1
+
+  - id: "kebab-302-lamb-rice"
+    name: "Lamb Rice Plate"
+    description: "Lamb kebab with rice and mixed vegetables"
+    sku: "RCP-LMR-202"
+    category_id: "kebab-003-cat-rice-plates"
+    category_name: "Rice Plates"
+    price: 11.90
+    cost: 6.50
+    iva_rate: 0.13
+    stock: 28
+    min_stock: 8
+    track_stock: true
+    supplier: "Turkish Meat Suppliers Ltd"
+    location: "Refrigerator Section A"
+    is_active: true
+    display_order: 2
+
+  - id: "kebab-303-mixed-rice"
+    name: "Mixed Meat Rice Plate"
+    description: "Chicken and lamb with rice and seasonal vegetables"
+    sku: "RCP-MXR-203"
+    category_id: "kebab-003-cat-rice-plates"
+    category_name: "Rice Plates"
+    price: 13.50
+    cost: 7.80
+    iva_rate: 0.13
+    stock: 22
+    min_stock: 6
+    track_stock: true
+    supplier: "Mixed Meat Suppliers"
+    location: "Refrigerator Section C"
+    is_active: true
+    display_order: 3
+
+  # === SIDES & SALADS ===
+  - id: "kebab-401-french-fries"
+    name: "French Fries"
+    description: "Crispy golden fries"
+    sku: "SID-FRF-301"
+    category_id: "kebab-004-cat-sides"
+    category_name: "Sides & Salads"
+    price: 3.50
+    cost: 1.20
+    iva_rate: 0.13
+    stock: 100
+    min_stock: 30
+    track_stock: true
+    supplier: "Frozen Foods Ltd"
+    location: "Freezer Section"
+    is_active: true
+    display_order: 1
+
+  - id: "kebab-402-onion-rings"
+    name: "Onion Rings"
+    description: "Crispy battered onion rings"
+    sku: "SID-ONR-302"
+    category_id: "kebab-004-cat-sides"
+    category_name: "Sides & Salads"
+    price: 4.50
+    cost: 1.80
+    iva_rate: 0.13
+    stock: 80
+    min_stock: 25
+    track_stock: true
+    supplier: "Frozen Foods Ltd"
+    location: "Freezer Section"
+    is_active: true
+    display_order: 2
+
+  - id: "kebab-403-greek-salad"
+    name: "Greek Salad"
+    description: "Tomatoes, cucumbers, olives, feta cheese with olive oil"
+    sku: "SID-GRS-303"
+    category_id: "kebab-004-cat-sides"
+    category_name: "Sides & Salads"
+    price: 5.90
+    cost: 2.50
+    iva_rate: 0.13
+    stock: 40
+    min_stock: 12
+    track_stock: true
+    supplier: "Fresh Produce Co"
+    location: "Refrigerator Section D"
+    is_active: true
+    display_order: 3
+
+  - id: "kebab-404-shepherd-salad"
+    name: "Shepherd Salad"
+    description: "Chopped tomatoes, cucumbers, peppers, onions with herbs"
+    sku: "SID-SHS-304"
+    category_id: "kebab-004-cat-sides"
+    category_name: "Sides & Salads"
+    price: 4.90
+    cost: 2.00
+    iva_rate: 0.06
+    stock: 45
+    min_stock: 15
+    track_stock: true
+    supplier: "Fresh Produce Co"
+    location: "Refrigerator Section D"
+    is_active: true
+    display_order: 4
+
+  # === BEVERAGES ===
+  - id: "kebab-501-coca-cola"
+    name: "Coca Cola"
+    description: "330ml glass bottle"
+    sku: "BEV-CCO-401"
+    category_id: "kebab-005-cat-beverages"
+    category_name: "Beverages"
+    price: 2.50
+    cost: 1.20
+    iva_rate: 0.13
+    stock: 120
+    min_stock: 40
+    track_stock: true
+    supplier: "Beverage Distributors"
+    location: "Storage Room B"
+    is_active: true
+    display_order: 1
+
+  - id: "kebab-502-fanta"
+    name: "Fanta Orange"
+    description: "330ml glass bottle"
+    sku: "BEV-FAN-402"
+    category_id: "kebab-005-cat-beverages"
+    category_name: "Beverages"
+    price: 2.50
+    cost: 1.20
+    iva_rate: 0.13
+    stock: 110
+    min_stock: 35
+    track_stock: true
+    supplier: "Beverage Distributors"
+    location: "Storage Room B"
+    is_active: true
+    display_order: 2
+
+  - id: "kebab-503-sprite"
+    name: "Sprite"
+    description: "330ml glass bottle"
+    sku: "BEV-SPR-403"
+    category_id: "kebab-005-cat-beverages"
+    category_name: "Beverages"
+    price: 2.50
+    cost: 1.20
+    iva_rate: 0.13
+    stock: 105
+    min_stock: 35
+    track_stock: true
+    supplier: "Beverage Distributors"
+    location: "Storage Room B"
+    is_active: true
+    display_order: 3
+
+  - id: "kebab-504-mineral-water"
+    name: "Mineral Water"
+    description: "500ml sparkling mineral water"
+    sku: "BEV-WAT-404"
+    category_id: "kebab-005-cat-beverages"
+    category_name: "Beverages"
+    price: 1.80
+    cost: 0.60
+    iva_rate: 0.06
+    stock: 150
+    min_stock: 50
+    track_stock: true
+    supplier: "Water Distributors"
+    location: "Storage Room A"
+    is_active: true
+    display_order: 4
+
+  - id: "kebab-505-ayran"
+    name: "Ayran"
+    description: "Traditional Turkish yogurt drink (300ml)"
+    sku: "BEV-AYR-405"
+    category_id: "kebab-005-cat-beverages"
+    category_name: "Beverages"
+    price: 2.90
+    cost: 1.50
+    iva_rate: 0.06
+    stock: 60
+    min_stock: 20
+    track_stock: true
+    supplier: "Turkish Dairy Imports"
+    location: "Refrigerator Section B"
+    is_active: true
+    display_order: 5
+
+  - id: "kebab-506-turkish-tea"
+    name: "Turkish Tea"
+    description: "Traditional black tea served in tulip glass"
+    sku: "BEV-TEA-406"
+    category_id: "kebab-005-cat-beverages"
+    category_name: "Beverages"
+    price: 2.20
+    cost: 0.80
+    iva_rate: 0.13
+    stock: 200
+    min_stock: 50
+    track_stock: true
+    supplier: "Tea Importers"
+    location: "Dry Storage"
+    is_active: true
+    display_order: 6
+
+  # === DESSERTS ===
+  - id: "kebab-601-baklava"
+    name: "Baklava"
+    description: "Traditional Turkish pastry with honey and nuts"
+    sku: "DES-BAK-501"
+    category_id: "kebab-006-cat-desserts"
+    category_name: "Desserts"
+    price: 4.50
+    cost: 2.50
+    iva_rate: 0.13
+    stock: 30
+    min_stock: 10
+    track_stock: true
+    supplier: "Turkish Sweets Ltd"
+    location: "Refrigerator Section C"
+    is_active: true
+    display_order: 1
+
+  - id: "kebab-602-kunefe"
+    name: "Künefe"
+    description: "Hot cheese pastry with syrup"
+    sku: "DES-KUN-502"
+    category_id: "kebab-006-cat-desserts"
+    category_name: "Desserts"
+    price: 6.90
+    cost: 4.00
+    iva_rate: 0.13
+    stock: 20
+    min_stock: 6
+    track_stock: true
+    supplier: "Turkish Sweets Ltd"
+    location: "Refrigerator Section C"
+    is_active: true
+    display_order: 2
+
+  - id: "kebab-603-turkish-delight"
+    name: "Turkish Delight"
+    description: "Assorted flavors of traditional Turkish candy"
+    sku: "DES-DEL-503"
+    category_id: "kebab-006-cat-desserts"
+    category_name: "Desserts"
+    price: 3.90
+    cost: 2.20
+    iva_rate: 0.13
+    stock: 50
+    min_stock: 15
+    track_stock: true
+    supplier: "Turkish Sweets Ltd"
+    location: "Dry Storage"
+    is_active: true
+    display_order: 3
+
+  - id: "kebab-604-ice-cream"
+    name: "Vanilla Ice Cream"
+    description: "Premium vanilla ice cream scoop"
+    sku: "DES-ICE-504"
+    category_id: "kebab-006-cat-desserts"
+    category_name: "Desserts"
+    price: 3.50
+    cost: 1.80
+    iva_rate: 0.13
+    stock: 40
+    min_stock: 12
+    track_stock: true
+    supplier: "Ice Cream Distributors"
+    location: "Freezer Section"
+    is_active: true
+    display_order: 4
+
+  # === SAUCES & EXTRAS ===
+  - id: "kebab-701-garlic-sauce"
+    name: "Garlic Sauce"
+    description: "Creamy garlic yogurt sauce"
+    sku: "SAU-GAR-601"
+    category_id: "kebab-007-cat-sauces"
+    category_name: "Sauces & Extras"
+    price: 1.50
+    cost: 0.50
+    iva_rate: 0.13
+    stock: 80
+    min_stock: 25
+    track_stock: true
+    supplier: "Sauce Manufacturers"
+    location: "Refrigerator Section D"
+    is_active: true
+    display_order: 1
+
+  - id: "kebab-702-spicy-sauce"
+    name: "Spicy Sauce"
+    description: "Hot chili sauce"
+    sku: "SAU-SPI-602"
+    category_id: "kebab-007-cat-sauces"
+    category_name: "Sauces & Extras"
+    price: 1.50
+    cost: 0.50
+    iva_rate: 0.13
+    stock: 75
+    min_stock: 20
+    track_stock: true
+    supplier: "Sauce Manufacturers"
+    location: "Refrigerator Section D"
+    is_active: true
+    display_order: 2
+
+  - id: "kebab-703-tahini-sauce"
+    name: "Tahini Sauce"
+    description: "Sesame paste sauce"
+    sku: "SAU-TAH-603"
+    category_id: "kebab-007-cat-sauces"
+    category_name: "Sauces & Extras"
+    price: 1.80
+    cost: 0.70
+    iva_rate: 0.13
+    stock: 60
+    min_stock: 18
+    track_stock: true
+    supplier: "Middle Eastern Imports"
+    location: "Refrigerator Section D"
+    is_active: true
+    display_order: 3
+
+  - id: "kebab-704-extra-meat"
+    name: "Extra Meat Portion"
+    description: "Additional kebab meat"
+    sku: "EXT-MEA-604"
+    category_id: "kebab-007-cat-sauces"
+    category_name: "Sauces & Extras"
+    price: 4.50
+    cost: 2.80
+    iva_rate: 0.13
+    stock: 100
+    min_stock: 30
+    track_stock: true
+    supplier: "Turkish Meat Suppliers Ltd"
+    location: "Refrigerator Section A"
+    is_active: true
+    display_order: 4
+
+  - id: "kebab-705-extra-rice"
+    name: "Extra Rice"
+    description: "Additional portion of rice"
+    sku: "EXT-RIC-605"
+    category_id: "kebab-007-cat-sauces"
+    category_name: "Sauces & Extras"
+    price: 2.50
+    cost: 1.00
+    iva_rate: 0.13
+    stock: 150
+    min_stock: 50
+    track_stock: true
+    supplier: "Rice Distributors"
+    location: "Dry Storage"
+    is_active: true
+    display_order: 5
+
+# Metadata
+metadata:
+  restaurant_name: "Authentic Kebab House"
+  location: "Lisbon, Portugal"
+  currency: "EUR"
+  tax_country: "Portugal"
+  created_date: "2025-01-15"
+  version: "1.0"
+  total_categories: 7
+  total_products: 29
+  description: "Comprehensive kebab restaurant menu with traditional Turkish dishes, Portuguese pricing, and proper IVA rates"

@@ -1,0 +1,64 @@
+# Transaction Items Data Seed File
+# This file contains individual line items for all transactions
+#
+# ITEMS TO INCLUDE:
+# - 100+ transaction items (average 4 items per transaction)
+# - Mix of all products from kebab-restaurant-menu.yml
+# - Various quantities (1-5 items per line)
+# - Item-level discounts and modifications
+#
+# PRODUCT DISTRIBUTION:
+# - 25% Kebabs (most popular)
+# - 20% Wraps & Sandwiches
+# - 15% Rice Plates
+# - 10% Sides & Salads
+# - 10% Beverages
+# - 5% Desserts
+# - 15% Sauces & Extras (add-ons)
+#
+# QUANTITY PATTERNS:
+# - 60% single quantity items
+# - 30% 2-3 quantity items
+# - 10% bulk orders (4+ items)
+#
+# PRICE VARIATIONS:
+# - Standard pricing for 80% of items
+# - Promotional pricing for 15% of items
+# - Custom pricing for 5% of items (special requests)
+#
+# MODIFICATIONS AND ADD-ONS:
+# - Extra meat portions (+€4.50)
+# - Extra rice (+€2.50)
+# - Spicy level adjustments
+# - Size modifications (large portions)
+#
+# DISCOUNT APPLICATIONS:
+# - 15% items with line-level discounts
+# - Buy-one-get-one scenarios
+# - Senior citizen discounts (10% off)
+# - Loyalty program discounts
+# - Promotional item discounts
+#
+# TAX CALCULATIONS:
+# - Correct IVA rates by product category
+# - 6% for basic foods (dairy, bread, milk)
+# - 13% for restaurant meals
+# - 23% for non-essential items
+# - Tax amount validation per item
+#
+# RELATIONSHIPS:
+# - Each item must link to valid transaction
+# - Each item must link to valid product
+# - Line totals must equal: (quantity × unit_price) - discount_amount
+# - Tax amounts must be calculated correctly
+# - Profit amounts must be calculated (unit_price - unit_cost) × quantity
+#
+#
+# DATA INTEGRITY:
+# - All product_ids must exist in products table
+# - All transaction_ids must exist in transactions table
+# - Product names and SKUs must match current catalog
+# - Category information must be denormalized correctly
+# - All monetary calculations must be accurate
+
+transaction_items: []

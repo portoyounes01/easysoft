@@ -1,3 +1,10 @@
+## Seeding Functionality (2025-09-08)
+
+- Introduced a new YAML-driven seeding workflow under `seed/` keeping existing `/setup` intact.
+- Installed `js-yaml` and `dotenv` for parsing and env handling.
+- Added npm script `npm run seed` to execute `seed/run-seed.cjs`.
+- Implementing utilities in `seed/lib/` for YAML loading and deterministic UUIDs.
+
 ### POS Right Panel Redesign (Order Summary Panel)
 
 - Implementing a new `OrderSummaryPanel` in `src/components/OrderSummaryPanel.tsx` following STYLE_GUIDE.md and DEVELOPMENT_GUIDE.md
