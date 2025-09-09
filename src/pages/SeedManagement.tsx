@@ -10,6 +10,9 @@ import {
     FileText,
     Users,
     Tag,
+    Package,
+    UserCheck,
+    CreditCard,
     TestTube,
     Archive,
     RefreshCw,
@@ -71,8 +74,11 @@ const SeedManagement: React.FC = () => {
                     details: [
                         `✅ ${result.details.employeesCount} employees seeded`,
                         `✅ ${result.details.categoriesCount} categories seeded`,
-                        `📊 ${result.details.cashierTestsCount} cashier tests found`,
-                        `🗃️ ${result.details.cashDrawerLogsCount} cash drawer logs found`,
+                        `✅ ${result.details.productsCount} products seeded`,
+                        `✅ ${result.details.customersCount} customers seeded`,
+                        `✅ ${result.details.transactionsCount} transactions seeded`,
+                        `✅ ${result.details.cashierTestsCount} cashier tests seeded`,
+                        `✅ ${result.details.cashDrawerLogsCount} cash drawer logs seeded`,
                         '🔄 Data synced to Supabase (if online)',
                         '📱 Local database updated'
                     ]
@@ -108,6 +114,9 @@ const SeedManagement: React.FC = () => {
     const seedFiles = [
         { name: 'employees.yml', icon: Users, description: 'Employee data with roles and permissions', required: true },
         { name: 'categories.yml', icon: Tag, description: 'Product categories with colors and icons', required: true },
+        { name: 'products.yml', icon: Package, description: 'Product catalog with pricing and inventory', required: false },
+        { name: 'customers.yml', icon: UserCheck, description: 'Customer information and loyalty data', required: false },
+        { name: 'transactions.yml', icon: CreditCard, description: 'Transaction history and sales data', required: false },
         { name: 'cashier-tests.yml', icon: TestTube, description: 'Hardware testing logs (optional)', required: false },
         { name: 'cash-drawer-logs.yml', icon: Archive, description: 'Cash drawer operation logs (optional)', required: false }
     ];
