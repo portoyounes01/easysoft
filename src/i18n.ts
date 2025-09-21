@@ -531,6 +531,26 @@ const resources = {
                     title: 'Select Receipt',
                     empty: 'No receipts yet',
                 },
+                confirmPayment: 'Confirm Payment',
+                discountDialog: {
+                    title: 'Discount',
+                    tabs: {
+                        new: 'New',
+                        preset: 'Preset',
+                        percentage: 'Percentage',
+                        fixed: 'Price',
+                    },
+                    noPresets: 'No presets',
+                    labels: {
+                        discountCode: 'Discount Code',
+                        price: 'Price',
+                        percentage: 'Percentage',
+                    },
+                    buttons: {
+                        add: 'Add',
+                        apply: 'Apply',
+                    },
+                },
             },
         },
     },
@@ -1057,6 +1077,26 @@ const resources = {
                 retry: 'Tentar Novamente',
                 syncData: 'Sincronizar Dados',
                 refresh: 'Atualizar',
+                confirmPayment: 'Confirmar Pagamento',
+                discountDialog: {
+                    title: 'Desconto',
+                    tabs: {
+                        new: 'Novo',
+                        preset: 'Predefinido',
+                        percentage: 'Percentagem',
+                        fixed: 'Preço',
+                    },
+                    noPresets: 'Sem predefinições',
+                    labels: {
+                        discountCode: 'Código de Desconto',
+                        price: 'Preço',
+                        percentage: 'Percentagem',
+                    },
+                    buttons: {
+                        add: 'Adicionar',
+                        apply: 'Aplicar',
+                    },
+                },
             },
         },
     },

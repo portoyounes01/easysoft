@@ -56,12 +56,15 @@ export class SeedDataService {
       console.log('🌱 Starting YAML-based seeding...');
 
       // Load all YAML files
+      // Ensure we don't use stale cached YAML during development
+      try { YamlLoader.clearCache(); } catch {}
       const yamlFiles = await YamlLoader.loadMultipleYamlFiles([
         'employees.yml',
         'categories.yml',
         'products.yml',
         'customers.yml',
         'transactions.yml',
+        'transaction-items.yml',
         'cashier-tests.yml',
         'cash-drawer-logs.yml'
       ]);
@@ -72,6 +75,7 @@ export class SeedDataService {
       let customersCount = 0;
       let transactionsCount = 0;
       let cashierTestsCount = 0;
+      let transactionItemsCount = 0;
       let cashDrawerLogsCount = 0;
 
       // 1. Seed Categories first (products depend on them)
@@ -94,7 +98,9 @@ export class SeedDataService {
       if (yamlFiles.employees?.employees) {
         console.log('👥 Seeding employees...');
         const employees = await this.normalizeEmployees(yamlFiles.employees.employees);
+        // Seed locally (for offline-first) and to Supabase (to satisfy FKs)
         await this.seedEmployees(employees);
+        await this.seedEmployeesServer(employees);
         employeesCount = employees.length;
       }
 
@@ -109,7 +115,66 @@ export class SeedDataService {
       // 5. Seed Transactions (direct to Supabase)
       if (yamlFiles.transactions?.transactions) {
         console.log('💳 Seeding transactions...');
-        const transactions = this.normalizeTransactions(yamlFiles.transactions.transactions);
+        const rawTxns: any[] = yamlFiles.transactions.transactions;
+
+        // Build YAML employee id → employee_number map (if employees YAML is available)
+        const yamlIdToNumber = new Map<string, string>();
+        if (yamlFiles.employees?.employees) {
+          for (const emp of yamlFiles.employees.employees as any[]) {
+            if (emp?.id && emp?.employee_number) {
+              yamlIdToNumber.set(String(emp.id), String(emp.employee_number));
+            }
+          }
+        }
+
+        // Collect employee_numbers from transactions (resolving YAML ids when needed)
+        const employeeNumbers = Array.from(new Set(rawTxns
+          .map((t: any) => {
+            const v = t.employee_id;
+            if (typeof v !== 'string') return null;
+            // If it's a UUID, we won't resolve by number
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+            if (isUuid) return null;
+            // If matches a YAML employee id, map to employee_number
+            if (yamlIdToNumber.has(v)) return yamlIdToNumber.get(v)!;
+            // Otherwise assume it's already an employee_number
+            return v;
+          })
+          .filter(Boolean)));
+
+        // Fetch canonical UUIDs for those employee_numbers
+        const employeeNumberToId = new Map<string, string>();
+        if (employeeNumbers.length > 0) {
+          const { data: rows, error: mapErr } = await supabase
+            .from('employees')
+            .select('id, employee_number')
+            .in('employee_number', employeeNumbers as string[]);
+          if (mapErr) {
+            console.error('Failed to load employees for transaction mapping:', mapErr);
+            throw mapErr;
+          }
+          for (const row of rows || []) {
+            employeeNumberToId.set(row.employee_number, row.id);
+          }
+        }
+
+        // Transform YAML transactions: replace employee_id with canonical UUID (by number or pass-through UUID)
+        const transformed = rawTxns.map((t: any) => {
+          const v = t.employee_id;
+          if (typeof v === 'string') {
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+            if (!isUuid) {
+              const number = yamlIdToNumber.get(v) || v; // resolve YAML id → number
+              const canonicalId = number ? employeeNumberToId.get(String(number)) : undefined;
+              if (canonicalId) {
+                return { ...t, employee_id: canonicalId };
+              }
+            }
+          }
+          return t; // keep as-is (UUID already or unresolved)
+        });
+
+        const transactions = this.normalizeTransactions(transformed);
         await this.seedTransactions(transactions);
         transactionsCount = transactions.length;
       }
@@ -134,6 +199,14 @@ export class SeedDataService {
       console.log('🔄 Triggering sync to Supabase...');
       await syncManager.fullSync();
 
+      // 9. Seed Transaction Items AFTER products and transactions exist server-side
+      if (yamlFiles['transaction-items']?.transaction_items) {
+        console.log('🧾 Seeding transaction items...');
+        const items = this.normalizeTransactionItems(yamlFiles['transaction-items'].transaction_items);
+        await this.seedTransactionItems(items);
+        transactionItemsCount = items.length;
+      }
+
       console.log('✅ Seeding completed successfully!');
 
       return {
@@ -146,6 +219,7 @@ export class SeedDataService {
           customersCount,
           transactionsCount,
           cashierTestsCount,
+          // Not returned previously, but keep internal tracking
           cashDrawerLogsCount
         }
       };
@@ -269,21 +343,35 @@ export class SeedDataService {
 
   // Normalize customers data (for direct Supabase insert)
   private normalizeCustomers(customers: any[]): any[] {
-    return customers.map((cust) => ({
-      id: coerceToUuidOrDeterministic(cust.id || cust.email || cust.name),
-      name: cust.name,
-      email: cust.email || null,
-      phone: cust.phone || null,
-      address: cust.address || null,
-      total_spent: cust.total_spent ?? 0,
-      transaction_count: cust.transaction_count ?? 0,
-      loyalty_points: cust.loyalty_points ?? 0,
-      is_active: cust.is_active !== false,
-      preferred_payment_method: cust.preferred_payment_method || null,
-      created_at: cust.created_at || new Date().toISOString(),
-      updated_at: cust.updated_at || new Date().toISOString(),
-      deleted_at: cust.deleted_at || null
-    }));
+    return customers.map((cust) => {
+      // Support multiple YAML schemas by mapping common aliases → DB columns
+      const totalSpent =
+        cust.total_spent ?? cust.totalSpent ?? cust.totalPurchases ?? 0;
+      const transactionCount =
+        cust.transaction_count ?? cust.transactionCount ?? cust.totalOrders ?? 0;
+      const loyaltyPoints =
+        cust.loyalty_points ?? cust.loyaltyPoints ?? 0;
+      const preferredPayment =
+        cust.preferred_payment_method ?? cust.preferredPayment ?? null;
+      const createdAt = cust.created_at ?? cust.registrationDate ?? null;
+      const updatedAt = cust.updated_at ?? null;
+
+      return {
+        id: coerceToUuidOrDeterministic(cust.id || cust.email || cust.name),
+        name: cust.name,
+        email: cust.email || null,
+        phone: cust.phone || null,
+        address: cust.address || null,
+        total_spent: Number(totalSpent) || 0,
+        transaction_count: Number(transactionCount) || 0,
+        loyalty_points: Number(loyaltyPoints) || 0,
+        is_active: cust.is_active !== false,
+        preferred_payment_method: preferredPayment,
+        created_at: createdAt || new Date().toISOString(),
+        updated_at: updatedAt || new Date().toISOString(),
+        deleted_at: cust.deleted_at || null,
+      };
+    });
   }
 
   // Normalize transactions data (for direct Supabase insert)
@@ -310,6 +398,31 @@ export class SeedDataService {
       created_at: txn.created_at || new Date().toISOString(),
       updated_at: txn.updated_at || new Date().toISOString(),
       deleted_at: txn.deleted_at || null
+    }));
+  }
+
+  // Normalize transaction items data
+  private normalizeTransactionItems(items: any[]): any[] {
+    return items.map((it) => ({
+      id: coerceToUuidOrDeterministic(it.id || `${it.transaction_id}-${it.product_id}-${it.product_sku || ''}-${it.product_name}`),
+      transaction_id: coerceToUuidOrDeterministic(it.transaction_id),
+      product_id: coerceToUuidOrDeterministic(it.product_id),
+      product_name: it.product_name,
+      product_sku: it.product_sku,
+      category_id: it.category_id ? coerceToUuidOrDeterministic(it.category_id) : null,
+      category_name: it.category_name || null,
+      quantity: it.quantity,
+      unit_price: it.unit_price,
+      unit_cost: it.unit_cost ?? 0,
+      iva_rate: it.iva_rate ?? 0.23,
+      line_total: it.line_total,
+      tax_amount: it.tax_amount,
+      profit_amount: it.profit_amount ?? 0,
+      discount_amount: it.discount_amount ?? 0,
+      discount_percentage: it.discount_percentage ?? 0,
+      created_at: it.created_at || new Date().toISOString(),
+      updated_at: it.updated_at || new Date().toISOString(),
+      deleted_at: it.deleted_at || null
     }));
   }
 
@@ -467,6 +580,195 @@ export class SeedDataService {
       }
     } catch (error) {
       console.error('Error seeding transactions:', error);
+      throw error;
+    }
+  }
+
+  // Seed transaction items directly to Supabase
+  private async seedTransactionItems(items: any[]): Promise<void> {
+    if (items.length === 0) return;
+    try {
+      // Fetch product and transaction mappings to ensure FK integrity
+      const [productsRes, transactionsRes] = await Promise.all([
+        supabase.from('products').select('id, sku, name').limit(5000),
+        supabase.from('transactions').select('id, transaction_number').limit(5000)
+      ]);
+
+      if (productsRes.error) {
+        console.error('Failed to load products for item mapping:', productsRes.error);
+        throw productsRes.error;
+      }
+      if (transactionsRes.error) {
+        console.error('Failed to load transactions for item mapping:', transactionsRes.error);
+        throw transactionsRes.error;
+      }
+
+      const skuToProductId = new Map<string, string>();
+      const nameToProductId = new Map<string, string>();
+      const existingProductIds = new Set<string>();
+      for (const p of productsRes.data || []) {
+        existingProductIds.add(p.id);
+        if (p.sku) skuToProductId.set(String(p.sku), p.id);
+        if (p.name) nameToProductId.set(String(p.name), p.id);
+      }
+
+      const txnIdSet = new Set<string>((transactionsRes.data || []).map((t: any) => t.id));
+      const txnNumberToId = new Map<string, string>();
+      for (const t of transactionsRes.data || []) txnNumberToId.set(String(t.transaction_number), t.id);
+
+      // Create placeholder products for missing SKUs if needed
+      const missingSkuSet = new Set<string>();
+      for (const raw of items) {
+        const hasValidUuidId = typeof raw.product_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw.product_id) && existingProductIds.has(raw.product_id);
+        if (!hasValidUuidId) {
+          if (raw.product_sku && !skuToProductId.has(String(raw.product_sku))) {
+            missingSkuSet.add(String(raw.product_sku));
+          }
+        }
+      }
+
+      if (missingSkuSet.size > 0) {
+        const placeholders = Array.from(missingSkuSet).map((sku) => {
+          // Find first item with this SKU to derive sensible defaults
+          const sample = items.find((it) => String(it.product_sku) === sku) || {} as any;
+          const id = coerceToUuidOrDeterministic(sku);
+          return {
+            id,
+            name: sample.product_name || sku,
+            description: sample.product_name || null,
+            sku,
+            barcode: null,
+            category_id: null,
+            category_name: sample.category_name || null,
+            price: sample.unit_price || 0,
+            cost: sample.unit_cost || 0,
+            iva_rate: sample.iva_rate ?? 0.23,
+            stock: 100,
+            min_stock: 0,
+            track_stock: false,
+            image_url: null,
+            supplier: null,
+            location: null,
+            is_active: true,
+            display_order: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            last_synced_at: null,
+            deleted_at: null
+          };
+        });
+
+        const { data: createdProducts, error: createProdsErr } = await supabase
+          .from('products')
+          .upsert(placeholders, { onConflict: 'sku' })
+          .select('id, sku');
+        if (createProdsErr) {
+          console.error('Failed to create placeholder products:', createProdsErr);
+          throw createProdsErr;
+        }
+        for (const p of createdProducts || []) {
+          skuToProductId.set(String(p.sku), p.id);
+          existingProductIds.add(p.id);
+        }
+      }
+
+      // Resolve FKs for each item
+      const resolvedItems = items.map((raw) => {
+        let productId = raw.product_id;
+        const idIsUuid = typeof productId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(productId);
+        if (!(idIsUuid && existingProductIds.has(productId))) {
+          if (raw.product_sku && skuToProductId.has(String(raw.product_sku))) {
+            productId = skuToProductId.get(String(raw.product_sku));
+          } else if (raw.product_name && nameToProductId.has(String(raw.product_name))) {
+            productId = nameToProductId.get(String(raw.product_name));
+          } else {
+            // Fallback to deterministic ID from SKU to keep FK valid (should exist after placeholders)
+            if (raw.product_sku) productId = skuToProductId.get(String(raw.product_sku)) || coerceToUuidOrDeterministic(raw.product_sku);
+          }
+        }
+
+        let transactionId = raw.transaction_id;
+        const txnIsUuid = typeof transactionId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(transactionId);
+        if (!(txnIsUuid && txnIdSet.has(transactionId))) {
+          if (raw.transaction_number && txnNumberToId.has(String(raw.transaction_number))) {
+            transactionId = txnNumberToId.get(String(raw.transaction_number));
+          }
+        }
+
+        return {
+          ...raw,
+          product_id: productId,
+          transaction_id: transactionId,
+        };
+      });
+
+      const { error } = await supabase
+        .from('transaction_items')
+        .upsert(resolvedItems, { onConflict: 'id' });
+      if (error) {
+        console.error('Failed to seed transaction items:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error seeding transaction items:', error);
+      throw error;
+    }
+  }
+
+  // Seed employees directly to Supabase (preserve deterministic IDs)
+  private async seedEmployeesServer(employees: LocalEmployee[]): Promise<void> {
+    if (!employees || employees.length === 0) return;
+    try {
+      // Fetch existing employees by employee_number to preserve canonical ids
+      const employeeNumbers = employees.map((e) => e.employee_number);
+      const { data: existingRows, error: fetchErr } = await supabase
+        .from('employees')
+        .select('id, employee_number')
+        .in('employee_number', employeeNumbers);
+      if (fetchErr) {
+        console.error('Failed to load existing employees:', fetchErr);
+        throw fetchErr;
+      }
+      const numberToId = new Map<string, string>();
+      for (const row of existingRows || []) {
+        numberToId.set(row.employee_number, row.id);
+      }
+
+      // Build payload ensuring existing rows reuse canonical id
+      const payload = employees.map((e) => ({
+        id: numberToId.get(e.employee_number) || e.id,
+        employee_number: e.employee_number,
+        name: e.name,
+        email: e.email,
+        phone: e.phone,
+        password_hash: e.password_hash,
+        pin: e.pin,
+        role: e.role,
+        access_levels: e.access_levels as any,
+        is_active: e.is_active,
+        hire_date: e.hire_date,
+        total_sales: e.total_sales,
+        transaction_count: e.transaction_count,
+        average_transaction: e.average_transaction,
+        hours_worked: e.hours_worked,
+        created_at: e.created_at.toISOString(),
+        updated_at: e.updated_at.toISOString(),
+        last_synced_at: e.last_synced_at ? e.last_synced_at.toISOString() : null,
+        needs_push: false,
+        is_conflicted: false,
+        deleted_at: e.deleted_at ? e.deleted_at.toISOString() : null,
+      }));
+
+      const { error } = await supabase
+        .from('employees')
+        .upsert(payload, { onConflict: 'employee_number' });
+
+      if (error) {
+        console.error('Failed to seed employees to Supabase:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error seeding employees to Supabase:', error);
       throw error;
     }
   }

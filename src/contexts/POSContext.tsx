@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer } from 'react';
 import { Product, Transaction, Customer, CashDrawer } from '../types';
 import { LocalProduct, LocalCustomer } from '../types/supabase';
 import { transactionLocalService, customerLocalService } from '../lib/localDatabase';
+import { supabase } from '../lib/supabase';
 import { transactionService } from '../services/transactionService';
 import { connectionStatus } from '../lib/supabase';
 import { calculateTaxAmount, calculatePriceWithoutTax } from '../types/supabase';
@@ -161,6 +162,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     amountPaid?: number;
     employeeId: string;
     employeeName: string;
+    employeeNumber?: string;
   }): Promise<string> => {
     try {
       // Calculate transaction totals
@@ -178,7 +180,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }, 0);
 
       const total = subtotal;
-      const changeGiven = paymentData.paymentMethod === 'cash' && paymentData.amountPaid ? 
+      const changeGiven = paymentData.paymentMethod === 'cash' && paymentData.amountPaid ?
         Math.max(0, paymentData.amountPaid - total) : 0;
 
       // Generate transaction number (offline fallback)
@@ -243,22 +245,37 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (connectionState.isOnline && connectionState.isSupabaseOnline) {
         try {
           console.log('POS: Processing transaction online...');
-          
+          // Resolve canonical employee UUID by employee_number if provided
+          let serverEmployeeId = paymentData.employeeId;
+          if (paymentData.employeeNumber) {
+            try {
+              const { data: empRow } = await supabase
+                .from('employees')
+                .select('id')
+                .eq('employee_number', paymentData.employeeNumber)
+                .single();
+              if (empRow?.id) serverEmployeeId = empRow.id;
+            } catch { }
+          }
+
+          // Use resolved server employee id
+          const serverTransactionData = { ...transactionData, employee_id: serverEmployeeId } as any;
+
           // Try to process through server
-          const result = await transactionService.createTransaction(transactionData, transactionItems);
+          const result = await transactionService.createTransaction(serverTransactionData, transactionItems);
           transactionId = result.transaction.id;
           receiptNumber = result.transaction.receipt_number || receiptNumber;
-          
+
           console.log('POS: Transaction processed online successfully');
         } catch (error) {
           console.warn('POS: Server transaction failed, falling back to offline:', error);
-          
+
           // Fallback to offline processing
           transactionId = await transactionLocalService.createTransaction(transactionData, transactionItems);
         }
       } else {
         console.log('POS: Processing transaction offline...');
-        
+
         // Process offline
         transactionId = await transactionLocalService.createTransaction(transactionData, transactionItems);
       }

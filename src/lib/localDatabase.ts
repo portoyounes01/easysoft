@@ -827,11 +827,12 @@ export class TransactionLocalService {
 
     // Get all non-deleted transactions (includes all statuses)
     async getAllTransactions(): Promise<LocalTransaction[]> {
-        return await localDb.transactions
+        const list = await localDb.transactions
             .filter(transaction => transaction.deleted_at === null)
-            .orderBy('created_at')
-            .reverse()
             .toArray();
+        // Sort by created_at desc
+        list.sort((a, b) => (b.created_at as Date).getTime() - (a.created_at as Date).getTime());
+        return list;
     }
 
     // Get transaction by ID with items
@@ -851,39 +852,39 @@ export class TransactionLocalService {
 
     // Get transactions by employee ID
     async getTransactionsByEmployee(employeeId: string): Promise<LocalTransaction[]> {
-        return await localDb.transactions
+        const list = await localDb.transactions
             .filter(transaction => 
                 transaction.employee_id === employeeId && 
                 transaction.deleted_at === null
             )
-            .orderBy('created_at')
-            .reverse()
             .toArray();
+        list.sort((a, b) => (b.created_at as Date).getTime() - (a.created_at as Date).getTime());
+        return list;
     }
 
     // Get transactions by customer ID
     async getTransactionsByCustomer(customerId: string): Promise<LocalTransaction[]> {
-        return await localDb.transactions
+        const list = await localDb.transactions
             .filter(transaction => 
                 transaction.customer_id === customerId && 
                 transaction.deleted_at === null
             )
-            .orderBy('created_at')
-            .reverse()
             .toArray();
+        list.sort((a, b) => (b.created_at as Date).getTime() - (a.created_at as Date).getTime());
+        return list;
     }
 
     // Get transactions by date range
     async getTransactionsByDateRange(startDate: string, endDate: string): Promise<LocalTransaction[]> {
-        return await localDb.transactions
+        const list = await localDb.transactions
             .filter(transaction => 
                 transaction.deleted_at === null &&
                 transaction.transaction_date >= startDate &&
                 transaction.transaction_date <= endDate
             )
-            .orderBy('created_at')
-            .reverse()
             .toArray();
+        list.sort((a, b) => (b.created_at as Date).getTime() - (a.created_at as Date).getTime());
+        return list;
     }
 
     // Create new transaction with items
@@ -966,25 +967,25 @@ export class TransactionLocalService {
     // Search transactions by transaction number, customer name, or employee name
     async searchTransactions(query: string): Promise<LocalTransaction[]> {
         const normalizedQuery = query.toLowerCase();
-        return await localDb.transactions
+        const list = await localDb.transactions
             .filter(transaction =>
                 transaction.deleted_at === null &&
                 (transaction.transaction_number.toLowerCase().includes(normalizedQuery) ||
                     ((transaction.customer_name ?? '').toLowerCase().includes(normalizedQuery)) ||
                     transaction.employee_name.toLowerCase().includes(normalizedQuery))
             )
-            .orderBy('created_at')
-            .reverse()
             .toArray();
+        list.sort((a, b) => (b.created_at as Date).getTime() - (a.created_at as Date).getTime());
+        return list;
     }
 
     // Get transactions by status
     async getTransactionsByStatus(status: 'completed' | 'refunded' | 'pending' | 'cancelled'): Promise<LocalTransaction[]> {
-        return await localDb.transactions
+        const list = await localDb.transactions
             .filter(transaction => transaction.status === status && transaction.deleted_at === null)
-            .orderBy('created_at')
-            .reverse()
             .toArray();
+        list.sort((a, b) => (b.created_at as Date).getTime() - (a.created_at as Date).getTime());
+        return list;
     }
 
     // Get recent transactions (last N days)
@@ -993,14 +994,14 @@ export class TransactionLocalService {
         cutoffDate.setDate(cutoffDate.getDate() - days);
         const cutoffDateString = cutoffDate.toISOString().split('T')[0];
 
-        return await localDb.transactions
+        const list = await localDb.transactions
             .filter(transaction => 
                 transaction.deleted_at === null &&
                 transaction.transaction_date >= cutoffDateString
             )
-            .orderBy('created_at')
-            .reverse()
             .toArray();
+        list.sort((a, b) => (b.created_at as Date).getTime() - (a.created_at as Date).getTime());
+        return list;
     }
 
     // Update stock levels for products in transaction items

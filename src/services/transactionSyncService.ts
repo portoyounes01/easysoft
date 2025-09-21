@@ -187,8 +187,39 @@ export class TransactionSyncService {
                     });
 
                     if (error) {
-                        console.error(`TransactionSync: Error pushing transaction ${transaction.id}:`, error);
-                        results.push({ transactionId: transaction.id, success: false, error: error.message });
+                        // Fallback if RPC missing (PGRST202 / 404): perform direct upserts
+                        if ((error as any).code === 'PGRST202' || (error as any).message?.includes('schema cache')) {
+                            try {
+                                // Upsert transaction header first
+                                const { error: upsertTxnErr } = await supabase
+                                    .from('transactions')
+                                    .upsert([transactionData], { onConflict: 'id' });
+                                if (upsertTxnErr) throw upsertTxnErr;
+
+                                // Only replace items if we actually have items to push
+                                if (itemsData.length > 0) {
+                                    const { error: delErr } = await supabase
+                                        .from('transaction_items')
+                                        .delete()
+                                        .eq('transaction_id', transaction.id);
+                                    if (delErr) throw delErr;
+
+                                    const { error: upsertItemsErr } = await supabase
+                                        .from('transaction_items')
+                                        .upsert(itemsData, { onConflict: 'id' });
+                                    if (upsertItemsErr) throw upsertItemsErr;
+                                }
+
+                                console.log(`TransactionSync: Fallback upsert succeeded for ${transaction.id}`);
+                                results.push({ transactionId: transaction.id, success: true, result: null });
+                            } catch (fallbackErr: any) {
+                                console.error(`TransactionSync: Fallback failed for ${transaction.id}:`, fallbackErr);
+                                results.push({ transactionId: transaction.id, success: false, error: fallbackErr.message || String(fallbackErr) });
+                            }
+                        } else {
+                            console.error(`TransactionSync: Error pushing transaction ${transaction.id}:`, error);
+                            results.push({ transactionId: transaction.id, success: false, error: error.message });
+                        }
                     } else {
                         console.log(`TransactionSync: Successfully pushed transaction ${transaction.id}`);
                         results.push({ transactionId: transaction.id, success: true, result });

@@ -61,4 +61,522 @@
 # - Category information must be denormalized correctly
 # - All monetary calculations must be accurate
 
-transaction_items: []
+transaction_items:
+  - id: 550e8400-e29b-41d4-a716-446655440601
+    transaction_id: 550e8400-e29b-41d4-a716-446655440501
+    product_id: 550e8400-e29b-41d4-a716-446655440101
+    product_name: Premium Coffee Beans
+    product_sku: COF001
+    category_id: 550e8400-e29b-41d4-a716-446655440001
+    category_name: Beverages
+    quantity: 2
+    unit_price: 12.5
+    unit_cost: 8
+    iva_rate: 0.23
+    line_total: 25
+    tax_amount: 4.6
+    profit_amount: 9
+    discount_amount: 0
+    discount_percentage: 0
+  # Transaction 4 items (TXN202412150001)
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440504
+    product_id: BEV-AYR-405
+    product_name: Ayran
+    product_sku: BEV-AYR-405
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 2.9
+    unit_cost: 1.5
+    iva_rate: 0.06
+    line_total: 2.9
+    tax_amount: 0.17
+    profit_amount: 1.4
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440504
+    product_id: BEV-CCO-401
+    product_name: Coca Cola
+    product_sku: BEV-CCO-401
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 2.5
+    unit_cost: 1.2
+    iva_rate: 0.13
+    line_total: 2.5
+    tax_amount: 0.33
+    profit_amount: 1.3
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440504
+    product_id: BEV-WAT-404
+    product_name: Mineral Water
+    product_sku: BEV-WAT-404
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 1.8
+    unit_cost: 0.6
+    iva_rate: 0.06
+    line_total: 1.8
+    tax_amount: 0.11
+    profit_amount: 1.2
+    discount_amount: 0
+    discount_percentage: 0
+
+  # Transaction 5 items (TXN202412130001)
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440505
+    product_id: KEB-SHI-003
+    product_name: Chicken Shish Kebab
+    product_sku: KEB-SHI-003
+    category_id: null
+    category_name: Kebabs
+    quantity: 1
+    unit_price: 11.5
+    unit_cost: 6.8
+    iva_rate: 0.13
+    line_total: 11.5
+    tax_amount: 1.5
+    profit_amount: 4.7
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440505
+    product_id: RCP-CHR-201
+    product_name: Chicken Rice Plate
+    product_sku: RCP-CHR-201
+    category_id: null
+    category_name: Rice Plates
+    quantity: 1
+    unit_price: 10.5
+    unit_cost: 5.5
+    iva_rate: 0.13
+    line_total: 10.5
+    tax_amount: 1.37
+    profit_amount: 5
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440505
+    product_id: BEV-TEA-406
+    product_name: Turkish Tea
+    product_sku: BEV-TEA-406
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 2.2
+    unit_cost: 0.8
+    iva_rate: 0.13
+    line_total: 2.2
+    tax_amount: 0.29
+    profit_amount: 1.4
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440505
+    product_id: SAU-GAR-601
+    product_name: Garlic Sauce
+    product_sku: SAU-GAR-601
+    category_id: null
+    category_name: Sauces & Extras
+    quantity: 1
+    unit_price: 1.5
+    unit_cost: 0.5
+    iva_rate: 0.13
+    line_total: 1.5
+    tax_amount: 0.2
+    profit_amount: 1
+    discount_amount: 0
+    discount_percentage: 0
+
+  # Transaction 6 items (TXN202412100001)
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440506
+    product_id: WRP-DON-101
+    product_name: Chicken Döner Wrap
+    product_sku: WRP-DON-101
+    category_id: null
+    category_name: Wraps & Sandwiches
+    quantity: 1
+    unit_price: 8.5
+    unit_cost: 4.2
+    iva_rate: 0.13
+    line_total: 8.5
+    tax_amount: 1.11
+    profit_amount: 4.3
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440506
+    product_id: BEV-CCO-401
+    product_name: Coca Cola
+    product_sku: BEV-CCO-401
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 2.5
+    unit_cost: 1.2
+    iva_rate: 0.13
+    line_total: 2.5
+    tax_amount: 0.33
+    profit_amount: 1.3
+    discount_amount: 0
+    discount_percentage: 0
+
+  # Transaction 7 items (TXN202412080001)
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440507
+    product_id: WRP-DON-101
+    product_name: Chicken Döner Wrap
+    product_sku: WRP-DON-101
+    category_id: null
+    category_name: Wraps & Sandwiches
+    quantity: 1
+    unit_price: 8.5
+    unit_cost: 4.2
+    iva_rate: 0.13
+    line_total: 8.5
+    tax_amount: 1.11
+    profit_amount: 4.3
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440507
+    product_id: WRP-KSB-104
+    product_name: Kebab Sandwich
+    product_sku: WRP-KSB-104
+    category_id: null
+    category_name: Wraps & Sandwiches
+    quantity: 1
+    unit_price: 7.5
+    unit_cost: 3.8
+    iva_rate: 0.13
+    line_total: 7.5
+    tax_amount: 0.98
+    profit_amount: 3.7
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440507
+    product_id: BEV-CCO-401
+    product_name: Coca Cola
+    product_sku: BEV-CCO-401
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 2.5
+    unit_cost: 1.2
+    iva_rate: 0.13
+    line_total: 2.5
+    tax_amount: 0.33
+    profit_amount: 1.3
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440507
+    product_id: SAU-GAR-601
+    product_name: Garlic Sauce
+    product_sku: SAU-GAR-601
+    category_id: null
+    category_name: Sauces & Extras
+    quantity: 1
+    unit_price: 1.5
+    unit_cost: 0.5
+    iva_rate: 0.13
+    line_total: 1.5
+    tax_amount: 0.2
+    profit_amount: 1
+    discount_amount: 0
+    discount_percentage: 0
+
+  # Transaction 8 items (TXN202412050001)
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440508
+    product_id: WRP-LDN-102
+    product_name: Lamb Döner Wrap
+    product_sku: WRP-LDN-102
+    category_id: null
+    category_name: Wraps & Sandwiches
+    quantity: 1
+    unit_price: 9.5
+    unit_cost: 5
+    iva_rate: 0.13
+    line_total: 9.5
+    tax_amount: 1.24
+    profit_amount: 4.5
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440508
+    product_id: SID-GRS-303
+    product_name: Greek Salad
+    product_sku: SID-GRS-303
+    category_id: null
+    category_name: Sides & Salads
+    quantity: 1
+    unit_price: 5.9
+    unit_cost: 2.5
+    iva_rate: 0.13
+    line_total: 5.9
+    tax_amount: 0.77
+    profit_amount: 3.4
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440508
+    product_id: BEV-TEA-406
+    product_name: Turkish Tea
+    product_sku: BEV-TEA-406
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 2.2
+    unit_cost: 0.8
+    iva_rate: 0.13
+    line_total: 2.2
+    tax_amount: 0.29
+    profit_amount: 1.4
+    discount_amount: 0
+    discount_percentage: 0
+
+  # Transaction 9 items (TXN202412020001)
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440509
+    product_id: KEB-SHI-003
+    product_name: Chicken Shish Kebab
+    product_sku: KEB-SHI-003
+    category_id: null
+    category_name: Kebabs
+    quantity: 1
+    unit_price: 11.5
+    unit_cost: 6.8
+    iva_rate: 0.13
+    line_total: 11.5
+    tax_amount: 1.5
+    profit_amount: 4.7
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440509
+    product_id: BEV-WAT-404
+    product_name: Mineral Water
+    product_sku: BEV-WAT-404
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 1.8
+    unit_cost: 0.6
+    iva_rate: 0.06
+    line_total: 1.8
+    tax_amount: 0.11
+    profit_amount: 1.2
+    discount_amount: 0
+    discount_percentage: 0
+
+  # Transaction 10 items (TXN202411300001)
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440510
+    product_id: DES-KUN-502
+    product_name: Künefe
+    product_sku: DES-KUN-502
+    category_id: null
+    category_name: Desserts
+    quantity: 1
+    unit_price: 6.9
+    unit_cost: 4
+    iva_rate: 0.13
+    line_total: 6.9
+    tax_amount: 0.9
+    profit_amount: 2.9
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440510
+    product_id: DES-BAK-501
+    product_name: Baklava
+    product_sku: DES-BAK-501
+    category_id: null
+    category_name: Desserts
+    quantity: 1
+    unit_price: 4.5
+    unit_cost: 2.5
+    iva_rate: 0.13
+    line_total: 4.5
+    tax_amount: 0.59
+    profit_amount: 2
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440510
+    product_id: BEV-AYR-405
+    product_name: Ayran
+    product_sku: BEV-AYR-405
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 2.9
+    unit_cost: 1.5
+    iva_rate: 0.06
+    line_total: 2.9
+    tax_amount: 0.17
+    profit_amount: 1.4
+    discount_amount: 0
+    discount_percentage: 0
+
+  # Transaction 11 items (TXN202411280001)
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440511
+    product_id: BEV-AYR-405
+    product_name: Ayran
+    product_sku: BEV-AYR-405
+    category_id: null
+    category_name: Beverages
+    quantity: 2
+    unit_price: 2.9
+    unit_cost: 1.5
+    iva_rate: 0.06
+    line_total: 5.8
+    tax_amount: 0.35
+    profit_amount: 2.8
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440511
+    product_id: BEV-CCO-401
+    product_name: Coca Cola
+    product_sku: BEV-CCO-401
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 2.5
+    unit_cost: 1.2
+    iva_rate: 0.13
+    line_total: 2.5
+    tax_amount: 0.33
+    profit_amount: 1.3
+    discount_amount: 0
+    discount_percentage: 0
+
+  # Transaction 12 items (TXN202411250001)
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440512
+    product_id: WRP-DON-101
+    product_name: Chicken Döner Wrap
+    product_sku: WRP-DON-101
+    category_id: null
+    category_name: Wraps & Sandwiches
+    quantity: 1
+    unit_price: 8.5
+    unit_cost: 4.2
+    iva_rate: 0.13
+    line_total: 8.5
+    tax_amount: 1.11
+    profit_amount: 4.3
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440512
+    product_id: SID-ONR-302
+    product_name: Onion Rings
+    product_sku: SID-ONR-302
+    category_id: null
+    category_name: Sides & Salads
+    quantity: 1
+    unit_price: 4.5
+    unit_cost: 1.8
+    iva_rate: 0.13
+    line_total: 4.5
+    tax_amount: 0.59
+    profit_amount: 2.7
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440512
+    product_id: BEV-TEA-406
+    product_name: Turkish Tea
+    product_sku: BEV-TEA-406
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 2.2
+    unit_cost: 0.8
+    iva_rate: 0.13
+    line_total: 2.2
+    tax_amount: 0.29
+    profit_amount: 1.4
+    discount_amount: 0
+    discount_percentage: 0
+  - transaction_id: 550e8400-e29b-41d4-a716-446655440512
+    product_id: BEV-AYR-405
+    product_name: Ayran
+    product_sku: BEV-AYR-405
+    category_id: null
+    category_name: Beverages
+    quantity: 1
+    unit_price: 2.9
+    unit_cost: 1.5
+    iva_rate: 0.06
+    line_total: 2.9
+    tax_amount: 0.17
+    profit_amount: 1.4
+    discount_amount: 0
+    discount_percentage: 0
+  - id: 550e8400-e29b-41d4-a716-446655440602
+    transaction_id: 550e8400-e29b-41d4-a716-446655440501
+    product_id: 550e8400-e29b-41d4-a716-446655440103
+    product_name: Croissant
+    product_sku: BRD002
+    category_id: 550e8400-e29b-41d4-a716-446655440003
+    category_name: Bakery
+    quantity: 1
+    unit_price: 3.5
+    unit_cost: 1.2
+    iva_rate: 0.06
+    line_total: 3.5
+    tax_amount: 0.2
+    profit_amount: 2.3
+    discount_amount: 0
+    discount_percentage: 0
+  - id: 550e8400-e29b-41d4-a716-446655440603
+    transaction_id: 550e8400-e29b-41d4-a716-446655440502
+    product_id: 550e8400-e29b-41d4-a716-446655440102
+    product_name: Organic Milk
+    product_sku: MLK001
+    category_id: 550e8400-e29b-41d4-a716-446655440002
+    category_name: Dairy
+    quantity: 3
+    unit_price: 2.8
+    unit_cost: 1.5
+    iva_rate: 0.06
+    line_total: 8.4
+    tax_amount: 0.48
+    profit_amount: 3.9
+    discount_amount: 0
+    discount_percentage: 0
+  - id: 550e8400-e29b-41d4-a716-446655440604
+    transaction_id: 550e8400-e29b-41d4-a716-446655440502
+    product_id: 550e8400-e29b-41d4-a716-446655440104
+    product_name: Dark Chocolate
+    product_sku: CHC001
+    category_id: 550e8400-e29b-41d4-a716-446655440004
+    category_name: Confectionery
+    quantity: 2
+    unit_price: 6.9
+    unit_cost: 4.2
+    iva_rate: 0.23
+    line_total: 13.8
+    tax_amount: 3.17
+    profit_amount: 5.4
+    discount_amount: 0
+    discount_percentage: 0
+  - id: 550e8400-e29b-41d4-a716-446655440605
+    transaction_id: 550e8400-e29b-41d4-a716-446655440503
+    product_id: 550e8400-e29b-41d4-a716-446655440101
+    product_name: Premium Coffee Beans
+    product_sku: COF001
+    category_id: 550e8400-e29b-41d4-a716-446655440001
+    category_name: Beverages
+    quantity: 1
+    unit_price: 12.5
+    unit_cost: 8
+    iva_rate: 0.23
+    line_total: 12.5
+    tax_amount: 2.88
+    profit_amount: 4.5
+    discount_amount: 0
+    discount_percentage: 0
+  - id: 550e8400-e29b-41d4-a716-446655440606
+    transaction_id: 550e8400-e29b-41d4-a716-446655440503
+    product_id: 550e8400-e29b-41d4-a716-446655440106
+    product_name: Cheese
+    product_sku: MLK003
+    category_id: 550e8400-e29b-41d4-a716-446655440002
+    category_name: Dairy
+    quantity: 1
+    unit_price: 8.9
+    unit_cost: 5.5
+    iva_rate: 0.06
+    line_total: 8.9
+    tax_amount: 0.53
+    profit_amount: 3.4
+    discount_amount: 0
+    discount_percentage: 0

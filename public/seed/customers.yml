@@ -16,4 +16,94 @@
 # - Customer categories for segmentation
 #
 
-customers: []
+customers:
+  - id: "1"
+    name: "Maria Silva"
+    email: "maria.silva@email.com"
+    phone: "+351 912 345 678"
+    taxId: "123456789"
+    address: "Rua das Flores, 123"
+    city: "Lisboa"
+    postalCode: "1000-001"
+    country: "Portugal"
+    discountLevel: 5
+    totalPurchases: 1250.50
+    totalOrders: 12
+    lastPurchase: "2024-01-10"
+    loyaltyMember: false
+    loyaltyPoints: 0
+    registrationDate: "2023-03-15"
+    preferredPayment: "card"
+    category: "regular"
+  - id: "2"
+    name: "João Santos"
+    email: "joao.santos@email.com"
+    phone: "+351 923 456 789"
+    taxId: "987654321"
+    address: "Av. da Liberdade, 456"
+    city: "Porto"
+    postalCode: "4000-001"
+    country: "Portugal"
+    discountLevel: 10
+    totalPurchases: 2890.75
+    totalOrders: 28
+    lastPurchase: "2024-01-12"
+    loyaltyMember: true
+    loyaltyPoints: 120
+    registrationDate: "2022-11-02"
+    preferredPayment: "cash"
+    category: "loyalty"
+  - id: "3"
+    name: "Ana Costa"
+    email: "ana.costa@email.com"
+    phone: "+351 934 567 890"
+    taxId: "456789123"
+    address: "Rua Central, 789"
+    city: "Braga"
+    postalCode: "4700-001"
+    country: "Portugal"
+    discountLevel: 0
+    totalPurchases: 450.25
+    totalOrders: 5
+    lastPurchase: "2024-01-08"
+    loyaltyMember: false
+    loyaltyPoints: 0
+    registrationDate: "2024-01-01"
+    preferredPayment: "card"
+    category: "regular"
+  - id: "4"
+    name: "Pedro Lima"
+    email: "pedro.lima@email.com"
+    phone: "+351 945 678 901"
+    taxId: "789123456"
+    address: "Largo do Mercado, 12"
+    city: "Faro"
+    postalCode: "8000-001"
+    country: "Portugal"
+    discountLevel: 15
+    totalPurchases: 3450.00
+    totalOrders: 35
+    lastPurchase: "2024-01-14"
+    loyaltyMember: true
+    loyaltyPoints: 350
+    registrationDate: "2021-07-20"
+    preferredPayment: "card"
+    category: "loyalty"
+  - id: "5"
+    name: "Carla Fernandes"
+    email: "carla.fernandes@email.com"
+    phone: "+351 956 789 012"
+    taxId: "321654987"
+    address: "Rua Nova, 34"
+    city: "Coimbra"
+    postalCode: "3000-001"
+    country: "Portugal"
+    discountLevel: 8
+    totalPurchases: 1890.30
+    totalOrders: 18
+    lastPurchase: "2024-01-11"
+    loyaltyMember: false
+    loyaltyPoints: 0
+    registrationDate: "2023-06-10"
+    preferredPayment: "cash"
+    category: "regular"

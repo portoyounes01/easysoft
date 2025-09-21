@@ -2,6 +2,7 @@
 - 2025-09-08: Added Seed Management UI at `/seed` with navigation, instructions, and environment status display for YAML-based seeding workflow.
 - 2025-09-08: Implemented browser-based YAML seeding that follows offline-first architecture - seeds IndexedDB first, then syncs to Supabase.
 - 2025-09-08: Enhanced seeding to support all entities: employees, categories, products (local DB + sync), customers, transactions, cashier tests, cash drawer logs (direct Supabase).
+- 2025-09-08: Fixed POS customer integration - replaced hardcoded mockCustomers with proper database integration using customerLocalService.
 - Prevented spurious Supabase password grant (400) during login by adding proper guards
   - Types aligned with DB: `auth_id` optional on `Employee`, include `'trainee'` role
   - Supabase sign-in now only runs when configured, online, and employee is provisioned

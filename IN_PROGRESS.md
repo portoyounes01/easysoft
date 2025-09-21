@@ -154,3 +154,8 @@
   - Implement Customer/Transaction Local + Sync services and orchestrator
   - Update POS checkout to write local transactions and queue sync
   - Add delta/upsert RPCs for customers/transactions on Supabase
+
+## Seeding Fixes (2025-09-11)
+
+- Replaced date placeholders in `public/seed/transactions.yml` with concrete ISO dates matching `transaction_number` to resolve Supabase error 22007 (invalid date syntax).
+- Verified YAML structure and relationships align with `src/utils/populateTransactionData.ts` mock data.

@@ -37,4 +37,196 @@
 # - Totals must match sum of transaction items
 # - Tax amounts must be calculated correctly
 
-transactions: []
+transactions:
+  - id: 550e8400-e29b-41d4-a716-446655440501
+    transaction_number: TXN202412200001
+    employee_id: EMP003
+    employee_name: João Pereira
+    customer_id: "1"
+    customer_name: Maria Silva
+    transaction_date: "2024-12-20"
+    transaction_time: "14:30:00"
+    subtotal: 28.5
+    discount: 1.43
+    tax: 6.2
+    total: 33.27
+    payment_method: card
+    amount_paid: 33.27
+    change_given: 0
+    status: completed
+  - id: 550e8400-e29b-41d4-a716-446655440502
+    transaction_number: TXN202412180001
+    employee_id: EMP004
+    employee_name: Ana Costa
+    customer_id: null
+    customer_name: null
+    transaction_date: "2024-12-18"
+    transaction_time: "15:45:00"
+    subtotal: 22.2
+    discount: 0
+    tax: 5.11
+    total: 27.31
+    payment_method: cash
+    amount_paid: 30
+    change_given: 2.69
+    status: completed
+  - id: 550e8400-e29b-41d4-a716-446655440503
+    transaction_number: TXN202412170001
+    employee_id: EMP002
+    employee_name: Maria Santos
+    customer_id: null
+    customer_name: null
+    transaction_date: "2024-12-17"
+    transaction_time: "16:20:00"
+    subtotal: 21.4
+    discount: 0
+    tax: 4.92
+    total: 26.32
+    payment_method: card
+    amount_paid: 26.32
+    change_given: 0
+    status: completed
+  - id: 550e8400-e29b-41d4-a716-446655440504
+    transaction_number: TXN202412150001
+    employee_id: EMP003
+    employee_name: João Pereira
+    customer_id: "2"
+    customer_name: João Santos
+    transaction_date: "2024-12-15"
+    transaction_time: "10:15:00"
+    subtotal: 7.2
+    discount: 0.36
+    tax: 1.58
+    total: 8.42
+    payment_method: cash
+    amount_paid: 10
+    change_given: 1.58
+    status: completed
+  - id: 550e8400-e29b-41d4-a716-446655440505
+    transaction_number: TXN202412130001
+    employee_id: EMP004
+    employee_name: Ana Costa
+    customer_id: null
+    customer_name: null
+    transaction_date: "2024-12-13"
+    transaction_time: "13:25:00"
+    subtotal: 25.7
+    discount: 0
+    tax: 5.91
+    total: 31.61
+    payment_method: card
+    amount_paid: 31.61
+    change_given: 0
+    status: completed
+  - id: 550e8400-e29b-41d4-a716-446655440506
+    transaction_number: TXN202412100001
+    employee_id: EMP003
+    employee_name: João Pereira
+    customer_id: null
+    customer_name: null
+    transaction_date: "2024-12-10"
+    transaction_time: "17:40:00"
+    subtotal: 11
+    discount: 0.55
+    tax: 2.4
+    total: 12.85
+    payment_method: cash
+    amount_paid: 15
+    change_given: 2.15
+    status: completed
+  - id: 550e8400-e29b-41d4-a716-446655440507
+    transaction_number: TXN202412080001
+    employee_id: EMP003
+    employee_name: João Pereira
+    customer_id: null
+    customer_name: null
+    transaction_date: "2024-12-08"
+    transaction_time: "11:30:00"
+    subtotal: 20
+    discount: 2
+    tax: 4.14
+    total: 22.14
+    payment_method: mixed
+    amount_paid: 22.14
+    change_given: 0
+    status: completed
+  - id: 550e8400-e29b-41d4-a716-446655440508
+    transaction_number: TXN202412050001
+    employee_id: EMP004
+    employee_name: Ana Costa
+    customer_id: "3"
+    customer_name: Ana Costa
+    transaction_date: "2024-12-05"
+    transaction_time: "14:15:00"
+    subtotal: 17.6
+    discount: 0
+    tax: 4.05
+    total: 21.65
+    payment_method: card
+    amount_paid: 21.65
+    change_given: 0
+    status: completed
+  - id: 550e8400-e29b-41d4-a716-446655440509
+    transaction_number: TXN202412020001
+    employee_id: EMP002
+    employee_name: Maria Santos
+    customer_id: null
+    customer_name: null
+    transaction_date: "2024-12-02"
+    transaction_time: "16:50:00"
+    subtotal: 13.3
+    discount: 0
+    tax: 3.06
+    total: 16.36
+    payment_method: cash
+    amount_paid: 20
+    change_given: 3.64
+    status: completed
+  - id: 550e8400-e29b-41d4-a716-446655440510
+    transaction_number: TXN202411300001
+    employee_id: EMP003
+    employee_name: João Pereira
+    customer_id: "4"
+    customer_name: Pedro Lima
+    transaction_date: "2024-11-30"
+    transaction_time: "09:45:00"
+    subtotal: 14.3
+    discount: 0.71
+    tax: 3.13
+    total: 16.72
+    payment_method: card
+    amount_paid: 16.72
+    change_given: 0
+    status: completed
+  - id: 550e8400-e29b-41d4-a716-446655440511
+    transaction_number: TXN202411280001
+    employee_id: EMP004
+    employee_name: Ana Costa
+    customer_id: null
+    customer_name: null
+    transaction_date: "2024-11-28"
+    transaction_time: "12:20:00"
+    subtotal: 8.3
+    discount: 0
+    tax: 1.91
+    total: 10.21
+    payment_method: cash
+    amount_paid: 15
+    change_given: 4.79
+    status: completed
+  - id: 550e8400-e29b-41d4-a716-446655440512
+    transaction_number: TXN202411250001
+    employee_id: EMP003
+    employee_name: João Pereira
+    customer_id: "5"
+    customer_name: Carla Fernandes
+    transaction_date: "2024-11-25"
+    transaction_time: "15:35:00"
+    subtotal: 18.1
+    discount: 1.81
+    tax: 3.75
+    total: 20.04
+    payment_method: card
+    amount_paid: 20.04
+    change_given: 0
+    status: completed

@@ -34,19 +34,23 @@ import {
   FileText
 } from 'lucide-react';
 import { usePOS } from '../contexts/POSContext';
+import { syncManager } from '../services/syncManager';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useProducts } from '../contexts/ProductsContext';
 import VirtualNumpad from '../components/VirtualNumpad';
 import OrderSummaryPanel from '../components/OrderSummaryPanel';
+import DiscountDialog from '../components/DiscountDialog';
 import VirtualKeyboard from '../components/VirtualKeyboard';
 import { Customer } from '../types';
-import { LocalProduct } from '../types/supabase';
+import { LocalProduct, LocalCustomer } from '../types/supabase';
 import { useTranslation } from 'react-i18next';
 import { transactionService } from '../services/transactionService';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
+import { customerLocalService } from '../lib/localDatabase';
 import ThermalReceipt, { ReceiptProps } from '../components/ThermalReceipt';
 import ReceiptHistorySelector from '../components/ReceiptHistorySelector';
+import PaymentDialog from '../components/PaymentDialog';
 
 // Icon mapping for categories
 const iconMap = {
@@ -57,88 +61,10 @@ const iconMap = {
   candy: Candy,
 };
 
-// Mock customer data - will be moved to context/localStorage in production
-let mockCustomers: Customer[] = [
-  {
-    id: '1',
-    name: 'Maria Silva',
-    email: 'maria.silva@email.com',
-    phone: '+351 912 345 678',
-    taxId: '123456789',
-    address: 'Rua das Flores, 123',
-    city: 'Lisboa',
-    postalCode: '1000-001',
-    country: 'Portugal',
-    discountLevel: 5,
-    totalPurchases: 1250.50,
-    totalOrders: 12,
-    lastPurchase: '2024-01-10'
-  },
-  {
-    id: '2',
-    name: 'João Santos',
-    email: 'joao.santos@email.com',
-    phone: '+351 923 456 789',
-    taxId: '987654321',
-    address: 'Av. da Liberdade, 456',
-    city: 'Porto',
-    postalCode: '4000-001',
-    country: 'Portugal',
-    discountLevel: 10,
-    totalPurchases: 2890.75,
-    totalOrders: 28,
-    lastPurchase: '2024-01-12'
-  },
-  {
-    id: '3',
-    name: 'Ana Costa',
-    email: 'ana.costa@email.com',
-    phone: '+351 934 567 890',
-    taxId: '456789123',
-    address: 'Rua Central, 789',
-    city: 'Braga',
-    postalCode: '4700-001',
-    country: 'Portugal',
-    discountLevel: 0,
-    totalPurchases: 450.25,
-    totalOrders: 5,
-    lastPurchase: '2024-01-08'
-  },
-  {
-    id: '4',
-    name: 'Pedro Lima',
-    email: 'pedro.lima@email.com',
-    phone: '+351 945 678 901',
-    taxId: '789123456',
-    address: 'Largo do Mercado, 12',
-    city: 'Faro',
-    postalCode: '8000-001',
-    country: 'Portugal',
-    discountLevel: 15,
-    totalPurchases: 3450.00,
-    totalOrders: 35,
-    lastPurchase: '2024-01-14'
-  },
-  {
-    id: '5',
-    name: 'Carla Fernandes',
-    email: 'carla.fernandes@email.com',
-    phone: '+351 956 789 012',
-    taxId: '321654987',
-    address: 'Rua Nova, 34',
-    city: 'Coimbra',
-    postalCode: '3000-001',
-    country: 'Portugal',
-    discountLevel: 8,
-    totalPurchases: 1890.30,
-    totalOrders: 18,
-    lastPurchase: '2024-01-11'
-  }
-];
 
 const POS: React.FC = () => {
   const { t } = useTranslation();
-  const { cart, addToCart, clearCart, selectedCustomer, selectCustomer } = usePOS();
+  const { cart, addToCart, clearCart, selectedCustomer, selectCustomer, processTransaction } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
   const { settings, updateSettings } = useSettings();
   const {
@@ -150,6 +76,10 @@ const POS: React.FC = () => {
     syncData,
     refreshData
   } = useProducts();
+
+  // Customer state management
+  const [customers, setCustomers] = useState<LocalCustomer[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
 
   // Receipt preview modal state
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
@@ -191,7 +121,8 @@ const POS: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   // POS uses a temporary navigation overlay instead of a persistent sidebar
   const [showNavigation, setShowNavigation] = useState(false);
-  const [discount, setDiscount] = useState({ type: 'none', value: 0 });
+  const [discount, setDiscount] = useState({ type: 'none' as 'none' | 'percentage' | 'fixed', value: 0 });
+  const [showDiscountDialog, setShowDiscountDialog] = useState(false);
 
   // Toggle sidebar and persist state
   // Collapsed state preserved; toggled via showNavigation overlay only in POS
@@ -362,10 +293,16 @@ const POS: React.FC = () => {
   // Filter products based on category only
   const filteredProducts = selectedCategoryId ? getProductsByCategory(selectedCategoryId) : [];
 
-  // Filter customers based on search term (NIF only)
-  const filteredCustomers = mockCustomers.filter(customer =>
-    customer.taxId && customer.taxId.includes(customerSearchTerm)
-  );
+  // Filter customers based on search term (name, email, phone)
+  const filteredCustomers = customers.filter(customer => {
+    if (!customerSearchTerm) return true;
+    const searchLower = customerSearchTerm.toLowerCase();
+    return (
+      customer.name?.toLowerCase().includes(searchLower) ||
+      customer.email?.toLowerCase().includes(searchLower) ||
+      customer.phone?.toLowerCase().includes(searchLower)
+    );
+  });
 
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const discountAmount = discount.type === 'percentage'
@@ -421,22 +358,8 @@ const POS: React.FC = () => {
 
   // (category selection handled inline where used)
 
-  const handleDiscountClick = (type: 'percentage' | 'fixed') => {
-    setNumpadConfig({
-      isOpen: true,
-      title: type === 'percentage' ? 'Enter Discount %' : 'Enter Discount Amount',
-      onConfirm: (value: string) => {
-        const numValue = parseFloat(value);
-        if (!isNaN(numValue) && numValue > 0) {
-          setDiscount({ type, value: numValue });
-        }
-      },
-      prefix: type === 'fixed' ? '€' : '',
-      suffix: type === 'percentage' ? '%' : '',
-      placeholder: type === 'percentage' ? '%0.00' : '€0.00',
-      allowDecimal: true,
-      maxLength: 8
-    });
+  const handleDiscountClick = () => {
+    setShowDiscountDialog(true);
   };
 
   const handleCashClick = () => {
@@ -487,7 +410,7 @@ const POS: React.FC = () => {
     setNumpadConfig(prev => ({ ...prev, isOpen: false }));
   };
 
-  const handleCustomerSelect = (customer: Customer) => {
+  const handleCustomerSelect = (customer: LocalCustomer) => {
     selectCustomer(customer);
     setShowCustomerModal(false);
     setCustomerSearchTerm('');
@@ -574,7 +497,7 @@ const POS: React.FC = () => {
     });
   };
 
-  const handleCustomerFormSubmit = () => {
+  const handleCustomerFormSubmit = async () => {
     // Validate required fields
     if (!newCustomerForm.taxId.trim()) {
       alert('NIF is required');
@@ -610,11 +533,34 @@ const POS: React.FC = () => {
       lastPurchase: undefined
     };
 
-    // Add to mock database
-    mockCustomers.push(newCustomer);
+    // Add to database
+    try {
+      const customerId = await customerLocalService.createCustomer({
+        name: newCustomer.name,
+        email: newCustomer.email || null,
+        phone: newCustomer.phone || null,
+        address: newCustomer.address || null,
+        total_spent: 0,
+        transaction_count: 0,
+        loyalty_points: 0,
+        is_active: true,
+        preferred_payment_method: null,
+        deleted_at: null
+      });
 
-    // Auto-select the new customer
-    selectCustomer(newCustomer);
+      // Reload customers to show the new one
+      const dbCustomers = await customerLocalService.getAllCustomers();
+      setCustomers(dbCustomers);
+
+      // Find and auto-select the new customer
+      const createdCustomer = dbCustomers.find(c => c.id === customerId);
+      if (createdCustomer) {
+        selectCustomer(createdCustomer);
+      }
+    } catch (error) {
+      console.error('Failed to create customer:', error);
+      // You might want to show an error message to the user here
+    }
 
     // Close modals and reset form
     setShowAddCustomerModal(false);
@@ -705,6 +651,24 @@ const POS: React.FC = () => {
       setLastCartActivity(Date.now());
     }
   }, [cart]);
+
+  // Load customers from database
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        setLoadingCustomers(true);
+        const dbCustomers = await customerLocalService.getAllCustomers();
+        setCustomers(dbCustomers);
+      } catch (error) {
+        console.error('Failed to load customers:', error);
+        setCustomers([]); // Fallback to empty array
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+
+    loadCustomers();
+  }, []);
 
   // Handle retry/refresh data
   const handleRetryData = async () => {
@@ -1068,13 +1032,28 @@ const POS: React.FC = () => {
         onClearAll={clearCart}
         onCustomer={() => setShowCustomerModal(true)}
         onTables={() => { }}
-        onDiscount={() => handleDiscountClick('percentage')}
+        onDiscount={handleDiscountClick}
         onSaveBill={() => {
           if (!lastCompletedReceipt) return;
           setShowReceiptHistory(true);
         }}
         canSaveBill={Boolean(lastCompletedReceipt)}
         onProcess={() => setShowPayment(true)}
+      />
+
+      <DiscountDialog
+        open={showDiscountDialog}
+        onClose={() => setShowDiscountDialog(false)}
+        presets={[
+          { id: 'p10', name: 'Promo 10%', type: 'percentage', value: 10, description: 'Seasonal discount' },
+          { id: 'p15', name: 'Promo 15%', type: 'percentage', value: 15 },
+          { id: 'f2', name: '€2 Off', type: 'fixed', value: 2 },
+          { id: 'f5', name: '€5 Off', type: 'fixed', value: 5, description: 'Limited time' }
+        ]}
+        onApply={(res) => {
+          setDiscount({ type: res.type, value: res.value });
+          setShowDiscountDialog(false);
+        }}
       />
 
       {/* Customer Selection Modal */}
@@ -1185,21 +1164,19 @@ const POS: React.FC = () => {
                             </div>
                             <div>
                               <h4 className="font-bold text-gray-800">{customer.name}</h4>
-                              <p className="text-sm text-gray-600">{customer.taxId}</p>
+                              <p className="text-sm text-gray-600">{customer.email || customer.phone || 'No contact info'}</p>
                             </div>
                           </div>
 
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             <div className="flex items-center space-x-2">
                               <span className="text-gray-600">{t('pos.totalOrders')}</span>
-                              <span className="font-semibold text-gray-800">{customer.totalOrders}</span>
+                              <span className="font-semibold text-gray-800">{customer.transaction_count || 0}</span>
                             </div>
-                            {customer.discountLevel > 0 && (
-                              <div className="flex items-center space-x-2">
-                                <Percent className="w-4 h-4 text-green-500" />
-                                <span className="font-semibold text-green-600">{customer.discountLevel}% Discount</span>
-                              </div>
-                            )}
+                            <div className="flex items-center space-x-2">
+                              <span className="text-gray-600">Total Spent</span>
+                              <span className="font-semibold text-gray-800">€{(customer.total_spent || 0).toFixed(2)}</span>
+                            </div>
                           </div>
                         </div>
 
@@ -1477,209 +1454,144 @@ const POS: React.FC = () => {
 
       {/* Payment Modal */}
       {showPayment && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-3xl p-8 w-[480px] max-w-md shadow-2xl">
-            <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">{t('pos.processPayment')}</h3>
-            <div className="space-y-6">
-              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-2xl">
-                <div className="text-4xl font-bold text-center">
-                  €{finalTotal.toFixed(2)}
-                </div>
-              </div>
+        <PaymentDialog
+          open={showPayment}
+          total={finalTotal}
+          cashReceived={cashReceived}
+          onChangeCash={(n) => setCashReceived(isNaN(n) ? 0 : n)}
+          onClose={() => {
+            setShowPayment(false);
+            setCashReceived(0);
+          }}
+          onConfirm={async () => {
+            // Build receipt data
+            // Build series key per settings (monthly/yearly)
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const seriesKey = settings.receipt.resetPolicy === 'monthly'
+              ? `${settings.receipt.seriesPrefix}-${y}${m}`
+              : `${settings.receipt.seriesPrefix}-${y}`;
 
-              {/* Cash Payment Section */}
-              {cashReceived > 0 && (
-                <div className="space-y-3">
-                  <div className="flex justify-between text-lg">
-                    <span className="text-gray-600">{t('pos.cashReceived')}</span>
-                    <span className="text-gray-800 font-semibold">€{cashReceived.toFixed(2)}</span>
-                  </div>
-                  {cashReceived > finalTotal && (
-                    <div className="flex justify-between text-xl font-bold text-green-600">
-                      <span>{t('pos.changeDue')}</span>
-                      <span>€{(cashReceived - finalTotal).toFixed(2)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
+            // Compute next number (starting from 1000 via currentNumber default 999)
+            let nextNumber = settings.receipt.currentNumber;
+            let lastSeriesKey = settings.receipt.lastSeriesKey;
+            if (lastSeriesKey !== seriesKey) {
+              nextNumber = 999; // reset so first becomes 1000
+              lastSeriesKey = seriesKey;
+            }
+            nextNumber += 1;
 
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  onClick={handleCashClick}
-                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]"
-                >
-                  <Banknote className="w-6 h-6" />
-                  <span>{t('pos.cash')}</span>
-                </button>
-                <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 min-h-[80px]">
-                  <CreditCard className="w-6 h-6" />
-                  <span>{t('pos.card')}</span>
-                </button>
-              </div>
+            const padded = String(nextNumber).padStart(settings.receipt.numericWidth, '0');
+            const documentNumber = `${seriesKey}-${padded}`; // reserved for future persistence in transaction
 
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => {
-                    setShowPayment(false);
-                    setCashReceived(0);
-                  }}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-3 rounded-2xl min-h-[60px]"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 rounded-2xl min-h-[60px]"
-                  disabled={cashReceived > 0 && cashReceived < finalTotal}
-                  onClick={async () => {
-                    // Build receipt data
-                    // Build series key per settings (monthly/yearly)
-                    const now = new Date();
-                    const y = now.getFullYear();
-                    const m = String(now.getMonth() + 1).padStart(2, '0');
-                    const seriesKey = settings.receipt.resetPolicy === 'monthly'
-                      ? `${settings.receipt.seriesPrefix}-${y}${m}`
-                      : `${settings.receipt.seriesPrefix}-${y}`;
+            // Persist updated counter using settings updater
+            updateSettings({
+              receipt: {
+                lastSeriesKey,
+                currentNumber: nextNumber,
+              }
+            });
 
-                    // Compute next number (starting from 1000 via currentNumber default 999)
-                    let nextNumber = settings.receipt.currentNumber;
-                    let lastSeriesKey = settings.receipt.lastSeriesKey;
-                    if (lastSeriesKey !== seriesKey) {
-                      nextNumber = 999; // reset so first becomes 1000
-                      lastSeriesKey = seriesKey;
-                    }
-                    nextNumber += 1;
+            const receiptData = {
+              documentType: settings.receipt.defaultDocumentType as 'FATURA' | 'FATURA_SIMPLIFICADA',
+              date: new Date(),
+              counter: settings.receipt.counterLabel,
+              verificationCode: `${settings.receipt.atcudPrefix}-${seriesKey}-${padded}`,
+              // Replace FS placeholder number with our generated document number
+              // Downstream receipt component prints documentNumber value
+              documentNumber: documentNumber,
+              company: {
+                name: settings.company.name,
+                address: settings.company.address,
+                postalCode: settings.company.postalCode,
+                city: settings.company.city,
+                taxNumber: settings.company.taxNumber,
+                phone: settings.company.phone || undefined,
+                email: settings.company.email || undefined,
+              },
+              customer: selectedCustomer ? {
+                taxNumber: selectedCustomer.taxId,
+                name: selectedCustomer.name
+              } : undefined,
+              items: cart.map(ci => ({
+                id: ci.product.id,
+                description: ci.product.name,
+                quantity: ci.quantity,
+                unitPrice: ci.product.price,
+                vatRate: Math.round((ci.product.iva_rate || 0) * 100),
+                // price is tax-included already; total line value equals unit*qty
+                total: Number((ci.product.price * ci.quantity).toFixed(2))
+              })),
+              totals: {
+                subtotal: Number(subtotal.toFixed(2)),
+                discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
+                discountPercentage: discount.type === 'percentage' ? discount.value : 0,
+                net: Number(finalSubtotal.toFixed(2)),
+                vat: Number(adjustedFinalTax.toFixed(2)),
+                total: Number(finalTotal.toFixed(2))
+              },
+              payment: {
+                method: cashReceived > 0 ? 'Numerário' : 'Multibanco',
+                amountGiven: Number(cashReceived.toFixed(2)),
+                change: Number(changeAmount.toFixed(2))
+              },
+              slogan: settings.company.slogan || undefined,
+              softwareInfo: settings.company.softwareInfo || undefined,
+              certificationNumber: settings.company.certificationNumber || undefined,
+            };
 
-                    const padded = String(nextNumber).padStart(settings.receipt.numericWidth, '0');
-                    const documentNumber = `${seriesKey}-${padded}`; // reserved for future persistence in transaction
+            // Try to persist transaction to Supabase
+            try {
+              if (isSupabaseConfigured() && await checkSupabaseConnection()) {
+                const employeeId = employee?.id || 'unknown-employee';
+                const employeeName = employee?.name || 'Employee';
+                const transactionDate = now.toISOString().slice(0, 10); // YYYY-MM-DD
+                const transactionTime = now.toTimeString().slice(0, 8); // HH:MM:SS
 
-                    // Persist updated counter using settings updater
-                    updateSettings({
-                      receipt: {
-                        lastSeriesKey,
-                        currentNumber: nextNumber,
-                      }
-                    });
+                const paymentMethod = cashReceived > 0 ? 'cash' : 'card' as const;
 
-                    const receiptData = {
-                      documentType: settings.receipt.defaultDocumentType as 'FATURA' | 'FATURA_SIMPLIFICADA',
-                      date: new Date(),
-                      counter: settings.receipt.counterLabel,
-                      verificationCode: `${settings.receipt.atcudPrefix}-${seriesKey}-${padded}`,
-                      // Replace FS placeholder number with our generated document number
-                      // Downstream receipt component prints documentNumber value
-                      documentNumber: documentNumber,
-                      company: {
-                        name: settings.company.name,
-                        address: settings.company.address,
-                        postalCode: settings.company.postalCode,
-                        city: settings.company.city,
-                        taxNumber: settings.company.taxNumber,
-                        phone: settings.company.phone || undefined,
-                        email: settings.company.email || undefined,
-                      },
-                      customer: selectedCustomer ? {
-                        taxNumber: selectedCustomer.taxId,
-                        name: selectedCustomer.name
-                      } : undefined,
-                      items: cart.map(ci => ({
-                        id: ci.product.id,
-                        description: ci.product.name,
-                        quantity: ci.quantity,
-                        unitPrice: ci.product.price,
-                        vatRate: Math.round((ci.product.iva_rate || 0) * 100),
-                        // price is tax-included already; total line value equals unit*qty
-                        total: Number((ci.product.price * ci.quantity).toFixed(2))
-                      })),
-                      totals: {
-                        subtotal: Number(subtotal.toFixed(2)),
-                        discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
-                        discountPercentage: discount.type === 'percentage' ? discount.value : 0,
-                        net: Number(finalSubtotal.toFixed(2)),
-                        vat: Number(adjustedFinalTax.toFixed(2)),
-                        total: Number(finalTotal.toFixed(2))
-                      },
-                      payment: {
-                        method: cashReceived > 0 ? 'Numerário' : 'Multibanco',
-                        amountGiven: Number(cashReceived.toFixed(2)),
-                        change: Number(changeAmount.toFixed(2))
-                      },
-                      slogan: settings.company.slogan || undefined,
-                      softwareInfo: settings.company.softwareInfo || undefined,
-                      certificationNumber: settings.company.certificationNumber || undefined,
-                    };
+                const transactionInsert = {
+                  employee_id: employeeId,
+                  employee_name: employeeName,
+                  customer_id: selectedCustomer?.id || null,
+                  customer_name: selectedCustomer?.name || null,
+                  transaction_date: transactionDate,
+                  transaction_time: transactionTime,
+                  subtotal: Number(subtotal.toFixed(2)),
+                  discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
+                  tax: Number(adjustedFinalTax.toFixed(2)),
+                  total: Number(finalTotal.toFixed(2)),
+                  payment_method: paymentMethod,
+                  amount_paid: cashReceived > 0 ? Number(cashReceived.toFixed(2)) : Number(finalTotal.toFixed(2)),
+                  change_given: Number(changeAmount.toFixed(2)),
+                  status: 'completed' as const,
+                  notes: null,
+                  receipt_number: documentNumber,
+                };
 
-                    // Try to persist transaction to Supabase
-                    try {
-                      if (isSupabaseConfigured() && await checkSupabaseConnection()) {
-                        const employeeId = employee?.id || 'unknown-employee';
-                        const employeeName = employee?.name || 'Employee';
-                        const transactionDate = now.toISOString().slice(0, 10); // YYYY-MM-DD
-                        const transactionTime = now.toTimeString().slice(0, 8); // HH:MM:SS
+                await processTransaction({
+                  paymentMethod,
+                  amountPaid: cashReceived > 0 ? cashReceived : undefined,
+                  employeeId,
+                  employeeName,
+                  employeeNumber: employee?.employee_number
+                });
+                // Attempt to push immediately when online
+                try { await syncManager.forceSync(); } catch { }
+              }
+            } catch (e) {
+              console.warn('Transaction persistence failed, falling back to local receipt view.', e);
+            }
 
-                        const paymentMethod = cashReceived > 0 ? 'cash' : 'card' as const;
-
-                        const transactionInsert = {
-                          employee_id: employeeId,
-                          employee_name: employeeName,
-                          customer_id: selectedCustomer?.id || null,
-                          customer_name: selectedCustomer?.name || null,
-                          transaction_date: transactionDate,
-                          transaction_time: transactionTime,
-                          subtotal: Number(subtotal.toFixed(2)),
-                          discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
-                          tax: Number(adjustedFinalTax.toFixed(2)),
-                          total: Number(finalTotal.toFixed(2)),
-                          payment_method: paymentMethod,
-                          amount_paid: cashReceived > 0 ? Number(cashReceived.toFixed(2)) : Number(finalTotal.toFixed(2)),
-                          change_given: Number(changeAmount.toFixed(2)),
-                          status: 'completed' as const,
-                          notes: null,
-                          receipt_number: documentNumber,
-                        };
-
-                        const itemsInsert = cart.map(ci => {
-                          const lineTotal = Number((ci.product.price * ci.quantity).toFixed(2));
-                          const taxAmount = Number((lineTotal - (lineTotal / (1 + (ci.product.iva_rate || 0)))).toFixed(2));
-                          return {
-                            transaction_id: 'placeholder', // will be set by service
-                            product_id: ci.product.id,
-                            product_name: ci.product.name,
-                            product_sku: ci.product.sku,
-                            category_id: ci.product.category_id || null,
-                            category_name: ci.product.category_name || null,
-                            quantity: ci.quantity,
-                            unit_price: ci.product.price,
-                            unit_cost: ci.product.cost || 0,
-                            iva_rate: ci.product.iva_rate || 0,
-                            line_total: lineTotal,
-                            tax_amount: taxAmount,
-                            profit_amount: 0,
-                            discount_amount: 0,
-                            discount_percentage: 0,
-                          };
-                        });
-
-                        await transactionService.createTransaction(transactionInsert as any, itemsInsert as any);
-                      }
-                    } catch (e) {
-                      console.warn('Transaction persistence failed, falling back to local receipt view.', e);
-                    }
-
-                    // Show receipt preview modal instead of navigation
-                    setShowPayment(false);
-                    clearCart();
-                    setReceiptPreviewData(receiptData);
-                    setLastCompletedReceipt(receiptData);
-                    setRecentReceipts(prev => [receiptData, ...prev].slice(0, 20));
-                    setShowReceiptPreview(true);
-                  }}
-                >
-                  {t('pos.completeSale')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+            // Show receipt preview modal instead of navigation
+            setShowPayment(false);
+            setReceiptPreviewData(receiptData);
+            setLastCompletedReceipt(receiptData);
+            setRecentReceipts(prev => [receiptData, ...prev].slice(0, 20));
+            setShowReceiptPreview(true);
+          }}
+        />
       )}
 
       {/* Receipt Preview Modal */}

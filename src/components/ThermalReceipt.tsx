@@ -186,9 +186,15 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
           display: grid;
           grid-template-columns: auto auto 1fr auto auto; /* avoid mm subpixel rounding */
           column-gap: 8px;
-          align-items: baseline;
-          white-space: nowrap;
+          align-items: start; /* keep IVA/Valor pinned to the top when description wraps */
           justify-items: start;
+        }
+        /* prevent column labels and numeric cells from wrapping, but allow description to wrap */
+        .receipt-grid > span { white-space: nowrap; }
+        .receipt-grid .item-desc, .receipt-grid .grid-from-desc { 
+          white-space: normal; 
+          overflow-wrap: anywhere; 
+          word-break: break-word;
         }
         .receipt-grid > span { padding-left: 0; }
         .grid-span-all { grid-column: 1 / -1; }
