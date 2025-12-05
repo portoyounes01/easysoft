@@ -20,6 +20,8 @@ import ProductForm from '../components/ProductForm';
 // Category management moved to Categories page
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
 
 const Products: React.FC = () => {
   const {
@@ -214,35 +216,34 @@ const Products: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between w-full">
-        {/* Left side: Search, Sort, Filter */}
-        <div className="flex items-center space-x-4 flex-1">
-          {/* Search */}
-          <div className="flex-1 max-w-2xl relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder={t('products.header.searchPlaceholder')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
+    <div className="space-y-4 md:space-y-6">
+      {/* Header - Responsive Layout */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 w-full">
+        {/* Search Bar - Full width on mobile, flex-1 on tablet+ */}
+        <div className="w-full md:flex-1 md:max-w-2xl relative order-1 md:order-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input
+            type="text"
+            placeholder={t('products.header.searchPlaceholder')}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
 
-          {/* Sort */}
+        {/* Action Buttons Row - Sort, Filter, Add Product */}
+        <div className="flex items-center gap-2 sm:gap-3 order-2 md:order-2">
+          {/* Sort Button - Icon only on mobile, text on tablet+ */}
           <div className="relative">
-            <button
+            <AdminActionButton
+              variant="outline"
+              label={t('products.header.sort')}
+              icon={ArrowUpDown}
               onClick={() => {
                 setShowSortMenu(prev => !prev);
                 setShowFilterMenu(false);
               }}
-              className="min-h-[44px] flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-all font-medium"
-            >
-              <ArrowUpDown className="w-5 h-5" />
-              <span>{t('products.header.sort')}</span>
-            </button>
+            />
             {showSortMenu && (
               <div className="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
                 <button
@@ -261,18 +262,17 @@ const Products: React.FC = () => {
             )}
           </div>
 
-          {/* Filter */}
+          {/* Filter Button - Icon only on mobile, text on tablet+ */}
           <div className="relative">
-            <button
+            <AdminActionButton
+              variant="outline"
+              label={t('products.header.filter')}
+              icon={Filter}
               onClick={() => {
                 setShowFilterMenu(prev => !prev);
                 setShowSortMenu(false);
               }}
-              className="min-h-[44px] flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-all font-medium"
-            >
-              <Filter className="w-5 h-5" />
-              <span>{t('products.header.filter')}</span>
-            </button>
+            />
             {showFilterMenu && (
               <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-3 space-y-2">
                 <label className="block text-xs font-semibold text-gray-600">{t('products.header.category')}</label>
@@ -290,12 +290,13 @@ const Products: React.FC = () => {
               </div>
             )}
           </div>
-        </div>
 
-        {/* Right side: Add Product */}
-        <div className="flex items-center space-x-3">
-          <div className="relative">
-            <button
+          {/* Add Product Button - Responsive sizing */}
+          <div className="relative flex-1 sm:flex-initial">
+            <AdminActionButton
+              variant="primary"
+              label={t('products.header.addProduct')}
+              icon={Plus}
               onClick={() => {
                 if (categories.length === 0) {
                   setShowCategoryAlert(true);
@@ -304,14 +305,9 @@ const Products: React.FC = () => {
                   setShowProductForm(true);
                 }
               }}
-              className={`min-h-[60px] px-8 py-4 rounded-lg font-semibold transition-all flex items-center space-x-3 shadow-lg ${categories.length === 0
-                ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:scale-105 active:scale-95'
-                }`}
-            >
-              <Plus className="w-6 h-6" />
-              <span>{t('products.header.addProduct')}</span>
-            </button>
+              disabled={categories.length === 0}
+              className="w-full sm:w-auto min-h-[48px] sm:min-h-[56px] lg:min-h-[60px] px-4 sm:px-6 lg:px-8 py-3 sm:py-3 lg:py-4"
+            />
             {showCategoryAlert && categories.length === 0 && (
               <div className="absolute top-full right-0 mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg shadow-lg z-10 min-w-[280px] max-w-[320px]">
                 <div className="flex items-start space-x-2">
@@ -325,7 +321,7 @@ const Products: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6">
         {[
           {
             title: t('products.stats.totalProducts'),
@@ -457,13 +453,12 @@ const Products: React.FC = () => {
                   </td>
                   <td className="px-6 py-4">{getExtendedStatusBadge(product)}</td>
                   <td className="px-6 py-4 text-right relative">
-                    <button
+                    <TableActionButton
+                      variant="icon"
+                      icon={MoreVertical}
                       onClick={() => setOpenMenuProductId(openMenuProductId === product.id ? null : product.id)}
-                      className="min-h-[44px] min-w-[44px] p-2 hover:bg-gray-100 rounded-lg transition-colors inline-flex items-center justify-center"
                       title={t('products.table.actionsTitle')}
-                    >
-                      <MoreVertical className="w-5 h-5 text-gray-600" />
-                    </button>
+                    />
                     {openMenuProductId === product.id && (
                       <div className="absolute right-4 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
                         <button

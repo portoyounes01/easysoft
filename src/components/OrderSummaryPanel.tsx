@@ -2,6 +2,11 @@ import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { Users, Table, TicketPercent, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LocalProduct } from '../types/supabase';
+import { POSActionButton } from './ui/POSActionButton';
+import { OutlineButton } from './ui/OutlineButton';
+import { TabToggle, TabToggleOption } from './ui/TabToggle';
+import { ActionButton } from './ui/ActionButton';
+
 
 export interface OrderSummaryItem {
     product: LocalProduct;
@@ -18,6 +23,17 @@ export interface OrderSummaryPanelProps {
     onProcess?: () => void;
     canSaveBill?: boolean;
     className?: string;
+    totalsOverride?: {
+        subtotal: number;
+        tax: number;
+        discount: number;
+        total: number;
+    };
+    discountInfo?: {
+        type: 'none' | 'percentage' | 'fixed';
+        value: number;
+        amount: number;
+    };
 }
 
 type ServiceType = 'dine-in' | 'take-away';
@@ -31,7 +47,9 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     onSaveBill,
     onProcess,
     canSaveBill = false,
-    className = ''
+    className = '',
+    totalsOverride,
+    discountInfo
 }) => {
     // 1. Hooks
     const { t } = useTranslation();
@@ -49,6 +67,22 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
         return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR' }).format(value);
     }, []);
 
+    const formatDiscountDisplay = useCallback((discountInfo?: { type: 'none' | 'percentage' | 'fixed'; value: number; amount: number }) => {
+        if (!discountInfo || discountInfo.type === 'none' || discountInfo.amount === 0) {
+            return formatCurrency(0);
+        }
+
+        if (discountInfo.type === 'fixed') {
+            return formatCurrency(discountInfo.amount);
+        }
+
+        if (discountInfo.type === 'percentage') {
+            return `${discountInfo.value}% (${formatCurrency(discountInfo.amount)})`;
+        }
+
+        return formatCurrency(0);
+    }, [formatCurrency]);
+
     // 3. Computed values
     const subtotal = useMemo(() => {
         return items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
@@ -63,7 +97,16 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
         }, 0);
     }, [items]);
 
-    const total = subtotal;
+    const computedTotals = useMemo(() => {
+        return {
+            subtotal,
+            tax,
+            discount: 0,
+            total: subtotal
+        };
+    }, [subtotal, tax]);
+
+    const displayTotals = totalsOverride || computedTotals;
 
     // 4. Effects - none
     const updateScrollbar = useCallback(() => {
@@ -104,47 +147,39 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                 <div className="h-full overflow-hidden">
                     {/* Top quick actions */}
                     <div className="grid grid-cols-2" style={{ gap: '0.8vh' }}>
-                        <button
+                        <POSActionButton
+                            icon={Users}
+                            label={t('pos.customer')}
                             onClick={onCustomer}
-                            className="bg-white border border-gray-200 rounded-xl flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
                             style={{ padding: '0.5vh', height: '6vh' }}
-                        >
-                            <Users style={{ width: '1.8vh', height: '1.8vh', marginBottom: '0.3vh' }} className="text-gray-800" />
-                            <span className="text-gray-800 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.customer')}</span>
-                        </button>
-
-                        <button
+                            className="w-full"
+                        />
+                        <POSActionButton
+                            icon={TicketPercent}
+                            label={t('pos.discountHeader')}
                             onClick={onDiscount}
-                            className="bg-white border border-gray-200 rounded-xl flex flex-col items-center justify-center hover:bg-gray-50 transition-all duration-200"
                             style={{ padding: '0.5vh', height: '6vh' }}
-                        >
-                            <TicketPercent style={{ width: '1.8vh', height: '1.8vh', marginBottom: '0.3vh' }} className="text-gray-800" />
-                            <span className="text-gray-800 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.discountHeader')}</span>
-                        </button>
-                        <button
+                            className="w-full"
+                        />
+                        <POSActionButton
+                            icon={Save}
+                            label={t('pos.saveBill')}
                             onClick={onSaveBill}
                             disabled={!canSaveBill}
-                            aria-disabled={!canSaveBill}
+                            variant={!canSaveBill ? 'disabled' : 'default'}
                             title={!canSaveBill ? 'Disponível após completar a venda' : undefined}
-                            className={`rounded-xl flex flex-col items-center justify-center transition-all duration-200 ${canSaveBill
-                                ? 'bg-white border border-gray-200 hover:bg-gray-50'
-                                : 'bg-gray-200 border border-gray-400 opacity-50 cursor-not-allowed'
-                                }`}
                             style={{ padding: '0.3vh', height: '6vh' }}
-                        >
-                            <Save style={{ width: '1.8vh', height: '1.8vh', marginBottom: '0.3vh' }} className="text-gray-800" />
-                            <span className="text-gray-800 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.saveBill')}</span>
-                        </button>
-                        <button
-                            disabled
-                            aria-disabled="true"
+                            className="w-full"
+                        />
+                        <POSActionButton
+                            icon={Table}
+                            label={t('pos.tables')}
+                            disabled={true}
+                            variant="disabled"
                             title="Disabled"
-                            className="bg-gray-200 border border-gray-400 rounded-xl flex flex-col items-center justify-center opacity-50 cursor-not-allowed transition-all duration-200"
                             style={{ padding: '0.5vh', height: '6vh' }}
-                        >
-                            <Table style={{ width: '1.8vh', height: '1.8vh', marginBottom: '0.3vh' }} className="text-gray-800" />
-                            <span className="text-gray-800 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.tables')}</span>
-                        </button>
+                            className="w-full"
+                        />
                     </div>
                 </div>
             </div>
@@ -155,35 +190,16 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                     {/* Order details header + tabs */}
                     <div>
                         <h2 className="font-bold text-gray-900" style={{ fontSize: '2vh', marginBottom: '1.3vh' }}>{t('pos.orderDetails')}</h2>
-                        <div className="bg-gray-100 rounded-[10px] flex w-full border shadow-sm relative">
-                            <div className="flex w-full relative">
-                                <button
-                                    onClick={() => handleSetServiceType('dine-in')}
-                                    className={`flex-1 rounded-[10px] font-semibold transition-all relative ${serviceType === 'dine-in' ? 'bg-white text-gray-900' : 'text-gray-600'}`}
-                                    style={{ padding: '1.25vh', fontSize: '1.5vh' }}
-                                >
-                                    {t('pos.dineIn')}
-                                    {serviceType === 'dine-in' && (
-                                        <span
-                                            className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[0.4vh] bg-gradient-to-r from-green-500 to-green-600 rounded-full"
-                                            style={{ width: '25%' }}
-                                        />
-                                    )}
-                                </button>
-                                <button
-                                    onClick={() => handleSetServiceType('take-away')}
-                                    className={`flex-1 rounded-[10px] font-semibold transition-all relative ${serviceType === 'take-away' ? 'bg-white text-gray-900' : 'text-gray-600'}`}
-                                    style={{ padding: '1.25vh', fontSize: '1.5vh' }}
-                                >
-                                    {t('pos.takeAway')}
-                                    {serviceType === 'take-away' && (
-                                        <span
-                                            className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[0.4vh] bg-gradient-to-r from-green-500 to-green-600 rounded-full"
-                                            style={{ width: '25%' }}
-                                        />
-                                    )}
-                                </button>
-                            </div>
+                        {/* Service Type Toggle */}
+                        <div className="mb-4">
+                            <TabToggle
+                                options={[
+                                    { value: 'dine-in', label: t('pos.dineIn') },
+                                    { value: 'take-away', label: t('pos.takeAway') }
+                                ] as TabToggleOption<'dine-in' | 'take-away'>[]}
+                                value={serviceType}
+                                onChange={handleSetServiceType}
+                            />
                         </div>
                     </div>
 
@@ -205,8 +221,14 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                     {items.map((ci, index) => (
                                         <li key={ci.product.id} style={{ paddingTop: index === 0 ? '2vh' : '1.5vh', paddingBottom: '1vh' }}>
                                             <div className="flex items-center justify-between">
-                                                <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>{ci.product.name}</p>
-                                                <p className="font-semibold text-gray-900" style={{ fontSize: '1.5vh' }}>{formatCurrency(ci.product.price)}</p>
+                                                <p
+                                                    className="font-semibold text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap"
+                                                    style={{ fontSize: '1.7vh', maxWidth: '14vw' }}
+                                                    title={ci.product.name}
+                                                >
+                                                    {ci.product.name}
+                                                </p>
+                                                <p className="font-semibold text-gray-900 whitespace-nowrap" style={{ fontSize: '1.5vh' }}>{formatCurrency(ci.product.price)}</p>
                                             </div>
                                             <div className="flex items-center space-x-3 text-gray-500" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
                                                 <span className="font-medium" style={{ fontSize: '1.3vh' }}>x{ci.quantity}</span>
@@ -228,13 +250,12 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
 
                     {/* Clear All Orders button at bottom */}
                     {items.length > 0 && (
-                        <button
+                        <OutlineButton
                             onClick={onClearAll}
-                            className="w-full bg-white shadow border border-gray-200 text-gray-900 rounded-2xl font-semibold transition-all duration-200 hover:bg-gray-50"
+                            label={t('pos.clearAllOrder')}
+                            className="w-full"
                             style={{ fontSize: '1.4vh', height: '4vh' }}
-                        >
-                            {t('pos.clearAllOrder')}
-                        </button>
+                        />
                     )}
                 </div>
             </div>
@@ -246,32 +267,30 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden" style={{ padding: '1vh', height: 'calc(26.5vh - 8vh - 2vh)' }}>
                         <div className="flex items-center justify-between" style={{ marginBottom: '0.5vh', paddingTop: '0.25vh' }}>
                             <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.subtotalLabel')}</span>
-                            <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>{formatCurrency(subtotal)}</span>
+                            <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>{formatCurrency(displayTotals.subtotal)}</span>
                         </div>
                         <div className="flex items-center justify-between" style={{ marginBottom: '0.5vh', paddingTop: '0.25vh' }}>
                             <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.taxLabel')}</span>
-                            <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>{formatCurrency(tax)}</span>
+                            <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>{formatCurrency(displayTotals.tax)}</span>
                         </div>
-                        <div className="flex items-center justify-between opacity-50" style={{ marginBottom: '1vh', paddingTop: '0.25vh' }}>
-                            <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.voucherLabel')}</span>
-                            <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>{formatCurrency(0)}</span>
+                        <div className="flex items-center justify-between" style={{ marginBottom: '1vh', paddingTop: '0.25vh' }}>
+                            <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.discountLabel') || 'Discount'}</span>
+                            <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>{formatDiscountDisplay(discountInfo)}</span>
                         </div>
                         <div className="border-t border-gray-200" style={{ marginBottom: '1vh' }}></div>
                         <div className="flex items-center justify-between">
                             <span className="text-gray-800 font-semibold" style={{ fontSize: '1.5vh' }}>{t('pos.totalLabel')}</span>
-                            <span className="font-extrabold text-gray-900" style={{ fontSize: '2.75vh' }}>{formatCurrency(total)}</span>
+                            <span className="font-extrabold text-gray-900" style={{ fontSize: '2.75vh' }}>{formatCurrency(displayTotals.total)}</span>
                         </div>
                     </div>
 
                     {/* Process button */}
-                    <button
+                    <ActionButton
                         onClick={onProcess}
                         disabled={items.length === 0}
-                        className="w-full bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-700 text-white rounded-[10px] font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        style={{ height: '4.5vh', fontSize: '1.85vh' }}
-                    >
-                        {t('pos.processTransaction')}
-                    </button>
+                        label={t('pos.processTransaction')}
+                        style={{ height: '4.7vh', fontSize: '1.8vh' }}
+                    />
                 </div>
             </div>
         </aside>

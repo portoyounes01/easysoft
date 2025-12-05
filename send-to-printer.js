@@ -28,7 +28,7 @@ async function sendCommandsToHardware(filePath, devicePath = null) {
 
     const commands = fs.readFileSync(filePath);
     console.log(`📄 Loaded ${commands.length} bytes from ${filePath}`);
-    
+
     // Show commands in hex
     const hexCommands = Array.from(commands)
       .map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase())
@@ -39,11 +39,11 @@ async function sendCommandsToHardware(filePath, devicePath = null) {
     if (!devicePath) {
       console.log('🔍 Auto-detecting printer...');
       const ports = await SerialPort.list();
-      
+
       // Look for common printer device patterns
-      const printerPorts = ports.filter(port => 
-        port.path.includes('USB') || 
-        port.path.includes('ttyUSB') || 
+      const printerPorts = ports.filter(port =>
+        port.path.includes('USB') ||
+        port.path.includes('ttyUSB') ||
         port.path.includes('cu.usbserial') ||
         (port.manufacturer && port.manufacturer.toLowerCase().includes('printer'))
       );
@@ -62,7 +62,7 @@ async function sendCommandsToHardware(filePath, devicePath = null) {
 
     // Connect and send commands
     console.log(`🔌 Connecting to ${devicePath}...`);
-    
+
     const port = new SerialPort({
       path: devicePath,
       baudRate: 9600,
@@ -112,10 +112,13 @@ async function sendCommandsToHardware(filePath, devicePath = null) {
   }
 }
 
-// Main execution
-if (require.main === module) {
+// Main execution (ESM-compatible main check)
+const currentPath = decodeURIComponent(new URL(import.meta.url).pathname);
+const scriptPath = path.resolve(process.argv[1] || '');
+const isMain = currentPath === scriptPath;
+if (isMain) {
   const args = process.argv.slice(2);
-  
+
   if (args.length === 0) {
     console.log('📖 Usage: node send-to-printer.js <command-file.bin> [device-path]');
     console.log('');

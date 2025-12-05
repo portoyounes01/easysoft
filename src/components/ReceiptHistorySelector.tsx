@@ -1,6 +1,8 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ReceiptProps } from './ThermalReceipt';
+import { BaseDialog } from './ui/BaseDialog';
+import { ActionButton } from './ui/ActionButton';
 
 interface ReceiptHistorySelectorProps {
     open: boolean;
@@ -11,20 +13,23 @@ interface ReceiptHistorySelectorProps {
 
 const ReceiptHistorySelector: React.FC<ReceiptHistorySelectorProps> = ({ open, receipts, onSelect, onClose }) => {
     const { t } = useTranslation();
-    if (!open) return null;
 
     const formatCurrency = (amount: number): string => new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(amount);
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-3xl p-6 w-[640px] max-w-[95vw] shadow-2xl max-h-[85vh] flex flex-col">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-2xl font-bold text-gray-800">{t('pos.receiptHistory.title') || 'Select Receipt'}</h3>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors min-h-[44px]">✕</button>
-                </div>
-
+        <BaseDialog
+            open={open}
+            onClose={onClose}
+            title={t('pos.receiptHistory.title') || 'Select Receipt'}
+            width="40vw"
+            height="64vh"
+            className="max-w-[95vw]"
+        >
+            <div className="flex-1 flex flex-col" style={{ padding: '2vh' }}>
                 {receipts.length === 0 ? (
-                    <div className="text-center text-gray-500 py-12">{t('pos.receiptHistory.empty') || 'No receipts yet'}</div>
+                    <div className="flex-1 flex items-center justify-center text-gray-500 py-12">
+                        {t('pos.receiptHistory.empty') || 'No receipts yet'}
+                    </div>
                 ) : (
                     <div className="flex-1 overflow-y-auto -mx-2 px-2">
                         <ul className="divide-y divide-gray-200">
@@ -50,16 +55,16 @@ const ReceiptHistorySelector: React.FC<ReceiptHistorySelectorProps> = ({ open, r
                     </div>
                 )}
 
-                <div className="mt-4 flex justify-end">
-                    <button
+                {/* <div className="mt-4 flex justify-end">
+                    <ActionButton
                         onClick={onClose}
-                        className="min-h-[60px] px-6 rounded-2xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium transition-colors"
-                    >
-                        {t('common.close') || 'Close'}
-                    </button>
-                </div>
+                        label={t('common.close') || 'Close'}
+                        variant="secondary"
+                        className="min-h-[60px] px-6"
+                    />
+                </div> */}
             </div>
-        </div>
+        </BaseDialog>
     );
 };
 

@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Delete } from 'lucide-react';
+import { Delete, X } from 'lucide-react';
 
 export interface QuickNumpadProps {
     value: string;
@@ -7,6 +7,7 @@ export interface QuickNumpadProps {
     allowDecimal?: boolean;
     quickValues?: number[]; // Right column quick-set values (top→bottom)
     className?: string;
+    disabled?: boolean;
 }
 
 const QuickNumpad: React.FC<QuickNumpadProps> = ({
@@ -14,7 +15,8 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
     onChange,
     allowDecimal = false,
     quickValues = [100, 50, 20, 10],
-    className = ''
+    className = '',
+    disabled = false
 }) => {
     // 1. Hooks - none
 
@@ -30,6 +32,10 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
         onChange(value.slice(0, -1));
     }, [onChange, value]);
 
+    const handleClear = useCallback(() => {
+        onChange('');
+    }, [onChange]);
+
     const handleQuickSet = useCallback((num: number) => {
         onChange(String(num));
     }, [onChange]);
@@ -40,52 +46,69 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
 
     // 5. Render
     return (
-        <div className={`rounded-2xl border border-gray-200 overflow-hidden ${className}`}>
+        <div className={`rounded-2xl ring-2 ring-gray-300 overflow-hidden ${className}`}>
             <div className="grid grid-cols-4 h-full">
                 {/* Left 3x3 + bottom row */}
                 <div className="col-span-3 h-full">
-                    <div className="grid grid-cols-3 divide-x divide-y divide-gray-200 h-full" style={{ gridTemplateRows: 'repeat(4, 1fr)' }}>
-                        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => (
-                            <button
-                                key={n}
-                                onClick={() => appendToken(n)}
-                                className="bg-white hover:bg-gray-50 text-gray-900 min-h-[6vh] flex items-center justify-center"
-                                style={{ fontSize: '2vh' }}
-                            >
-                                {n}
-                            </button>
-                        ))}
-                        {/* Bottom row: 00, 0, delete */}
-                        <button
-                            onClick={() => appendToken('00')}
-                            className="bg-gray-50 hover:bg-gray-100 text-gray-900 flex items-center justify-center"
-                            style={{ fontSize: '2vh' }}
-                        >
-                            00
-                        </button>
-                        <button
-                            onClick={() => appendToken('0')}
-                            className="bg-white hover:bg-gray-50 text-gray-900 flex items-center justify-center"
-                            style={{ fontSize: '2vh' }}
-                        >
-                            0
-                        </button>
-                        <button
-                            onClick={handleDelete}
-                            className="bg-white hover:bg-gray-50 text-gray-900 flex items-center justify-center"
-                        >
-                            <Delete className="text-gray-800" style={{ width: '2.2vh', height: '2.2vh' }} />
-                        </button>
+                    <div className="grid grid-cols-3 h-full" style={{ gridTemplateRows: 'repeat(4, 1fr)' }}>
+                        {[
+                            '1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'delete'
+                        ].map((token, index) => {
+                            const rowIndex = Math.floor(index / 3);
+                            const colIndex = index % 3;
+                            const withTop = rowIndex > 0;
+                            const withLeft = colIndex > 0;
+                            const dividerClasses = `${withTop ? 'border-t' : ''} ${withLeft ? 'border-l' : ''} ${withTop || withLeft ? 'border-gray-300' : ''}`.trim();
+
+                            if (token === 'delete') {
+                                return (
+                                    <button
+                                        key={token}
+                                        onClick={handleDelete}
+                                        disabled={disabled}
+                                        className={`bg-white text-gray-900 flex items-center justify-center ${dividerClasses} ${disabled ? 'cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                                    >
+                                        <Delete className="text-gray-800" style={{ width: '2.2vh', height: '2.2vh' }} />
+                                    </button>
+                                );
+                            }
+
+                            if (token === 'clear') {
+                                return (
+                                    <button
+                                        key={token}
+                                        onClick={handleClear}
+                                        disabled={disabled}
+                                        className={`bg-gray-50 text-gray-900 flex items-center justify-center ${dividerClasses} ${disabled ? 'cursor-not-allowed' : 'hover:bg-gray-100'}`}
+                                    >
+                                        <X className="text-gray-800" style={{ width: '2.2vh', height: '2.2vh' }} />
+                                    </button>
+                                );
+                            }
+
+                            return (
+                                <button
+                                    key={token}
+                                    onClick={() => appendToken(String(token))}
+                                    disabled={disabled}
+                                    className={`text-gray-900 flex items-center justify-center bg-white ${dividerClasses} ${disabled ? 'cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                                    style={{ fontSize: '2vh' }}
+                                >
+                                    {token}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
                 {/* Right quick values column */}
-                <div className="bg-gray-100 divide-y divide-gray-200 h-full flex flex-col">
-                    {quickValues.map((q) => (
+                <div className="bg-gray-100 h-full grid grid-rows-4 border-l border-gray-300">
+                    {quickValues.map((q, idx) => (
                         <button
                             key={q}
                             onClick={() => handleQuickSet(q)}
-                            className="w-full flex-1 flex items-center justify-center hover:bg-gray-200"
+                            disabled={disabled}
+                            className={`w-full flex items-center justify-center ${idx > 0 ? 'border-t border-gray-300' : ''} ${disabled ? 'cursor-not-allowed' : 'hover:bg-gray-200'}`}
                             style={{ fontSize: '2vh' }}
                         >
                             {q}

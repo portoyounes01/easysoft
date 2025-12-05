@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { QrCode, Building2, MapPin, MonitorSmartphone, Camera, HelpCircle } from 'lucide-react';
+import { PairingButton } from '../components/ui/PairingButton';
 
 interface DevicePairingProps { }
 
@@ -72,21 +73,20 @@ const DevicePairing: React.FC<DevicePairingProps> = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <button
+                        <PairingButton
+                            variant="primary"
+                            label="Pair Device (mock)"
                             onClick={handlePair}
                             disabled
-                            className="min-h-[80px] text-2xl font-medium text-white rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 transition-transform duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                            Pair Device (mock)
-                        </button>
+                        />
 
-                        <button
+                        <PairingButton
+                            variant="secondary"
+                            label="Scan QR (mock)"
+                            icon={Camera}
                             onClick={handleScanQr}
                             disabled
-                            className="min-h-[80px] text-2xl font-medium rounded-2xl bg-white border border-gray-300 hover:bg-gray-50 transition-colors duration-150 flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                            <Camera className="w-7 h-7 text-gray-700" /> Scan QR (mock)
-                        </button>
+                        />
                     </div>
 
                     <div className="flex items-start gap-3 bg-blue-50 rounded-2xl p-4">

@@ -137,6 +137,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
         if (!formData.category_id) {
             newErrors.category_id = 'Category is required';
+        } else {
+            // Check if the selected category actually exists
+            const selectedCategory = activeCategories.find(cat => cat.id === formData.category_id);
+            if (!selectedCategory) {
+                newErrors.category_id = 'Selected category not found';
+                console.warn('ProductForm: Selected category_id not found in active categories:', formData.category_id);
+            }
         }
 
         if (formData.iva_rate < 0 || formData.iva_rate > 1) {
@@ -185,6 +192,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 }
             } else {
                 // Create new product
+                console.log('ProductForm: Creating product with category_id:', productDataWithBarcode.category_id);
                 await createProduct(productDataWithBarcode);
                 // Process pending deletes after successful create
                 if (pendingDeletes.length > 0) {

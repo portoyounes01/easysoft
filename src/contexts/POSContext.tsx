@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react';
-import { Product, Transaction, Customer, CashDrawer } from '../types';
+import { Transaction, CashDrawer } from '../types';
 import { LocalProduct, LocalCustomer } from '../types/supabase';
 import { transactionLocalService, customerLocalService } from '../lib/localDatabase';
 import { supabase } from '../lib/supabase';
@@ -27,7 +27,7 @@ interface POSContextType extends POSState {
   selectCustomer: (customer: LocalCustomer | null) => void;
   openDrawer: (initialFloat: number) => void;
   closeDrawer: (finalCount: number) => void;
-  processTransaction: (paymentData: any) => Promise<string>;
+  processTransaction: (paymentData: any, onTransactionComplete?: () => void, globalDiscount?: { type: 'none' | 'percentage' | 'fixed'; value: number; amount: number }) => Promise<string>;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -163,10 +163,17 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     employeeId: string;
     employeeName: string;
     employeeNumber?: string;
-  }): Promise<string> => {
+  }, onTransactionComplete?: () => void, globalDiscount?: { type: 'none' | 'percentage' | 'fixed'; value: number; amount: number }): Promise<string> => {
     try {
       // Calculate transaction totals
-      const subtotal = state.cart.reduce((sum, item) => {
+      // Subtotal should be the original amount before ANY discounts (individual or global)
+      const originalSubtotal = state.cart.reduce((sum, item) => {
+        const itemTotal = item.product.price * item.quantity;
+        return sum + itemTotal;
+      }, 0);
+
+      // Calculate after individual item discounts but before global discount
+      const subtotalAfterItemDiscounts = state.cart.reduce((sum, item) => {
         const itemTotal = item.product.price * item.quantity;
         const discountAmount = (itemTotal * item.discount) / 100;
         return sum + (itemTotal - discountAmount);
@@ -179,7 +186,10 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return sum + calculateTaxAmount(discountedTotal, item.product.iva_rate);
       }, 0);
 
-      const total = subtotal;
+      // Apply global discount to the subtotal after item discounts
+      const globalDiscountAmount = globalDiscount?.amount || 0;
+      const finalSubtotal = subtotalAfterItemDiscounts - globalDiscountAmount;
+      const total = finalSubtotal;
       const changeGiven = paymentData.paymentMethod === 'cash' && paymentData.amountPaid ?
         Math.max(0, paymentData.amountPaid - total) : 0;
 
@@ -188,6 +198,9 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const now = new Date();
       const transactionDate = now.toISOString().split('T')[0];
       const transactionTime = now.toTimeString().split(' ')[0];
+
+      // Total discount is the difference between original and final amounts
+      const totalDiscountAmount = originalSubtotal - finalSubtotal;
 
       // Create transaction data
       const transactionData = {
@@ -198,8 +211,12 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         customer_name: state.selectedCustomer?.name || null,
         transaction_date: transactionDate,
         transaction_time: transactionTime,
-        subtotal: subtotal,
-        discount: 0, // Could be calculated from cart items
+        subtotal: originalSubtotal,
+        discount: totalDiscountAmount,
+        discount_type: ((globalDiscount && globalDiscount.type !== 'none') ? globalDiscount.type : (state.cart.some(i => i.discount > 0) ? 'percentage' : 'none')) as 'none' | 'percentage' | 'fixed',
+        discount_percentage: (globalDiscount && globalDiscount.type === 'percentage')
+          ? Number(globalDiscount.value)
+          : (state.cart.every(i => i.discount === state.cart[0]?.discount) ? Number(state.cart[0]?.discount || 0) : 0),
         tax: totalTax,
         total: total,
         payment_method: paymentData.paymentMethod,
@@ -208,6 +225,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'completed' as const,
         notes: null,
         receipt_number: `REC-${transactionNumber}`,
+        deleted_at: null,
       };
 
       // Create transaction items
@@ -234,17 +252,34 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           profit_amount: profitAmount,
           discount_amount: discountAmount,
           discount_percentage: item.discount,
+          transaction_id: '', // Will be set by the service
+          deleted_at: null,
         };
       });
 
       // Check if online and try server first
       const connectionState = connectionStatus.getStatus();
-      let transactionId: string;
       let receiptNumber: string = transactionData.receipt_number;
+      let localTransactionItems: any[] = [];
 
       if (connectionState.isOnline && connectionState.isSupabaseOnline) {
         try {
           console.log('POS: Processing transaction online...');
+          console.log('POS: Transaction data:', transactionData);
+          console.log('POS: Transaction items:', transactionItems);
+          console.log('POS: Cart state:', state.cart);
+
+          // Check if any products in the cart need to be synced first
+          console.log('POS: Checking if products need syncing before transaction...');
+          try {
+            // Import the product sync service directly
+            const { productSyncService } = await import('../services/productService');
+            await productSyncService.fullSync();
+            console.log('POS: Products synced successfully before transaction');
+          } catch (syncError) {
+            console.warn('POS: Product sync failed before transaction, continuing anyway:', syncError);
+          }
+
           // Resolve canonical employee UUID by employee_number if provided
           let serverEmployeeId = paymentData.employeeId;
           if (paymentData.employeeNumber) {
@@ -261,27 +296,53 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // Use resolved server employee id
           const serverTransactionData = { ...transactionData, employee_id: serverEmployeeId } as any;
 
+          console.log('POS: Server transaction data:', serverTransactionData);
+
           // Try to process through server
           const result = await transactionService.createTransaction(serverTransactionData, transactionItems);
-          transactionId = result.transaction.id;
+          const transactionId = result.transaction.id;
           receiptNumber = result.transaction.receipt_number || receiptNumber;
 
           console.log('POS: Transaction processed online successfully');
+          console.log('POS: Server result:', result);
         } catch (error) {
           console.warn('POS: Server transaction failed, falling back to offline:', error);
 
-          // Fallback to offline processing
-          transactionId = await transactionLocalService.createTransaction(transactionData, transactionItems);
+          // Fallback to offline processing - create proper LocalTransactionItem objects
+          localTransactionItems = transactionItems.map(item => ({
+            ...item,
+            id: '', // Will be set by the service
+            created_at: new Date(),
+            updated_at: new Date(),
+            last_synced_at: null,
+            needs_push: true,
+            is_conflicted: false,
+          }));
+
+          const transactionId = await transactionLocalService.createTransaction(transactionData, localTransactionItems);
         }
       } else {
         console.log('POS: Processing transaction offline...');
+        console.log('POS: Offline transaction data:', transactionData);
+        console.log('POS: Offline transaction items:', transactionItems);
 
-        // Process offline
-        transactionId = await transactionLocalService.createTransaction(transactionData, transactionItems);
+        // Process offline - create proper LocalTransactionItem objects
+        localTransactionItems = transactionItems.map(item => ({
+          ...item,
+          id: '', // Will be set by the service
+          created_at: new Date(),
+          updated_at: new Date(),
+          last_synced_at: null,
+          needs_push: true,
+          is_conflicted: false,
+        }));
+
+        const transactionId = await transactionLocalService.createTransaction(transactionData, localTransactionItems);
       }
 
-      // Update product stock levels locally
-      await transactionLocalService.updateProductStock(transactionItems);
+      // Update product stock levels locally - use transactionItems for online, localTransactionItems for offline
+      const itemsForStockUpdate = connectionState.isOnline && connectionState.isSupabaseOnline ? transactionItems : localTransactionItems;
+      await transactionLocalService.updateProductStock(itemsForStockUpdate);
 
       // Update customer totals if customer selected
       if (state.selectedCustomer) {
@@ -291,15 +352,20 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
 
-      // Clear cart after successful transaction
+      // Clear cart and reset discount after successful transaction
       clearCart();
+
+      // Call the completion callback to reset discount in POS
+      if (onTransactionComplete) {
+        onTransactionComplete();
+      }
 
       console.log(`POS: Transaction ${transactionNumber} processed successfully`);
       return receiptNumber;
 
     } catch (error) {
       console.error('POS: Transaction processing failed:', error);
-      throw new Error(`Transaction failed: ${error.message}`);
+      throw new Error(`Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

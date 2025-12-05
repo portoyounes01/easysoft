@@ -1,6 +1,10 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import QuickNumpad from './QuickNumpad';
+import { ActionButton } from './ui/ActionButton';
+import { BaseDialog } from './ui/BaseDialog';
+import { TabToggle, TabToggleOption } from './ui/TabToggle';
+import { InputField } from './ui/InputField';
 
 interface CouponPreset {
     id: string;
@@ -80,160 +84,118 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({ open, onClose, onApply,
         return isNumericValid;
     }, [activeTab, selectedPresetId, newCode, isNumericValid]);
 
-    if (!open) return null;
-
     // 5. Render
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[29vw] h-[70vh] shadow-2xl flex flex-col overflow-hidden">
-                {/* Header */}
-                <div className="bg-gray-200 border-b rounded-t-xl" style={{ padding: '1.2vh 2vh' }}>
-                    <div className="flex items-center justify-between">
-                        <span className="opacity-0">✕</span>
-                        <h3 className="font-bold text-gray-800 text-center" style={{ fontSize: '2vh' }}>{t('pos.discountDialog.title')}</h3>
-                        <button
-                            onClick={onClose}
-                            className="text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
-                            style={{ padding: '0.6vh' }}
-                        >
-                            ✕
-                        </button>
-                    </div>
+        <BaseDialog
+            open={open}
+            onClose={onClose}
+            title={t('pos.discountDialog.title')}
+            width="29vw"
+            height="70vh"
+            footer={
+                <div className="flex space-x-4">
+                    <ActionButton
+                        onClick={onClose}
+                        label={t('common.cancel')}
+                        variant="secondary"
+                        className="flex-1"
+                        style={{ height: '5vh', fontSize: '1.6vh' }}
+                    />
+                    <ActionButton
+                        disabled={!canApply}
+                        onClick={handleApply}
+                        label={(activeTab === 'percentage' || activeTab === 'fixed') ? t('pos.discountDialog.buttons.add') : t('pos.discountDialog.buttons.apply')}
+                        className={`flex-1 rounded-2xl ${canApply ? '' : 'bg-gray-300 cursor-not-allowed'}`}
+                        style={{ height: '5vh', fontSize: '1.6vh' }}
+                    />
+                </div>
+            }
+        >
+            <div className="flex-1 flex flex-col bg-gray-100" style={{ padding: '2vh', paddingLeft: '4vh', paddingRight: '4vh', paddingTop: '3vh' }}>
+                {/* Tabs */}
+                <div className="mb-5">
+                    <TabToggle
+                        options={[
+                            { value: 'preset', label: t('pos.discountDialog.tabs.preset') },
+                            { value: 'percentage', label: t('pos.discountDialog.tabs.percentage') },
+                            { value: 'fixed', label: t('pos.discountDialog.tabs.fixed') }
+                        ] as TabToggleOption<DiscountTab>[]}
+                        value={activeTab}
+                        onChange={handleSetTab}
+                    />
                 </div>
 
-                {/* Full-width divider */}
-                <div
-                    className="border-t border-gray-300"
-                    style={{ marginLeft: '-4vh', marginRight: '-4vh' }}
-                />
-
-
-                {/* Body */}
-                <div className="flex-1 flex flex-col bg-gray-100" style={{ padding: '2vh', paddingLeft: '4vh', paddingRight: '4vh', paddingTop: '3vh' }}>
-                    {/* Tabs */}
-                    <div className="bg-gray-200 rounded-[10px] flex w-full border shadow-sm relative mb-6">
-                        <div className="flex w-full relative">
-                            {(['preset', 'percentage', 'fixed'] as DiscountTab[]).map((tab) => (
-                                <button
-                                    key={tab}
-                                    onClick={() => handleSetTab(tab)}
-                                    className={`flex-1 rounded-[10px] font-semibold transition-all relative ${activeTab === tab ? 'bg-white text-gray-900' : 'text-gray-600'}`}
-                                    style={{ padding: '1.25vh', fontSize: '1.5vh' }}
-                                >
-                                    {/* {tab === 'new' && t('pos.discountDialog.tabs.new')} */}
-                                    {tab === 'preset' && t('pos.discountDialog.tabs.preset')}
-                                    {tab === 'percentage' && t('pos.discountDialog.tabs.percentage')}
-                                    {tab === 'fixed' && t('pos.discountDialog.tabs.fixed')}
-                                    {activeTab === tab && (
-                                        <span
-                                            className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[0.4vh] bg-gradient-to-r from-green-500 to-green-600 rounded-full"
-                                            style={{ width: '25%' }}
-                                        />
-                                    )}
-                                </button>
-                            ))}
+                {/* Content */}
+                <div className="flex-1 overflow-visible">
+                    {activeTab === 'preset' ? (
+                        <div className="h-full overflow-y-auto">
+                            {presets.length === 0 ? (
+                                <div className="h-full flex items-center justify-center text-gray-500" style={{ fontSize: '1.5vh' }}>{t('pos.discountDialog.noPresets')}</div>
+                            ) : (
+                                <ul className="divide-y divide-gray-200">
+                                    {presets.map((p) => (
+                                        <li key={p.id}>
+                                            <button
+                                                onClick={() => setSelectedPresetId(p.id)}
+                                                className={`w-full text-left rounded-xs transition-all ${selectedPresetId === p.id ? 'bg-green-100' : 'hover:bg-gray-50'}`}
+                                                style={{ padding: '1.2vh 2vh' }}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-gray-900 font-semibold" style={{ fontSize: '1.6vh' }}>{p.name}</span>
+                                                    <span className="text-red-500 font-semibold" style={{ fontSize: '1.6vh' }}>{p.type === 'percentage' ? `-${p.value}%` : `- ${p.value.toFixed(2)}`}</span>
+                                                </div>
+                                                {p.description && <div className="text-gray-600 mt-1" style={{ fontSize: '1.4vh' }}>{p.description}</div>}
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
                         </div>
-                    </div>
+                    ) : (
+                        <div className="h-full flex flex-col">
+                            {activeTab === 'new' && (
+                                <div className="mb-4">
+                                    <InputField
+                                        label={t('pos.discountDialog.labels.discountCode') || 'Discount Code'}
+                                        value={newCode}
+                                        onChange={(e) => setNewCode(e.target.value.slice(0, 32))}
+                                        placeholder=""
+                                        maxLength={32}
+                                    />
+                                </div>
+                            )}
+                            {(activeTab === 'percentage' || activeTab === 'fixed') && (
+                                <div className="flex-1 flex flex-col min-h-0">
+                                    <InputField
+                                        label={activeTab === 'fixed' ? t('pos.discountDialog.labels.price') || 'Price' : t('pos.discountDialog.labels.percentage') || 'Percentage'}
+                                        value={inputValue}
+                                        onChange={(e) => setInputValue(e.target.value.replace(/[^0-9.,]/g, ''))}
+                                        className={inputValue && !isNumericValid ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'focus:ring-green-500 focus:border-green-500'}
+                                        placeholder={activeTab === 'fixed' ? '5.00' : '15'}
+                                    // We can't easily put the suffix inside InputField without modifying it to accept a string node for rightIcon or a suffix prop.
+                                    // For now, let's use a workaround or just accept it doesn't have the suffix inside the input in the same way, OR add suffix support to InputField.
+                                    // Adding suffix support to InputField is better.
+                                    />
+                                    {/* Suffix workaround or update InputField */}
+                                    <div className="absolute top-[34px] right-4 text-gray-500 font-semibold pointer-events-none" style={{ fontSize: '1.6vh' }}>{activeTab === 'fixed' ? '€' : '%'}</div>
 
-                    {/* Content */}
-                    <div className="flex-1 overflow-visible">
-                        {activeTab === 'preset' ? (
-                            <div className="h-full overflow-y-auto">
-                                {presets.length === 0 ? (
-                                    <div className="h-full flex items-center justify-center text-gray-500" style={{ fontSize: '1.5vh' }}>{t('pos.discountDialog.noPresets')}</div>
-                                ) : (
-                                    <ul className="divide-y divide-gray-200">
-                                        {presets.map((p) => (
-                                            <li key={p.id}>
-                                                <button
-                                                    onClick={() => setSelectedPresetId(p.id)}
-                                                    className={`w-full text-left rounded-xs transition-all ${selectedPresetId === p.id ? 'bg-green-100' : 'hover:bg-gray-50'}`}
-                                                    style={{ padding: '1.2vh 2vh' }}
-                                                >
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-gray-900 font-semibold" style={{ fontSize: '1.6vh' }}>{p.name}</span>
-                                                        <span className="text-red-500 font-semibold" style={{ fontSize: '1.6vh' }}>{p.type === 'percentage' ? `-${p.value}%` : `- ${p.value.toFixed(2)}`}</span>
-                                                    </div>
-                                                    {p.description && <div className="text-gray-600 mt-1" style={{ fontSize: '1.4vh' }}>{p.description}</div>}
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="h-full flex flex-col">
-                                {activeTab === 'new' && (
-                                    <div className="mb-4">
-                                        <label className="block font-semibold text-gray-700 mb-2" style={{ fontSize: '1.4vh' }}>{t('pos.discountDialog.labels.discountCode')}</label>
-                                        <input
-                                            type="text"
-                                            value={newCode}
-                                            onChange={(e) => setNewCode(e.target.value.slice(0, 32))}
-                                            className="w-full bg-white border border-gray-300 rounded-[10px] focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 transition-all"
-                                            style={{ padding: '1.2vh 2vh', fontSize: '1.6vh' }}
-                                            placeholder=""
-                                            maxLength={32}
+                                    {/* Quick Numpad */}
+                                    <div className="mt-4 flex-1 min-h-0" style={{ marginBottom: '2vh' }}>
+                                        <QuickNumpad
+                                            value={inputValue}
+                                            onChange={(v) => setInputValue(v)}
+                                            allowDecimal={activeTab === 'fixed'}
+                                            quickValues={[100, 50, 20, 10]}
+                                            className="h-full"
                                         />
                                     </div>
-                                )}
-                                {(activeTab === 'percentage' || activeTab === 'fixed') && (
-                                    <div className="flex-1 flex flex-col min-h-0">
-                                        <label className="block font-semibold text-gray-700 mb-2" style={{ fontSize: '1.4vh' }}>
-                                            {activeTab === 'fixed' ? t('pos.discountDialog.labels.price') : t('pos.discountDialog.labels.percentage')}
-                                        </label>
-                                        <div className="relative">
-                                            <input
-                                                type="text"
-                                                value={inputValue}
-                                                onChange={(e) => setInputValue(e.target.value.replace(/[^0-9.,]/g, ''))}
-                                                className={`w-full bg-white border rounded-[10px] focus:outline-none focus:ring-1 transition-all ${inputValue && !isNumericValid ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-green-500 focus:border-green-500'}`}
-                                                style={{ padding: '1.2vh 2vh', paddingLeft: '4.5vh', fontSize: '1.8vh' }}
-                                                placeholder={activeTab === 'fixed' ? '5.00' : '15'}
-                                            />
-                                            <div className="absolute top-1/2 -translate-y-1/2 text-gray-500 font-semibold" style={{ left: '2vh', fontSize: '1.6vh' }}>{activeTab === 'fixed' ? '€' : '%'}</div>
-                                        </div>
-
-                                        {/* Quick Numpad */}
-                                        <div className="mt-4 flex-1 min-h-0" style={{ marginBottom: '2vh' }}>
-                                            <QuickNumpad
-                                                value={inputValue}
-                                                onChange={(v) => setInputValue(v)}
-                                                allowDecimal={activeTab === 'fixed'}
-                                                quickValues={[100, 50, 20, 10]}
-                                                className="h-full"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Full-width divider */}
-                    <div className="border-t border-gray-300" style={{ marginLeft: '-6vh', marginRight: '-6vh' }} />
-
-                    {/* Footer */}
-                    <div className="flex space-x-4" style={{ padding: '1.2vh 2vh' }}>
-                        <button
-                            onClick={onClose}
-                            className="flex-1 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold rounded-2xl transition-colors"
-                            style={{ height: '6.5vh', fontSize: '1.6vh' }}
-                        >
-                            {t('common.cancel')}
-                        </button>
-                        <button
-                            disabled={!canApply}
-                            onClick={handleApply}
-                            className={`flex-1 text-white font-bold rounded-2xl transition-colors ${canApply ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' : 'bg-gray-300 cursor-not-allowed'}`}
-                            style={{ height: '6.5vh', fontSize: '1.6vh' }}
-                        >
-                            {(activeTab === 'percentage' || activeTab === 'fixed') ? t('pos.discountDialog.buttons.add') : t('pos.discountDialog.buttons.apply')}
-                        </button>
-                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
-        </div>
+        </BaseDialog>
     );
 };
 

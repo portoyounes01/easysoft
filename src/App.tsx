@@ -20,6 +20,7 @@ import CashierTesting from './pages/CashierTesting';
 import ElectronCashierTesting from './pages/ElectronCashierTesting';
 import PrinterTestPage from './pages/PrinterTestPage';
 import DevicePairing from './pages/DevicePairing';
+import DesignSystem from './pages/DesignSystem';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useSupabaseAuth();
@@ -248,6 +249,14 @@ const AppContent: React.FC = () => {
                       <PermissionRoute permission="settings">
                         <DevicePairing />
                       </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/design-system"
+                    element={
+                      <ProtectedRoute>
+                        <DesignSystem />
+                      </ProtectedRoute>
                     }
                   />
                 </Routes>

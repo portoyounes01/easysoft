@@ -1,60 +1,127 @@
-# Categories Data Seed File
-# Product categories for kebab restaurant menu
-# Based on database schema
+# # Categories Data Seed File
+# # Product categories for kebab restaurant menu
+# # Based on database schema
 
+# categories:
+#   - id: "kebab-001-cat-main-dishes"
+#     name: "Kebabs"
+#     description: "Traditional Turkish kebabs and grilled meats"
+#     color: "from-red-500 to-orange-600"
+#     icon: "flame"
+#     display_order: 1
+#     is_active: true
+
+#   - id: "kebab-002-cat-wraps"
+#     name: "Wraps & Sandwiches"
+#     description: "Döner, shawarma, and kebab wraps"
+#     color: "from-yellow-500 to-amber-600"
+#     icon: "sandwich"
+#     display_order: 2
+#     is_active: true
+
+#   - id: "kebab-003-cat-rice-plates"
+#     name: "Rice Plates"
+#     description: "Rice-based dishes with meats and vegetables"
+#     color: "from-green-500 to-emerald-600"
+#     icon: "rice"
+#     display_order: 3
+#     is_active: true
+
+#   - id: "kebab-004-cat-sides"
+#     name: "Sides & Salads"
+#     description: "Fries, salads, and complementary dishes"
+#     color: "from-blue-500 to-cyan-600"
+#     icon: "salad"
+#     display_order: 4
+#     is_active: true
+
+#   - id: "kebab-005-cat-beverages"
+#     name: "Beverages"
+#     description: "Soft drinks, water, and traditional drinks"
+#     color: "from-purple-500 to-pink-600"
+#     icon: "coffee"
+#     display_order: 5
+#     is_active: true
+
+#   - id: "kebab-006-cat-desserts"
+#     name: "Desserts"
+#     description: "Traditional Turkish sweets and ice cream"
+#     color: "from-pink-500 to-rose-600"
+#     icon: "cake"
+#     display_order: 6
+#     is_active: true
+
+#   - id: "kebab-007-cat-sauces"
+#     name: "Sauces & Extras"
+#     description: "Sauces, dips, and additional toppings"
+#     color: "from-gray-500 to-slate-600"
+#     icon: "utensils"
+#     display_order: 7
+#     is_active: true
+
+
+# categories.yml
 categories:
-  - id: "kebab-001-cat-main-dishes"
-    name: "Kebabs"
-    description: "Traditional Turkish kebabs and grilled meats"
-    color: "from-red-500 to-orange-600"
-    icon: "flame"
+  - id: "shimama-cat-001-entradas"
+    name: "Entradas"
+    description: "Starters and appetizers"
+    color: "from-orange-400 to-red-500"
+    icon: "bread-slice"
     display_order: 1
     is_active: true
 
-  - id: "kebab-002-cat-wraps"
-    name: "Wraps & Sandwiches"
-    description: "Döner, shawarma, and kebab wraps"
-    color: "from-yellow-500 to-amber-600"
-    icon: "sandwich"
+  - id: "shimama-cat-002-ementa"
+    name: "Ementa"
+    description: "Main kebab dishes and plates"
+    color: "from-red-500 to-orange-600"
+    icon: "drumstick-bite"
     display_order: 2
     is_active: true
 
-  - id: "kebab-003-cat-rice-plates"
-    name: "Rice Plates"
-    description: "Rice-based dishes with meats and vegetables"
-    color: "from-green-500 to-emerald-600"
-    icon: "rice"
+  - id: "shimama-cat-003-bebidas"
+    name: "Bebidas"
+    description: "Soft drinks and water"
+    color: "from-blue-400 to-blue-600"
+    icon: "wine-bottle"
     display_order: 3
     is_active: true
 
-  - id: "kebab-004-cat-sides"
-    name: "Sides & Salads"
-    description: "Fries, salads, and complementary dishes"
-    color: "from-blue-500 to-cyan-600"
-    icon: "salad"
+  - id: "shimama-cat-004-extras"
+    name: "Extras"
+    description: "Sauces, extra portions and sides"
+    color: "from-yellow-400 to-orange-500"
+    icon: "plus-circle"
     display_order: 4
     is_active: true
 
-  - id: "kebab-005-cat-beverages"
-    name: "Beverages"
-    description: "Soft drinks, water, and traditional drinks"
-    color: "from-purple-500 to-pink-600"
-    icon: "coffee"
+  - id: "shimama-cat-005-fast"
+    name: "Shimama Fast"
+    description: "Quick bites and snacks"
+    color: "from-purple-500 to-indigo-600"
+    icon: "bolt"
     display_order: 5
     is_active: true
 
-  - id: "kebab-006-cat-desserts"
-    name: "Desserts"
-    description: "Traditional Turkish sweets and ice cream"
-    color: "from-pink-500 to-rose-600"
-    icon: "cake"
+  - id: "shimama-cat-006-veggie"
+    name: "Veggie"
+    description: "Vegetarian falafel options"
+    color: "from-green-500 to-emerald-600"
+    icon: "leaf"
     display_order: 6
     is_active: true
 
-  - id: "kebab-007-cat-sauces"
-    name: "Sauces & Extras"
-    description: "Sauces, dips, and additional toppings"
-    color: "from-gray-500 to-slate-600"
-    icon: "utensils"
+  - id: "shimama-cat-007-small"
+    name: "Small Shi's"
+    description: "Smaller portions and kids menus"
+    color: "from-pink-400 to-rose-500"
+    icon: "child"
     display_order: 7
+    is_active: true
+
+  - id: "shimama-cat-008-tacos"
+    name: "Tacos (Nossas Sugestões)"
+    description: "Specialty French Tacos"
+    color: "from-amber-500 to-yellow-600"
+    icon: "hamburger"
+    display_order: 8
     is_active: true

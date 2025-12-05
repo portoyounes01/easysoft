@@ -58,6 +58,9 @@ CREATE TABLE IF NOT EXISTS public.transactions (
   -- Financial totals
   subtotal NUMERIC(10, 2) NOT NULL CHECK (subtotal >= 0),
   discount NUMERIC(10, 2) DEFAULT 0 CHECK (discount >= 0),
+  -- Discount metadata for accurate historical rendering
+  discount_type TEXT DEFAULT 'none' CHECK (discount_type IN ('none','percentage','fixed')),
+  discount_percentage NUMERIC(5, 2) DEFAULT 0 CHECK (discount_percentage >= 0 AND discount_percentage <= 100),
   tax NUMERIC(10, 2) NOT NULL CHECK (tax >= 0),
   total NUMERIC(10, 2) NOT NULL CHECK (total >= 0),
   
@@ -81,6 +84,12 @@ CREATE TABLE IF NOT EXISTS public.transactions (
   -- Soft delete support
   deleted_at TIMESTAMPTZ
 );
+
+-- Backfill-safe: ensure columns exist for upgraded databases
+ALTER TABLE public.transactions
+  ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'none' CHECK (discount_type IN ('none','percentage','fixed'));
+ALTER TABLE public.transactions
+  ADD COLUMN IF NOT EXISTS discount_percentage NUMERIC(5,2) DEFAULT 0 CHECK (discount_percentage >= 0 AND discount_percentage <= 100);
 
 -- =====================================================
 -- TRANSACTION ITEMS TABLE

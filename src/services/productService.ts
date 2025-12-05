@@ -190,9 +190,46 @@ export class ProductService {
 
     // Create new product
     async createProduct(productData: Omit<LocalProduct, 'id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'>): Promise<string> {
+        console.log('ProductService: Creating new product with data:', productData);
+
+        // Populate category_name from category_id if available
+        let categoryName = productData.category_name;
+        if (!categoryName && productData.category_id) {
+            try {
+                console.log('ProductService: Attempting to get category for ID:', productData.category_id);
+                // Get category directly from database
+                const category = await localDb.categories.get(productData.category_id);
+                if (category) {
+                    categoryName = category.name;
+                    console.log('ProductService: Populated category_name from category_id:', categoryName, 'for category:', category);
+                } else {
+                    console.warn('ProductService: No category found for ID:', productData.category_id);
+
+                    // If category_id exists but category not found, try to get all categories and find it
+                    try {
+                        const allCategories = await localDb.categories.filter((cat: any) => cat.deleted_at === null).toArray();
+                        const foundCategory = allCategories.find((cat: any) => cat.id === productData.category_id);
+                        if (foundCategory) {
+                            categoryName = foundCategory.name;
+                            console.log('ProductService: Found category using all categories:', categoryName);
+                        } else {
+                            console.error('ProductService: Category not found even in all categories. category_id:', productData.category_id);
+                        }
+                    } catch (allCatsError) {
+                        console.error('ProductService: Error getting all categories:', allCatsError);
+                    }
+                }
+            } catch (error) {
+                console.warn('ProductService: Could not populate category_name:', error);
+            }
+        } else if (productData.category_id) {
+            console.log('ProductService: Category name already exists or no category_id provided');
+        }
+
         const id = generateUUID();
         const product: LocalProduct = {
             ...productData,
+            category_name: categoryName,
             id,
             created_at: new Date(),
             updated_at: new Date(),
@@ -201,11 +238,17 @@ export class ProductService {
             last_synced_at: null,
         };
 
+        console.log('ProductService: Created product object with category_name:', categoryName, 'and category_id:', productData.category_id);
+        console.log('ProductService: Final product object:', product);
+
         await localDb.transaction('rw', [localDb.products, localDb.productSyncQueue], async () => {
             await localDb.products.add(product);
+            console.log('ProductService: Product added to local database');
             await this.queueProductOperation('CREATE', id, product);
+            console.log('ProductService: Product queued for sync');
         });
 
+        console.log('ProductService: Product creation completed, returning ID:', id);
         return id;
     }
 

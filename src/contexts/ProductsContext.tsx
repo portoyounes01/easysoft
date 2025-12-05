@@ -6,7 +6,6 @@ import {
     ProductFormData,
     CategoryFormData,
     ProductFilters,
-    CategoryFilters,
     calculateStockStatus,
     calculateTaxAmount,
     calculatePriceWithTax
@@ -220,17 +219,31 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             // Convert form data to local product format
             const localProductData = {
                 ...productData,
+                barcode: null, // Will be set by the service
+                category_name: null, // Will be populated by the service
                 display_order: 0,
                 deleted_at: null,
                 track_stock: true,
             };
 
+            console.log('ProductsContext: Creating product with category_id:', productData.category_id);
+            console.log('ProductsContext: Local product data before service call:', localProductData);
+
             const id = await productService.createProduct(localProductData);
+
+            console.log('ProductsContext: Product created with ID:', id);
             const newProduct = await productService.getProductById(id);
 
             if (newProduct) {
                 dispatch({ type: 'ADD_PRODUCT', payload: newProduct });
+                console.log('New product added to context:', newProduct);
+                console.log('POS: New product created with ID:', id, 'Name:', newProduct.name);
+            } else {
+                console.error('POS: Failed to retrieve newly created product!');
             }
+
+            // Refresh the data to ensure consistency
+            await refreshData();
 
             return id;
         } catch (error) {

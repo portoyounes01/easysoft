@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Delete, Check, X } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Delete, X, Undo2 } from 'lucide-react';
 
 interface VirtualKeyboardProps {
     isOpen: boolean;
@@ -15,363 +15,301 @@ interface VirtualKeyboardProps {
 
 const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
     isOpen,
-    onClose,
     onConfirm,
-    title,
     initialValue = '',
-    placeholder = 'Enter text...',
     maxLength = 50,
     allowNumbers = true,
     allowLetters = true
 }) => {
     const [value, setValue] = useState(initialValue);
-    const [isNumericMode, setIsNumericMode] = useState(allowNumbers);
-    const [isSpecialCharsMode, setIsSpecialCharsMode] = useState(false);
     const [isCapsLock, setIsCapsLock] = useState(false);
+    const [isSpecialMode, setIsSpecialMode] = useState(false);
+    const historyRef = useRef<string[]>([initialValue]);
 
     // Sync value with initialValue when it changes
     React.useEffect(() => {
         setValue(initialValue);
+        historyRef.current = [initialValue];
     }, [initialValue]);
-
-    // Set appropriate mode when field capabilities change
-    React.useEffect(() => {
-        if (allowNumbers && !allowLetters) {
-            // Numbers only field - use numeric mode
-            setIsNumericMode(true);
-        } else if (allowLetters && !allowNumbers) {
-            // Letters only field - use alphabetic mode
-            setIsNumericMode(false);
-        }
-        // For fields that allow both, keep current mode
-    }, [allowNumbers, allowLetters]);
 
     const handleCharClick = (char: string) => {
         if (value.length >= maxLength) return;
+        historyRef.current.push(value);
         const newValue = value + char;
         setValue(newValue);
         onConfirm(newValue);
     };
 
     const handleDelete = () => {
+        historyRef.current.push(value);
         const newValue = value.slice(0, -1);
         setValue(newValue);
         onConfirm(newValue);
     };
 
     const handleClear = () => {
+        historyRef.current.push(value);
         setValue('');
         onConfirm('');
     };
 
+    const handleUndo = () => {
+        if (historyRef.current.length > 1) {
+            historyRef.current.pop();
+            const previousValue = historyRef.current[historyRef.current.length - 1] || '';
+            setValue(previousValue);
+            onConfirm(previousValue);
+        }
+    };
+
     const handleSpace = () => {
         if (value.length >= maxLength) return;
+        historyRef.current.push(value);
         const newValue = value + ' ';
         setValue(newValue);
         onConfirm(newValue);
-    };
-
-    const toggleMode = () => {
-        setIsNumericMode(prev => !prev);
-        setIsSpecialCharsMode(false); // Reset special chars when switching modes
-    };
-
-    const toggleSpecialChars = () => {
-        setIsSpecialCharsMode(prev => !prev);
     };
 
     const toggleCapsLock = () => {
         setIsCapsLock(prev => !prev);
     };
 
-    const handleConfirm = () => {
-        onConfirm(value);
-        onClose();
-    };
-
-    const formatDisplayValue = () => {
-        if (value === '') return placeholder;
-        return value;
+    const toggleSpecialMode = () => {
+        setIsSpecialMode(prev => !prev);
     };
 
     if (!isOpen) return null;
 
+    // Phone-style keyboard layout
+    const numberRow = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
+    const row1 = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
+    const row2 = ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', '.'];
+    const row3 = ['Z', 'X', 'C', 'V', 'B', 'N', 'M'];
+
+    // Special characters layout
+    const specialRow1 = ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')'];
+    const specialRow2 = ['-', '_', '=', '+', '[', ']', '{', '}', '|', '\\'];
+    const specialRow3 = [':', ';', '"', "'", '<', '>', ','];
+
+    // Common button styles
+    const baseButtonClass = "flex items-center justify-center transition-all duration-150 font-medium";
+    const keyButtonClass = `${baseButtonClass} bg-white hover:bg-gray-50 text-gray-900 border-r border-b border-gray-300`;
+    const actionButtonClass = `${baseButtonClass} bg-gray-100 hover:bg-gray-200 text-gray-700 border-r border-b border-gray-300`;
+    const capsButtonClass = (active: boolean) =>
+        `${baseButtonClass} ${active ? 'bg-primary-500 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} border-r border-b border-gray-300`;
+    const specialToggleClass = (active: boolean) =>
+        `${baseButtonClass} ${active ? 'bg-primary-500 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} border-r border-b border-gray-300`;
+
+    // Determine what to show based on what's allowed
+    const showNumbers = allowNumbers;
+    const showLetters = allowLetters;
+
     return (
-        <div className="bg-white rounded-3xl p-6 w-full shadow-lg border border-gray-200">
-            {/* Keyboard Grid */}
-            <div className="mb-6">
-                {isNumericMode ? (
-                    /* Numeric Layout - 3x5 grid */
-                    <div className="grid grid-cols-3 gap-3">
-                        {/* Row 1 */}
+        <div className="rounded-2xl ring-2 ring-gray-300 overflow-hidden h-full flex flex-col">
+            {/* Number row */}
+            {showNumbers && (
+                <div className="flex flex-1">
+                    {numberRow.map((num, index) => (
                         <button
-                            onClick={() => handleCharClick('1')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
+                            key={num}
+                            onClick={() => handleCharClick(num)}
+                            className={`${keyButtonClass} flex-1 ${index === numberRow.length - 1 ? 'border-r-0' : ''}`}
+                            style={{ fontSize: '2vh' }}
                         >
-                            1
+                            {num}
                         </button>
-                        <button
-                            onClick={() => handleCharClick('2')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            2
-                        </button>
-                        <button
-                            onClick={() => handleCharClick('3')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            3
-                        </button>
+                    ))}
+                </div>
+            )}
 
-                        {/* Row 2 */}
-                        <button
-                            onClick={() => handleCharClick('4')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            4
-                        </button>
-                        <button
-                            onClick={() => handleCharClick('5')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            5
-                        </button>
-                        <button
-                            onClick={() => handleCharClick('6')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            6
-                        </button>
-
-                        {/* Row 3 */}
-                        <button
-                            onClick={() => handleCharClick('7')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            7
-                        </button>
-                        <button
-                            onClick={() => handleCharClick('8')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            8
-                        </button>
-                        <button
-                            onClick={() => handleCharClick('9')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            9
-                        </button>
-
-                        {/* Row 4 */}
-                        <button
-                            onClick={() => handleCharClick('-')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            -
-                        </button>
-                        <button
-                            onClick={() => handleCharClick('0')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            0
-                        </button>
-                        <button
-                            onClick={() => handleCharClick('+')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            +
-                        </button>
-
-                        {/* Row 5 */}
-                        <button
-                            onClick={toggleMode}
-                            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-lg"
-                        >
-                            ABCD
-                        </button>
-                        {/* Empty middle slot where Clear button was */}
-                        <div></div>
-                        <button
-                            onClick={handleDelete}
-                            className="bg-red-500 hover:bg-red-600 text-white font-bold py-4 rounded-2xl transition-colors min-h-[60px] flex items-center justify-center"
-                        >
-                            <Delete className="w-6 h-6" />
-                        </button>
+            {showLetters && !isSpecialMode && (
+                <>
+                    {/* QWERTY Row 1 */}
+                    <div className="flex flex-1">
+                        {row1.map((letter, index) => (
+                            <button
+                                key={letter}
+                                onClick={() => handleCharClick(isCapsLock ? letter : letter.toLowerCase())}
+                                className={`${keyButtonClass} flex-1 ${index === row1.length - 1 ? 'border-r-0' : ''}`}
+                                style={{ fontSize: '1.8vh' }}
+                            >
+                                {isCapsLock ? letter : letter.toLowerCase()}
+                            </button>
+                        ))}
                     </div>
-                ) : (
-                    /* Alphabetic Layout - 6x5 grid */
-                    <div className="grid grid-cols-6 gap-2">
-                        {isSpecialCharsMode ? (
-                            /* Special Characters Layout */
-                            <>
-                                {/* Row 1 */}
-                                {['@', '#', '$', '%', '&', '*'].map((char) => (
-                                    <button
-                                        key={char}
-                                        onClick={() => handleCharClick(char)}
-                                        className="bg-purple-200 hover:bg-purple-300 text-purple-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-lg"
-                                    >
-                                        {char}
-                                    </button>
-                                ))}
 
-                                {/* Row 2 */}
-                                {['(', ')', '[', ']', '{', '}'].map((char) => (
-                                    <button
-                                        key={char}
-                                        onClick={() => handleCharClick(char)}
-                                        className="bg-purple-200 hover:bg-purple-300 text-purple-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-lg"
-                                    >
-                                        {char}
-                                    </button>
-                                ))}
+                    {/* QWERTY Row 2: ASDFGHJKL. */}
+                    <div className="flex flex-1">
+                        {row2.map((char, index) => (
+                            <button
+                                key={char}
+                                onClick={() => handleCharClick(char === '.' ? char : (isCapsLock ? char : char.toLowerCase()))}
+                                className={`${keyButtonClass} flex-1 ${index === row2.length - 1 ? 'border-r-0' : ''}`}
+                                style={{ fontSize: '1.8vh' }}
+                            >
+                                {char === '.' ? char : (isCapsLock ? char : char.toLowerCase())}
+                            </button>
+                        ))}
+                    </div>
 
-                                {/* Row 3 */}
-                                {['!', '?', '.', ',', ';', ':'].map((char) => (
-                                    <button
-                                        key={char}
-                                        onClick={() => handleCharClick(char)}
-                                        className="bg-purple-200 hover:bg-purple-300 text-purple-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-lg"
-                                    >
-                                        {char}
-                                    </button>
-                                ))}
-
-                                {/* Row 4 */}
-                                {['"', "'", '/', '\\', '|', '~'].map((char) => (
-                                    <button
-                                        key={char}
-                                        onClick={() => handleCharClick(char)}
-                                        className="bg-purple-200 hover:bg-purple-300 text-purple-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-lg"
-                                    >
-                                        {char}
-                                    </button>
-                                ))}
-
-                                {/* Row 5 */}
-                                {['<', '>'].map((char) => (
-                                    <button
-                                        key={char}
-                                        onClick={() => handleCharClick(char)}
-                                        className="bg-purple-200 hover:bg-purple-300 text-purple-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-lg"
-                                    >
-                                        {char}
-                                    </button>
-                                ))}
-                                <button
-                                    onClick={handleSpace}
-                                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-sm col-span-4"
-                                >
-                                    SPACE
-                                </button>
-                            </>
-                        ) : (
-                            /* Regular Letters Layout */
-                            <>
-                                {/* Row 1 */}
-                                {['A', 'B', 'C', 'D', 'E', 'F'].map((letter) => (
-                                    <button
-                                        key={letter}
-                                        onClick={() => handleCharClick(isCapsLock ? letter : letter.toLowerCase())}
-                                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-lg"
-                                    >
-                                        {isCapsLock ? letter : letter.toLowerCase()}
-                                    </button>
-                                ))}
-
-                                {/* Row 2 */}
-                                {['G', 'H', 'I', 'J', 'K', 'L'].map((letter) => (
-                                    <button
-                                        key={letter}
-                                        onClick={() => handleCharClick(isCapsLock ? letter : letter.toLowerCase())}
-                                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-lg"
-                                    >
-                                        {isCapsLock ? letter : letter.toLowerCase()}
-                                    </button>
-                                ))}
-
-                                {/* Row 3 */}
-                                {['M', 'N', 'O', 'P', 'Q', 'R'].map((letter) => (
-                                    <button
-                                        key={letter}
-                                        onClick={() => handleCharClick(isCapsLock ? letter : letter.toLowerCase())}
-                                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-lg"
-                                    >
-                                        {isCapsLock ? letter : letter.toLowerCase()}
-                                    </button>
-                                ))}
-
-                                {/* Row 4 */}
-                                {['S', 'T', 'U', 'V', 'W', 'X'].map((letter) => (
-                                    <button
-                                        key={letter}
-                                        onClick={() => handleCharClick(isCapsLock ? letter : letter.toLowerCase())}
-                                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-lg"
-                                    >
-                                        {isCapsLock ? letter : letter.toLowerCase()}
-                                    </button>
-                                ))}
-
-                                {/* Row 5 */}
-                                {['Y', 'Z'].map((letter) => (
-                                    <button
-                                        key={letter}
-                                        onClick={() => handleCharClick(isCapsLock ? letter : letter.toLowerCase())}
-                                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-lg"
-                                    >
-                                        {isCapsLock ? letter : letter.toLowerCase()}
-                                    </button>
-                                ))}
-                                <button
-                                    onClick={handleSpace}
-                                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-xl transition-colors min-h-[50px] text-sm col-span-4"
-                                >
-                                    SPACE
-                                </button>
-                            </>
-                        )}
-
-                        {/* Row 6 - Control buttons */}
-                        <button
-                            onClick={toggleMode}
-                            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-xl transition-colors min-h-[50px] text-sm"
-                        >
-                            123
-                        </button>
+                    {/* QWERTY Row 3: Caps + ZXCVBNM + Delete */}
+                    <div className="flex flex-1">
                         <button
                             onClick={toggleCapsLock}
-                            className={`font-bold py-3 rounded-xl transition-colors min-h-[50px] text-sm ${isCapsLock
-                                ? 'bg-green-500 hover:bg-green-600 text-white'
-                                : 'bg-gray-400 hover:bg-gray-500 text-white'
-                                }`}
+                            className={`${capsButtonClass(isCapsLock)} flex-[1.5]`}
+                            style={{ fontSize: '1.4vh' }}
                         >
-                            Aa
+                            ⇧
                         </button>
-                        <button
-                            onClick={toggleSpecialChars}
-                            className={`font-bold py-3 rounded-xl transition-colors min-h-[50px] text-sm ${isSpecialCharsMode
-                                ? 'bg-purple-500 hover:bg-purple-600 text-white'
-                                : 'bg-orange-500 hover:bg-orange-600 text-white'
-                                }`}
-                        >
-                            {isSpecialCharsMode ? 'ABC' : '@#$'}
-                        </button>
-                        {/* Empty space where Clear button was */}
-                        <div className="col-span-2"></div>
+                        {row3.map((letter) => (
+                            <button
+                                key={letter}
+                                onClick={() => handleCharClick(isCapsLock ? letter : letter.toLowerCase())}
+                                className={`${keyButtonClass} flex-1`}
+                                style={{ fontSize: '1.8vh' }}
+                            >
+                                {isCapsLock ? letter : letter.toLowerCase()}
+                            </button>
+                        ))}
                         <button
                             onClick={handleDelete}
-                            className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-colors min-h-[50px] flex items-center justify-center"
+                            className={`${actionButtonClass} flex-[1.5] border-r-0`}
                         >
-                            <Delete className="w-5 h-5" />
+                            <Delete style={{ width: '2vh', height: '2vh' }} />
                         </button>
                     </div>
-                )}
-            </div>
 
+                    {/* Bottom row: Undo + Special toggle + Space + Clear */}
+                    {/* Row 4 total: 1.5 + 7 + 1.5 = 10, so bottom row should also total 10 */}
+                    <div className="flex flex-1">
+                        <button
+                            onClick={handleUndo}
+                            className={`${actionButtonClass} flex-[1.5]`}
+                        >
+                            <Undo2 style={{ width: '2vh', height: '2vh' }} />
+                        </button>
+                        <button
+                            onClick={toggleSpecialMode}
+                            className={`${specialToggleClass(isSpecialMode)} flex-[1.5]`}
+                            style={{ fontSize: '1.6vh' }}
+                        >
+                            #+=
+                        </button>
+                        <button
+                            onClick={handleSpace}
+                            className={`${keyButtonClass} flex-[5.5]`}
+                            style={{ fontSize: '1.4vh' }}
+                        >
+                            space
+                        </button>
+                        <button
+                            onClick={handleClear}
+                            className={`${actionButtonClass} flex-[1.5] border-r-0`}
+                        >
+                            <X style={{ width: '2vh', height: '2vh' }} />
+                        </button>
+                    </div>
+                </>
+            )}
 
+            {/* Special characters mode */}
+            {showLetters && isSpecialMode && (
+                <>
+                    {/* Special Row 1 */}
+                    <div className="flex flex-1">
+                        {specialRow1.map((char, index) => (
+                            <button
+                                key={char}
+                                onClick={() => handleCharClick(char)}
+                                className={`${keyButtonClass} flex-1 ${index === specialRow1.length - 1 ? 'border-r-0' : ''}`}
+                                style={{ fontSize: '1.8vh' }}
+                            >
+                                {char}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Special Row 2 */}
+                    <div className="flex flex-1">
+                        {specialRow2.map((char, index) => (
+                            <button
+                                key={char}
+                                onClick={() => handleCharClick(char)}
+                                className={`${keyButtonClass} flex-1 ${index === specialRow2.length - 1 ? 'border-r-0' : ''}`}
+                                style={{ fontSize: '1.8vh' }}
+                            >
+                                {char}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Special Row 3 */}
+                    <div className="flex flex-1">
+                        <div className="flex-[1.5] border-r border-b border-gray-300" />
+                        {specialRow3.map((char) => (
+                            <button
+                                key={char}
+                                onClick={() => handleCharClick(char)}
+                                className={`${keyButtonClass} flex-1`}
+                                style={{ fontSize: '1.8vh' }}
+                            >
+                                {char}
+                            </button>
+                        ))}
+                        <button
+                            onClick={handleDelete}
+                            className={`${actionButtonClass} flex-[1.5] border-r-0`}
+                        >
+                            <Delete style={{ width: '2vh', height: '2vh' }} />
+                        </button>
+                    </div>
+
+                    {/* Bottom row: Undo + ABC toggle + Space + Clear */}
+                    <div className="flex flex-1">
+                        <button
+                            onClick={handleUndo}
+                            className={`${actionButtonClass} flex-[1.5]`}
+                        >
+                            <Undo2 style={{ width: '2vh', height: '2vh' }} />
+                        </button>
+                        <button
+                            onClick={toggleSpecialMode}
+                            className={`${specialToggleClass(!isSpecialMode)} flex-[1.5]`}
+                            style={{ fontSize: '1.6vh' }}
+                        >
+                            ABC
+                        </button>
+                        <button
+                            onClick={handleSpace}
+                            className={`${keyButtonClass} flex-[5.5]`}
+                            style={{ fontSize: '1.4vh' }}
+                        >
+                            space
+                        </button>
+                        <button
+                            onClick={handleClear}
+                            className={`${actionButtonClass} flex-[1.5] border-r-0`}
+                        >
+                            <X style={{ width: '2vh', height: '2vh' }} />
+                        </button>
+                    </div>
+                </>
+            )}
+
+            {/* Numbers only mode (no letters) */}
+            {!showLetters && showNumbers && (
+                <div className="flex flex-1">
+                    <button onClick={handleClear} className={`${actionButtonClass} flex-1`}>
+                        <X style={{ width: '2vh', height: '2vh' }} />
+                    </button>
+                    <button onClick={() => handleCharClick('+')} className={`${keyButtonClass} flex-1`} style={{ fontSize: '2vh' }}>+</button>
+                    <button onClick={handleDelete} className={`${actionButtonClass} flex-1 border-r-0`}>
+                        <Delete style={{ width: '2vh', height: '2vh' }} />
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
 
-export default VirtualKeyboard; 
+export default VirtualKeyboard;

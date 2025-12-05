@@ -4,6 +4,8 @@ import { useProducts } from '../contexts/ProductsContext';
 import { LocalCategory, LocalProduct } from '../types/supabase';
 import CategoryForm from '../components/CategoryForm';
 import { useTranslation } from 'react-i18next';
+import { DashedCardButton } from '../components/ui/DashedCardButton';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
 
 const Categories: React.FC = () => {
     // 1. Hooks (useState, useEffect, useContext)
@@ -89,13 +91,12 @@ const Categories: React.FC = () => {
                     <h1 className="text-3xl font-bold text-gray-800">{t('categories.title')}</h1>
                     <p className="text-gray-600 mt-1">{t('categories.subtitle')}</p>
                 </div>
-                <button
+                <AdminActionButton
+                    variant="primary"
+                    label={t('categories.addCategory')}
+                    icon={Plus}
                     onClick={handleCreateCategory}
-                    className="min-h-[60px] px-8 py-4 rounded-lg font-semibold transition-all flex items-center space-x-3 shadow-lg bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-700 hover:to-blue-600 hover:scale-105 active:scale-95"
-                >
-                    <Plus className="w-6 h-6" />
-                    <span>{t('categories.addCategory')}</span>
-                </button>
+                />
             </div>
 
             {/* Stats */}
@@ -204,13 +205,12 @@ const Categories: React.FC = () => {
                             })}
 
                         {/* Add Category Card */}
-                        <button
+                        <DashedCardButton
+                            icon={Plus}
+                            label={t('categories.addCategoryCard')}
                             onClick={handleCreateCategory}
-                            className="group border-2 border-dashed border-gray-300 rounded-lg p-6 h-full min-h-[140px] flex flex-col items-center justify-center hover:border-purple-400 hover:bg-purple-50 transition-all hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
-                        >
-                            <Plus className="w-10 h-10 text-gray-400 group-hover:text-purple-600 mb-3" />
-                            <span className="text-base font-semibold text-gray-600 group-hover:text-purple-600">{t('categories.addCategoryCard')}</span>
-                        </button>
+                            className="h-full min-h-[140px]"
+                        />
                     </div>
                 </div>
             </div>

@@ -59,7 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
 
   return (
     <>
-      <div className={`bg-gradient-to-b from-slate-900 to-slate-800 text-white h-screen overflow-y-auto flex flex-col shadow-2xl transition-[width] duration-300 z-20 ${isCollapsed ? 'w-20' : 'w-64'
+      <div className={`bg-gradient-to-b from-slate-900 to-slate-800 text-white h-screen overflow-y-auto flex flex-col shadow-2xl transition-[width] duration-300 ${isCollapsed ? 'w-20' : 'w-64 md:w-64'
         }`}>
         <div className="p-6 border-b border-slate-700">
           <div className="flex items-center space-x-3">

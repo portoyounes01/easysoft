@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Delete, Check, X } from 'lucide-react';
+import { NumpadButton } from './ui/NumpadButton';
 
 interface VirtualNumpadProps {
     isOpen: boolean;
@@ -72,90 +73,30 @@ const VirtualNumpad: React.FC<VirtualNumpadProps> = ({
                 {/* Numpad Grid */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
                     {/* Row 1 */}
-                    <button
-                        onClick={() => handleNumberClick('1')}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                    >
-                        1
-                    </button>
-                    <button
-                        onClick={() => handleNumberClick('2')}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                    >
-                        2
-                    </button>
-                    <button
-                        onClick={() => handleNumberClick('3')}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                    >
-                        3
-                    </button>
+                    <NumpadButton label="1" onClick={() => handleNumberClick('1')} />
+                    <NumpadButton label="2" onClick={() => handleNumberClick('2')} />
+                    <NumpadButton label="3" onClick={() => handleNumberClick('3')} />
 
                     {/* Row 2 */}
-                    <button
-                        onClick={() => handleNumberClick('4')}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                    >
-                        4
-                    </button>
-                    <button
-                        onClick={() => handleNumberClick('5')}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                    >
-                        5
-                    </button>
-                    <button
-                        onClick={() => handleNumberClick('6')}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                    >
-                        6
-                    </button>
+                    <NumpadButton label="4" onClick={() => handleNumberClick('4')} />
+                    <NumpadButton label="5" onClick={() => handleNumberClick('5')} />
+                    <NumpadButton label="6" onClick={() => handleNumberClick('6')} />
 
                     {/* Row 3 */}
-                    <button
-                        onClick={() => handleNumberClick('7')}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                    >
-                        7
-                    </button>
-                    <button
-                        onClick={() => handleNumberClick('8')}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                    >
-                        8
-                    </button>
-                    <button
-                        onClick={() => handleNumberClick('9')}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                    >
-                        9
-                    </button>
+                    <NumpadButton label="7" onClick={() => handleNumberClick('7')} />
+                    <NumpadButton label="8" onClick={() => handleNumberClick('8')} />
+                    <NumpadButton label="9" onClick={() => handleNumberClick('9')} />
 
                     {/* Row 4 */}
                     {allowDecimal ? (
-                        <button
-                            onClick={() => handleNumberClick('.')}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                        >
-                            .
-                        </button>
+                        <NumpadButton label="." onClick={() => handleNumberClick('.')} />
                     ) : (
                         <div></div>
                     )}
 
-                    <button
-                        onClick={() => handleNumberClick('0')}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-4 rounded-2xl transition-colors min-h-[60px] text-2xl"
-                    >
-                        0
-                    </button>
+                    <NumpadButton label="0" onClick={() => handleNumberClick('0')} />
 
-                    <button
-                        onClick={handleDelete}
-                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-4 rounded-2xl transition-colors min-h-[60px] flex items-center justify-center"
-                    >
-                        <Delete className="w-6 h-6" />
-                    </button>
+                    <NumpadButton variant="action" icon={Delete} onClick={handleDelete} />
                 </div>
 
                 {/* Action Buttons */}
@@ -167,13 +108,13 @@ const VirtualNumpad: React.FC<VirtualNumpadProps> = ({
                         <X className="w-5 h-5" />
                         <span>Cancel</span>
                     </button>
-                    <button
+                    <NumpadButton
+                        variant="confirm"
+                        label="Confirm"
+                        icon={Check}
                         onClick={handleConfirm}
-                        className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
-                    >
-                        <Check className="w-5 h-5" />
-                        <span>Confirm</span>
-                    </button>
+                        className="flex-1 py-4"
+                    />
                 </div>
             </div>
         </div>

@@ -23,6 +23,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useSettings } from '../contexts/SettingsContext';
 import ReceiptDialog from '../components/ReceiptDialog';
 import type { ReceiptProps } from '../components/ThermalReceipt';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
 
 interface Transaction {
     id: string;
@@ -72,35 +74,43 @@ const Transactions: React.FC = () => {
             try {
                 setLoading(true);
                 setError(null);
+                console.log('Transactions: Fetching transactions...');
                 const data = await transactionService.getTransactions();
 
                 // Transform database data to UI format
-                const transformedTransactions: Transaction[] = data.map((dbTransaction: any) => ({
-                    id: dbTransaction.id,
-                    transactionNumber: dbTransaction.transaction_number,
-                    date: dbTransaction.transaction_date,
-                    time: dbTransaction.transaction_time,
-                    customerName: dbTransaction.customer_name,
-                    customerNif: dbTransaction.customer_id, // Using customer_id as NIF for now
-                    items: (dbTransaction.transaction_items || []).map((it: any) => ({
+                const transformedTransactions: Transaction[] = data.map((dbTransaction: any) => {
+                    const items = (dbTransaction.transaction_items || []).map((it: any) => ({
                         id: it.id,
                         name: it.product_name,
                         quantity: it.quantity,
                         price: it.unit_price,
                         total: it.line_total
-                    })),
-                    subtotal: dbTransaction.subtotal,
-                    discount: dbTransaction.discount,
-                    tax: dbTransaction.tax,
-                    total: dbTransaction.total,
-                    paymentMethod: dbTransaction.payment_method,
-                    cashReceived: dbTransaction.amount_paid,
-                    changeGiven: dbTransaction.change_given,
-                    status: dbTransaction.status,
-                    employeeName: dbTransaction.employee_name,
-                    employeeId: dbTransaction.employee_id
-                }));
+                    }));
 
+                    console.log(`Transactions: Transaction ${dbTransaction.transaction_number} has ${items.length} items`);
+
+                    return {
+                        id: dbTransaction.id,
+                        transactionNumber: dbTransaction.transaction_number,
+                        date: dbTransaction.transaction_date,
+                        time: dbTransaction.transaction_time,
+                        customerName: dbTransaction.customer_name,
+                        customerNif: dbTransaction.customer_id, // Using customer_id as NIF for now
+                        items: items,
+                        subtotal: dbTransaction.subtotal,
+                        discount: dbTransaction.discount,
+                        tax: dbTransaction.tax,
+                        total: dbTransaction.total,
+                        paymentMethod: dbTransaction.payment_method,
+                        cashReceived: dbTransaction.amount_paid,
+                        changeGiven: dbTransaction.change_given,
+                        status: dbTransaction.status,
+                        employeeName: dbTransaction.employee_name,
+                        employeeId: dbTransaction.employee_id
+                    };
+                });
+
+                console.log(`Transactions: Loaded ${transformedTransactions.length} transactions`);
                 setTransactions(transformedTransactions);
             } catch (err) {
                 console.error('Error fetching transactions:', err);
@@ -112,6 +122,56 @@ const Transactions: React.FC = () => {
 
         fetchTransactions();
     }, []);
+
+    // Refresh transactions function
+    const refreshTransactions = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            console.log('Transactions: Refreshing transactions...');
+            const data = await transactionService.getTransactions();
+
+            const transformedTransactions: Transaction[] = data.map((dbTransaction: any) => {
+                const items = (dbTransaction.transaction_items || []).map((it: any) => ({
+                    id: it.id,
+                    name: it.product_name,
+                    quantity: it.quantity,
+                    price: it.unit_price,
+                    total: it.line_total
+                }));
+
+                console.log(`Transactions: Transaction ${dbTransaction.transaction_number} has ${items.length} items (refresh)`);
+
+                return {
+                    id: dbTransaction.id,
+                    transactionNumber: dbTransaction.transaction_number,
+                    date: dbTransaction.transaction_date,
+                    time: dbTransaction.transaction_time,
+                    customerName: dbTransaction.customer_name,
+                    customerNif: dbTransaction.customer_id,
+                    items: items,
+                    subtotal: dbTransaction.subtotal,
+                    discount: dbTransaction.discount,
+                    tax: dbTransaction.tax,
+                    total: dbTransaction.total,
+                    paymentMethod: dbTransaction.payment_method,
+                    cashReceived: dbTransaction.amount_paid,
+                    changeGiven: dbTransaction.change_given,
+                    status: dbTransaction.status,
+                    employeeName: dbTransaction.employee_name,
+                    employeeId: dbTransaction.employee_id
+                };
+            });
+
+            console.log(`Transactions: Refreshed ${transformedTransactions.length} transactions`);
+            setTransactions(transformedTransactions);
+        } catch (err) {
+            console.error('Error refreshing transactions:', err);
+            setError('Failed to refresh transactions. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Filter transactions
     const filteredTransactions = transactions.filter(transaction => {
@@ -183,6 +243,33 @@ const Transactions: React.FC = () => {
             if (!trx) return;
 
             const date = new Date(`${trx.transaction_date}T${trx.transaction_time}`);
+            // Infer percentage discount for historical transactions
+            // Priority 1: If items carry a uniform non-zero discount_percentage, use it
+            // Priority 2: Otherwise, infer from header (discount/subtotal) ONLY when it matches a common percentage
+            const inferredDiscountPct = (() => {
+                const pcts = (trx.transaction_items || [])
+                    .map((it: any) => Number(it.discount_percentage || 0))
+                    .filter((p: number) => p > 0);
+                if (pcts.length > 0) {
+                    const first = Math.round(pcts[0]);
+                    const allSame = pcts.every((p: number) => Math.abs(p - first) < 0.01);
+                    if (allSame) return first;
+                }
+
+                // Header inference guarded by whitelist to avoid misclassifying fixed discounts
+                const commonPercents = [5, 10, 12, 15, 20, 25, 30, 40, 50];
+                const ratio = trx.subtotal > 0 ? (trx.discount / trx.subtotal) * 100 : 0;
+                const nearest = Math.round(ratio);
+                const withinTolerance = Math.abs(ratio - nearest) < 0.05; // 0.05pp tolerance
+                if (withinTolerance && commonPercents.includes(nearest)) {
+                    return nearest;
+                }
+                return 0;
+            })();
+
+            const headerDiscountPct = Number(trx.discount_percentage || 0);
+            const headerDiscountType = (trx.discount_type || 'none') as 'none' | 'percentage' | 'fixed';
+
             const receipt: ReceiptProps = {
                 documentNumber: trx.receipt_number || trx.transaction_number,
                 documentType: settings.receipt.defaultDocumentType,
@@ -213,7 +300,7 @@ const Transactions: React.FC = () => {
                 totals: {
                     subtotal: trx.subtotal,
                     discount: trx.discount,
-                    discountPercentage: 0,
+                    discountPercentage: headerDiscountType === 'percentage' && headerDiscountPct > 0 ? Math.round(headerDiscountPct) : inferredDiscountPct,
                     net: trx.total - trx.tax,
                     vat: trx.tax,
                     total: trx.total,
@@ -244,10 +331,11 @@ const Transactions: React.FC = () => {
                     <p className="text-gray-600 mt-1">{t('transactions.header.subtitle')}</p>
                 </div>
                 <div className="mt-4 sm:mt-0 flex items-center space-x-3">
-                    <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2">
-                        <Download className="w-4 h-4" />
-                        <span>{t('transactions.header.export')}</span>
-                    </button>
+                    <AdminActionButton
+                        variant="primary"
+                        label={t('transactions.header.export')}
+                        icon={Download}
+                    />
                 </div>
             </div>
 
@@ -278,7 +366,7 @@ const Transactions: React.FC = () => {
 
             {/* Summary Stats */}
             {!loading && !error && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
                         <div className="flex items-center justify-between">
                             <div>
@@ -343,14 +431,23 @@ const Transactions: React.FC = () => {
                                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                         </div>
-                        <button
+                        <AdminActionButton
+                            variant="outline"
+                            label={t('transactions.filters.filters')}
+                            icon={Filter}
+                            showChevron={true}
                             onClick={() => setShowFilters(!showFilters)}
-                            className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                            <Filter className="w-4 h-4" />
-                            <span>{t('transactions.filters.filters')}</span>
                             {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </button>
+                        </AdminActionButton>
+                        <AdminActionButton
+                            variant="outline"
+                            label="Refresh"
+                            icon={Receipt}
+                            onClick={refreshTransactions}
+                            disabled={loading}
+                            title="Refresh transactions"
+                        />
                     </div>
                 </div>
 
@@ -527,17 +624,18 @@ const Transactions: React.FC = () => {
                                             </div>
 
                                             <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end space-x-3">
-                                                <button
+                                                <AdminActionButton
+                                                    variant="outline"
+                                                    label={t('transactions.list.viewReceipt')}
+                                                    icon={Eye}
                                                     onClick={() => handleViewReceipt(transaction.id)}
-                                                    className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center space-x-2"
-                                                >
-                                                    <Eye className="w-4 h-4" />
-                                                    <span>{t('transactions.list.viewReceipt')}</span>
-                                                </button>
-                                                <button className="px-4 py-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors flex items-center space-x-2">
-                                                    <Download className="w-4 h-4" />
-                                                    <span>{t('transactions.list.download')}</span>
-                                                </button>
+                                                />
+                                                <AdminActionButton
+                                                    variant="ghost"
+                                                    label={t('transactions.list.download')}
+                                                    icon={Download}
+                                                    className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                                                />
                                             </div>
                                         </div>
                                     )}

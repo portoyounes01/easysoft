@@ -2,17 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   ShoppingCart,
-  Plus,
   X,
   CreditCard,
-  Banknote,
-  User,
   Grid,
   Coffee,
   Milk,
   Cake,
   Candy,
-  Percent,
   LogOut,
   UserCircle,
   Search,
@@ -38,19 +34,20 @@ import { syncManager } from '../services/syncManager';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useProducts } from '../contexts/ProductsContext';
-import VirtualNumpad from '../components/VirtualNumpad';
 import OrderSummaryPanel from '../components/OrderSummaryPanel';
 import DiscountDialog from '../components/DiscountDialog';
-import VirtualKeyboard from '../components/VirtualKeyboard';
-import { Customer } from '../types';
 import { LocalProduct, LocalCustomer } from '../types/supabase';
 import { useTranslation } from 'react-i18next';
-import { transactionService } from '../services/transactionService';
+// import { transactionService } from '../services/transactionService';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
 import { customerLocalService } from '../lib/localDatabase';
 import ThermalReceipt, { ReceiptProps } from '../components/ThermalReceipt';
 import ReceiptHistorySelector from '../components/ReceiptHistorySelector';
+import { CustomerDialog } from '../components/CustomerDialog';
 import PaymentDialog from '../components/PaymentDialog';
+import ReceiptDialog from '../components/ReceiptDialog';
+import { CategoryFilterButton } from '../components/ui/CategoryFilterButton';
+import { ProductCard } from '../components/ui/ProductCard';
 
 // Icon mapping for categories
 const iconMap = {
@@ -79,7 +76,7 @@ const POS: React.FC = () => {
 
   // Customer state management
   const [customers, setCustomers] = useState<LocalCustomer[]>([]);
-  const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
 
   // Receipt preview modal state
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
@@ -116,8 +113,6 @@ const POS: React.FC = () => {
   // Quantity edits handled in product grid; order panel is read-only summary
   const [showPayment, setShowPayment] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [showCustomerModal, setShowCustomerModal] = useState(false);
-  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   // POS uses a temporary navigation overlay instead of a persistent sidebar
   const [showNavigation, setShowNavigation] = useState(false);
@@ -133,37 +128,6 @@ const POS: React.FC = () => {
   };
 
   const [cashReceived, setCashReceived] = useState(0);
-  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
-  const [newCustomerForm, setNewCustomerForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    taxId: '',
-    address: '',
-    city: '',
-    postalCode: '',
-    country: 'Portugal'
-  });
-  const [numpadConfig, setNumpadConfig] = useState({
-    isOpen: false,
-    title: '',
-    onConfirm: (_value: string) => { },
-    prefix: '',
-    suffix: '',
-    placeholder: '0.00',
-    allowDecimal: true,
-    maxLength: 10
-  });
-  const [keyboardConfig, setKeyboardConfig] = useState({
-    isOpen: false,
-    title: '',
-    field: '',
-    onConfirm: (_value: string) => { },
-    maxLength: 50,
-    allowNumbers: true,
-    allowLetters: true
-  });
-  const [activeField, setActiveField] = useState<string>('');
 
   // Auto-logout states
   const [showAutoLogoutWarning, setShowAutoLogoutWarning] = useState(false);
@@ -176,23 +140,6 @@ const POS: React.FC = () => {
   const [lastCartActivity, setLastCartActivity] = useState<number>(Date.now());
   const [cartClearCountdown, setCartClearCountdown] = useState<number>(0);
 
-  // Handle focus when Add Customer modal opens
-  useEffect(() => {
-    if (showAddCustomerModal) {
-      setTimeout(() => {
-        const nifValue = newCustomerForm.taxId.trim();
-        if (nifValue.length === 9 && /^[A-Z0-9]{9}$/.test(nifValue)) {
-          // Focus on name field if NIF is complete
-          const nameInput = document.querySelector('input[placeholder="Enter customer name"]') as HTMLInputElement;
-          if (nameInput) nameInput.focus();
-        } else {
-          // Focus on NIF field if NIF is incomplete
-          const nifInput = document.querySelector('input[placeholder="123456789 / X1234567L"]') as HTMLInputElement;
-          if (nifInput) nifInput.focus();
-        }
-      }, 100);
-    }
-  }, [showAddCustomerModal, newCustomerForm.taxId]);
 
   // Activity tracking for auto-logout
   useEffect(() => {
@@ -293,16 +240,7 @@ const POS: React.FC = () => {
   // Filter products based on category only
   const filteredProducts = selectedCategoryId ? getProductsByCategory(selectedCategoryId) : [];
 
-  // Filter customers based on search term (name, email, phone)
-  const filteredCustomers = customers.filter(customer => {
-    if (!customerSearchTerm) return true;
-    const searchLower = customerSearchTerm.toLowerCase();
-    return (
-      customer.name?.toLowerCase().includes(searchLower) ||
-      customer.email?.toLowerCase().includes(searchLower) ||
-      customer.phone?.toLowerCase().includes(searchLower)
-    );
-  });
+
 
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const discountAmount = discount.type === 'percentage'
@@ -324,28 +262,8 @@ const POS: React.FC = () => {
   const discountedTax = tax * (discountedSubtotal / subtotal);
   const finalTaxAfterDiscount = isNaN(discountedTax) ? 0 : discountedTax;
 
-  // NIF validation helper
-  const getNifValidationState = (nif: string) => {
-    if (!nif.trim()) return 'default'; // Empty/unfilled
-    if (nif.length === 9 && /^[A-Z0-9]{9}$/.test(nif)) return 'valid'; // Valid 9 alphanumeric characters
-    return 'invalid'; // Invalid/incomplete
-  };
-
-  // Get NIF field styling based on validation state
-  const getNifFieldClasses = (nif: string, baseClasses: string) => {
-    const state = getNifValidationState(nif);
-    switch (state) {
-      case 'valid':
-        return `${baseClasses} border-green-500 focus:ring-green-500 focus:border-green-500`;
-      case 'invalid':
-        return `${baseClasses} border-red-500 focus:ring-red-500 focus:border-red-500`;
-      default:
-        return `${baseClasses} border-gray-300 focus:ring-blue-500 focus:border-transparent`;
-    }
-  };
-
-  // Apply customer discount to total
-  const customerDiscount = selectedCustomer ? selectedCustomer.discountLevel : 0;
+  // Apply customer discount to total (no customer-specific discount field in LocalCustomer)
+  const customerDiscount = 0;
   const customerDiscountAmount = discountedSubtotal * customerDiscount / 100;
   const finalSubtotal = discountedSubtotal - customerDiscountAmount;
 
@@ -362,25 +280,10 @@ const POS: React.FC = () => {
     setShowDiscountDialog(true);
   };
 
-  const handleCashClick = () => {
-    setNumpadConfig({
-      isOpen: true,
-      title: 'Cash Received',
-      onConfirm: (value: string) => {
-        const numValue = parseFloat(value);
-        if (!isNaN(numValue) && numValue > 0) {
-          setCashReceived(numValue);
-        }
-      },
-      prefix: '€',
-      suffix: '',
-      placeholder: '€0.00',
-      allowDecimal: true,
-      maxLength: 10
-    });
+  const handleClearAll = () => {
+    clearCart();
+    setDiscount({ type: 'none', value: 0 });
   };
-
-  // Legacy discount removal kept for previous UI; not used in new summary panel
 
   const handleLogout = () => {
     signOut();
@@ -404,217 +307,9 @@ const POS: React.FC = () => {
     return <IconComponent className="w-4 h-4" />;
   };
 
-  const handleCustomerClick = () => {
-    setCustomerSearchTerm(''); // clear previous search
-    setShowCustomerModal(true);
-    setNumpadConfig(prev => ({ ...prev, isOpen: false }));
-  };
-
   const handleCustomerSelect = (customer: LocalCustomer) => {
     selectCustomer(customer);
     setShowCustomerModal(false);
-    setCustomerSearchTerm('');
-    // Ensure numpad/keyboard is closed
-    setNumpadConfig(prev => ({ ...prev, isOpen: false }));
-    setKeyboardConfig(prev => ({ ...prev, isOpen: false }));
-  };
-
-  // Legacy customer remove kept for previous UI; not used in new summary panel
-
-  // Removed unused handleCustomerSearch helper
-
-  const handleAddNewCustomer = () => {
-    // Prefill form based on search term
-    const searchTerm = customerSearchTerm.trim().toUpperCase();
-    if (searchTerm) {
-      if (searchTerm.length === 9 && /^[A-Z0-9]{9}$/.test(searchTerm)) {
-        // If search term is exactly 9 alphanumeric characters, prefill NIF and focus on name
-        setNewCustomerForm(prev => ({ ...prev, taxId: searchTerm }));
-        setActiveField('name');
-        setKeyboardConfig({
-          isOpen: true,
-          title: '',
-          field: 'name',
-          onConfirm: (value: string) => {
-            handleCustomerFormChange('name', value);
-          },
-          maxLength: 50,
-          allowNumbers: false,
-          allowLetters: true
-        });
-      } else {
-        // If search term is less than 9 characters, prefill NIF and focus will be on NIF
-        setNewCustomerForm(prev => ({ ...prev, taxId: searchTerm }));
-        setActiveField('taxId');
-        setKeyboardConfig({
-          isOpen: true,
-          title: '',
-          field: 'taxId',
-          onConfirm: (value: string) => {
-            // Apply NIF validation: alphanumeric, max 9 characters, uppercase
-            const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-            handleCustomerFormChange('taxId', validatedValue);
-          },
-          maxLength: 9,
-          allowNumbers: true,
-          allowLetters: true
-        });
-      }
-    } else {
-      // Default to name field
-      setActiveField('name');
-      setKeyboardConfig({
-        isOpen: true,
-        title: '',
-        field: 'name',
-        onConfirm: (value: string) => {
-          handleCustomerFormChange('name', value);
-        },
-        maxLength: 50,
-        allowNumbers: false,
-        allowLetters: true
-      });
-    }
-    setShowAddCustomerModal(true);
-  };
-
-  const handleCustomerFormChange = (field: string, value: string | number) => {
-    setNewCustomerForm(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleTextFieldClick = (field: string, allowNumbers = true, allowLetters = true, maxLength = 50) => {
-    setActiveField(field);
-    setKeyboardConfig({
-      isOpen: true,
-      title: '',
-      field,
-      onConfirm: (value: string) => {
-        handleCustomerFormChange(field, value);
-      },
-      maxLength,
-      allowNumbers,
-      allowLetters
-    });
-  };
-
-  const handleCustomerFormSubmit = async () => {
-    // Validate required fields
-    if (!newCustomerForm.taxId.trim()) {
-      alert('NIF is required');
-      return;
-    }
-
-    // Validate NIF format (exactly 9 alphanumeric characters)
-    const nifRegex = /^[A-Z0-9]{9}$/;
-    if (!nifRegex.test(newCustomerForm.taxId.trim())) {
-      alert('NIF must be exactly 9 alphanumeric characters');
-      return;
-    }
-
-    // Generate new customer ID
-    const newCustomerId = `${Date.now()}`;
-
-    // Create new customer object
-    const customerName = newCustomerForm.name.trim() || `Customer ${newCustomerForm.taxId.trim()}`;
-
-    const newCustomer: Customer = {
-      id: newCustomerId,
-      name: customerName,
-      email: newCustomerForm.email.trim() || undefined,
-      phone: newCustomerForm.phone.trim() || undefined,
-      taxId: newCustomerForm.taxId.trim(),
-      address: newCustomerForm.address.trim() || undefined,
-      city: newCustomerForm.city.trim() || undefined,
-      postalCode: newCustomerForm.postalCode.trim() || undefined,
-      country: newCustomerForm.country.trim() || 'Portugal',
-      discountLevel: 0,
-      totalPurchases: 0,
-      totalOrders: 0,
-      lastPurchase: undefined
-    };
-
-    // Add to database
-    try {
-      const customerId = await customerLocalService.createCustomer({
-        name: newCustomer.name,
-        email: newCustomer.email || null,
-        phone: newCustomer.phone || null,
-        address: newCustomer.address || null,
-        total_spent: 0,
-        transaction_count: 0,
-        loyalty_points: 0,
-        is_active: true,
-        preferred_payment_method: null,
-        deleted_at: null
-      });
-
-      // Reload customers to show the new one
-      const dbCustomers = await customerLocalService.getAllCustomers();
-      setCustomers(dbCustomers);
-
-      // Find and auto-select the new customer
-      const createdCustomer = dbCustomers.find(c => c.id === customerId);
-      if (createdCustomer) {
-        selectCustomer(createdCustomer);
-      }
-    } catch (error) {
-      console.error('Failed to create customer:', error);
-      // You might want to show an error message to the user here
-    }
-
-    // Close modals and reset form
-    setShowAddCustomerModal(false);
-    setShowCustomerModal(false);
-    // Ensure any open numpad/keyboard is closed
-    setNumpadConfig(prev => ({ ...prev, isOpen: false }));
-    setKeyboardConfig(prev => ({ ...prev, isOpen: false }));
-    setActiveField('');
-    setKeyboardConfig({
-      isOpen: false,
-      title: '',
-      field: '',
-      onConfirm: (_value: string) => { },
-      maxLength: 50,
-      allowNumbers: true,
-      allowLetters: true
-    });
-    setNewCustomerForm({
-      name: '',
-      email: '',
-      phone: '',
-      taxId: '',
-      address: '',
-      city: '',
-      postalCode: '',
-      country: 'Portugal'
-    });
-
-    // Optionally show toast here; currently no alert displayed
-  };
-
-  const handleCancelAddCustomer = () => {
-    setShowAddCustomerModal(false);
-    setNumpadConfig(prev => ({ ...prev, isOpen: false }));
-    setActiveField('');
-    setKeyboardConfig({
-      isOpen: false,
-      title: '',
-      field: '',
-      onConfirm: (_value: string) => { },
-      maxLength: 50,
-      allowNumbers: true,
-      allowLetters: true
-    });
-    setNewCustomerForm({
-      name: '',
-      email: '',
-      phone: '',
-      taxId: '',
-      address: '',
-      city: '',
-      postalCode: '',
-      country: 'Portugal'
-    });
   };
 
   // Auto-clear cart timer management
@@ -656,14 +351,11 @@ const POS: React.FC = () => {
   useEffect(() => {
     const loadCustomers = async () => {
       try {
-        setLoadingCustomers(true);
         const dbCustomers = await customerLocalService.getAllCustomers();
         setCustomers(dbCustomers);
       } catch (error) {
         console.error('Failed to load customers:', error);
         setCustomers([]); // Fallback to empty array
-      } finally {
-        setLoadingCustomers(false);
       }
     };
 
@@ -674,6 +366,7 @@ const POS: React.FC = () => {
   const handleRetryData = async () => {
     try {
       await refreshData();
+      console.log('POS: Data refreshed successfully');
     } catch (error) {
       console.error('Failed to refresh data:', error);
     }
@@ -683,13 +376,32 @@ const POS: React.FC = () => {
   const handleSyncData = async () => {
     try {
       await syncData();
+      console.log('POS: Data synced successfully');
     } catch (error) {
       console.error('Failed to sync data:', error);
     }
   };
 
+  // Auto-refresh data when coming back to POS after adding products
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('POS: Page became visible, refreshing data...');
+        refreshData().catch(error => {
+          console.error('Failed to refresh data on visibility change:', error);
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refreshData]);
+
   return (
-    <div className="h-screen flex bg-gray-50">
+    <div className="h-screen flex bg-neutral-50">
       {/* Main Content Area - takes most space */}
       <div className="flex-1 flex flex-col">
         {/* Top Header - only over left sidebar + center, not cart */}
@@ -713,7 +425,7 @@ const POS: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Search Product..."
-                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 bg-neutral-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
@@ -814,65 +526,29 @@ const POS: React.FC = () => {
 
         {/* Content Area - Left sidebar + Center products */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Left Categories Sidebar */}
-          <div className="w-24 bg-gray-100 flex flex-col py-2">
-            {/* All Menu Option */}
-            <div className="px-3 mb-2">
-              <button
+          {/* Left Categories Sidebar - uses vw units to match CategoryFilterButton */}
+          <div className="bg-neutral-100 flex flex-col" style={{ width: '8vw', paddingLeft: '0.5vw', paddingTop: '1.5vw' }}>
+            {/* All Categories (including All Menu) */}
+            <div className="flex-1 overflow-y-auto" style={{ padding: '0 0.5vw', gap: '0.5vw', display: 'flex', flexDirection: 'column' }}>
+              {/* All Menu Option */}
+              <CategoryFilterButton
+                label="All Menu"
+                icon={Grid}
+                isSelected={!selectedCategoryId}
                 onClick={() => setSelectedCategoryId('')}
-                className={`w-full aspect-square flex flex-col items-center justify-center p-1 rounded transition-all duration-200 relative ${!selectedCategoryId
-                  ? 'bg-white shadow-sm'
-                  : 'bg-gray-200 hover:bg-gray-50'
-                  }`}
-              >
-                {/* Left indicator for selected state */}
-                {!selectedCategoryId && (
-                  <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-full"></div>
-                )}
+              />
 
-                <div className={`w-6 h-6 flex items-center justify-center mb-1 ${!selectedCategoryId ? 'text-blue-500' : 'text-gray-500'
-                  }`}>
-                  <Grid className="w-4 h-4" />
-                </div>
-                <div className={`text-[10px] font-medium text-center leading-tight px-1 w-full max-w-full ${!selectedCategoryId ? 'text-gray-900' : 'text-gray-500'}`}>{/* category label */}
-                  {'All Menu'.split(' ').length > 1 ? (
-                    <div className="line-clamp-2 break-words">All Menu</div>
-                  ) : (
-                    <div className="truncate w-full max-w-full overflow-hidden">All Menu</div>
-                  )}
-                </div>
-              </button>
-            </div>
-
-            {/* Category Options */}
-            <div className="flex-1 overflow-y-auto px-3 space-y-2">
+              {/* Category Options */}
               {allCategories.map((category) => {
-                const isSelected = selectedCategoryId === category.id;
+                const Icon = iconMap[category.icon as keyof typeof iconMap] || Grid;
                 return (
-                  <button
+                  <CategoryFilterButton
                     key={category.id}
+                    label={category.name}
+                    icon={Icon}
+                    isSelected={selectedCategoryId === category.id}
                     onClick={() => setSelectedCategoryId(category.id)}
-                    className={`w-full aspect-square flex flex-col items-center justify-center p-1 rounded transition-all duration-200 relative ${isSelected
-                      ? 'bg-white shadow-sm'
-                      : 'bg-gray-200 hover:bg-gray-50'
-                      }`}
-                  >
-                    {/* Left indicator for selected state */}
-                    {isSelected && (
-                      <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-blue-500 rounded-full"></div>
-                    )}
-
-                    <div className={`w-6 h-6 flex items-center justify-center mb-1 text-gray-500`}>
-                      {renderCategoryIcon(category.icon)}
-                    </div>
-                    <div className={`text-[10px] font-medium text-center leading-tight px-1 w-full max-w-full ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{/* category label */}
-                      {category.name.split(' ').length > 1 ? (
-                        <div className="line-clamp-2 break-words">{category.name}</div>
-                      ) : (
-                        <div className="truncate w-full max-w-full overflow-hidden">{category.name}</div>
-                      )}
-                    </div>
-                  </button>
+                  />
                 );
               })}
 
@@ -880,14 +556,14 @@ const POS: React.FC = () => {
               {allCategories.length === 0 && (
                 <div className="text-center py-8">
                   <Grid className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-xs text-gray-500">No categories available</p>
+                  <p className="text-xs text-neutral-500">No categories available</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Center Products Area */}
-          <div className="flex-1 bg-gray-50 overflow-hidden">
+          <div className="flex-1 bg-neutral-100 overflow-hidden">
             {/* Loading State */}
             {isLoading && (
               <div className="flex items-center justify-center h-full">
@@ -928,16 +604,16 @@ const POS: React.FC = () => {
 
             {/* Products Content */}
             {!isLoading && !error && (
-              <div className="h-full overflow-y-auto p-6">
+              <div className="h-full overflow-y-auto" style={{ padding: '1.5vw' }}>
                 {/* Show products for selected category OR all products if no category selected */}
                 {(() => {
                   const productsToShow = selectedCategoryId ? filteredProducts : getActiveProducts();
 
                   return (
                     <>
-                      {/* Products Grid */}
+                      {/* Products Grid - uses flexbox with vw-based gap to match ProductCard sizing */}
                       {productsToShow.length > 0 ? (
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                        <div className="flex flex-wrap" style={{ gap: '1vw' }}>
                           {productsToShow.map((product) => {
                             const canAdd = canAddToCart(product, 1);
                             const isOutOfStock = !canAdd && !settings.pos.allowNegativeStock;
@@ -946,62 +622,19 @@ const POS: React.FC = () => {
                             const remainingStock = product.stock - cartQuantity;
 
                             return (
-                              <div
+                              <ProductCard
                                 key={product.id}
-                                className={`
-                                  bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 cursor-pointer relative
-                                  ${canAdd
-                                    ? 'hover:shadow-lg hover:scale-105'
-                                    : 'opacity-60 cursor-not-allowed'
-                                  }
-                                `}
-                                onClick={canAdd ? () => handleAddToCart(product) : undefined}
-                              >
-                                {/* Cart Quantity Badge */}
-                                {cartQuantity > 0 && (
-                                  <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold z-10">
-                                    {cartQuantity}
-                                  </div>
-                                )}
-
-                                {/* Product Image */}
-                                <div className="aspect-square relative bg-gray-100 flex items-center justify-center">
-                                  {/* Default icon (visible under image or when image hidden) */}
-                                  <Package className={`w-10 h-10 text-gray-400 ${isOutOfStock ? 'grayscale' : ''}`} />
-                                  {/* Product image overlays the icon when available */}
-                                  {product.image_url && (
-                                    <img
-                                      src={product.image_url}
-                                      alt={product.name}
-                                      className={`absolute inset-0 w-full h-full object-cover ${isOutOfStock ? 'grayscale' : ''}`}
-                                      onError={(e) => {
-                                        const target = e.currentTarget as HTMLImageElement;
-                                        target.style.display = 'none';
-                                      }}
-                                    />
-                                  )}
-
-                                  {/* Out of Stock Overlay */}
-                                  {isOutOfStock && (
-                                    <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                                      <div className="bg-red-500 text-white px-3 py-1 rounded-lg text-sm font-bold">
-                                        {t('pos.outOfStock')}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Product Info */}
-                                <div className="p-3 flex flex-col h-20">
-                                  <h3 className="font-semibold text-gray-800 text-sm truncate flex-1" title={product.name}>{product.name}</h3>
-
-                                  {/* Price and Stock at bottom */}
-                                  <div className="flex items-center justify-between mt-auto pt-2">
-                                    <span className="text-sm font-bold text-gray-900">€{product.price.toFixed(2)}</span>
-                                    <span className="text-xs text-gray-500">Stock: {remainingStock}</span>
-                                  </div>
-                                </div>
-                              </div>
+                                name={product.name}
+                                price={product.price}
+                                stock={product.stock}
+                                imageUrl={product.image_url || undefined}
+                                cartQuantity={cartQuantity}
+                                remainingStock={remainingStock}
+                                isOutOfStock={isOutOfStock}
+                                canAdd={canAdd}
+                                onClick={() => handleAddToCart(product)}
+                                outOfStockLabel={t('pos.outOfStock')}
+                              />
                             );
                           })}
                         </div>
@@ -1029,7 +662,7 @@ const POS: React.FC = () => {
       {/* Right Order Summary Panel (DEBUG 30/40/30) */}
       <OrderSummaryPanel
         items={cart.map(item => ({ product: item.product, quantity: item.quantity }))}
-        onClearAll={clearCart}
+        onClearAll={handleClearAll}
         onCustomer={() => setShowCustomerModal(true)}
         onTables={() => { }}
         onDiscount={handleDiscountClick}
@@ -1039,6 +672,17 @@ const POS: React.FC = () => {
         }}
         canSaveBill={Boolean(lastCompletedReceipt)}
         onProcess={() => setShowPayment(true)}
+        totalsOverride={{
+          subtotal: Number(subtotal.toFixed(2)),
+          tax: Number(adjustedFinalTax.toFixed(2)),
+          discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
+          total: Number(finalTotal.toFixed(2))
+        }}
+        discountInfo={{
+          type: discount.type,
+          value: discount.value,
+          amount: discountAmount + customerDiscountAmount
+        }}
       />
 
       <DiscountDialog
@@ -1056,401 +700,26 @@ const POS: React.FC = () => {
         }}
       />
 
-      {/* Customer Selection Modal */}
-      {showCustomerModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className={`bg-white rounded-3xl p-8 shadow-2xl flex flex-col ${numpadConfig.isOpen ? 'w-[1000px] max-w-6xl' : 'w-[600px] max-w-2xl'} h-[600px]`}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-gray-800">{t('pos.selectCustomerTitle')}</h3>
-              <button
-                onClick={() => {
-                  setShowCustomerModal(false);
-                  setCustomerSearchTerm('');
-                  setNumpadConfig(prev => ({ ...prev, isOpen: false }));
-                }}
-                className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Main Content Area */}
-            <div className={`flex-1 flex ${numpadConfig.isOpen ? 'space-x-6' : ''} overflow-hidden`}>
-              {/* Customer Section */}
-              <div className={`${numpadConfig.isOpen ? 'flex-1' : 'w-full'} flex flex-col`}>
-                {/* Search Section */}
-                <div className="mb-6 space-y-4">
-                  <div className="flex space-x-3">
-                    <div className="flex-1 relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder={t('pos.searchByNif')}
-                        value={customerSearchTerm}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                          setCustomerSearchTerm(value);
-                        }}
-                        onClick={() => {
-                          setNumpadConfig({
-                            isOpen: true,
-                            title: t('pos.searchByNif'),
-                            onConfirm: (value: string) => {
-                              const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                              setCustomerSearchTerm(validatedValue);
-                            },
-                            prefix: '',
-                            suffix: '',
-                            placeholder: '123456789',
-                            allowDecimal: false,
-                            maxLength: 9
-                          });
-                        }}
-                        className={`w-full pl-10 pr-4 py-3 border rounded-2xl focus:outline-none focus:ring-2 focus:border-transparent cursor-pointer ${numpadConfig.isOpen ? 'border-blue-500 bg-blue-50' : 'border-gray-300 focus:ring-blue-500'
-                          }`}
-                        maxLength={9}
-                      />
-                    </div>
-                    <button
-                      onClick={() => {
-                        setNumpadConfig({
-                          isOpen: true,
-                          title: t('pos.searchByNif'),
-                          onConfirm: (value: string) => {
-                            const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                            setCustomerSearchTerm(validatedValue);
-                          },
-                          prefix: '',
-                          suffix: '',
-                          placeholder: '123456789',
-                          allowDecimal: false,
-                          maxLength: 9
-                        });
-                      }}
-                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-2xl font-semibold transition-all duration-200 flex items-center space-x-2"
-                    >
-                      <Search className="w-5 h-5" />
-                      <span>{t('pos.search')}</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-600">
-                      {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''} found
-                    </p>
-                    <button
-                      onClick={handleAddNewCustomer}
-                      className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center space-x-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>{t('pos.addNew')}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Customer List */}
-                <div className="flex-1 overflow-y-auto space-y-3">
-                  {filteredCustomers.map((customer) => (
-                    <div
-                      key={customer.id}
-                      onClick={() => handleCustomerSelect(customer)}
-                      className="bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-2xl p-4 cursor-pointer transition-all duration-200 hover:shadow-lg"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-xl">
-                              <UserCircle className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-gray-800">{customer.name}</h4>
-                              <p className="text-sm text-gray-600">{customer.email || customer.phone || 'No contact info'}</p>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-gray-600">{t('pos.totalOrders')}</span>
-                              <span className="font-semibold text-gray-800">{customer.transaction_count || 0}</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-gray-600">Total Spent</span>
-                              <span className="font-semibold text-gray-800">€{(customer.total_spent || 0).toFixed(2)}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="ml-4">
-                          <button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200">
-                            {t('common.select')}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {filteredCustomers.length === 0 && (
-                    <div className="text-center py-12">
-                      <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                      <p className="text-xl text-gray-500 mb-2">{t('pos.noCustomersFoundTitle')}</p>
-                      <p className="text-gray-400">{t('pos.noCustomersFoundMessage')}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Numpad Section */}
-              {numpadConfig.isOpen && (
-                <div className="flex-1">
-                  <VirtualKeyboard
-                    isOpen={true}
-                    onClose={() => setNumpadConfig(prev => ({ ...prev, isOpen: false }))}
-                    onConfirm={(value: string) => {
-                      const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                      setCustomerSearchTerm(validatedValue);
-                    }}
-                    title={t('pos.searchByNif')}
-                    initialValue={customerSearchTerm}
-                    maxLength={9}
-                    allowNumbers={true}
-                    allowLetters={true}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add New Customer Modal */}
-      {showAddCustomerModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-3xl p-8 w-[1000px] max-w-6xl h-[700px] shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-gray-800">Add New Customer</h3>
-              <button
-                onClick={handleCancelAddCustomer}
-                className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Customer Form and Keyboard */}
-            <div className="flex-1 flex space-x-6 overflow-hidden">
-              {/* Customer Form */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="space-y-3">
-                  {/* Personal Information Section */}
-                  <div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Name
-                        </label>
-                        <input
-                          type="text"
-                          value={newCustomerForm.name}
-                          onChange={(e) => handleCustomerFormChange('name', e.target.value)}
-                          onClick={() => handleTextFieldClick('name', false, true, 50)}
-                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'name'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                            }`}
-                          placeholder="Enter customer name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          NIF *
-                        </label>
-                        <div className="relative">
-                          <TaxIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
-                          <input
-                            type="text"
-                            value={newCustomerForm.taxId}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                              handleCustomerFormChange('taxId', value);
-                            }}
-                            onClick={() => {
-                              setActiveField('taxId');
-                              setKeyboardConfig({
-                                isOpen: true,
-                                title: '',
-                                field: 'taxId',
-                                onConfirm: (value: string) => {
-                                  // Apply NIF validation: alphanumeric, max 9 characters, uppercase
-                                  const validatedValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
-                                  handleCustomerFormChange('taxId', validatedValue);
-                                },
-                                maxLength: 9,
-                                allowNumbers: true,
-                                allowLetters: true
-                              });
-                            }}
-                            className={getNifFieldClasses(
-                              newCustomerForm.taxId,
-                              `w-full pl-6 pr-8 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'taxId'
-                                ? 'border-blue-500 bg-blue-50'
-                                : ''
-                              }`
-                            )}
-                            placeholder="123456789 / X1234567L"
-                            maxLength={9}
-                            required
-                          />
-                          {newCustomerForm.taxId && (
-                            <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                              {getNifValidationState(newCustomerForm.taxId) === 'valid' ? (
-                                <Check className="w-3 h-3 text-green-500" />
-                              ) : (
-                                <AlertCircle className="w-3 h-3 text-red-500" />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Contact Information Section */}
-                  <div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Phone
-                        </label>
-                        <div className="relative">
-                          <Phone className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
-                          <input
-                            type="tel"
-                            value={newCustomerForm.phone}
-                            onChange={(e) => handleCustomerFormChange('phone', e.target.value)}
-                            onClick={() => handleTextFieldClick('phone', true, false, 20)}
-                            className={`w-full pl-6 pr-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'phone'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                              }`}
-                            placeholder="+351 912 345 678"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Email
-                        </label>
-                        <div className="relative">
-                          <Mail className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
-                          <input
-                            type="email"
-                            value={newCustomerForm.email}
-                            onChange={(e) => handleCustomerFormChange('email', e.target.value)}
-                            onClick={() => handleTextFieldClick('email', true, true, 50)}
-                            className={`w-full pl-6 pr-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'email'
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                              }`}
-                            placeholder="customer@email.com"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Location Information Section */}
-                  <div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          City
-                        </label>
-                        <input
-                          type="text"
-                          value={newCustomerForm.city}
-                          onChange={(e) => handleCustomerFormChange('city', e.target.value)}
-                          onClick={() => handleTextFieldClick('city', false, true, 30)}
-                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'city'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                            }`}
-                          placeholder="Lisbon"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Postal Code
-                        </label>
-                        <input
-                          type="text"
-                          value={newCustomerForm.postalCode}
-                          onChange={(e) => handleCustomerFormChange('postalCode', e.target.value)}
-                          onClick={() => handleTextFieldClick('postalCode', true, false, 10)}
-                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'postalCode'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                            }`}
-                          placeholder="1000-001"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Country
-                        </label>
-                        <input
-                          type="text"
-                          value={newCustomerForm.country}
-                          onChange={(e) => handleCustomerFormChange('country', e.target.value)}
-                          onClick={() => handleTextFieldClick('country', false, true, 30)}
-                          className={`w-full px-2 py-2 border rounded-xl focus:outline-none focus:ring-1 text-sm cursor-pointer ${activeField === 'country'
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-300 focus:ring-blue-500 focus:border-transparent'
-                            }`}
-                          placeholder="Portugal"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-              {/* Virtual Keyboard */}
-              <div className="flex-1">
-                <VirtualKeyboard
-                  isOpen={showAddCustomerModal}
-                  onClose={() => { }}
-                  onConfirm={keyboardConfig.onConfirm}
-                  title=""
-                  initialValue={activeField && newCustomerForm[activeField as keyof typeof newCustomerForm] ? newCustomerForm[activeField as keyof typeof newCustomerForm]?.toString() || '' : ''}
-                  maxLength={keyboardConfig.maxLength}
-                  allowNumbers={keyboardConfig.allowNumbers}
-                  allowLetters={keyboardConfig.allowLetters}
-                />
-              </div>
-            </div>
-
-            {/* Form Actions */}
-            <div className="flex-none mt-6 pt-6 border-t border-gray-200">
-              <div className="flex space-x-2">
-                <button
-                  onClick={handleCancelAddCustomer}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-2 rounded-xl min-h-[36px] transition-colors text-sm"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={handleCustomerFormSubmit}
-                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-2 rounded-xl min-h-[36px] transition-colors flex items-center justify-center space-x-2 text-sm"
-                >
-                  <Save className="w-3 h-3" />
-                  <span>Save Customer</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <CustomerDialog
+        open={showCustomerModal}
+        onClose={() => setShowCustomerModal(false)}
+        customers={customers}
+        onSelect={handleCustomerSelect}
+        onRegisterCustomer={async (customerData) => {
+          try {
+            const customerId = await customerLocalService.createCustomer(customerData);
+            const dbCustomers = await customerLocalService.getAllCustomers();
+            setCustomers(dbCustomers);
+            const createdCustomer = dbCustomers.find(c => c.id === customerId);
+            if (createdCustomer) {
+              selectCustomer(createdCustomer);
+            }
+            setShowCustomerModal(false);
+          } catch (error) {
+            console.error('Failed to create customer:', error);
+          }
+        }}
+      />
 
       {/* Payment Modal */}
       {showPayment && (
@@ -1511,7 +780,6 @@ const POS: React.FC = () => {
                 email: settings.company.email || undefined,
               },
               customer: selectedCustomer ? {
-                taxNumber: selectedCustomer.taxId,
                 name: selectedCustomer.name
               } : undefined,
               items: cart.map(ci => ({
@@ -1546,29 +814,12 @@ const POS: React.FC = () => {
               if (isSupabaseConfigured() && await checkSupabaseConnection()) {
                 const employeeId = employee?.id || 'unknown-employee';
                 const employeeName = employee?.name || 'Employee';
-                const transactionDate = now.toISOString().slice(0, 10); // YYYY-MM-DD
-                const transactionTime = now.toTimeString().slice(0, 8); // HH:MM:SS
+                // const transactionDate = now.toISOString().slice(0, 10); // YYYY-MM-DD
+                // const transactionTime = now.toTimeString().slice(0, 8); // HH:MM:SS
 
                 const paymentMethod = cashReceived > 0 ? 'cash' : 'card' as const;
 
-                const transactionInsert = {
-                  employee_id: employeeId,
-                  employee_name: employeeName,
-                  customer_id: selectedCustomer?.id || null,
-                  customer_name: selectedCustomer?.name || null,
-                  transaction_date: transactionDate,
-                  transaction_time: transactionTime,
-                  subtotal: Number(subtotal.toFixed(2)),
-                  discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
-                  tax: Number(adjustedFinalTax.toFixed(2)),
-                  total: Number(finalTotal.toFixed(2)),
-                  payment_method: paymentMethod,
-                  amount_paid: cashReceived > 0 ? Number(cashReceived.toFixed(2)) : Number(finalTotal.toFixed(2)),
-                  change_given: Number(changeAmount.toFixed(2)),
-                  status: 'completed' as const,
-                  notes: null,
-                  receipt_number: documentNumber,
-                };
+                // NOTE: Server insert payload is constructed inside processTransaction; inline sample removed.
 
                 await processTransaction({
                   paymentMethod,
@@ -1576,9 +827,17 @@ const POS: React.FC = () => {
                   employeeId,
                   employeeName,
                   employeeNumber: employee?.employee_number
+                }, () => {
+                  // Reset discount after successful transaction
+                  setDiscount({ type: 'none', value: 0 });
+                  console.log('POS: Discount reset after transaction');
+                }, {
+                  type: discount.type,
+                  value: discount.value,
+                  amount: discountAmount + customerDiscountAmount
                 });
-                // Attempt to push immediately when online
-                try { await syncManager.forceSync(); } catch { }
+                // Attempt to push immediately when online (non-blocking)
+                try { syncManager.forceSync().catch(() => { }); } catch { }
               }
             } catch (e) {
               console.warn('Transaction persistence failed, falling back to local receipt view.', e);
@@ -1595,31 +854,13 @@ const POS: React.FC = () => {
       )}
 
       {/* Receipt Preview Modal */}
-      {showReceiptPreview && receiptPreviewData && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-          <div className="bg-white rounded-3xl w-[800px] max-w-[95vw] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] min-h-0">
-            <div className="px-8 py-6 border-b">
-              <h3 className="text-2xl font-bold text-center text-gray-800">{t('pos.receiptPreview') || 'Receipt Preview'}</h3>
-            </div>
-            <div className="px-6 py-6 flex-1 min-h-0 overflow-y-auto bg-gray-50">
-              <ThermalReceipt {...receiptPreviewData} />
-            </div>
-            <div className="px-6 py-6 border-t bg-white flex items-center justify-end space-x-4">
-              <button
-                onClick={() => setShowReceiptPreview(false)}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-4 px-6 rounded-2xl min-h-[60px] transition-colors"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-8 rounded-2xl min-h-[60px] transition-colors"
-              >
-                {t('common.print') || 'Print'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Receipt Preview Modal */}
+      {receiptPreviewData && (
+        <ReceiptDialog
+          open={showReceiptPreview}
+          onClose={() => setShowReceiptPreview(false)}
+          receipt={receiptPreviewData}
+        />
       )}
 
       {/* Receipt History Selector for Segunda via */}
@@ -1709,18 +950,7 @@ const POS: React.FC = () => {
         </div>
       )}
 
-      {/* Virtual Numpad */}
-      <VirtualNumpad
-        isOpen={numpadConfig.isOpen && !showCustomerModal}
-        onClose={() => setNumpadConfig(prev => ({ ...prev, isOpen: false }))}
-        onConfirm={numpadConfig.onConfirm}
-        title={numpadConfig.title}
-        prefix={numpadConfig.prefix}
-        suffix={numpadConfig.suffix}
-        placeholder={numpadConfig.placeholder}
-        allowDecimal={numpadConfig.allowDecimal}
-        maxLength={numpadConfig.maxLength}
-      />
+
 
       {/* Bottom User Status Bar */}
       <div id="pos-status-bar" className="fixed bottom-0 left-0 bg-white border-t border-gray-200 px-3 py-1 z-10" style={{ right: '24.5vw' }}>

@@ -21,7 +21,7 @@ async function sendCommandsToSystemPrinter(filePath, printerName = 'HPRT_TP80K')
 
     const commands = fs.readFileSync(filePath);
     console.log(`📄 Loaded ${commands.length} bytes from ${filePath}`);
-    
+
     // Show commands in hex
     const hexCommands = Array.from(commands)
       .map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase())
@@ -48,7 +48,7 @@ async function sendCommandsToSystemPrinter(filePath, printerName = 'HPRT_TP80K')
     console.log(`🖨️  Sending to printer: ${printerName}`);
     const command = `lp -d "${printerName}" -o raw "${filePath}"`;
     console.log(`📤 Executing: ${command}`);
-    
+
     const { stdout, stderr } = await execAsync(command);
 
     if (stderr) {
@@ -71,13 +71,13 @@ async function sendCommandsToSystemPrinter(filePath, printerName = 'HPRT_TP80K')
 // Quick cash drawer test function
 async function testCashDrawer(printerName = 'HPRT_TP80K') {
   console.log('🏦 Testing cash drawer...');
-  
+
   // Create temporary cash drawer command file
   const drawerCommands = Buffer.from([0x1B, 0x70, 0x00, 0x19, 0xFA]); // ESC p 0 25 250 (longer pulse)
   const tempFile = path.join(__dirname, 'temp_drawer_test.bin');
-  
+
   fs.writeFileSync(tempFile, drawerCommands);
-  
+
   try {
     await sendCommandsToSystemPrinter(tempFile, printerName);
     console.log('💰 Cash drawer should open now!');
@@ -92,7 +92,7 @@ async function testCashDrawer(printerName = 'HPRT_TP80K') {
 // Close/reset cash drawer function
 async function closeCashDrawer(printerName = 'HPRT_TP80K') {
   console.log('🔒 Attempting to close/reset cash drawer...');
-  
+
   // Try multiple approaches to stop the drawer signal
   const approaches = [
     {
@@ -113,30 +113,30 @@ async function closeCashDrawer(printerName = 'HPRT_TP80K') {
     console.log(`🔧 Trying: ${approach.name}`);
     const tempFile = path.join(__dirname, `temp_close_${Date.now()}.bin`);
     const buffer = Buffer.from(approach.commands);
-    
+
     fs.writeFileSync(tempFile, buffer);
-    
+
     try {
       await sendCommandsToSystemPrinter(tempFile, printerName);
       console.log(`✅ Sent ${approach.name} command`);
-      
+
       // Wait a moment between attempts
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
     } finally {
       if (fs.existsSync(tempFile)) {
         fs.unlinkSync(tempFile);
       }
     }
   }
-  
+
   console.log('🔒 Close/reset commands sent. Try manually closing the drawer now.');
 }
 
 // Main execution
 async function main() {
   const args = process.argv.slice(2);
-  
+
   if (args.length === 0) {
     console.log('Usage:');
     console.log('  node send-to-printer.cjs <command-file.bin> [printer-name]');

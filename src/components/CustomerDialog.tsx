@@ -1,0 +1,392 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Search, Plus, UserCircle, Users, Check, AlertCircle, Phone, CreditCard as TaxIcon } from 'lucide-react';
+import { BaseDialog } from './ui/BaseDialog';
+import { ActionButton } from './ui/ActionButton';
+import { TabToggle } from './ui/TabToggle';
+import { InputField } from './ui/InputField';
+import VirtualKeyboard from './VirtualKeyboard';
+import SimpleNumpad from './SimpleNumpad';
+import { LocalCustomer } from '../types/supabase';
+
+interface CustomerDialogProps {
+    open: boolean;
+    onClose: () => void;
+    onSelect: (customer: LocalCustomer) => void;
+    customers: LocalCustomer[];
+    onRegisterCustomer: (customerData: Omit<LocalCustomer, 'id'>) => Promise<void>;
+}
+
+type ViewMode = 'list' | 'add';
+
+interface NewCustomerForm {
+    name: string;
+    phone: string;
+    taxId: string;
+    address: string;
+    country: string;
+}
+
+const initialFormState: NewCustomerForm = {
+    name: '',
+    phone: '',
+    taxId: '',
+    address: '',
+    country: 'Portugal'
+};
+
+export const CustomerDialog: React.FC<CustomerDialogProps> = ({
+    open,
+    onClose,
+    onSelect,
+    customers,
+    onRegisterCustomer
+}) => {
+    const { t } = useTranslation();
+    const [view, setView] = useState<ViewMode>('list');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedCustomer, setSelectedCustomer] = useState<LocalCustomer | null>(null);
+    const [newCustomerForm, setNewCustomerForm] = useState<NewCustomerForm>(initialFormState);
+
+    // Virtual Keyboard State
+    const [activeField, setActiveField] = useState<string>('');
+    const [searchFocused, setSearchFocused] = useState(false);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    const [keyboardConfig, setKeyboardConfig] = useState({
+        isOpen: false,
+        title: '',
+        field: '',
+        onConfirm: (_value: string) => { },
+        maxLength: 50,
+        allowNumbers: true,
+        allowLetters: true
+    });
+
+    // Reset state when dialog opens/closes
+    useEffect(() => {
+        if (open) {
+            setView('list');
+            setSearchTerm('');
+            setNewCustomerForm(initialFormState);
+            setActiveField(''); // Reset active field to hide keyboard
+        }
+    }, [open]);
+
+    // Reset active field when switching views
+    const handleViewChange = (newView: ViewMode) => {
+        setActiveField(''); // Hide keyboard when switching views
+        setView(newView);
+    };
+
+    // Filter customers
+    const filteredCustomers = useMemo(() => {
+        if (!searchTerm) return customers;
+        const searchLower = searchTerm.toLowerCase();
+        return customers.filter(c =>
+            c.name.toLowerCase().includes(searchLower) ||
+            ((c as any).nif && (c as any).nif.toLowerCase().includes(searchLower)) ||
+            c.email?.toLowerCase().includes(searchLower) ||
+            c.phone?.toLowerCase().includes(searchLower)
+        );
+    }, [customers, searchTerm]);
+
+    // NIF Validation Helpers
+    const getNifValidationState = (nif: string) => {
+        if (!nif.trim()) return 'default';
+        if (nif.length === 9 && /^[A-Z0-9]{9}$/.test(nif)) return 'valid';
+        return 'invalid';
+    };
+
+    const getNifFieldClasses = (nif: string, baseClasses: string) => {
+        const state = getNifValidationState(nif);
+        switch (state) {
+            case 'valid':
+                return `${baseClasses} border-green-500 focus:ring-green-500 focus:border-green-500`;
+            case 'invalid':
+                return `${baseClasses} border-red-500 focus:ring-red-500 focus:border-red-500`;
+            default:
+                return `${baseClasses} border-gray-300 focus:ring-blue-500 focus:border-transparent`;
+        }
+    };
+
+
+
+    const handleFormChange = (field: string, value: string) => {
+        setNewCustomerForm(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleTextFieldClick = (field: string, allowNumbers = true, allowLetters = true, maxLength = 50) => {
+        setActiveField(field);
+        setKeyboardConfig({
+            isOpen: true,
+            title: '',
+            field,
+            onConfirm: (value: string) => {
+                let finalValue = value;
+                if (field === 'taxId') {
+                    finalValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                }
+                handleFormChange(field, finalValue);
+            },
+            maxLength,
+            allowNumbers,
+            allowLetters
+        });
+    };
+
+    const handleSubmit = async () => {
+        if (!newCustomerForm.taxId.trim()) {
+            // You might want to use a toast here
+            return;
+        }
+
+        const nifRegex = /^[A-Z0-9]{9}$/;
+        if (!nifRegex.test(newCustomerForm.taxId.trim())) {
+            return;
+        }
+
+        const customerData = {
+            name: newCustomerForm.name.trim() || `Customer ${newCustomerForm.taxId.trim()}`,
+            email: null,
+            phone: newCustomerForm.phone.trim() || null,
+            nif: newCustomerForm.taxId.trim(),
+            address: newCustomerForm.address.trim() || null,
+            city: null,
+            postalCode: null,
+            country: newCustomerForm.country.trim() || 'Portugal',
+            discountLevel: 0,
+            totalPurchases: 0,
+            totalOrders: 0,
+            is_active: true,
+            loyalty_points: 0,
+            preferred_payment_method: null,
+            created_at: new Date(),
+            updated_at: new Date(),
+            last_synced_at: new Date(),
+            total_spent: 0,
+            transaction_count: 0,
+            deleted_at: null,
+            needs_push: true,
+            is_conflicted: false
+        };
+
+        await onRegisterCustomer(customerData);
+        setView('list');
+    };
+
+    return (
+        <BaseDialog
+            open={open}
+            onClose={onClose}
+            title={t('pos.selectCustomer') || 'Select Customer'}
+            width="55vw"
+            height="80vh"
+            footer={
+                view === 'list' ? (
+                    <div className="flex space-x-4">
+                        <ActionButton
+                            onClick={onClose}
+                            label={t('common.cancel') || 'Cancel'}
+                            variant="secondary"
+                            className="flex-1"
+                            style={{ height: '5vh', fontSize: '1.6vh' }}
+                        />
+                        <ActionButton
+                            onClick={() => {
+                                if (selectedCustomer) {
+                                    onSelect(selectedCustomer);
+                                }
+                            }}
+                            label={t('common.select') || 'Select'}
+                            disabled={!selectedCustomer}
+                            className={`flex-1 ${!selectedCustomer ? 'bg-gray-300 cursor-not-allowed' : ''}`}
+                            style={{ height: '5vh', fontSize: '1.6vh' }}
+                        />
+                    </div>
+                ) : view === 'add' ? (
+                    <div className="flex space-x-4">
+                        <ActionButton
+                            onClick={() => setView('list')}
+                            label={t('common.cancel') || 'Cancel'}
+                            variant="secondary"
+                            className="flex-1"
+                        />
+                        <ActionButton
+                            onClick={handleSubmit}
+                            label="Save Customer"
+                            className="flex-1"
+                            disabled={!newCustomerForm.taxId || getNifValidationState(newCustomerForm.taxId) !== 'valid'}
+                        />
+                    </div>
+                ) : undefined
+            }
+        >
+            <div className="flex flex-col h-full">
+                {/* View Toggle */}
+                <div className="px-6 pt-6 pb-4">
+                    <TabToggle
+                        value={view}
+                        onChange={(val) => handleViewChange(val as ViewMode)}
+                        options={[
+                            { value: 'list', label: t('pos.existingCustomer') || 'Existing Customer', icon: Users },
+                            { value: 'add', label: t('pos.newCustomer') || 'New Customer', icon: Plus }
+                        ]}
+                    />
+                </div>
+
+                {view === 'list' ? (
+                    <div className="flex-1 flex space-x-6 px-6 pb-6 overflow-hidden">
+                        {/* Left: Search + Numpad - Always visible */}
+                        <div className="flex-1 flex flex-col min-w-0">
+                            {/* Search Bar */}
+                            <div className="mb-4 pt-1">
+                                <InputField
+                                    ref={searchInputRef}
+                                    icon={Search}
+                                    placeholder={t('pos.searchByNif') || 'Search by Name, NIF, Email...'}
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="rounded-2xl"
+                                />
+                            </div>
+
+                            {/* Numpad */}
+                            <div className="flex-1 min-h-0 py-1">
+                                <SimpleNumpad
+                                    value={searchTerm}
+                                    onChange={setSearchTerm}
+                                    onButtonClick={() => searchInputRef.current?.focus()}
+                                    className="h-full"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Right: Customer List or Empty State - Always visible */}
+                        <div className="flex-1 flex flex-col overflow-hidden">
+                            {searchTerm.trim().length > 0 && filteredCustomers.length > 0 ? (
+                                <div className="flex-1 overflow-y-auto">
+                                    <ul className="divide-y divide-gray-200">
+                                        {filteredCustomers.map((customer, index) => (
+                                            <li
+                                                key={customer.id}
+                                                onClick={() => setSelectedCustomer(customer)}
+                                                className={`cursor-pointer transition-colors ${selectedCustomer?.id === customer.id ? 'bg-green-50' : 'hover:bg-blue-50'
+                                                    }`}
+                                                style={{ paddingTop: index === 0 ? '2vh' : '1.5vh', paddingBottom: '1vh' }}
+                                            >
+                                                <div className="flex items-center justify-between px-2">
+                                                    <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>
+                                                        {(customer as any).nif || 'N/A'}
+                                                    </p>
+                                                    <p className="font-semibold text-gray-900" style={{ fontSize: '1.5vh' }}>
+                                                        €{(customer.total_spent || 0).toFixed(2)}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center space-x-3 text-gray-500 px-2" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
+                                                    <span className="font-medium truncate" style={{ fontSize: '1.3vh' }}>{customer.name}</span>
+                                                    <span style={{ fontSize: '1.3vh' }}>•</span>
+                                                    <span style={{ fontSize: '1.3vh' }}>{customer.transaction_count || 0} orders</span>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ) : (
+                                <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+                                    <Users className="w-16 h-16 text-gray-300 mb-4" />
+                                    <p className="text-xl font-semibold text-gray-700 mb-2">
+                                        {searchTerm.trim().length === 0
+                                            ? (t('pos.startSearchTitle') || 'Search for customers')
+                                            : (t('pos.noCustomersFoundTitle') || 'No customers found')
+                                        }
+                                    </p>
+                                    <p className="text-gray-500 mb-6">
+                                        {searchTerm.trim().length === 0
+                                            ? (t('pos.startSearchMessage') || 'Start typing to search for customers')
+                                            : (t('pos.noCustomersFoundMessage') || 'No customers match your search')
+                                        }
+                                    </p>
+                                    {searchTerm.trim().length > 0 && (
+                                        <ActionButton
+                                            onClick={() => setView('add')}
+                                            label={t('pos.addNewCustomer') || 'Add New Customer'}
+                                        />
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex-1 flex flex-col overflow-hidden px-6 pb-6">
+                        {/* Form */}
+                        <div className="space-y-4">
+                            {/* Personal Info */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <InputField
+                                    label="Name"
+                                    value={newCustomerForm.name}
+                                    onChange={(e) => handleFormChange('name', e.target.value)}
+                                    onClick={() => handleTextFieldClick('name', true, true, 50)}
+                                    className={activeField === 'name' ? 'bg-blue-50 border-blue-500' : ''}
+                                    placeholder="Enter customer name"
+                                />
+                                <div className="relative">
+                                    <InputField
+                                        label="NIF *"
+                                        icon={TaxIcon}
+                                        value={newCustomerForm.taxId}
+                                        onChange={(e) => handleFormChange('taxId', e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase())}
+                                        onClick={() => handleTextFieldClick('taxId', true, true, 9)}
+                                        className={activeField === 'taxId' ? 'bg-blue-50' : ''}
+                                        placeholder="123456789"
+                                        error={newCustomerForm.taxId && getNifValidationState(newCustomerForm.taxId) !== 'valid' ? 'Invalid NIF' : undefined}
+                                        rightIcon={newCustomerForm.taxId && getNifValidationState(newCustomerForm.taxId) === 'valid' ? Check : undefined}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Contact Info */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <InputField
+                                    label="Phone"
+                                    icon={Phone}
+                                    type="tel"
+                                    value={newCustomerForm.phone}
+                                    onChange={(e) => handleFormChange('phone', e.target.value)}
+                                    onClick={() => handleTextFieldClick('phone', true, true, 20)}
+                                    className={activeField === 'phone' ? 'bg-blue-50 border-blue-500' : ''}
+                                    placeholder="+351 912 345 678"
+                                />
+                                <InputField
+                                    label="Country"
+                                    value={newCustomerForm.country}
+                                    onChange={(e) => handleFormChange('country', e.target.value)}
+                                    onClick={() => handleTextFieldClick('country', true, true, 30)}
+                                    className={activeField === 'country' ? 'bg-blue-50 border-blue-500' : ''}
+                                    placeholder="Portugal"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Keyboard - Below the form, only visible when activeField is set */}
+                        {activeField && (
+                            <div className="flex-1 mt-4 min-h-0">
+                                <VirtualKeyboard
+                                    isOpen={true}
+                                    onClose={() => setActiveField('')}
+                                    onConfirm={keyboardConfig.onConfirm}
+                                    title=""
+                                    initialValue={activeField && newCustomerForm[activeField as keyof NewCustomerForm] ? newCustomerForm[activeField as keyof NewCustomerForm] : ''}
+                                    maxLength={keyboardConfig.maxLength}
+                                    allowNumbers={keyboardConfig.allowNumbers}
+                                    allowLetters={keyboardConfig.allowLetters}
+                                />
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </BaseDialog>
+    );
+};
+

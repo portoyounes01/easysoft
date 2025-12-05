@@ -7,7 +7,10 @@
 
 ### POS Right Panel Redesign (Order Summary Panel)
 
-- Implementing a new `OrderSummaryPanel` in `src/components/OrderSummaryPanel.tsx` following STYLE_GUIDE.md and DEVELOPMENT_GUIDE.md
+ - Implementing a new `OrderSummaryPanel` in `src/components/OrderSummaryPanel.tsx` following STYLE_GUIDE.md and DEVELOPMENT_GUIDE.md
+  - Added `totalsOverride` prop and integrated discount/tax/total display from POS
+  - Added `discountInfo` prop with proper formatting: percentage with amount in parens, or fixed amount
+  - Updated clear cart to reset discount state
 - Integrated into `src/pages/POS.tsx`, replacing legacy cart sidebar UI
 - Added i18n keys for: orderDetails, dineIn, takeAway, saveBill, tables, clearAllOrder
 - Pending: refine styles to match touch target/typography specs; add tests; update DONE.md after verification
@@ -159,3 +162,104 @@
 
 - Replaced date placeholders in `public/seed/transactions.yml` with concrete ISO dates matching `transaction_number` to resolve Supabase error 22007 (invalid date syntax).
 - Verified YAML structure and relationships align with `src/utils/populateTransactionData.ts` mock data.
+
+## Dashboard Responsive Design Fix (2025-11-04)
+
+- **Status**: ✅ COMPLETED
+- **Description**: Complete overhaul of dashboard responsiveness across all screen sizes
+- **Changes Made**:
+  - **Header Component** (`src/components/Layout/Header.tsx`):
+    - Implemented progressive disclosure: full date on desktop (lg+), short date on tablet (md-lg), hidden on mobile
+    - Till status hidden on smallest mobile devices (shown from sm+)
+    - Search bar hidden on mobile/tablet (shown on lg+)
+    - Notifications hidden on mobile (shown on md+)
+    - User profile responsive: full info on desktop (md+), avatar only on mobile
+    - Language switcher hidden on small mobile (shown from sm+)
+    - Replaced fixed `space-x-*` with responsive `gap-*` utilities
+    - All elements use `flex-shrink-0` or `whitespace-nowrap` to prevent layout breaks
+  
+  - **Layout Component** (`src/components/Layout/Layout.tsx`):
+    - Implemented mobile drawer pattern for sidebar (overlay on mobile, fixed on desktop)
+    - Added mobile state detection and separate sidebar open state for mobile
+    - Sidebar hidden by default on mobile (<768px), toggled via hamburger menu
+    - Added backdrop for mobile sidebar with proper z-index layering
+    - Sidebar slides in/out with smooth transition on mobile
+    - Desktop behavior unchanged (collapse/expand in place)
+    - Main content always takes full width on mobile
+  
+  - **Sidebar Component** (`src/components/Layout/Sidebar.tsx`):
+    - No visual changes needed, works correctly with Layout overlay pattern
+  
+- **Testing Results**:
+  - ✅ **Mobile (375px)**: Clean layout with hamburger menu, user avatar, full-width content
+  - ✅ **Tablet (768px)**: Collapsed sidebar icons, shortened date, full functionality
+  - ✅ **Desktop (1920px)**: Full layout with expanded sidebar, complete date/time, search bar, all elements visible
+  - ✅ **Sidebar Drawer**: Works perfectly on mobile with backdrop and smooth animation
+  
+- **Breakpoints Used**:
+  - Mobile: `<768px` (md)
+  - Tablet: `768px - 1024px` (md - lg)
+  - Desktop: `>1024px` (lg+)
+  
+- **Benefits**:
+  - No more horizontal overflow on any screen size
+  - Professional mobile UX with proper navigation drawer
+  - All content properly readable at every breakpoint
+  - Maintains full functionality across all devices
+  - Follows modern responsive design patterns
+
+## Products Page Responsive Design Fix (2025-11-04)
+
+- **Status**: ✅ COMPLETED
+- **Description**: Fixed responsive layout issues on the Products page across all screen sizes
+- **Changes Made**:
+  - **Header Layout** (`src/pages/Products.tsx`):
+    - Changed header flex direction from `lg:flex-row` to `md:flex-row`
+    - Ensures search bar and action buttons share the same row on tablet and above
+    - Better horizontal space utilization on tablet devices
+  
+  - **Statistics Cards Grid** (`src/pages/Products.tsx`):
+    - Modified grid layout from `md:grid-cols-5` to `sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5`
+    - Prevents severe cramping on tablet view
+    - Proper grid breakdowns:
+      - Mobile (<640px): 1 column (stacked)
+      - Small tablet (640px-1024px): 2 columns
+      - Large tablet/laptop (1024px-1280px): 3 columns
+      - Desktop (1280px+): 5 columns
+  
+- **Testing Results**:
+  - ✅ **Mobile (375px)**: Clean stacked layout, full-width search, properly sized buttons
+  - ✅ **Tablet (768px)**: Two-column stat cards, search/buttons on same row
+  - ✅ **Desktop (1280px+)**: Five-column stat cards, optimal space usage
+  
+- **Benefits**:
+  - No more cramped stat cards on tablet
+  - Improved header utilization on tablet and up
+  - Professional layout at all breakpoints
+
+## Reports Page Responsive Design Fix (2025-11-04)
+
+- **Status**: ✅ COMPLETED
+- **Description**: Fixed responsive tab navigation on the Reports page to prevent wasted space
+- **Changes Made**:
+  - **Tab Navigation** (`src/pages/Reports.tsx`):
+    - Changed text label visibility from `lg:` (1024px) to `md:` (768px)
+    - Progressive padding: `px-3` (mobile) → `px-4` (tablet) → `px-6` (desktop)
+    - Ensures tabs show full labels from tablet size onwards
+    - Icon-only tabs reserved for smallest mobile screens (<768px)
+  
+  - **Responsive Breakpoints**:
+    - Mobile (<768px): Icon-only tabs with compact padding (px-3)
+    - Tablet+ (≥768px): Icons + full text labels with progressive padding
+    - Desktop (≥1024px): Icons + text with generous padding (px-6)
+  
+- **Testing Results**:
+  - ✅ **Mobile (400px)**: Icon-only tabs, compact padding, space-efficient
+  - ✅ **Large phone/small tablet (700px)**: Icon-only tabs, no wasted space
+  - ✅ **Tablet+ (850px)**: Icons + full text labels, proper space utilization
+  
+- **Benefits**:
+  - No more wasted horizontal space on tablet sizes
+  - Better UX with full text labels appearing earlier
+  - Consistent visual hierarchy across breakpoints
+  - Optimal space usage at all screen sizes

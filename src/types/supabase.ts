@@ -668,6 +668,8 @@ export interface TransactionRow {
     transaction_time: string; // Time string (HH:MM:SS)
     subtotal: number;
     discount: number;
+    discount_type?: 'none' | 'percentage' | 'fixed';
+    discount_percentage?: number;
     tax: number;
     total: number;
     payment_method: 'cash' | 'card' | 'mixed';
@@ -694,6 +696,8 @@ export interface TransactionInsert {
     transaction_time: string; // Time string
     subtotal: number;
     discount?: number;
+    discount_type?: 'none' | 'percentage' | 'fixed';
+    discount_percentage?: number;
     tax: number;
     total: number;
     payment_method: 'cash' | 'card' | 'mixed';
@@ -720,6 +724,8 @@ export interface TransactionUpdate {
     transaction_time?: string;
     subtotal?: number;
     discount?: number;
+    discount_type?: 'none' | 'percentage' | 'fixed';
+    discount_percentage?: number;
     tax?: number;
     total?: number;
     payment_method?: 'cash' | 'card' | 'mixed';

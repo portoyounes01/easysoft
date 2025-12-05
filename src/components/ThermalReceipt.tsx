@@ -87,13 +87,25 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   // Helpers for precise totals based on discount policy (apply discount first, then split VAT)
   const round2 = (n: number): number => Math.round(n * 100) / 100;
   const discountPct = totals.discountPercentage || 0;
-  const discountFactor = 1 - discountPct / 100;
 
-  // Aggregate recomputed totals from items after discount
+  // 1) Determine discount factor to apply on item totals (tax-included)
+  const grossBefore = items.reduce((s, it) => s + (it.total || 0), 0);
+  let grossFactor = 1;
+  if (discountPct > 0) {
+    grossFactor = 1 - discountPct / 100;
+  } else if ((totals.discount || 0) > 0 && grossBefore > 0) {
+    // For fixed discount, scale item totals so that their sum matches provided totals.total
+    // Clamp to [0,1] to avoid accidental overflows
+    const desiredGross = typeof totals.total === 'number' ? totals.total : grossBefore;
+    const computed = desiredGross / grossBefore;
+    grossFactor = Math.max(0, Math.min(1, computed));
+  }
+
+  // 2) Aggregate recomputed totals from items AFTER discount (using grossFactor)
   const recomputed = items.reduce(
     (acc, item) => {
       const rate = (item.vatRate || 0) / 100;
-      const grossAfterDiscount = item.total * discountFactor; // tax-included
+      const grossAfterDiscount = (item.total || 0) * grossFactor; // tax-included
       const base = grossAfterDiscount / (1 + rate);
       const vat = grossAfterDiscount - base;
       acc.gross += grossAfterDiscount;
@@ -103,10 +115,27 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
     },
     { gross: 0, base: 0, vat: 0 }
   );
-  const totalGross = round2(recomputed.gross);
+
+  // 3) Also compute original (BEFORE discount) base and VAT for display of ILÍQUIDO
+  const original = items.reduce(
+    (acc, item) => {
+      const rate = (item.vatRate || 0) / 100;
+      const gross = item.total || 0;
+      const base = gross / (1 + rate);
+      const vat = gross - base;
+      acc.gross += gross;
+      acc.base += base;
+      acc.vat += vat;
+      return acc;
+    },
+    { gross: 0, base: 0, vat: 0 }
+  );
+
+  // Prefer provided totals for final amounts, fall back to recomputed when missing
+  const totalGross = typeof totals.total === 'number' ? round2(totals.total) : round2(recomputed.gross);
   const totalBase = round2(recomputed.base);
-  const totalVat = round2(recomputed.vat);
-  const subtotalBeforeDiscount = round2(totalBase + (totals.discount || 0));
+  const totalVat = typeof totals.vat === 'number' ? round2(totals.vat) : round2(recomputed.vat);
+  const subtotalBeforeDiscount = round2(original.base);
 
   const getDocumentTitle = (): string => {
     switch (documentType) {
@@ -316,7 +345,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
             <span>Uni</span>
             <span className="item-desc">{item.description}</span>
             <span>{item.vatRate}%</span>
-            <span className="cell-end">{formatCurrency(round2(item.total * discountFactor))}</span>
+            <span className="cell-end">{formatCurrency(round2(item.total * grossFactor))}</span>
             <span className="small-text grid-from-desc">Preço unitário: {formatCurrency(item.unitPrice)} €/Unidade</span>
             {index < items.length - 1 && <span className="spacer-row"></span>}
           </React.Fragment>
@@ -341,7 +370,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
               acc[key] = { incidence: 0, vat: 0 };
             }
             const rateFraction = (item.vatRate || 0) / 100;
-            const grossAfterDiscount = item.total * discountFactor;
+            const grossAfterDiscount = item.total * grossFactor;
             const base = grossAfterDiscount / (1 + rateFraction);
             const vat = grossAfterDiscount - base;
             acc[key].incidence += base;
@@ -362,20 +391,22 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       </div>
 
       {/* Totals */}
-      <div className="total-row">
-        <span>ILÍQUIDO</span>
-        <span>{formatCurrency(subtotalBeforeDiscount)}</span>
-      </div>
       {totals.discount > 0 && (
-        <div className="total-row">
-          <span>DESC.{totals.discountPercentage}%</span>
-          <span>{formatCurrency(totals.discount)}</span>
-        </div>
+        <>
+          <div className="total-row">
+            <span>ILÍQUIDO</span>
+            <span>{formatCurrency(subtotalBeforeDiscount)}</span>
+          </div>
+          <div className="total-row">
+            <span>{discountPct > 0 ? `DESC.${discountPct}%` : 'DESC.'}</span>
+            <span>{formatCurrency(totals.discount)}</span>
+          </div>
+          <div className="total-row">
+            <span>LÍQUIDO</span>
+            <span>{formatCurrency(totalBase)}</span>
+          </div>
+        </>
       )}
-      <div className="total-row">
-        <span>LÍQUIDO</span>
-        <span>{formatCurrency(totalBase)}</span>
-      </div>
       <div className="total-row">
         <span>IVA</span>
         <span>{formatCurrency(totalVat)}</span>

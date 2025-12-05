@@ -35,6 +35,8 @@ import {
     ProductPerformance,
     OverviewMetrics
 } from '../types/supabase';
+import { TabButton } from '../components/ui/TabButton';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
 
 // Note: Mock data has been replaced with real database integration
 // The transaction data now comes from the reportingService
@@ -218,31 +220,23 @@ const Reports: React.FC = () => {
                     <p className="text-gray-600 mt-1">{t('reports.header.subtitle')}</p>
                 </div>
                 <div className="flex items-center space-x-3">
-                    <button
+                    <AdminActionButton
+                        variant="outline"
+                        label={t('reports.header.filters')}
+                        icon={Filter}
+                        showChevron={true}
                         onClick={() => setShowFilters(!showFilters)}
-                        className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2"
                     >
-                        <Filter className="w-4 h-4" />
-                        <span>{t('reports.header.filters')}</span>
                         {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-                    <button
+                    </AdminActionButton>
+                    <AdminActionButton
+                        variant="primary"
+                        label={isExporting ? t('reports.header.exporting') : t('reports.header.exportExcel')}
+                        icon={Download}
                         onClick={handleExportExcel}
                         disabled={isExporting}
-                        className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2"
-                    >
-                        {isExporting ? (
-                            <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>{t('reports.header.exporting')}</span>
-                            </>
-                        ) : (
-                            <>
-                                <Download className="w-4 h-4" />
-                                <span>{t('reports.header.exportExcel')}</span>
-                            </>
-                        )}
-                    </button>
+                        isLoading={isExporting}
+                    />
                 </div>
             </div>
 
@@ -302,23 +296,18 @@ const Reports: React.FC = () => {
 
             {/* Tab Navigation */}
             <div className="bg-white rounded-xl shadow-lg border border-gray-100">
-                <div className="flex overflow-x-auto">
-                    {tabs.map((tab) => {
-                        const Icon = tab.icon;
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`flex items-center space-x-2 px-6 py-4 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === tab.id
-                                    ? 'border-blue-500 text-blue-600 bg-blue-50'
-                                    : 'border-transparent text-gray-600 hover:text-gray-800 hover:bg-gray-50'
-                                    }`}
-                            >
-                                <Icon className="w-4 h-4" />
-                                <span>{tab.label}</span>
-                            </button>
-                        );
-                    })}
+                <div className="flex">
+                    {tabs.map((tab) => (
+                        <TabButton
+                            key={tab.id}
+                            variant="reports"
+                            active={activeTab === tab.id}
+                            label={tab.label}
+                            icon={tab.icon}
+                            onClick={() => setActiveTab(tab.id)}
+                            className="flex-1"
+                        />
+                    ))}
                 </div>
             </div>
 

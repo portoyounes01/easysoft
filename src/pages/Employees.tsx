@@ -28,6 +28,7 @@ import { EmployeeFormData, EmployeeRole, AccessLevel, Employee, AccessLevels } f
 import DatabaseReset from '../components/DatabaseReset';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
 
 const Employees: React.FC = () => {
     const {
@@ -489,13 +490,12 @@ const Employees: React.FC = () => {
                     <h1 className="text-3xl font-bold text-gray-800">{t('employees.header.title')}</h1>
                     <p className="text-gray-600 mt-1">{t('employees.header.subtitle')}</p>
                 </div>
-                <button
+                <AdminActionButton
+                    variant="primary"
+                    label={t('employees.header.addEmployee')}
+                    icon={Plus}
                     onClick={handleAddEmployee}
-                    className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-600 transition-all flex items-center space-x-2 shadow-lg"
-                >
-                    <Plus className="w-5 h-5" />
-                    <span>{t('employees.header.addEmployee')}</span>
-                </button>
+                />
             </div>
 
             {/* Filters */}
@@ -527,10 +527,12 @@ const Employees: React.FC = () => {
                     </div>
 
                     <div className="flex items-center space-x-2">
-                        <button className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                            <Filter className="w-4 h-4" />
-                            <span>{t('employees.header.filters')}</span>
-                        </button>
+                        <AdminActionButton
+                            variant="ghost"
+                            label={t('employees.header.filters')}
+                            icon={Filter}
+                            className="bg-gray-100 hover:bg-gray-200"
+                        />
                     </div>
                 </div>
             </div>

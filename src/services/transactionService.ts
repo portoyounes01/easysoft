@@ -80,8 +80,10 @@ export const transactionService = {
             return [];
         }
 
-        // Get transaction items for these transactions
+        // Get transaction items for these transactions with more detailed logging
         const transactionIds = transactions.map(t => t.id);
+        console.log('Fetching transaction items for transaction IDs:', transactionIds);
+
         const { data: transactionItems, error: itemsError } = await supabase
             .from('transaction_items')
             .select('*')
@@ -93,26 +95,38 @@ export const transactionService = {
             throw itemsError;
         }
 
-        // Group items by transaction
+        console.log('Retrieved transaction items:', transactionItems);
+
+        // Group items by transaction with more detailed logging
         const itemsByTransaction = new Map<string, any[]>();
         (transactionItems || []).forEach(item => {
             if (!itemsByTransaction.has(item.transaction_id)) {
                 itemsByTransaction.set(item.transaction_id, []);
             }
             itemsByTransaction.get(item.transaction_id)!.push(item);
+            console.log(`Adding item ${item.id} to transaction ${item.transaction_id}:`, item);
         });
 
-        // Add items to transactions
-        return transactions.map(transaction => ({
-            ...transaction,
-            transaction_items: itemsByTransaction.get(transaction.id) || []
-        }));
+        // Add items to transactions with logging
+        const result = transactions.map(transaction => {
+            const items = itemsByTransaction.get(transaction.id) || [];
+            console.log(`Transaction ${transaction.id} (${transaction.transaction_number}) has ${items.length} items`);
+            return {
+                ...transaction,
+                transaction_items: items
+            };
+        });
+
+        console.log('Final transaction data with items:', result);
+        return result;
     },
 
     // Get a single transaction by ID (coalesces concurrent calls per id)
     async getTransactionById(id: string) {
         if (!getTransactionByIdInFlight.has(id)) {
             const p = (async () => {
+                console.log(`Fetching transaction ${id} by ID`);
+
                 const { data: transaction, error: transactionError } = await supabase
                     .from('transactions')
                     .select('*')
@@ -121,8 +135,11 @@ export const transactionService = {
                     .single();
 
                 if (transactionError) {
+                    console.error('Error fetching transaction:', transactionError);
                     throw transactionError;
                 }
+
+                console.log('Retrieved transaction:', transaction);
 
                 const { data: transactionItems, error: itemsError } = await supabase
                     .from('transaction_items')
@@ -131,8 +148,11 @@ export const transactionService = {
                     .is('deleted_at', null);
 
                 if (itemsError) {
+                    console.error('Error fetching transaction items:', itemsError);
                     throw itemsError;
                 }
+
+                console.log(`Retrieved ${transactionItems?.length || 0} items for transaction ${id}:`, transactionItems);
 
                 let customer = null as any;
                 if (transaction.customer_id) {
@@ -143,13 +163,17 @@ export const transactionService = {
                         .is('deleted_at', null)
                         .single();
                     customer = customerData;
+                    console.log('Retrieved customer for transaction:', customer);
                 }
 
-                return {
+                const result = {
                     ...transaction,
                     transaction_items: transactionItems || [],
                     customers: customer
                 };
+
+                console.log('Final transaction data with items:', result);
+                return result;
             })().finally(() => {
                 getTransactionByIdInFlight.delete(id);
             });
@@ -162,9 +186,12 @@ export const transactionService = {
 
     // Create a new transaction with items
     async createTransaction(transactionData: TransactionInsert, items: TransactionItemInsert[]) {
+        console.log('TransactionService: Creating transaction with data:', transactionData);
+        console.log('TransactionService: Creating transaction items:', items);
+
         // Generate transaction number with fallback
         let transactionNumber: string;
-        
+
         try {
             const { data: rpcNumber, error: numberError } = await supabase
                 .rpc('generate_transaction_number');
@@ -198,11 +225,15 @@ export const transactionService = {
             throw transactionError;
         }
 
+        console.log('TransactionService: Transaction created successfully:', transaction);
+
         // Create the transaction items
         const itemsWithTransactionId = items.map(item => ({
             ...item,
             transaction_id: transaction.id
         }));
+
+        console.log('TransactionService: Inserting transaction items:', itemsWithTransactionId);
 
         const { data: transactionItems, error: itemsError } = await supabase
             .from('transaction_items')
@@ -211,13 +242,50 @@ export const transactionService = {
 
         if (itemsError) {
             console.error('Error creating transaction items:', itemsError);
+            console.error('Items error details:', {
+                message: itemsError.message,
+                details: itemsError.details,
+                hint: itemsError.hint,
+                code: itemsError.code
+            });
+
+            // Check if this is a foreign key constraint violation
+            if (itemsError.code === '23503') {
+                console.error('Foreign key constraint violation - product_id references products table');
+                console.error('This might mean the product was created locally but not synced to server yet');
+
+                // Check which products exist in the server
+                for (const item of itemsWithTransactionId) {
+                    try {
+                        const { data: productExists } = await supabase
+                            .from('products')
+                            .select('id, name')
+                            .eq('id', item.product_id)
+                            .single();
+
+                        if (!productExists) {
+                            console.error(`Product ${item.product_id} (${item.product_name}) does not exist in server products table`);
+                        } else {
+                            console.log(`Product ${item.product_id} (${item.product_name}) exists in server products table`);
+                        }
+                    } catch (productCheckError) {
+                        console.error(`Error checking if product ${item.product_id} exists:`, productCheckError);
+                    }
+                }
+            }
+
             throw itemsError;
         }
 
-        return {
+        console.log('TransactionService: Transaction items created successfully:', transactionItems);
+
+        const result = {
             transaction,
             items: transactionItems
         };
+
+        console.log('TransactionService: Final result:', result);
+        return result;
     },
 
     // Update a transaction
