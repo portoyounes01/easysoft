@@ -138,7 +138,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                         €{price.toFixed(2)}
                     </span>
                     <span
-                        className="text-gray-50"
+                        className="text-gray-500"
                         style={{ fontSize: `${CARD_WIDTH_VW * 0.07}vw` }}
                     >
                         Stock: {displayStock}

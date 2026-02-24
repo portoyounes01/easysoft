@@ -131,8 +131,8 @@ const PrinterManager: React.FC = () => {
     // For quick list, always show grey icons since we don't know the real status
     if (printer.connectionStatus === 'quick_list') {
       return printer.type === 'usb' ? 
-        <Usb className="h-4 w-4 text-gray-50" /> : 
-        <Wifi className="h-4 w-4 text-gray-50" />;
+        <Usb className="h-4 w-4 text-gray-500" /> : 
+        <Wifi className="h-4 w-4 text-gray-500" />;
     }
     
     // For enhanced status checks, show actual connectivity
@@ -166,7 +166,7 @@ const PrinterManager: React.FC = () => {
           </div>
           <div className="flex items-center space-x-3">
             {lastRefresh && (
-              <span className="text-sm text-gray-50">
+              <span className="text-sm text-gray-500">
                 Last updated: {lastRefresh.toLocaleTimeString()}
               </span>
             )}
@@ -188,7 +188,7 @@ const PrinterManager: React.FC = () => {
             </button>
           </div>
         </div>
-        <div className="text-center py-8 text-gray-50">
+        <div className="text-center py-8 text-gray-500">
           <Printer className="h-12 w-12 mx-auto mb-3 opacity-50" />
           <p>No printers found on this system</p>
           <p className="text-sm mt-1">Make sure printers are installed and configured</p>
@@ -206,7 +206,7 @@ const PrinterManager: React.FC = () => {
         </div>
         <div className="flex items-center space-x-3">
           {lastRefresh && (
-            <span className="text-sm text-gray-50">
+            <span className="text-sm text-gray-500">
               Last updated: {lastRefresh.toLocaleTimeString()}
             </span>
           )}
@@ -267,7 +267,7 @@ const PrinterManager: React.FC = () => {
                   )}
                 </div>
                 {printer.device && printer.device !== 'unknown' && (
-                  <p className="text-xs text-gray-50 mt-1 truncate max-w-md">
+                  <p className="text-xs text-gray-500 mt-1 truncate max-w-md">
                     {printer.device}
                   </p>
                 )}

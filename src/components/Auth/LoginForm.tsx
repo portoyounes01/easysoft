@@ -280,7 +280,7 @@ const LoginForm: React.FC = () => {
                       {showKeyboard ? 'Hide Keyboard' : 'Show Keyboard'}
                     </button>
 
-                    <div className="text-sm text-gray-50">
+                    <div className="text-sm text-gray-500">
                       Demo {selectedEmployee?.role === 'admin' ? 'Password' : 'PIN'}: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{selectedEmployee?.role === 'admin' ? 'password' : '1234'}</span>
                     </div>
                   </div>

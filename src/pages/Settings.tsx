@@ -320,7 +320,7 @@ const Settings: React.FC = () => {
                                                 onChange={(e) => handleSettingsChange('pos', 'taxRate', parseFloat(e.target.value))}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
-                                            <p className="text-sm text-gray-50 mt-1">{(settings.pos.taxRate * 100).toFixed(1)}% tax rate</p>
+                                            <p className="text-sm text-gray-500 mt-1">{(settings.pos.taxRate * 100).toFixed(1)}% tax rate</p>
                                         </div>
                                     </div>
                                 </div>

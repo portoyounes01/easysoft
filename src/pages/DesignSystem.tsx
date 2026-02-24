@@ -30,7 +30,7 @@ const DesignSystem: React.FC = () => {
         return <Premade />;
       default:
         return (
-          <div className="p-8 text-center text-gray-50">
+          <div className="p-8 text-center text-gray-500">
             <h2 className="text-xl font-semibold mb-2">Coming Soon</h2>
             <p>The {activeSection.replace('-', ' ')} section is under construction.</p>
           </div>
@@ -57,7 +57,7 @@ const DesignSystem: React.FC = () => {
       <div className="w-64 bg-white border-r border-gray-200 overflow-y-auto">
         <div className="p-6">
           <h1 className="text-2xl font-bold text-gray-900">Design System</h1>
-          <p className="text-sm text-gray-50 mt-1">Style Guide & Components</p>
+          <p className="text-sm text-gray-500 mt-1">Style Guide & Components</p>
         </div>
         <nav className="px-4 pb-6">
           <ul className="space-y-1">

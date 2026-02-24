@@ -213,7 +213,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                         >
                             {items.length === 0 ? (
                                 <div className="text-center py-12">
-                                    <p className="text-gray-50 mb-2" style={{ fontSize: '1.8vh' }}>{t('pos.noCartItemsTitle')}</p>
+                                    <p className="text-gray-500 mb-2" style={{ fontSize: '1.8vh' }}>{t('pos.noCartItemsTitle')}</p>
                                     <p className="text-gray-400" style={{ fontSize: '1.4vh' }}>{t('pos.noCartItemsMessage')}</p>
                                 </div>
                             ) : (
@@ -230,7 +230,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                                 </p>
                                                 <p className="font-semibold text-gray-900 whitespace-nowrap" style={{ fontSize: '1.5vh' }}>{formatCurrency(ci.product.price)}</p>
                                             </div>
-                                            <div className="flex items-center space-x-3 text-gray-50" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
+                                            <div className="flex items-center space-x-3 text-gray-500" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
                                                 <span className="font-medium" style={{ fontSize: '1.3vh' }}>x{ci.quantity}</span>
                                                 <span style={{ fontSize: '1.3vh' }}>{formatCurrency(ci.product.price * ci.quantity)}</span>
                                             </div>
@@ -266,15 +266,15 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                     {/* Totals section */}
                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden" style={{ padding: '1vh', height: 'calc(26.5vh - 8vh - 2vh)' }}>
                         <div className="flex items-center justify-between" style={{ marginBottom: '0.5vh', paddingTop: '0.25vh' }}>
-                            <span className="text-gray-50 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.subtotalLabel')}</span>
+                            <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.subtotalLabel')}</span>
                             <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>{formatCurrency(displayTotals.subtotal)}</span>
                         </div>
                         <div className="flex items-center justify-between" style={{ marginBottom: '0.5vh', paddingTop: '0.25vh' }}>
-                            <span className="text-gray-50 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.taxLabel')}</span>
+                            <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.taxLabel')}</span>
                             <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>{formatCurrency(displayTotals.tax)}</span>
                         </div>
                         <div className="flex items-center justify-between" style={{ marginBottom: '1vh', paddingTop: '0.25vh' }}>
-                            <span className="text-gray-50 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.discountLabel') || 'Discount'}</span>
+                            <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.discountLabel') || 'Discount'}</span>
                             <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>{formatDiscountDisplay(discountInfo)}</span>
                         </div>
                         <div className="border-t border-gray-200" style={{ marginBottom: '1vh' }}></div>

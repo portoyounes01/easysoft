@@ -234,7 +234,7 @@ indexedDB.deleteDatabase('POSDatabase').onsuccess = () => location.reload();
                                     <span>Has Data</span>
                                 </div>
                                 <div className="flex items-center space-x-2">
-                                    <Info className="w-3 h-3 text-gray-50" />
+                                    <Info className="w-3 h-3 text-gray-500" />
                                     <span>Version: {diagnostics.version || 'Unknown'}</span>
                                 </div>
                             </div>
@@ -278,7 +278,7 @@ indexedDB.deleteDatabase('POSDatabase').onsuccess = () => location.reload();
                             )}
                         </div>
                     ) : (
-                        <p className="text-gray-50">Loading diagnostics...</p>
+                        <p className="text-gray-500">Loading diagnostics...</p>
                     )}
                 </div>
             )}

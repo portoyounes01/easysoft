@@ -98,7 +98,7 @@ const OrderPrintButton: React.FC<OrderPrintButtonProps> = ({
         className={`
           flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
           ${buttonDisabled
-            ? 'bg-gray-300 text-gray-50 cursor-not-allowed'
+            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
             : 'bg-blue-600 text-white hover:bg-blue-700'
           }
           ${className}

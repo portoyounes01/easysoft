@@ -58,7 +58,7 @@ const DebugOrderSummaryPannel: React.FC = () => {
                                     <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>Classic Crispyburger</p>
                                     <p className="font-semibold text-gray-900" style={{ fontSize: '1.5vh' }}>€3.50</p>
                                 </div>
-                                <div className="flex items-center space-x-3 text-gray-50" style={{ marginTop: '0.2vh', paddingLeft: '1vh' }}>
+                                <div className="flex items-center space-x-3 text-gray-500" style={{ marginTop: '0.2vh', paddingLeft: '1vh' }}>
                                     <span className="font-medium" style={{ fontSize: '1.3vh' }}>x1</span>
                                     <span style={{ fontSize: '1.3vh' }}>€3.50</span>
                                 </div>
@@ -68,7 +68,7 @@ const DebugOrderSummaryPannel: React.FC = () => {
                                     <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>Pastry Item</p>
                                     <p className="font-semibold text-gray-900" style={{ fontSize: '1.5vh' }}>€2.25</p>
                                 </div>
-                                <div className="flex items-center space-x-3 text-gray-50" style={{ marginTop: '0.8vh', paddingLeft: '1vh' }}>
+                                <div className="flex items-center space-x-3 text-gray-500" style={{ marginTop: '0.8vh', paddingLeft: '1vh' }}>
                                     <span className="font-medium" style={{ fontSize: '1.3vh' }}>x1</span>
                                     <span style={{ fontSize: '1.3vh' }}>€2.25</span>
                                 </div>
@@ -78,7 +78,7 @@ const DebugOrderSummaryPannel: React.FC = () => {
                                     <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>Sandwich Special</p>
                                     <p className="font-semibold text-gray-900" style={{ fontSize: '1.7vh' }}>€5.75</p>
                                 </div>
-                                <div className="flex items-center space-x-3 text-gray-50" style={{ marginTop: '0.8vh', paddingLeft: '1vh' }}>
+                                <div className="flex items-center space-x-3 text-gray-500" style={{ marginTop: '0.8vh', paddingLeft: '1vh' }}>
                                     <span className="font-medium" style={{ fontSize: '1.3vh' }}>x1</span>
                                     <span style={{ fontSize: '1.3vh' }}>€5.75</span>
                                 </div>
@@ -88,7 +88,7 @@ const DebugOrderSummaryPannel: React.FC = () => {
                                     <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>Classic Crispyburger</p>
                                     <p className="font-semibold text-gray-900" style={{ fontSize: '1.5vh' }}>€3.50</p>
                                 </div>
-                                <div className="flex items-center space-x-3 text-gray-50" style={{ marginTop: '0.2vh', paddingLeft: '1vh' }}>
+                                <div className="flex items-center space-x-3 text-gray-500" style={{ marginTop: '0.2vh', paddingLeft: '1vh' }}>
                                     <span className="font-medium" style={{ fontSize: '1.3vh' }}>x1</span>
                                     <span style={{ fontSize: '1.3vh' }}>€3.50</span>
                                 </div>
@@ -98,7 +98,7 @@ const DebugOrderSummaryPannel: React.FC = () => {
                                     <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>Pastry Item</p>
                                     <p className="font-semibold text-gray-900" style={{ fontSize: '1.5vh' }}>€2.25</p>
                                 </div>
-                                <div className="flex items-center space-x-3 text-gray-50" style={{ marginTop: '0.8vh', paddingLeft: '1vh' }}>
+                                <div className="flex items-center space-x-3 text-gray-500" style={{ marginTop: '0.8vh', paddingLeft: '1vh' }}>
                                     <span className="font-medium" style={{ fontSize: '1.3vh' }}>x1</span>
                                     <span style={{ fontSize: '1.3vh' }}>€2.25</span>
                                 </div>
@@ -108,7 +108,7 @@ const DebugOrderSummaryPannel: React.FC = () => {
                                     <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>Spicy Drumstick</p>
                                     <p className="font-semibold text-gray-900" style={{ fontSize: '1.7vh' }}>€5.75</p>
                                 </div>
-                                <div className="flex items-center space-x-3 text-gray-50" style={{ marginTop: '0.8vh', paddingLeft: '1vh' }}>
+                                <div className="flex items-center space-x-3 text-gray-500" style={{ marginTop: '0.8vh', paddingLeft: '1vh' }}>
                                     <span className="font-medium" style={{ fontSize: '1.3vh' }}>x1</span>
                                     <span style={{ fontSize: '1.3vh' }}>€5.75</span>
                                 </div>
@@ -127,15 +127,15 @@ const DebugOrderSummaryPannel: React.FC = () => {
                     {/* Totals section */}
                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden" style={{ padding: '1vh', height: 'calc(26.5vh - 8vh - 2vh)' }}>
                         <div className="flex items-center justify-between" style={{ marginBottom: '0.5vh', paddingTop: '0.25vh' }}>
-                            <span className="text-gray-50 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.subtotalLabel')}</span>
+                            <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.subtotalLabel')}</span>
                             <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>€0.00</span>
                         </div>
                         <div className="flex items-center justify-between" style={{ marginBottom: '0.5vh', paddingTop: '0.25vh' }}>
-                            <span className="text-gray-50 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.taxLabel')}</span>
+                            <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.taxLabel')}</span>
                             <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>€0.00</span>
                         </div>
                         <div className="flex items-center justify-between opacity-50" style={{ marginBottom: '1vh', paddingTop: '0.25vh' }}>
-                            <span className="text-gray-50 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.voucherLabel')}</span>
+                            <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.voucherLabel')}</span>
                             <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>€0.00</span>
                         </div>
                         <div className="border-t border-gray-200" style={{ marginBottom: '1vh' }}></div>

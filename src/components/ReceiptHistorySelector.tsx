@@ -27,7 +27,7 @@ const ReceiptHistorySelector: React.FC<ReceiptHistorySelectorProps> = ({ open, r
         >
             <div className="flex-1 flex flex-col" style={{ padding: '2vh' }}>
                 {receipts.length === 0 ? (
-                    <div className="flex-1 flex items-center justify-center text-gray-50 py-12">
+                    <div className="flex-1 flex items-center justify-center text-gray-500 py-12">
                         {t('pos.receiptHistory.empty') || 'No receipts yet'}
                     </div>
                 ) : (
@@ -46,7 +46,7 @@ const ReceiptHistorySelector: React.FC<ReceiptHistorySelectorProps> = ({ open, r
                                         </div>
                                         <div className="text-right">
                                             <div className="text-gray-900 font-semibold">{formatCurrency(r.totals.total)}</div>
-                                            {r.customer?.name && <div className="text-sm text-gray-50 truncate max-w-[220px]">{r.customer.name}</div>}
+                                            {r.customer?.name && <div className="text-sm text-gray-500 truncate max-w-[220px]">{r.customer.name}</div>}
                                         </div>
                                     </button>
                                 </li>

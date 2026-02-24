@@ -112,7 +112,7 @@ const OrderPrintManager: React.FC<OrderPrintManagerProps> = ({ onPrintComplete }
         
         <div className="flex items-center gap-3">
           {lastPrintTime && (
-            <span className="text-sm text-gray-50">
+            <span className="text-sm text-gray-500">
               Last print: {lastPrintTime.toLocaleTimeString()}
             </span>
           )}

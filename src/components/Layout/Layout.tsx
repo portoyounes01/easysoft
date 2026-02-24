@@ -68,7 +68,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden relative z-10 w-full">
-        <Header onToggleSidebar={toggleSidebar} isSidebarCollapsed={isSidebarCollapsed} />
+        {/* <Header onToggleSidebar={toggleSidebar} isSidebarCollapsed={isSidebarCollapsed} /> */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
           {children}
         </main>

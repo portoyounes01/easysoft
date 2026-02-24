@@ -192,7 +192,7 @@ const RoutingDebugger: React.FC = () => {
                     <div className="flex items-center gap-2 mb-3">
                       <CheckCircle className="h-5 w-5 text-green-600" />
                       <h4 className="font-medium text-gray-900">{detail.stationName}</h4>
-                      <span className="text-sm text-gray-50">({detail.items.length} items)</span>
+                      <span className="text-sm text-gray-500">({detail.items.length} items)</span>
                     </div>
 
                     <div className="mb-3">

@@ -119,7 +119,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isSidebarCollapsed }) 
                   {/* User info - hidden on small screens */}
                   <div className="hidden md:block">
                     <p className="text-sm font-semibold text-gray-800 text-left whitespace-nowrap">{employee?.name}</p>
-                    <p className="text-xs text-gray-50 text-left">{employee?.employee_number}</p>
+                    <p className="text-xs text-gray-500 text-left">{employee?.employee_number}</p>
                   </div>
                 </button>
 

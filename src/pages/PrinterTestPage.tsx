@@ -111,7 +111,7 @@ const PrinterTestPage: React.FC = () => {
                     )}
                   </div>
                 ) : (
-                  <p className="text-gray-50">Loading status...</p>
+                  <p className="text-gray-500">Loading status...</p>
                 )}
               </div>
 

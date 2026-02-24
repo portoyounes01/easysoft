@@ -190,7 +190,7 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
           {/* Categories and Products Tree */}
           <div className="border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
             {categorizedProducts.length === 0 ? (
-              <div className="text-center py-8 text-gray-50">
+              <div className="text-center py-8 text-gray-500">
                 <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>{searchTerm ? 'No products found' : 'No products available'}</p>
               </div>
@@ -229,7 +229,7 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
                         </div>
                         
                         <span className="font-medium text-gray-900">{category.name}</span>
-                        <span className="text-sm text-gray-50">
+                        <span className="text-sm text-gray-500">
                           ({category.assignedCount}/{category.totalCount})
                         </span>
                       </button>
@@ -259,7 +259,7 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
                               
                               <div className="flex-1">
                                 <div className="font-medium text-gray-900">{product.name}</div>
-                                <div className="text-sm text-gray-50">SKU: {product.sku}</div>
+                                <div className="text-sm text-gray-500">SKU: {product.sku}</div>
                               </div>
                               
                               <div className="text-sm text-gray-700 font-medium">

@@ -96,7 +96,7 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
       </div>
 
       {rules.length === 0 ? (
-        <div className="text-center py-6 text-gray-50 border-2 border-dashed border-gray-300 rounded-lg">
+        <div className="text-center py-6 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
           <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
           <p>No routing rules configured</p>
           <p className="text-sm">Add rules to control what prints to this station</p>
@@ -119,7 +119,7 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                   
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className={`font-medium ${rule.isActive ? 'text-gray-900' : 'text-gray-50'}`}>
+                      <span className={`font-medium ${rule.isActive ? 'text-gray-900' : 'text-gray-500'}`}>
                         {rule.type}: {rule.condition}
                       </span>
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
@@ -185,7 +185,7 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                   <option value="menu">Menu Section</option>
                   <option value="tag">Product Tag</option>
                 </select>
-                <p className="text-xs text-gray-50 mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   {getRuleTypeDescription(editingRule.type)}
                 </p>
               </div>
@@ -228,7 +228,7 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                   })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <p className="text-xs text-gray-50 mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   Higher priority rules are evaluated first
                 </p>
               </div>

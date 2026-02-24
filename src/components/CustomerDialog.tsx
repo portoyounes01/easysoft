@@ -282,7 +282,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                                         €{(customer.total_spent || 0).toFixed(2)}
                                                     </p>
                                                 </div>
-                                                <div className="flex items-center space-x-3 text-gray-50 px-2" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
+                                                <div className="flex items-center space-x-3 text-gray-500 px-2" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
                                                     <span className="font-medium truncate" style={{ fontSize: '1.3vh' }}>{customer.name}</span>
                                                     <span style={{ fontSize: '1.3vh' }}>•</span>
                                                     <span style={{ fontSize: '1.3vh' }}>{customer.transaction_count || 0} orders</span>
@@ -300,7 +300,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                             : (t('pos.noCustomersFoundTitle') || 'No customers found')
                                         }
                                     </p>
-                                    <p className="text-gray-50 mb-6">
+                                    <p className="text-gray-500 mb-6">
                                         {searchTerm.trim().length === 0
                                             ? (t('pos.startSearchMessage') || 'Start typing to search for customers')
                                             : (t('pos.noCustomersFoundMessage') || 'No customers match your search')

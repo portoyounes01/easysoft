@@ -503,7 +503,7 @@ const Transactions: React.FC = () => {
                     {filteredTransactions.length === 0 ? (
                         <div className="text-center py-12">
                             <Receipt className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <p className="text-xl text-gray-50 mb-2">{t('transactions.list.emptyTitle')}</p>
+                            <p className="text-xl text-gray-500 mb-2">{t('transactions.list.emptyTitle')}</p>
                             <p className="text-gray-400">{t('transactions.list.emptyMessage')}</p>
                         </div>
                     ) : (
@@ -544,7 +544,7 @@ const Transactions: React.FC = () => {
                                         <div className="flex items-center space-x-4">
                                             <div className="text-right">
                                                 <p className="text-lg font-bold text-gray-900">{formatCurrency(transaction.total)}</p>
-                                                <p className="text-sm text-gray-50">{transaction.items.length} {transaction.items.length !== 1 ? t('transactions.list.itemPlural') : t('transactions.list.itemSingular')}</p>
+                                                <p className="text-sm text-gray-500">{transaction.items.length} {transaction.items.length !== 1 ? t('transactions.list.itemPlural') : t('transactions.list.itemSingular')}</p>
                                             </div>
                                             <button
                                                 onClick={() => setExpandedTransaction(
@@ -574,7 +574,7 @@ const Transactions: React.FC = () => {
                                                             <div key={index} className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-lg">
                                                                 <div>
                                                                     <p className="font-medium text-gray-900">{item.name}</p>
-                                                                    <p className="text-sm text-gray-50">{t('transactions.list.qty')}: {item.quantity} × {formatCurrency(item.price)}</p>
+                                                                    <p className="text-sm text-gray-500">{t('transactions.list.qty')}: {item.quantity} × {formatCurrency(item.price)}</p>
                                                                 </div>
                                                                 <p className="font-medium text-gray-900">{formatCurrency(item.total)}</p>
                                                             </div>
