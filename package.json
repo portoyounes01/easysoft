@@ -22,7 +22,7 @@
     "electron:dist:win32": "echo '❌ Use GitHub Actions for Windows builds with hardware support. Run: ./trigger-github-build.sh'",
     "electron:dist:all": "npm run build && electron-builder --win --mac --linux",
     "build:github": "echo 'Push to GitHub to trigger cross-platform builds with hardware support!'",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "node -e \"if (!process.env.VERCEL) { require('child_process').execSync('electron-builder install-app-deps', {stdio: 'inherit'}); }\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.50.4",
@@ -100,7 +100,6 @@
         {
           "target": "dmg",
           "arch": [
-            "x64",
             "arm64"
           ]
         }
