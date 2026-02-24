@@ -22,10 +22,10 @@ export const AdminActionButton: React.FC<AdminActionButtonProps> = ({
     const baseStyles = "rounded-lg transition-all duration-200 flex items-center justify-center";
 
     const variants = {
-        primary: "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-yellow-500 px-4 py-2 font-medium space-x-2",
-        outline: "bg-white border border-gray-200 hover:bg-gray-50 text-yellow-500 px-4 py-2 space-x-2",
-        ghost: "hover:bg-gray-100 text-yellow-500 px-4 py-2 space-x-2",
-        icon: "p-2 hover:bg-gray-100 text-yellow-500"
+        primary: "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-grey-50 px-4 py-2 font-medium space-x-2",
+        outline: "bg-white border border-gray-200 hover:bg-gray-50 text-grey-50 px-4 py-2 space-x-2",
+        ghost: "hover:bg-gray-100 text-grey-50 px-4 py-2 space-x-2",
+        icon: "p-2 hover:bg-gray-100 text-grey-50"
     };
 
     return (

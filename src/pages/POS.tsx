@@ -642,7 +642,7 @@ const POS: React.FC = () => {
                         /* Empty Products State */
                         <div className="text-center py-20">
                           <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                          <h3 className="text-xl font-semibold text-gray-500 mb-2">
+                          <h3 className="text-xl font-semibold text-gray-50 mb-2">
                             {selectedCategoryId ? t('pos.noProductsFoundTitle') : 'No Products Available'}
                           </h3>
                           <p className="text-gray-400">
@@ -887,7 +887,7 @@ const POS: React.FC = () => {
               <p className="text-lg text-gray-600 mb-2">
                 {t('pos.confirmLogoutQuestion')}, <strong>{employee?.name}</strong>?
               </p>
-              <p className="text-sm text-gray-500 mb-8">
+              <p className="text-sm text-gray-50 mb-8">
                 {t('pos.unsavedWork')}
               </p>
 
@@ -926,7 +926,7 @@ const POS: React.FC = () => {
               <div className="text-4xl font-bold text-red-600 mb-6">
                 {autoLogoutCountdown}s
               </div>
-              <p className="text-sm text-gray-500 mb-8">
+              <p className="text-sm text-gray-50 mb-8">
                 {t('pos.securityNotice')}
               </p>
 
@@ -963,7 +963,7 @@ const POS: React.FC = () => {
               </span>
             )}
           </div>
-          <div className="flex items-center space-x-3 text-xs text-gray-500">
+          <div className="flex items-center space-x-3 text-xs text-gray-50">
             {settings.autoLogout.enabled && (
               <span>
                 {Math.floor(timeUntilAutoLogout / 60000)}:{String(Math.floor((timeUntilAutoLogout % 60000) / 1000)).padStart(2, '0')}

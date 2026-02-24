@@ -363,7 +363,7 @@ const Products: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                  <p className="text-gray-500 text-sm mt-1">{stat.title}</p>
+                  <p className="text-gray-50 text-sm mt-1">{stat.title}</p>
                 </div>
                 <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.gradient}`}>
                   <Icon className="w-6 h-6 text-white" />
@@ -392,19 +392,19 @@ const Products: React.FC = () => {
           <table className="w-full">
             <thead className="bg-neutral-50 border-b border-gray-100">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('products.table.id')}</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('products.table.product')}</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('products.table.category')}</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('products.table.stock')}</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('products.table.price')}</th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">{t('products.table.status')}</th>
-                <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider"> </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-50 uppercase tracking-wider">{t('products.table.id')}</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-50 uppercase tracking-wider">{t('products.table.product')}</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-50 uppercase tracking-wider">{t('products.table.category')}</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-50 uppercase tracking-wider">{t('products.table.stock')}</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-50 uppercase tracking-wider">{t('products.table.price')}</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-50 uppercase tracking-wider">{t('products.table.status')}</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-gray-50 uppercase tracking-wider"> </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filteredProducts.map((product) => (
                 <tr key={product.id} className="hover:bg-neutral-50/50 transition-colors">
-                  <td className="px-6 py-4 text-sm text-gray-500 font-mono">#{product.id.slice(0, 8).toUpperCase()}</td>
+                  <td className="px-6 py-4 text-sm text-gray-50 font-mono">#{product.id.slice(0, 8).toUpperCase()}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center space-x-4">
                       <div className="w-12 h-12 rounded-xl overflow-hidden border border-gray-100 flex-shrink-0 bg-neutral-50 relative flex items-center justify-center">
@@ -424,7 +424,7 @@ const Products: React.FC = () => {
                       <div>
                         <div className="font-semibold text-gray-900">{product.name}</div>
                         {product.description && (
-                          <div className="text-sm text-gray-500 line-clamp-1">{product.description}</div>
+                          <div className="text-sm text-gray-50 line-clamp-1">{product.description}</div>
                         )}
                       </div>
                     </div>
@@ -437,12 +437,12 @@ const Products: React.FC = () => {
                   <td className="px-6 py-4">
                     <div>
                       <div className="font-bold text-gray-900">{product.stock}</div>
-                      <div className="text-xs text-gray-500">{t('products.table.min')} {product.min_stock}</div>
+                      <div className="text-xs text-gray-50">{t('products.table.min')} {product.min_stock}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="font-bold text-gray-900">€{product.price.toFixed(2)}</div>
-                    <div className="text-xs text-gray-500">{t('products.table.vat')} {(product.iva_rate * 100).toFixed(0)}%</div>
+                    <div className="text-xs text-gray-50">{t('products.table.vat')} {(product.iva_rate * 100).toFixed(0)}%</div>
                   </td>
                   <td className="px-6 py-4">{getExtendedStatusBadge(product)}</td>
                   <td className="px-6 py-4 text-right relative">
@@ -451,7 +451,7 @@ const Products: React.FC = () => {
                       className="p-2 hover:bg-neutral-100 rounded-xl transition-colors"
                       title={t('products.table.actionsTitle')}
                     >
-                      <MoreVertical className="w-5 h-5 text-gray-500" />
+                      <MoreVertical className="w-5 h-5 text-gray-50" />
                     </button>
                     {openMenuProductId === product.id && (
                       <div className="absolute right-4 mt-2 w-44 bg-white border border-gray-200 rounded-xl shadow-xl z-10 overflow-hidden">
@@ -552,19 +552,19 @@ const Products: React.FC = () => {
                   <h3 className="text-lg font-bold text-gray-900 mb-4">{t('products.viewModal.basicInfo')}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.productName')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.productName')}</label>
                       <p className="text-gray-900 font-semibold">{viewingProduct.name}</p>
                     </div>
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.sku')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.sku')}</label>
                       <p className="text-gray-900 font-mono">{viewingProduct.sku}</p>
                     </div>
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.category')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.category')}</label>
                       <p className="text-gray-900">{categoryIdToName.get(viewingProduct.category_id || '') || t('products.table.noCategory')}</p>
                     </div>
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.status')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.status')}</label>
                       <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${viewingProduct.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
                         {viewingProduct.is_active ? t('products.status.inStock') : t('products.status.inactive')}
                       </span>
@@ -572,7 +572,7 @@ const Products: React.FC = () => {
                   </div>
                   {viewingProduct.description && (
                     <div className="mt-4 bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.description')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.description')}</label>
                       <p className="text-gray-900">{viewingProduct.description}</p>
                     </div>
                   )}
@@ -583,15 +583,15 @@ const Products: React.FC = () => {
                   <h3 className="text-lg font-bold text-gray-900 mb-4">{t('products.viewModal.pricingInfo')}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.costPrice')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.costPrice')}</label>
                       <p className="text-gray-900 font-bold text-xl">€{viewingProduct.cost.toFixed(2)}</p>
                     </div>
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.sellingPriceInclVat')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.sellingPriceInclVat')}</label>
                       <p className="text-gray-900 font-bold text-xl">€{viewingProduct.price.toFixed(2)}</p>
                     </div>
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.vatRate')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.vatRate')}</label>
                       <p className="text-gray-900 font-bold text-xl">{(viewingProduct.iva_rate * 100).toFixed(0)}%</p>
                     </div>
                   </div>
@@ -618,15 +618,15 @@ const Products: React.FC = () => {
                   <h3 className="text-lg font-bold text-gray-900 mb-4">{t('products.viewModal.stockInfo')}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.currentStock')}</label>
-                      <p className="text-gray-900 font-bold text-2xl">{viewingProduct.stock} <span className="text-base font-normal text-gray-500">{t('products.viewModal.units')}</span></p>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.currentStock')}</label>
+                      <p className="text-gray-900 font-bold text-2xl">{viewingProduct.stock} <span className="text-base font-normal text-gray-50">{t('products.viewModal.units')}</span></p>
                     </div>
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.minimumStock')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.minimumStock')}</label>
                       <p className="text-gray-900 font-bold">{viewingProduct.min_stock} units</p>
                     </div>
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.stockStatus')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.stockStatus')}</label>
                       {getStatusBadge(viewingProduct)}
                     </div>
                   </div>
@@ -653,11 +653,11 @@ const Products: React.FC = () => {
                   <h3 className="text-lg font-bold text-gray-900 mb-4">{t('products.viewModal.additionalInfo')}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.trackStock')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.trackStock')}</label>
                       <p className="text-gray-900 font-semibold">{viewingProduct.track_stock ? t('products.viewModal.yes') : t('products.viewModal.no')}</p>
                     </div>
                     <div className="bg-neutral-50 rounded-xl p-4">
-                      <label className="block text-sm font-medium text-gray-500 mb-1">{t('products.viewModal.displayOrder')}</label>
+                      <label className="block text-sm font-medium text-gray-50 mb-1">{t('products.viewModal.displayOrder')}</label>
                       <p className="text-gray-900 font-semibold">{viewingProduct.display_order}</p>
                     </div>
                   </div>

@@ -491,7 +491,7 @@ const CashierTesting: React.FC = () => {
               {isLoadingLogs ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-                  <p className="text-gray-500 text-sm">Loading test history...</p>
+                  <p className="text-gray-50 text-sm">Loading test history...</p>
                 </div>
               ) : fetchError ? (
                 <div className="text-center py-8">
@@ -504,7 +504,7 @@ const CashierTesting: React.FC = () => {
                   </button>
                 </div>
               ) : testLogs.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">
+                <p className="text-gray-50 text-center py-8">
                   No tests run yet
                 </p>
               ) : (
@@ -521,7 +521,7 @@ const CashierTesting: React.FC = () => {
                         log.success ? 'bg-green-500' : 'bg-red-500'
                       }`}></span>
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-50">
                       {new Date(log.timestamp).toLocaleString('pt-PT')}
                     </p>
                     {log.test_details && (

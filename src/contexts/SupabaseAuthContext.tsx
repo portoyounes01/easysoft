@@ -131,7 +131,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       // Guard: only attempt Supabase auth when properly configured
       if (!isSupabaseConfigured()) {
-        const msg = 'Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.';
+        const msg = 'Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON.';
         setState(prev => ({ ...prev, isLoading: false, error: msg }));
         return { success: false, error: msg };
       }

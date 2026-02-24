@@ -146,7 +146,7 @@ async function setupSupabaseAuthUsers() {
 
     console.log('🎉 Supabase auth user setup complete!');
     console.log('\n📝 Next steps:');
-    console.log('1. Ensure app .env has VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+    console.log('1. Ensure app .env has VITE_SUPABASE_URL and VITE_SUPABASE_ANON');
     console.log('2. Test image uploads with any inventory-enabled account');
     console.log('3. If Supabase sign-in fails in POS, align Supabase password with POS credential');
 }

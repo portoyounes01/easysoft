@@ -223,7 +223,7 @@ const DataSetup: React.FC = () => {
                             <li>• Transaction history with sales data (past 30 days)</li>
                             <li>• Transaction items for detailed reporting</li>
                         </ul>
-                        <p className="text-xs text-gray-500 mt-3">
+                        <p className="text-xs text-gray-50 mt-3">
                             <strong>Note:</strong> This will populate both the local database (for products/categories) 
                             and Supabase (for transactions and reports). The Reports section will show comprehensive 
                             data including stock levels (inventory report) and sales analytics.

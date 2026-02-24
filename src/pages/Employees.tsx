@@ -554,8 +554,8 @@ const Employees: React.FC = () => {
                                     </div>
                                     <div>
                                         <h3 className={`text-lg font-bold ${employee.is_active ? 'text-gray-800' : 'text-gray-700'}`}>{employee.name}</h3>
-                                        <p className={`text-sm ${employee.is_active ? 'text-gray-600' : 'text-gray-500'}`}>{employee.employee_number}</p>
-                                        <p className={`text-sm ${employee.is_active ? 'text-gray-500' : 'text-gray-400'}`}>{employee.email}</p>
+                                        <p className={`text-sm ${employee.is_active ? 'text-gray-600' : 'text-gray-50'}`}>{employee.employee_number}</p>
+                                        <p className={`text-sm ${employee.is_active ? 'text-gray-50' : 'text-gray-400'}`}>{employee.email}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-2">
@@ -639,7 +639,7 @@ const Employees: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div className={`${employee.is_active ? 'bg-green-50' : 'bg-gray-100'} p-3 rounded-lg`}>
                                     <div className="flex items-center space-x-2 mb-1">
-                                        <Banknote className={`w-4 h-4 ${employee.is_active ? 'text-green-600' : 'text-gray-500'}`} />
+                                        <Banknote className={`w-4 h-4 ${employee.is_active ? 'text-green-600' : 'text-gray-50'}`} />
                                         <span className={`text-sm font-medium ${employee.is_active ? 'text-green-800' : 'text-gray-600'}`}>{t('employees.card.totalSales')}</span>
                                     </div>
                                     <p className={`text-lg font-bold ${employee.is_active ? 'text-green-700' : 'text-gray-700'}`}>€{employee.total_sales.toFixed(2)}</p>
@@ -647,7 +647,7 @@ const Employees: React.FC = () => {
 
                                 <div className={`${employee.is_active ? 'bg-blue-50' : 'bg-gray-100'} p-3 rounded-lg`}>
                                     <div className="flex items-center space-x-2 mb-1">
-                                        <Clock className={`w-4 h-4 ${employee.is_active ? 'text-blue-600' : 'text-gray-500'}`} />
+                                        <Clock className={`w-4 h-4 ${employee.is_active ? 'text-blue-600' : 'text-gray-50'}`} />
                                         <span className={`text-sm font-medium ${employee.is_active ? 'text-blue-800' : 'text-gray-600'}`}>{t('employees.card.daysWorked')}</span>
                                     </div>
                                     <p className={`text-lg font-bold ${employee.is_active ? 'text-blue-700' : 'text-gray-700'}`}>{daysWorked}</p>
@@ -656,13 +656,13 @@ const Employees: React.FC = () => {
 
                             <div className="mb-4">
                                 <div>
-                                    <p className={`text-sm ${employee.is_active ? 'text-gray-600' : 'text-gray-500'}`}>{t('employees.card.transactions')}</p>
+                                    <p className={`text-sm ${employee.is_active ? 'text-gray-600' : 'text-gray-50'}`}>{t('employees.card.transactions')}</p>
                                     <p className={`font-semibold ${employee.is_active ? 'text-gray-800' : 'text-gray-700'}`}>{employee.transaction_count}</p>
                                 </div>
                             </div>
 
                             <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                                <span className="text-sm text-gray-500">
+                                <span className="text-sm text-gray-50">
                                     {t('employees.card.hireDate')} {new Date(employee.hire_date).toLocaleDateString(language?.startsWith('pt') ? 'pt-PT' : 'en-US')}
                                 </span>
                                 <div className="flex items-center space-x-2">
@@ -670,7 +670,7 @@ const Employees: React.FC = () => {
                                     {(currentUser?.role === 'admin' || employee.role !== 'admin') ? (
                                         <button
                                             onClick={() => handleEditEmployee(employee)}
-                                            className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-500 hover:bg-gray-100'}`}
+                                            className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-50 hover:bg-gray-100'}`}
                                             title={t('employees.actions.edit')}
                                         >
                                             <Edit className="w-4 h-4" />
@@ -689,7 +689,7 @@ const Employees: React.FC = () => {
                                     {(currentUser?.role === 'admin' || employee.role !== 'admin') ? (
                                         <button
                                             onClick={() => setShowDeleteConfirm(employee)}
-                                            className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-red-600 hover:bg-red-50' : 'text-gray-500 hover:bg-gray-100'}`}
+                                            className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-red-600 hover:bg-red-50' : 'text-gray-50 hover:bg-gray-100'}`}
                                             title={t('employees.actions.delete')}
                                         >
                                             <Trash2 className="w-4 h-4" />
@@ -796,7 +796,7 @@ const Employees: React.FC = () => {
                                                     onChange={(e) => handleFormChange('role', e.target.value as EmployeeRole)}
                                                     disabled={editingEmployee?.role === 'admin' && currentUser?.role !== 'admin'}
                                                     className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editingEmployee?.role === 'admin' && currentUser?.role !== 'admin'
-                                                        ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed'
+                                                        ? 'border-gray-200 bg-gray-50 text-gray-50 cursor-not-allowed'
                                                         : 'border-gray-300'
                                                         }`}
                                                 >
@@ -880,7 +880,7 @@ const Employees: React.FC = () => {
                                                             {formErrors.pin}
                                                         </p>
                                                     )}
-                                                    <p className="mt-1 text-xs text-gray-500">{editingEmployee ? t('employees.form.pinHelperEdit') : t('employees.form.pinHelperNew')}</p>
+                                                    <p className="mt-1 text-xs text-gray-50">{editingEmployee ? t('employees.form.pinHelperEdit') : t('employees.form.pinHelperNew')}</p>
                                                 </div>
                                             )}
                                         </div>
@@ -904,7 +904,7 @@ const Employees: React.FC = () => {
                                                         />
                                                         <div>
                                                             <div className="font-medium text-gray-900">{level.label}</div>
-                                                            <div className="text-sm text-gray-500">{level.description}</div>
+                                                            <div className="text-sm text-gray-50">{level.description}</div>
                                                         </div>
                                                     </label>
                                                 ))}
@@ -981,7 +981,7 @@ const Employees: React.FC = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-900">Delete Employee</h3>
-                                    <p className="text-sm text-gray-500">This action cannot be undone</p>
+                                    <p className="text-sm text-gray-50">This action cannot be undone</p>
                                 </div>
                             </div>
 

@@ -18,7 +18,7 @@ Add your Supabase environment values:
 ```bash
 # App runtime (root .env)
 VITE_SUPABASE_URL=your_project_url
-VITE_SUPABASE_ANON_KEY=your_anon_key
+VITE_SUPABASE_ANON=your_anon_key
 
 # Provisioning script (supabase/.env)
 SUPABASE_URL=your_project_url

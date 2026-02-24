@@ -61,13 +61,13 @@ const PermissionRoute: React.FC<{
           <p className="text-gray-600 mb-6">
             Sorry <strong>{employee?.name}</strong>, you don't have permission to access this page.
             <br />
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-gray-50">
               Your role: <span className="font-medium capitalize">{employee?.role}</span>
             </span>
           </p>
           <div className="space-y-3">
             <Navigate to={fallbackPath} replace />
-            <p className="text-sm text-gray-500">Redirecting to your allowed area...</p>
+            <p className="text-sm text-gray-50">Redirecting to your allowed area...</p>
           </div>
         </div>
       </div>

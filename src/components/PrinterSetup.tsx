@@ -383,7 +383,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                               <p className="text-sm text-gray-600">Brand: {printer.brand}</p>
                             )}
                             {printer.identification && (
-                              <p className="text-sm text-gray-500">ID: {printer.identification}</p>
+                              <p className="text-sm text-gray-50">ID: {printer.identification}</p>
                             )}
                           </div>
                         </div>
@@ -517,7 +517,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                       placeholder="9100"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-gray-50">
                       Most thermal printers use port 9100
                     </p>
                   </div>
@@ -615,7 +615,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                 </div>
               ) : (
                 !systemLoading && (
-                  <div className="p-4 border border-dashed rounded-lg text-gray-500 text-sm">No system printers found.</div>
+                  <div className="p-4 border border-dashed rounded-lg text-gray-50 text-sm">No system printers found.</div>
                 )
               )}
             </div>

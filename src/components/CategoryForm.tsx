@@ -403,7 +403,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                         placeholder="1"
                                     />
                                 </div>
-                                <p className="mt-1 text-xs text-gray-500">
+                                <p className="mt-1 text-xs text-gray-50">
                                     Lower numbers appear first in category lists
                                 </p>
                             </div>

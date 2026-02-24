@@ -573,7 +573,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                     onClick={() => setInputMode('upload')}
                     className={`px-4 py-2 text-sm font-medium transition-colors ${inputMode === 'upload'
                         ? 'text-blue-600 border-b-2 border-blue-600'
-                        : 'text-gray-500 hover:text-gray-700'
+                        : 'text-gray-50 hover:text-gray-700'
                         }`}
                 >
                     <Upload className="w-4 h-4 inline mr-2" />
@@ -584,7 +584,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                     onClick={() => setInputMode('url')}
                     className={`px-4 py-2 text-sm font-medium transition-colors ${inputMode === 'url'
                         ? 'text-blue-600 border-b-2 border-blue-600'
-                        : 'text-gray-500 hover:text-gray-700'
+                        : 'text-gray-50 hover:text-gray-700'
                         }`}
                 >
                     <Link className="w-4 h-4 inline mr-2" />
@@ -640,7 +640,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                                     <p className="text-sm font-medium text-gray-700">
                                         Click to upload or drag & drop
                                     </p>
-                                    <p className="text-xs text-gray-500">
+                                    <p className="text-xs text-gray-50">
                                         PNG, JPG, GIF, SVG up to {IMAGE_CONFIG.MAX_UPLOAD_SIZE / 1024 / 1024}MB
                                     </p>
                                     <p className="text-xs text-gray-400 mt-1">
@@ -685,7 +685,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                         </button>
                     </div>
 
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-50">
                         Enter a direct link to an image file (jpg, png, gif, webp, svg)
                     </p>
                 </div>
@@ -745,7 +745,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                             </div>
                         </div>
 
-                        <div className="mt-2 text-xs text-gray-500 break-all">
+                        <div className="mt-2 text-xs text-gray-50 break-all">
                             {state.previewUrl.length > 60
                                 ? `${state.previewUrl.substring(0, 60)}...`
                                 : state.previewUrl

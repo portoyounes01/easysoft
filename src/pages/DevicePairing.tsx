@@ -106,7 +106,7 @@ const DevicePairing: React.FC<DevicePairingProps> = () => {
                             <HelpCircle className="w-5 h-5" />
                             <span className="text-base">Need help? Contact your administrator.</span>
                         </div>
-                        <div className="text-sm text-gray-500">UI only • No backend yet</div>
+                        <div className="text-sm text-gray-50">UI only • No backend yet</div>
                     </div>
                 </div>
             </div>

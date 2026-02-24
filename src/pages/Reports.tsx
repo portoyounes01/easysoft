@@ -412,10 +412,10 @@ const Reports: React.FC = () => {
                             <table className="w-full">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.employees.table.employee')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.employees.table.totalSales')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.employees.table.transactions')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.employees.table.itemsSold')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.employees.table.employee')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.employees.table.totalSales')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.employees.table.transactions')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.employees.table.itemsSold')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -430,7 +430,7 @@ const Reports: React.FC = () => {
                                                     </div>
                                                     <div className="ml-4">
                                                         <div className="text-sm font-medium text-gray-900">{employee.employeeName}</div>
-                                                        <div className="text-sm text-gray-500">#{index + 1} performer</div>
+                                                        <div className="text-sm text-gray-50">#{index + 1} performer</div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -462,11 +462,11 @@ const Reports: React.FC = () => {
                             <table className="w-full">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.products.table.product')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.products.table.category')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.products.table.quantitySold')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.products.table.totalRevenue')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.products.table.transactions')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.products.table.product')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.products.table.category')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.products.table.quantitySold')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.products.table.totalRevenue')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.products.table.transactions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -475,7 +475,7 @@ const Reports: React.FC = () => {
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div>
                                                     <div className="text-sm font-medium text-gray-900">{product.productName}</div>
-                                                    <div className="text-sm text-gray-500">#{index + 1} best seller</div>
+                                                    <div className="text-sm text-gray-50">#{index + 1} best seller</div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -513,12 +513,12 @@ const Reports: React.FC = () => {
                             <table className="w-full">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.product')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.currentStock')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.minStock')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.stockValue')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.status')}</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('reports.inventory.table.actionRequired')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.inventory.table.product')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.inventory.table.currentStock')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.inventory.table.minStock')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.inventory.table.stockValue')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.inventory.table.status')}</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-50 uppercase tracking-wider">{t('reports.inventory.table.actionRequired')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -552,7 +552,7 @@ const Reports: React.FC = () => {
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div>
                                                             <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                                                            <div className="text-sm text-gray-500">{product.sku}</div>
+                                                            <div className="text-sm text-gray-50">{product.sku}</div>
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">

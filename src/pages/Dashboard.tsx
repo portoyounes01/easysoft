@@ -129,12 +129,12 @@ const Dashboard: React.FC = () => {
                   </div>
                   <div>
                     <p className="font-semibold text-gray-800">{transaction.customer}</p>
-                    <p className="text-sm text-gray-500">{transaction.id}</p>
+                    <p className="text-sm text-gray-50">{transaction.id}</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="font-bold text-gray-800">{transaction.amount}</p>
-                  <div className="flex items-center space-x-1 text-sm text-gray-500">
+                  <div className="flex items-center space-x-1 text-sm text-gray-50">
                     <Clock className="w-3 h-3" />
                     <span>{transaction.time}</span>
                   </div>
@@ -159,7 +159,7 @@ const Dashboard: React.FC = () => {
                 <div className="flex items-center justify-between mb-2">
                   <div>
                     <p className="font-semibold text-gray-800">{item.name}</p>
-                    <p className="text-sm text-gray-500">{item.category}</p>
+                    <p className="text-sm text-gray-50">{item.category}</p>
                   </div>
                   <Package className="w-5 h-5 text-orange-600" />
                 </div>

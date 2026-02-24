@@ -235,7 +235,7 @@ npm run dev
 
 ```bash
 # Step 1: Online setup
-VITE_SUPABASE_URL=your_url VITE_SUPABASE_ANON_KEY=your_key node bootstrap-admin.cjs
+VITE_SUPABASE_URL=your_url VITE_SUPABASE_ANON=your_key node bootstrap-admin.cjs
 # Creates admin in Supabase
 
 # Step 2: Go offline

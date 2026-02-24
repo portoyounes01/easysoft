@@ -425,7 +425,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                         {formData.sku || 'Will be generated when you enter name and category'}
                                     </div>
                                 </div>
-                                <p className="mt-1 text-xs text-gray-500">
+                                <p className="mt-1 text-xs text-gray-50">
                                     Automatically generated from category and product name
                                 </p>
                             </div>

@@ -161,7 +161,7 @@ const SeedManagement: React.FC = () => {
                                                 </div>
                                             ))
                                         ) : (
-                                            <span className="text-gray-500">Loading...</span>
+                                            <span className="text-gray-50">Loading...</span>
                                         )}
                                     </div>
                                 </div>
@@ -204,7 +204,7 @@ const SeedManagement: React.FC = () => {
                                     onClick={handleRunSeed}
                                     disabled={seedStatus.isRunning}
                                     className={`w-full flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${seedStatus.isRunning
-                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        ? 'bg-gray-300 text-gray-50 cursor-not-allowed'
                                         : 'bg-blue-600 hover:bg-blue-700 text-white'
                                         }`}
                                 >
@@ -301,7 +301,7 @@ const SeedManagement: React.FC = () => {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className={`text-xs mt-1 ${available ? 'text-green-700' : 'text-gray-500'}`}>
+                                                <p className={`text-xs mt-1 ${available ? 'text-green-700' : 'text-gray-50'}`}>
                                                     {file.description}
                                                 </p>
                                             </div>

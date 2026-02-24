@@ -17,9 +17,9 @@ export const NumpadButton: React.FC<NumpadButtonProps> = ({
     const baseStyles = "font-bold rounded-2xl transition-colors flex items-center justify-center";
 
     const variants = {
-        default: "bg-gray-200 hover:bg-gray-300 text-yellow-500 w-full min-h-[60px] text-2xl",
-        action: "bg-blue-100 hover:bg-blue-200 text-yellow-500 w-full min-h-[60px]",
-        confirm: "bg-green-500 hover:bg-green-600 text-yellow-500 px-6 min-h-[60px]"
+        default: "bg-gray-200 hover:bg-gray-300 text-grey-50 w-full min-h-[60px] text-2xl",
+        action: "bg-blue-100 hover:bg-blue-200 text-grey-50 w-full min-h-[60px]",
+        confirm: "bg-green-500 hover:bg-green-600 text-grey-50 px-6 min-h-[60px]"
     };
 
     return (

@@ -90,8 +90,8 @@ const PrinterWorkflowManager: React.FC = () => {
   };
 
   const getStationStatus = (station: PrinterStation) => {
-    if (!station.isActive) return { status: 'inactive', color: 'text-gray-500', icon: XCircle };
-    if (!station.printerNames || station.printerNames.length === 0) return { status: 'no-printers', color: 'text-yellow-500', icon: AlertCircle };
+    if (!station.isActive) return { status: 'inactive', color: 'text-gray-50', icon: XCircle };
+    if (!station.printerNames || station.printerNames.length === 0) return { status: 'no-printers', color: 'text-grey-50', icon: AlertCircle };
     
     const connectedPrinters = station.printerNames.filter(name =>
       availablePrinters.some(p => p.name === name && p.connected)
@@ -99,7 +99,7 @@ const PrinterWorkflowManager: React.FC = () => {
     
     if (connectedPrinters.length === 0) return { status: 'offline', color: 'text-red-500', icon: XCircle };
     if (connectedPrinters.length === station.printerNames.length) return { status: 'online', color: 'text-green-500', icon: CheckCircle };
-    return { status: 'partial', color: 'text-yellow-500', icon: AlertCircle };
+    return { status: 'partial', color: 'text-grey-50', icon: AlertCircle };
   };
 
   return (
@@ -139,7 +139,7 @@ const PrinterWorkflowManager: React.FC = () => {
         {stations.length === 0 ? (
           <div className="text-center py-12 bg-gray-50 rounded-lg">
             <Settings className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">No printer stations configured</p>
+            <p className="text-gray-50">No printer stations configured</p>
             <button
               onClick={handleCreateStation}
               className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -168,13 +168,13 @@ const PrinterWorkflowManager: React.FC = () => {
                       <h3 className="font-semibold text-gray-900">{station.name}</h3>
                       <p className="text-sm text-gray-600">{station.description}</p>
                       <div className="flex items-center gap-4 mt-2 text-sm">
-                        <span className="text-gray-500">
+                        <span className="text-gray-50">
                           Category: {category.name}
                         </span>
-                        <span className="text-gray-500">
+                        <span className="text-gray-50">
                           Printers: {station.printerNames?.length || 0}
                         </span>
-                        <span className="text-gray-500">
+                        <span className="text-gray-50">
                           Products: {station.categoryId === 'receipt' ? 'All' : (station.productIds?.length || 0)}
                         </span>
                         <div className={`flex items-center gap-1 ${status.color}`}>
@@ -336,7 +336,7 @@ const PrinterWorkflowManager: React.FC = () => {
                   </label>
                   <div className="border border-gray-300 rounded-md p-3 max-h-32 overflow-y-auto">
                     {availablePrinters.length === 0 ? (
-                      <p className="text-gray-500 text-sm">No printers available</p>
+                      <p className="text-gray-50 text-sm">No printers available</p>
                     ) : (
                       availablePrinters.map((printer) => (
                         <label key={printer.name} className="flex items-center gap-2 py-1">

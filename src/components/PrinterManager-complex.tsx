@@ -135,7 +135,7 @@ const PrinterManager: React.FC = () => {
       case 'error':
         return 'text-red-500';
       default:
-        return 'text-yellow-500';
+        return 'text-grey-50';
     }
   };
 
@@ -188,7 +188,7 @@ const PrinterManager: React.FC = () => {
       {printers.length === 0 ? (
         <div className="text-center py-12">
           <Printer className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500">No printers configured</p>
+          <p className="text-gray-50">No printers configured</p>
         </div>
       ) : (
         <div className="grid gap-4">
@@ -199,7 +199,7 @@ const PrinterManager: React.FC = () => {
                   <Printer className="h-5 w-5 text-gray-600" />
                   <div>
                     <h3 className="font-medium text-gray-900">{printer.name}</h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="flex items-center gap-2 text-sm text-gray-50">
                       <span>Type: {printer.type}</span>
                       <span>•</span>
                       <span>Role: {printer.role || 'unassigned'}</span>
@@ -268,7 +268,7 @@ const PrinterManager: React.FC = () => {
                   />
                   <div>
                     <div className="font-medium">{role.label}</div>
-                    <div className="text-sm text-gray-500">{role.description}</div>
+                    <div className="text-sm text-gray-50">{role.description}</div>
                   </div>
                 </label>
               ))}

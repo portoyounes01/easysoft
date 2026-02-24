@@ -130,7 +130,7 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({ open, onClose, onApply,
                     {activeTab === 'preset' ? (
                         <div className="h-full overflow-y-auto">
                             {presets.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-gray-500" style={{ fontSize: '1.5vh' }}>{t('pos.discountDialog.noPresets')}</div>
+                                <div className="h-full flex items-center justify-center text-gray-50" style={{ fontSize: '1.5vh' }}>{t('pos.discountDialog.noPresets')}</div>
                             ) : (
                                 <ul className="divide-y divide-gray-200">
                                     {presets.map((p) => (
@@ -177,7 +177,7 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({ open, onClose, onApply,
                                     // Adding suffix support to InputField is better.
                                     />
                                     {/* Suffix workaround or update InputField */}
-                                    <div className="absolute top-[34px] right-4 text-gray-500 font-semibold pointer-events-none" style={{ fontSize: '1.6vh' }}>{activeTab === 'fixed' ? '€' : '%'}</div>
+                                    <div className="absolute top-[34px] right-4 text-gray-50 font-semibold pointer-events-none" style={{ fontSize: '1.6vh' }}>{activeTab === 'fixed' ? '€' : '%'}</div>
 
                                     {/* Quick Numpad */}
                                     <div className="mt-4 flex-1 min-h-0" style={{ marginBottom: '2vh' }}>

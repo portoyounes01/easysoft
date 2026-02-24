@@ -37,23 +37,19 @@ The POS System now supports hybrid product image management with two convenient 
 ### Adding Images to Products
 
 1. **Open Product Form**:
-
    - Go to Products page → Click "Add Product"
    - Or edit existing product → Click edit button
 
 2. **Navigate to Image Section**:
-
    - Scroll down to "Product Image" section
    - Choose between "Upload Image" or "Image URL" tabs
 
 3. **Upload Method**:
-
    - **Drag & Drop**: Drag image file onto the upload area
    - **File Browser**: Click upload area → select file from computer
    - **Paste**: Copy image from anywhere → paste in upload area
 
 4. **URL Method**:
-
    - Switch to "Image URL" tab
    - Paste or type image URL
    - Click "Apply" or press Enter
@@ -105,11 +101,10 @@ The POS System now supports hybrid product image management with two convenient 
    ```bash
    # Add to your .env file
    VITE_SUPABASE_URL=your_supabase_project_url
-   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   VITE_SUPABASE_ANON=your_supabase_anon_key
    ```
 
 2. **Setup Storage Bucket**:
-
    - Run the SQL commands in `supabase_storage_setup.sql`
    - This creates the `product-images` bucket with proper permissions
 
@@ -120,7 +115,6 @@ The POS System now supports hybrid product image management with two convenient 
 ### For URL-Only Usage (Alternative)
 
 1. **Use External Hosting**:
-
    - Upload images to Imgur, Cloudinary, or your website
    - Copy direct image URLs
    - Paste URLs in the "Image URL" tab

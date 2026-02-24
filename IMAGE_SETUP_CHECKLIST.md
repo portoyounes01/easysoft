@@ -19,7 +19,7 @@ Create `.env` file in project root:
 ```bash
 # Copy from .env and fill in your values
 VITE_SUPABASE_URL=your_supabase_project_url_here
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+VITE_SUPABASE_ANON=your_supabase_anon_key_here
 ```
 
 ### 2. **Supabase Storage Setup** ⚠️ REQUIRED FOR UPLOAD

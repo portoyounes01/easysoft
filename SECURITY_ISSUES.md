@@ -117,7 +117,7 @@ sessionStorage.setItem(
     id: user.id,
     name: user.name,
     role: user.role,
-  })
+  }),
 );
 ```
 
@@ -150,7 +150,7 @@ Demo Password: <span className="font-mono bg-gray-100 px-2 py-1 rounded">passwor
 // Remove password hints entirely or use environment-based hints
 {
   process.env.NODE_ENV === "development" && (
-    <div className="text-sm text-gray-500">
+    <div className="text-sm text-gray-50">
       Development mode - Contact admin for credentials
     </div>
   );

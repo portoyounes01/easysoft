@@ -142,7 +142,7 @@ const Categories: React.FC = () => {
                             <Tag className="w-5 h-5 text-purple-600" />
                             <span>{t('categories.grid.title')}</span>
                         </h2>
-                        <span className="text-sm text-gray-500">
+                        <span className="text-sm text-gray-50">
                             {t('categories.grid.total', { total: categories.filter(c => !c.deleted_at).length, active: categories.filter(c => c.is_active && !c.deleted_at).length })}
                         </span>
                     </div>
@@ -184,9 +184,9 @@ const Categories: React.FC = () => {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <h3 className={`font-semibold truncate ${category.is_active ? 'text-gray-800' : 'text-gray-500'}`}>{category.name}</h3>
+                                            <h3 className={`font-semibold truncate ${category.is_active ? 'text-gray-800' : 'text-gray-50'}`}>{category.name}</h3>
                                             <p className={`text-sm line-clamp-2 ${category.is_active ? 'text-gray-600' : 'text-gray-400'}`}>{category.description || t('categories.grid.noDescription')}</p>
-                                            <div className={`flex items-center justify-between text-xs ${category.is_active ? 'text-gray-500' : 'text-gray-400'}`}>
+                                            <div className={`flex items-center justify-between text-xs ${category.is_active ? 'text-gray-50' : 'text-gray-400'}`}>
                                                 <span>{t('categories.grid.productsCount', { count: productCount })}</span>
                                                 <button
                                                     onClick={(e) => {
