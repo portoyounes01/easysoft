@@ -32,3 +32,4 @@ TEMP_DEBUG_*.md
 # Build artifacts and caches (Electron)
 dist-electron/
 electron-cache/
+.vercel

@@ -17,7 +17,7 @@
 Create `.env` file in project root:
 
 ```bash
-# Copy from .env.example and fill in your values
+# Copy from .env and fill in your values
 VITE_SUPABASE_URL=your_supabase_project_url_here
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
@@ -130,14 +130,12 @@ No `.env` file exists, so Supabase integration defaults to offline mode.
 Once configured, you can demonstrate:
 
 1. **URL Method**:
-
    - Add product with image URL
    - Show instant preview
    - Save and view in products table
    - View in POS interface
 
 2. **Upload Method**:
-
    - Drag image file onto upload area
    - Watch upload progress
    - See automatic preview
