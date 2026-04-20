@@ -1,6 +1,8 @@
 // Supabase Database Types
 // Generated types for the employees table and related functionality
 
+import type { FiscalDocumentRow } from '../fiscal/types';
+
 export interface Database {
     public: {
         Tables: {
@@ -596,6 +598,8 @@ export const calculatePriceWithoutTax = (priceWithTax: number, ivaRate: number):
 export interface CustomerRow {
     id: string;
     name: string;
+    /** NIF / VAT for fiscal documents (optional). */
+    tax_number: string | null;
     email: string | null;
     phone: string | null;
     address: string | null;
@@ -614,6 +618,7 @@ export interface CustomerRow {
 export interface CustomerInsert {
     id?: string; // Optional, will be generated if not provided
     name: string;
+    tax_number?: string | null;
     email?: string | null;
     phone?: string | null;
     address?: string | null;
@@ -632,6 +637,7 @@ export interface CustomerInsert {
 export interface CustomerUpdate {
     id?: never; // Can't update ID
     name?: string;
+    tax_number?: string | null;
     email?: string | null;
     phone?: string | null;
     address?: string | null;
@@ -678,6 +684,10 @@ export interface TransactionRow {
     status: 'completed' | 'refunded' | 'pending' | 'cancelled';
     notes: string | null;
     receipt_number: string | null;
+    /** Local fiscal document id (Dexie); mirrors fiscal_documents.id */
+    fiscal_document_id?: string | null;
+    /** Immutable fiscal snapshot JSON for sync / SAF-T */
+    fiscal_metadata_json?: string | null;
     created_at: string; // ISO timestamp
     updated_at: string; // ISO timestamp
     last_synced_at: string | null; // ISO timestamp
@@ -706,6 +716,8 @@ export interface TransactionInsert {
     status?: 'completed' | 'refunded' | 'pending' | 'cancelled';
     notes?: string | null;
     receipt_number?: string | null;
+    fiscal_document_id?: string | null;
+    fiscal_metadata_json?: string | null;
     created_at?: string; // Will be auto-generated if not provided
     updated_at?: string; // Will be auto-generated
     last_synced_at?: string | null;
@@ -734,6 +746,8 @@ export interface TransactionUpdate {
     status?: 'completed' | 'refunded' | 'pending' | 'cancelled';
     notes?: string | null;
     receipt_number?: string | null;
+    fiscal_document_id?: string | null;
+    fiscal_metadata_json?: string | null;
     updated_at?: string; // Will be auto-generated
     last_synced_at?: string | null;
     deleted_at?: string | null;
@@ -1018,6 +1032,19 @@ export type TransactionStatus = typeof TransactionStatuses[number];
 // =====================================================
 // LOCAL DATABASE TYPES FOR OFFLINE SYNC
 // =====================================================
+
+/** Persisted fiscal row (Portugal AT); Dexie + optional server JSON mirror. */
+export interface LocalFiscalDocument extends FiscalDocumentRow {
+    needs_push: boolean;
+}
+
+export interface LocalFiscalAuditEvent {
+    id: string;
+    event_type: string;
+    payload_json: string;
+    employee_id: string | null;
+    created_at: string;
+}
 
 // Local database interfaces for customers
 export interface LocalCustomer extends Omit<CustomerRow, 'created_at' | 'updated_at' | 'last_synced_at' | 'deleted_at'> {

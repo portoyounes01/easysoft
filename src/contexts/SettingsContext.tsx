@@ -32,20 +32,30 @@ export interface SystemSettings {
         slogan?: string;
         softwareInfo?: string;
         certificationNumber?: string;
+        softwareCertNumber?: string; // AT software certification number
     };
     receipt: {
-        seriesPrefix: string; // e.g., 'ABC'
+        series: string; // e.g., 'FAT2026' - series name for AT registration
+        seriesPrefix: string; // e.g., 'ABC' (legacy, for numbering)
         numericWidth: number; // e.g., 4 → 1000 minimum
         resetPolicy: 'monthly' | 'yearly';
         lastSeriesKey: string; // e.g., 'ABC-202508'
         currentNumber: number; // last allocated; starts at 999 so first becomes 1000
         defaultDocumentType: 'FATURA' | 'FATURA_SIMPLIFICADA';
         counterLabel: string; // e.g., 'BALCÃO 1'
-        atcudPrefix: string; // e.g., 'ATCUD'
+        atValidationCode: string; // e.g., 'AT56789X1' - from AT portal registration
+        seriesDiscontinued?: boolean;
+    };
+    /** Portugal AT: signing, training mode, key version (HashControl). */
+    fiscal: {
+        hashControlVersion: string;
+        /** RSA private key PKCS#8 PEM — dev/local; prefer secure storage in production */
+        privateKeyPem?: string;
+        trainingMode: boolean;
     };
 }
 
-type DeepPartial<T> = {
+export type DeepPartial<T> = {
     [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
 };
 
@@ -91,8 +101,10 @@ const defaultSettings: SystemSettings = {
         slogan: 'Your slogan here',
         softwareInfo: 'Software ZSRest - www.zsrest.com',
         certificationNumber: '196/AT',
+        softwareCertNumber: 'PTR-A-001', // Placeholder - AT software certification
     },
     receipt: {
+        series: 'FAT2026', // Series name for AT registration
         seriesPrefix: 'ABC',
         numericWidth: 4,
         resetPolicy: 'monthly',
@@ -100,7 +112,13 @@ const defaultSettings: SystemSettings = {
         currentNumber: 999, // start so that first allocation becomes 1000
         defaultDocumentType: 'FATURA_SIMPLIFICADA',
         counterLabel: 'BALCÃO 1',
-        atcudPrefix: 'ATCUD',
+        atValidationCode: 'AT0000001', // Placeholder - replace with real code from AT portal
+        seriesDiscontinued: false,
+    },
+    fiscal: {
+        hashControlVersion: '1',
+        privateKeyPem: undefined,
+        trainingMode: false,
     },
 };
 
@@ -148,6 +166,10 @@ const settingsReducer = (state: SettingsState, action: SettingsAction): Settings
                     receipt: {
                         ...state.settings.receipt,
                         ...(action.payload.receipt || {}),
+                    },
+                    fiscal: {
+                        ...state.settings.fiscal,
+                        ...(action.payload.fiscal || {}),
                     },
                 },
             };
@@ -206,6 +228,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 ...state.settings.receipt,
                 ...(newSettings.receipt || {}),
             },
+            fiscal: {
+                ...state.settings.fiscal,
+                ...(newSettings.fiscal || {}),
+            },
         };
 
         localStorage.setItem('pos_system_settings', JSON.stringify(updatedSettings));
@@ -250,6 +276,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                         receipt: {
                             ...defaultSettings.receipt,
                             ...(parsedSettings.receipt || {}),
+                        },
+                        fiscal: {
+                            ...defaultSettings.fiscal,
+                            ...(parsedSettings.fiscal || {}),
                         },
                     };
                     dispatch({ type: 'LOAD_SETTINGS', payload: mergedSettings });

@@ -189,25 +189,26 @@ export const transactionService = {
         console.log('TransactionService: Creating transaction with data:', transactionData);
         console.log('TransactionService: Creating transaction items:', items);
 
-        // Generate transaction number with fallback
-        let transactionNumber: string;
+        // Fiscal / caller may supply transaction_number (e.g. SAFT InvoiceNo); otherwise RPC
+        let transactionNumber = transactionData.transaction_number?.trim();
 
-        try {
-            const { data: rpcNumber, error: numberError } = await supabase
-                .rpc('generate_transaction_number');
+        if (!transactionNumber) {
+            try {
+                const { data: rpcNumber, error: numberError } = await supabase
+                    .rpc('generate_transaction_number');
 
-            if (numberError || !rpcNumber) {
-                throw new Error('RPC failed: ' + (numberError?.message || 'null result'));
+                if (numberError || !rpcNumber) {
+                    throw new Error('RPC failed: ' + (numberError?.message || 'null result'));
+                }
+                transactionNumber = rpcNumber;
+            } catch (error) {
+                console.warn('RPC generate_transaction_number failed, using client fallback:', error);
+                const now = new Date();
+                const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+                const timeStr = now.getTime().toString().slice(-4);
+                const randomStr = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+                transactionNumber = `TXN${dateStr}${timeStr}${randomStr}`;
             }
-            transactionNumber = rpcNumber;
-        } catch (error) {
-            console.warn('RPC generate_transaction_number failed, using client fallback:', error);
-            // Client-side fallback with timestamp + random
-            const now = new Date();
-            const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
-            const timeStr = now.getTime().toString().slice(-4);
-            const randomStr = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-            transactionNumber = `TXN${dateStr}${timeStr}${randomStr}`;
         }
 
         // Create the transaction

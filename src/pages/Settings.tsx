@@ -12,9 +12,13 @@ import {
     DollarSign,
     Bell,
     Printer,
+    FileDown,
 } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useTranslation } from 'react-i18next';
+import { transactionLocalService } from '../lib/localDatabase';
+import { buildSaftAuditFileXml } from '../fiscal/saft/exportSaft';
+import { generateUUID } from '../utils/uuid';
 // import PrinterSetup from '../components/PrinterSetup';
 
 const Settings: React.FC = () => {
@@ -23,6 +27,11 @@ const Settings: React.FC = () => {
     const [activeTab, setActiveTab] = useState('security');
     const [pendingChanges, setPendingChanges] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const [saftStart, setSaftStart] = useState(() => new Date().toISOString().slice(0, 10));
+    const [saftEnd, setSaftEnd] = useState(() => new Date().toISOString().slice(0, 10));
+    const [saftBusy, setSaftBusy] = useState(false);
+    const [saftMessage, setSaftMessage] = useState<string | null>(null);
+    const [fiscalElectronMsg, setFiscalElectronMsg] = useState<string | null>(null);
     // const [showPrinterSetup, setShowPrinterSetup] = useState(false);
     // const [printerStatus, setPrinterStatus] = useState<any>(null);
 
@@ -81,6 +90,62 @@ const Settings: React.FC = () => {
             resetToDefaults();
             setPendingChanges(false);
             setSaveStatus('idle');
+        }
+    };
+
+    const handleStoreFiscalPemInElectron = async () => {
+        setFiscalElectronMsg(null);
+        const api = typeof window !== 'undefined' ? window.electronAPI?.fiscal : undefined;
+        if (!api) {
+            setFiscalElectronMsg('Disponível apenas na aplicação Electron.');
+            return;
+        }
+        const pem = settings.fiscal.privateKeyPem?.trim();
+        if (!pem) {
+            setFiscalElectronMsg('Cole a chave PEM antes de guardar.');
+            return;
+        }
+        const r = await api.storePrivateKeyPem(pem);
+        if (r.success) {
+            setFiscalElectronMsg(
+                'Chave guardada no armazenamento seguro do sistema. Pode limpar o campo local se já não precisar dele no browser.'
+            );
+        } else {
+            setFiscalElectronMsg(r.error || 'Falha ao guardar.');
+        }
+    };
+
+    const handleExportSaft = async () => {
+        setSaftBusy(true);
+        setSaftMessage(null);
+        try {
+            const fiscalDocs = await transactionLocalService.getFiscalDocumentsByDateRange(saftStart, saftEnd);
+            const xml = await buildSaftAuditFileXml({
+                settings,
+                startDateYmd: saftStart,
+                endDateYmd: saftEnd,
+                fiscalDocuments: fiscalDocs,
+                loadTransaction: id => transactionLocalService.getTransactionById(id),
+                productVersion: '0.1.0',
+            });
+            const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `SAFT_PT_${saftStart}_${saftEnd}.xml`;
+            a.click();
+            URL.revokeObjectURL(url);
+            const batchId = generateUUID();
+            await transactionLocalService.markFiscalDocumentsSaftExported(
+                fiscalDocs.map(d => d.id),
+                batchId,
+                new Date().toISOString()
+            );
+            setSaftMessage(`Exportadas ${fiscalDocs.length} faturas (intervalo local).`);
+        } catch (e) {
+            setSaftMessage(e instanceof Error ? e.message : 'Falha na exportação SAF-T.');
+        } finally {
+            setSaftBusy(false);
         }
     };
 
@@ -585,12 +650,34 @@ const Settings: React.FC = () => {
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
                                             />
                                         </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Software Certification Number (AT)</label>
+                                            <input
+                                                type="text"
+                                                value={settings.company.softwareCertNumber || ''}
+                                                onChange={(e) => handleSettingsChange('company', 'softwareCertNumber', e.target.value)}
+                                                placeholder="PTR-A-001"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">Official AT certification number for software</p>
+                                        </div>
                                     </div>
                                 </div>
 
                                 <div className="p-6 bg-blue-50 rounded-xl border border-blue-200">
                                     <h3 className="text-lg font-semibold text-gray-800 mb-4">Receipt Numbering</h3>
                                     <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Series Name (for AT Registration)</label>
+                                            <input
+                                                type="text"
+                                                value={settings.receipt.series}
+                                                onChange={(e) => handleSettingsChange('receipt', 'series', e.target.value)}
+                                                placeholder="FAT2026"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">Series identifier to register with AT portal</p>
+                                        </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">Series Prefix</label>
@@ -647,14 +734,32 @@ const Settings: React.FC = () => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">ATCUD Prefix</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">AT Validation Code (ATCUD)</label>
                                                 <input
                                                     type="text"
-                                                    value={settings.receipt.atcudPrefix}
-                                                    onChange={(e) => handleSettingsChange('receipt', 'atcudPrefix', e.target.value)}
+                                                    value={settings.receipt.atValidationCode}
+                                                    onChange={(e) => handleSettingsChange('receipt', 'atValidationCode', e.target.value)}
+                                                    placeholder="AT56789X1"
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 />
+                                                <p className="text-xs text-gray-500 mt-1">Code from AT portal after series registration</p>
                                             </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 min-h-[60px]">
+                                            <div>
+                                                <h4 className="font-medium text-gray-800">Série descontinuada</h4>
+                                                <p className="text-sm text-gray-600">Impede novas emissões nesta série (AT).</p>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    className="sr-only peer"
+                                                    checked={Boolean(settings.receipt.seriesDiscontinued)}
+                                                    onChange={(e) => handleSettingsChange('receipt', 'seriesDiscontinued', e.target.checked)}
+                                                />
+                                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            </label>
                                         </div>
 
                                         {/* Current Series Preview */}
@@ -663,6 +768,101 @@ const Settings: React.FC = () => {
                                             <p className="text-sm text-gray-600">Last series key: <strong>{settings.receipt.lastSeriesKey || '—'}</strong></p>
                                             <p className="text-sm text-gray-600">Current number: <strong>{settings.receipt.currentNumber}</strong></p>
                                         </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 bg-emerald-50 rounded-xl border border-emerald-200 md:col-span-2">
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Fiscal AT (certificação)</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">HashControl (versão)</label>
+                                                <input
+                                                    type="text"
+                                                    value={settings.fiscal.hashControlVersion}
+                                                    onChange={(e) => handleSettingsChange('fiscal', 'hashControlVersion', e.target.value)}
+                                                    className="w-full min-h-[60px] px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-xl"
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 min-h-[60px]">
+                                                <div>
+                                                    <h4 className="font-medium text-gray-800">Modo de formação</h4>
+                                                    <p className="text-sm text-gray-600">Documentos sem valor fiscal (AT).</p>
+                                                </div>
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="sr-only peer"
+                                                        checked={settings.fiscal.trainingMode}
+                                                        onChange={(e) => handleSettingsChange('fiscal', 'trainingMode', e.target.checked)}
+                                                    />
+                                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Chave privada RSA (PEM PKCS#8 ou PKCS#1) — apenas ambiente controlado
+                                            </label>
+                                            <textarea
+                                                value={settings.fiscal.privateKeyPem || ''}
+                                                onChange={(e) => handleSettingsChange('fiscal', 'privateKeyPem', e.target.value)}
+                                                placeholder="-----BEGIN PRIVATE KEY----- ou -----BEGIN RSA PRIVATE KEY-----"
+                                                rows={6}
+                                                className="w-full font-mono text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                            />
+                                            {typeof window !== 'undefined' && window.electronAPI?.fiscal && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleStoreFiscalPemInElectron}
+                                                    className="mt-3 w-full md:w-auto min-h-[60px] px-6 rounded-2xl font-semibold text-xl text-white bg-green-500 hover:bg-green-600 transition-colors duration-200"
+                                                >
+                                                    Guardar chave no armazenamento seguro (Electron)
+                                                </button>
+                                            )}
+                                            {fiscalElectronMsg && (
+                                                <p className="mt-2 text-sm text-gray-700">{fiscalElectronMsg}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-8 pt-6 border-t border-emerald-200">
+                                        <h4 className="text-md font-semibold text-gray-800 mb-3">Exportar SAF-T (PT) 1.04_01</h4>
+                                        <p className="text-sm text-gray-600 mb-4">
+                                            Gera ficheiro XML a partir de documentos fiscais guardados localmente (intervalo de datas).
+                                        </p>
+                                        <div className="flex flex-col md:flex-row gap-4 md:items-end">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">De</label>
+                                                <input
+                                                    type="date"
+                                                    value={saftStart}
+                                                    onChange={(e) => setSaftStart(e.target.value)}
+                                                    className="w-full min-h-[60px] px-3 py-2 border border-gray-300 rounded-lg text-xl"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Até</label>
+                                                <input
+                                                    type="date"
+                                                    value={saftEnd}
+                                                    onChange={(e) => setSaftEnd(e.target.value)}
+                                                    className="w-full min-h-[60px] px-3 py-2 border border-gray-300 rounded-lg text-xl"
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleExportSaft}
+                                                disabled={saftBusy}
+                                                className="inline-flex items-center justify-center gap-2 min-h-[80px] px-6 rounded-2xl font-semibold text-xl text-white bg-green-500 hover:bg-green-600 transition-colors duration-200 disabled:opacity-50"
+                                            >
+                                                <FileDown className="w-6 h-6" />
+                                                {saftBusy ? 'A exportar…' : 'Descarregar SAF-T'}
+                                            </button>
+                                        </div>
+                                        {saftMessage && (
+                                            <p className="text-sm text-gray-700 mt-3">{saftMessage}</p>
+                                        )}
                                     </div>
                                 </div>
                             </div>

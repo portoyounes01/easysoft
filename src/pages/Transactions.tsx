@@ -15,16 +15,20 @@ import {
     TrendingUp,
     DollarSign,
     ShoppingCart,
-    Users
+    Users,
+    FileMinus,
 } from 'lucide-react';
 import { transactionService } from '../services/transactionService';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import ReceiptDialog from '../components/ReceiptDialog';
 import type { ReceiptProps } from '../components/ThermalReceipt';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
-import { TableActionButton } from '../components/ui/TableActionButton';
+import { initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { runFiscalCreditNoteForTransaction } from '../fiscal/creditNoteCheckout';
 
 interface Transaction {
     id: string;
@@ -50,12 +54,60 @@ interface Transaction {
     status: 'completed' | 'refunded';
     employeeName: string;
     employeeId: string;
+    /** True when local Dexie has a non-NC fiscal document for this sale (AT credit note allowed). */
+    canIssueCreditNote?: boolean;
+}
+
+async function buildTransactionViewModel(dbTransaction: Record<string, unknown>): Promise<Transaction> {
+    const tid = String(dbTransaction.id);
+    const rawItems = (dbTransaction.transaction_items as Record<string, unknown>[] | undefined) ?? [];
+    const items = rawItems.map(it => ({
+        id: String(it.id),
+        name: String(it.product_name),
+        quantity: Number(it.quantity),
+        price: Number(it.unit_price),
+        total: Number(it.line_total),
+    }));
+    const txNum = String(dbTransaction.transaction_number ?? '');
+    const local = await transactionLocalService.getTransactionById(tid);
+    let canIssueCreditNote = false;
+    if (
+        local?.fiscal_document_id &&
+        local.status === 'completed' &&
+        local.deleted_at == null &&
+        Number(local.total) > 0 &&
+        !txNum.trim().toUpperCase().startsWith('NC ')
+    ) {
+        const fiscal = await transactionLocalService.getFiscalDocumentById(local.fiscal_document_id);
+        canIssueCreditNote = Boolean(fiscal && fiscal.invoice_type !== 'NC');
+    }
+    return {
+        id: tid,
+        transactionNumber: txNum,
+        date: String(dbTransaction.transaction_date ?? ''),
+        time: String(dbTransaction.transaction_time ?? ''),
+        customerName: dbTransaction.customer_name ? String(dbTransaction.customer_name) : undefined,
+        customerNif: dbTransaction.customer_id ? String(dbTransaction.customer_id) : undefined,
+        items,
+        subtotal: Number(dbTransaction.subtotal ?? 0),
+        discount: Number(dbTransaction.discount ?? 0),
+        tax: Number(dbTransaction.tax ?? 0),
+        total: Number(dbTransaction.total ?? 0),
+        paymentMethod: dbTransaction.payment_method as Transaction['paymentMethod'],
+        cashReceived: dbTransaction.amount_paid != null ? Number(dbTransaction.amount_paid) : undefined,
+        changeGiven: dbTransaction.change_given != null ? Number(dbTransaction.change_given) : undefined,
+        status: dbTransaction.status as Transaction['status'],
+        employeeName: String(dbTransaction.employee_name ?? ''),
+        employeeId: String(dbTransaction.employee_id ?? ''),
+        canIssueCreditNote,
+    };
 }
 
 const Transactions: React.FC = () => {
     const { t } = useTranslation();
     const { language } = useLanguage();
     const { settings } = useSettings();
+    const { employee } = useSupabaseAuth();
     const [showReceiptPreview, setShowReceiptPreview] = useState(false);
     const [receiptPreviewData, setReceiptPreviewData] = useState<ReceiptProps | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -67,109 +119,88 @@ const Transactions: React.FC = () => {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [creditNoteBusyId, setCreditNoteBusyId] = useState<string | null>(null);
 
-    // Fetch transactions from database
-    useEffect(() => {
-        const fetchTransactions = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                console.log('Transactions: Fetching transactions...');
-                const data = await transactionService.getTransactions();
-
-                // Transform database data to UI format
-                const transformedTransactions: Transaction[] = data.map((dbTransaction: any) => {
-                    const items = (dbTransaction.transaction_items || []).map((it: any) => ({
-                        id: it.id,
-                        name: it.product_name,
-                        quantity: it.quantity,
-                        price: it.unit_price,
-                        total: it.line_total
-                    }));
-
-                    console.log(`Transactions: Transaction ${dbTransaction.transaction_number} has ${items.length} items`);
-
-                    return {
-                        id: dbTransaction.id,
-                        transactionNumber: dbTransaction.transaction_number,
-                        date: dbTransaction.transaction_date,
-                        time: dbTransaction.transaction_time,
-                        customerName: dbTransaction.customer_name,
-                        customerNif: dbTransaction.customer_id, // Using customer_id as NIF for now
-                        items: items,
-                        subtotal: dbTransaction.subtotal,
-                        discount: dbTransaction.discount,
-                        tax: dbTransaction.tax,
-                        total: dbTransaction.total,
-                        paymentMethod: dbTransaction.payment_method,
-                        cashReceived: dbTransaction.amount_paid,
-                        changeGiven: dbTransaction.change_given,
-                        status: dbTransaction.status,
-                        employeeName: dbTransaction.employee_name,
-                        employeeId: dbTransaction.employee_id
-                    };
-                });
-
-                console.log(`Transactions: Loaded ${transformedTransactions.length} transactions`);
-                setTransactions(transformedTransactions);
-            } catch (err) {
-                console.error('Error fetching transactions:', err);
-                setError('Failed to load transactions. Please try again.');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchTransactions();
-    }, []);
-
-    // Refresh transactions function
-    const refreshTransactions = async () => {
+    const loadTransactions = async () => {
         try {
             setLoading(true);
             setError(null);
-            console.log('Transactions: Refreshing transactions...');
-            const data = await transactionService.getTransactions();
+            await initializeLocalDatabase();
 
-            const transformedTransactions: Transaction[] = data.map((dbTransaction: any) => {
-                const items = (dbTransaction.transaction_items || []).map((it: any) => ({
-                    id: it.id,
-                    name: it.product_name,
-                    quantity: it.quantity,
-                    price: it.unit_price,
-                    total: it.line_total
-                }));
+            let rows: Record<string, unknown>[] = [];
+            if (isSupabaseConfigured()) {
+                try {
+                    rows = (await transactionService.getTransactions()) as Record<string, unknown>[];
+                } catch (remoteErr) {
+                    console.warn('Transactions: remote fetch failed, falling back to local', remoteErr);
+                }
+            }
 
-                console.log(`Transactions: Transaction ${dbTransaction.transaction_number} has ${items.length} items (refresh)`);
+            if (rows.length === 0) {
+                const locals = await transactionLocalService.getAllTransactions();
+                const active = locals.filter(t => t.deleted_at == null);
+                const full = (
+                    await Promise.all(active.map(t => transactionLocalService.getTransactionById(t.id)))
+                ).filter((x): x is NonNullable<typeof x> => Boolean(x));
+                rows = full.map(l => ({ ...l, transaction_items: l.items })) as Record<string, unknown>[];
+            }
 
-                return {
-                    id: dbTransaction.id,
-                    transactionNumber: dbTransaction.transaction_number,
-                    date: dbTransaction.transaction_date,
-                    time: dbTransaction.transaction_time,
-                    customerName: dbTransaction.customer_name,
-                    customerNif: dbTransaction.customer_id,
-                    items: items,
-                    subtotal: dbTransaction.subtotal,
-                    discount: dbTransaction.discount,
-                    tax: dbTransaction.tax,
-                    total: dbTransaction.total,
-                    paymentMethod: dbTransaction.payment_method,
-                    cashReceived: dbTransaction.amount_paid,
-                    changeGiven: dbTransaction.change_given,
-                    status: dbTransaction.status,
-                    employeeName: dbTransaction.employee_name,
-                    employeeId: dbTransaction.employee_id
-                };
+            const transformed = await Promise.all(rows.map(r => buildTransactionViewModel(r)));
+            transformed.sort((a, b) => {
+                const ta = new Date(`${a.date}T${a.time}`).getTime();
+                const tb = new Date(`${b.date}T${b.time}`).getTime();
+                return tb - ta;
             });
-
-            console.log(`Transactions: Refreshed ${transformedTransactions.length} transactions`);
-            setTransactions(transformedTransactions);
+            setTransactions(transformed);
         } catch (err) {
-            console.error('Error refreshing transactions:', err);
-            setError('Failed to refresh transactions. Please try again.');
+            console.error('Error loading transactions:', err);
+            setError(t('transactions.error.message'));
         } finally {
             setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void loadTransactions();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only
+    }, []);
+
+    const handleIssueCreditNote = async (tx: Transaction) => {
+        if (!employee) {
+            window.alert(t('transactions.creditNote.needEmployee'));
+            return;
+        }
+        if (
+            !window.confirm(
+                t('transactions.creditNote.confirm', { number: tx.transactionNumber })
+            )
+        ) {
+            return;
+        }
+        try {
+            setCreditNoteBusyId(tx.id);
+            const pm =
+                tx.paymentMethod === 'card' || tx.paymentMethod === 'mixed'
+                    ? tx.paymentMethod
+                    : 'cash';
+            const result = await runFiscalCreditNoteForTransaction({
+                settings,
+                originalTransactionId: tx.id,
+                payment: {
+                    paymentMethod: pm,
+                    employeeId: employee.id,
+                    employeeName: employee.name,
+                    employeeNumber: employee.employee_number,
+                },
+            });
+            window.alert(t('transactions.creditNote.success', { invoiceNo: result.invoiceNo }));
+            await loadTransactions();
+        } catch (e) {
+            console.error(e);
+            const msg = e instanceof Error ? e.message : '';
+            window.alert(msg ? `${t('transactions.creditNote.error')} ${msg}` : t('transactions.creditNote.error'));
+        } finally {
+            setCreditNoteBusyId(null);
         }
     };
 
@@ -275,7 +306,9 @@ const Transactions: React.FC = () => {
                 documentType: settings.receipt.defaultDocumentType,
                 date,
                 counter: settings.receipt.counterLabel,
-                verificationCode: `${settings.receipt.atcudPrefix}-${trx.receipt_number || trx.transaction_number}`,
+                // Use real ATCUD format: AT validation code + sequential number
+                // Note: For older transactions, this will use current settings
+                verificationCode: `${settings.receipt.atValidationCode}-${trx.receipt_number?.split('-').pop() || trx.transaction_number}`,
                 company: {
                     name: settings.company.name,
                     address: settings.company.address,
@@ -444,7 +477,7 @@ const Transactions: React.FC = () => {
                             variant="outline"
                             label="Refresh"
                             icon={Receipt}
-                            onClick={refreshTransactions}
+                            onClick={() => void loadTransactions()}
                             disabled={loading}
                             title="Refresh transactions"
                         />
@@ -623,13 +656,26 @@ const Transactions: React.FC = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end space-x-3">
+                                            <div className="mt-4 pt-4 border-t border-gray-200 flex flex-col sm:flex-row sm:flex-wrap justify-end gap-3">
                                                 <AdminActionButton
                                                     variant="outline"
                                                     label={t('transactions.list.viewReceipt')}
                                                     icon={Eye}
                                                     onClick={() => handleViewReceipt(transaction.id)}
                                                 />
+                                                {transaction.canIssueCreditNote && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void handleIssueCreditNote(transaction)}
+                                                        disabled={creditNoteBusyId !== null}
+                                                        className="inline-flex items-center justify-center gap-2 min-h-[60px] px-6 rounded-2xl font-semibold text-xl text-white bg-orange-500 hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        <FileMinus className="w-6 h-6 shrink-0" />
+                                                        {creditNoteBusyId === transaction.id
+                                                            ? t('transactions.creditNote.issuing')
+                                                            : t('transactions.list.issueCreditNote')}
+                                                    </button>
+                                                )}
                                                 <AdminActionButton
                                                     variant="ghost"
                                                     label={t('transactions.list.download')}

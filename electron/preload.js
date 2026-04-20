@@ -76,32 +76,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     platform: process.platform
   },
 
+  fiscal: {
+    hasSecureKey: () => ipcRenderer.invoke('fiscal:has-secure-key'),
+    storePrivateKeyPem: (pem) => ipcRenderer.invoke('fiscal:store-private-key-pem', pem),
+    clearSecureKey: () => ipcRenderer.invoke('fiscal:clear-secure-key'),
+    signHashPlaintext: (plaintext) => ipcRenderer.invoke('fiscal:sign-hash-plaintext', plaintext),
+  },
+
   // Development helpers
   isDev: process.env.NODE_ENV === 'development'
 });
-
-// Add type definitions for TypeScript
-window.electronAPI = {
-  hardware: {
-    init: () => Promise,
-    printReceipt: (receiptData) => Promise,
-    openCashDrawer: (options) => Promise,
-    getDrawerStatus: () => Promise,
-    testPrinter: () => Promise,
-    getHardwareStatus: () => Promise,
-    getConfiguredPrinters: () => Promise,
-    setPrinterRole: (printerName, role) => Promise,
-    removePrinter: (printerName) => Promise,
-    testPrinterByName: (printerName, testType) => Promise
-  },
-  discoverThermalPrinters: () => Promise,
-  connectToNetworkPrinter: (ip, port, printerName) => Promise,
-  discoverUSBPrinters: () => Promise,
-  connectToUSBPrinter: (uri, printerName) => Promise,
-  scanPrintersProgressively: (onProgress) => Promise,
-  app: {
-    getVersion: () => Promise,
-    platform: string
-  },
-  isDev: boolean
-};

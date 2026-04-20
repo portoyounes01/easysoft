@@ -33,3 +33,9 @@ TEMP_DEBUG_*.md
 dist-electron/
 electron-cache/
 .vercel
+
+# Playwright
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/

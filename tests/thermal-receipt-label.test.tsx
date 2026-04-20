@@ -22,9 +22,14 @@ describe('ThermalReceipt documentLabel', () => {
         expect(screen.getByText(/ABC-202508-1001 Original/)).toBeInTheDocument();
     });
 
-    test('renders custom label Segunda via', () => {
-        render(<ThermalReceipt {...base} documentLabel="Segunda via" />);
-        expect(screen.getByText(/ABC-202508-1001 Segunda via/)).toBeInTheDocument();
+    test('renders custom label Duplicado', () => {
+        render(<ThermalReceipt {...base} documentLabel="Duplicado" />);
+        expect(screen.getByText(/ABC-202508-1001 Duplicado/)).toBeInTheDocument();
+    });
+
+    test('renders certification phrase with /AT suffix', () => {
+        render(<ThermalReceipt {...base} certificationNumber="196/AT" />);
+        expect(screen.getByText(/Processado por programa certificado n\.º\s+196\/AT/)).toBeInTheDocument();
     });
 });
 

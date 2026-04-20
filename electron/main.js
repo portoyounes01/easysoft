@@ -4,6 +4,7 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 // Import our hardware controllers
 const HardwareController = require('./hardware/hardwareController');
+const { registerFiscalSigningIpc } = require('./fiscalSigning');
 
 let mainWindow;
 let hardwareController;
@@ -352,6 +353,8 @@ ipcMain.handle('hardware:check-all-connections', async () => {
 ipcMain.handle('app:get-version', async () => {
   return app.getVersion();
 });
+
+registerFiscalSigningIpc(ipcMain, app);
 
 // Error handling
 process.on('uncaughtException', (error) => {

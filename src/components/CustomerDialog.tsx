@@ -14,7 +14,12 @@ interface CustomerDialogProps {
     onClose: () => void;
     onSelect: (customer: LocalCustomer) => void;
     customers: LocalCustomer[];
-    onRegisterCustomer: (customerData: Omit<LocalCustomer, 'id'>) => Promise<void>;
+    onRegisterCustomer: (
+        customerData: Omit<
+            LocalCustomer,
+            'id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'
+        >
+    ) => Promise<void>;
 }
 
 type ViewMode = 'list' | 'add';
@@ -84,7 +89,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         const searchLower = searchTerm.toLowerCase();
         return customers.filter(c =>
             c.name.toLowerCase().includes(searchLower) ||
-            ((c as any).nif && (c as any).nif.toLowerCase().includes(searchLower)) ||
+            (c.tax_number && c.tax_number.toLowerCase().includes(searchLower)) ||
             c.email?.toLowerCase().includes(searchLower) ||
             c.phone?.toLowerCase().includes(searchLower)
         );
@@ -145,29 +150,21 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             return;
         }
 
-        const customerData = {
-            name: newCustomerForm.name.trim() || `Customer ${newCustomerForm.taxId.trim()}`,
+        const customerData: Omit<
+            LocalCustomer,
+            'id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'
+        > = {
+            name: newCustomerForm.name.trim() || `Cliente ${newCustomerForm.taxId.trim()}`,
+            tax_number: newCustomerForm.taxId.trim(),
             email: null,
             phone: newCustomerForm.phone.trim() || null,
-            nif: newCustomerForm.taxId.trim(),
             address: newCustomerForm.address.trim() || null,
-            city: null,
-            postalCode: null,
-            country: newCustomerForm.country.trim() || 'Portugal',
-            discountLevel: 0,
-            totalPurchases: 0,
-            totalOrders: 0,
-            is_active: true,
-            loyalty_points: 0,
-            preferred_payment_method: null,
-            created_at: new Date(),
-            updated_at: new Date(),
-            last_synced_at: new Date(),
             total_spent: 0,
             transaction_count: 0,
+            loyalty_points: 0,
+            is_active: true,
+            preferred_payment_method: null,
             deleted_at: null,
-            needs_push: true,
-            is_conflicted: false
         };
 
         await onRegisterCustomer(customerData);

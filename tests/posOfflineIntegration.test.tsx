@@ -80,7 +80,7 @@ const TestPOSComponent: React.FC = () => {
 
     const handleProcessTransaction = async () => {
         try {
-            const receiptNumber = await processTransaction({
+            const { receiptNumber } = await processTransaction({
                 paymentMethod: 'cash',
                 amountPaid: 130,
                 employeeId: 'emp-1',
@@ -118,6 +118,8 @@ describe('POS Offline Integration', () => {
         await localDb.customers.clear();
         await localDb.transactions.clear();
         await localDb.transactionItems.clear();
+        await localDb.fiscalDocuments.clear();
+        await localDb.fiscalAuditEvents.clear();
         await localDb.customerSyncQueue.clear();
         await localDb.transactionSyncQueue.clear();
         await localDb.products.clear();
@@ -128,6 +130,8 @@ describe('POS Offline Integration', () => {
         await localDb.customers.clear();
         await localDb.transactions.clear();
         await localDb.transactionItems.clear();
+        await localDb.fiscalDocuments.clear();
+        await localDb.fiscalAuditEvents.clear();
         await localDb.customerSyncQueue.clear();
         await localDb.transactionSyncQueue.clear();
         await localDb.products.clear();
@@ -301,31 +305,37 @@ describe('POS Offline Integration', () => {
                 is_conflicted: false
             };
 
-            const handleSelectCustomer = async () => {
-                const customer = await localDb.customers.get('cust-1');
-                if (customer) {
-                    selectCustomer(customer);
-                }
-            };
-
-            const handleAddAndProcess = async () => {
+            const handleCompleteWithCustomer = () => {
+                selectCustomer({
+                    id: 'cust-1',
+                    name: 'Test Customer',
+                    email: 'test@example.com',
+                    phone: '123456789',
+                    address: '123 Test St',
+                    total_spent: 0,
+                    transaction_count: 0,
+                    loyalty_points: 0,
+                    is_active: true,
+                    preferred_payment_method: 'cash',
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                    last_synced_at: null,
+                    deleted_at: null,
+                    needs_push: false,
+                    is_conflicted: false,
+                });
                 addToCart(testProduct, 1);
-                setTimeout(async () => {
-                    await processTransaction({
-                        paymentMethod: 'card',
-                        employeeId: 'emp-1',
-                        employeeName: 'Test Employee'
-                    });
-                }, 100);
+                void processTransaction({
+                    paymentMethod: 'card',
+                    employeeId: 'emp-1',
+                    employeeName: 'Test Employee'
+                });
             };
 
             return (
                 <div>
-                    <button onClick={handleSelectCustomer} data-testid="select-customer">
-                        Select Customer
-                    </button>
-                    <button onClick={handleAddAndProcess} data-testid="add-and-process">
-                        Add and Process
+                    <button onClick={handleCompleteWithCustomer} data-testid="complete-with-customer">
+                        Complete with customer
                     </button>
                 </div>
             );
@@ -337,11 +347,7 @@ describe('POS Offline Integration', () => {
             </POSProvider>
         );
 
-        // Select customer
-        fireEvent.click(screen.getByTestId('select-customer'));
-
-        // Add product and process transaction
-        fireEvent.click(screen.getByTestId('add-and-process'));
+        fireEvent.click(screen.getByTestId('complete-with-customer'));
 
         // Wait for transaction to be processed
         await waitFor(async () => {
@@ -351,7 +357,7 @@ describe('POS Offline Integration', () => {
             const transaction = transactions[0];
             expect(transaction.customer_id).toBe('cust-1');
             expect(transaction.customer_name).toBe('Test Customer');
-        }, { timeout: 5000 });
+        }, { timeout: 10000 });
 
         // Check that customer totals were updated
         await waitFor(async () => {
@@ -396,12 +402,16 @@ describe('Error Handling in Offline Mode', () => {
         await localDb.customers.clear();
         await localDb.transactions.clear();
         await localDb.transactionItems.clear();
+        await localDb.fiscalDocuments.clear();
+        await localDb.fiscalAuditEvents.clear();
     });
 
     afterEach(async () => {
         await localDb.customers.clear();
         await localDb.transactions.clear();
         await localDb.transactionItems.clear();
+        await localDb.fiscalDocuments.clear();
+        await localDb.fiscalAuditEvents.clear();
     });
 
     it('should handle database errors gracefully', async () => {

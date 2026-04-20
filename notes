@@ -1,0 +1,61 @@
+- dados do cliente deve ter morada e codigo postal
+when we generate a saft files, all the info on it (transactions etc..) have to be marked/flagged so that when we generate a new saft, it doesnt contain previous ones (duplicated)
+logs are very very important (in case anything goes wrong, everything can be constructed from the logs)
+fatura duplicada
+whatever's seent to saft needs to be marked/flagged
+mode test/stage/formation/debug
+series de faturas needs to be manually filled (by admin or manager) because it's generated from the AT
+the percetage of the iva (6, 13 ,23) needs to be also saved in the DB (we already have that) and sent to the AT/financas
+recibos(reçu)
+
+
+-numero de documento needs to start from 1, always, and needs to be sequential (VERY IMPORTANT)
+- the hash of the docuyment N2 depends on hash from document number 1
+
+-if we have a new serie number, we can have document number starting from 1, but if we use an already used serie number, the document number needs to be sequential and start from the last one used in that serie number
+
+HASH:
+-system entry date,
+
+
+
+each POS machine needs to have unique serie
+
+qr-code:
+    - add codigo de pais
+    - not all hash (only 4 last characters)
+
+
+SAF-T:
+    -verify that all products are in the saft (even if its a newly added product withut orders, it needs to be in the saft file)
+
+HashControl:
+    - Cannot be exposed in the settings (even for sys admin)
+
+Settings:
+        - Settings prefix (hardcoded ABC, verify and remove)
+        - the same series in the settings (provided by financas) needs to be the same in all documents, and in the generated saft file
+        - serie needs to have "description" field in the settings
+        - Important:: no reset policy (the issue is, the serie is only reset at the end of the year, but there needs to be a new serie, meaning the original is never tampered with)
+
+Faturas:
+    - FS and FT, etc... are completely different (we cannot generate both documents for the same order)
+    - VERY IMPORTANT: the numbers of the invoices ALWAYS need to be sequential, for the same serie number. ONly start with 1 again for a new serie number (emitted from Fincancas)
+    - never create a new document without verifying it exists (or its numeber or identified exists) first
+    - add UI field indicating "last document number used" (for the serie number) to avoid human error and to make it easier for the user to know which number is next
+    - NC: motivo doesnt need to be in the receipt (but needs to be in the saft file)
+    - for FT, add option to give recibo
+
+
+Anular documento:
+    - you can "cancel" an invoice (e.g customer doesnt want it anymore), but needs to stay saved, in saft, and in the printed doc, it needs to indicagte that its cancelled
+
+
+- in the pos interface, add option to delete one item (click on it on the right side pannel should remove it)
+- indicate client (NIF) in the POS interface@  (on the right side pannel) when selected, and also in the printed receipt, and in the saft file
+
+- IMPORTANT: verify transactions are properly saved in both localDB and remoteDB, currently it's broken
+
+- unique DB for demo mode (formacao)
+- company NIF should be op top (with the rest of the company data)
+- add name of the user that emitted the document in the receipt

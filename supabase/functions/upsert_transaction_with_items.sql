@@ -44,6 +44,8 @@ BEGIN
             status,
             notes,
             receipt_number,
+            fiscal_document_id,
+            fiscal_metadata_json,
             created_at,
             updated_at,
             deleted_at
@@ -70,6 +72,8 @@ BEGIN
             transaction_data->>'status',
             transaction_data->>'notes',
             transaction_data->>'receipt_number',
+            transaction_data->>'fiscal_document_id',
+            transaction_data->'fiscal_metadata_json',
             COALESCE((transaction_data->>'created_at')::TIMESTAMPTZ, NOW()),
             COALESCE((transaction_data->>'updated_at')::TIMESTAMPTZ, NOW()),
             CASE WHEN transaction_data->>'deleted_at' IS NOT NULL 
@@ -91,6 +95,8 @@ BEGIN
             status = EXCLUDED.status,
             notes = EXCLUDED.notes,
             receipt_number = EXCLUDED.receipt_number,
+            fiscal_document_id = COALESCE(EXCLUDED.fiscal_document_id, transactions.fiscal_document_id),
+            fiscal_metadata_json = COALESCE(EXCLUDED.fiscal_metadata_json, transactions.fiscal_metadata_json),
             updated_at = EXCLUDED.updated_at,
             deleted_at = EXCLUDED.deleted_at
         WHERE transactions.updated_at <= EXCLUDED.updated_at;

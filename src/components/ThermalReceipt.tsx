@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { generateQRCodeImage } from '../utils/qrCode';
 
 interface ReceiptItem {
   id: string;
@@ -44,7 +45,14 @@ export interface ReceiptProps {
   documentType: 'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO';
   date: Date;
   counter: string;
-  verificationCode: string;
+  verificationCode: string; // ATCUD body (e.g. CSDF7T5H-0001); printed as ATCUD: …
+  documentHash?: string; // Base64 RSA-SHA1 fiscal hash (optional / debug)
+  /** Four signature chars (positions 1,11,21,31 of Base64 hash) */
+  hashFourChars?: string;
+  qrCodeData?: string; // AT QR payload
+  /** Pre-rendered QR when already generated (avoids duplicate work) */
+  qrCodeImage?: string;
+  trainingMode?: boolean;
   company: ReceiptCompany;
   customer?: ReceiptCustomer;
   items: ReceiptItem[];
@@ -64,6 +72,11 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   date,
   counter,
   verificationCode,
+  documentHash,
+  hashFourChars,
+  qrCodeData,
+  qrCodeImage: qrCodeImageProp,
+  trainingMode,
   company,
   customer,
   items,
@@ -76,6 +89,20 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   creditReason,
   documentLabel
 }) => {
+  const [qrCodeImage, setQrCodeImage] = useState<string>('');
+
+  useEffect(() => {
+    if (qrCodeImageProp) {
+      setQrCodeImage(qrCodeImageProp);
+      return;
+    }
+    if (qrCodeData) {
+      generateQRCodeImage(qrCodeData)
+        .then(setQrCodeImage)
+        .catch(err => console.error('Failed to generate QR code:', err));
+    }
+  }, [qrCodeData, qrCodeImageProp]);
+
   const formatDate = (date: Date): string => {
     return date.toLocaleDateString('pt-PT') + ' ' + date.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
   };
@@ -288,6 +315,12 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         }
       `}</style>
 
+      {trainingMode && (
+        <div className="center bold small-text" style={{ border: '2px dashed #c00', padding: '6px', marginBottom: '8px' }}>
+          DOCUMENTO EM MODO DE FORMAÇÃO — SEM VALOR FISCAL
+        </div>
+      )}
+
       {/* Logo/Header */}
       <div className="center company-logo">[LOGO]</div>
 
@@ -308,11 +341,26 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         </>
       )}
 
-      {/* Verification Code */}
-      <div className="center small-text">{verificationCode}</div>
+      {/* Verification Code (ATCUD) */}
+      <div className="center small-text bold">ATCUD: {verificationCode}</div>
 
-      {/* QR Code Placeholder */}
-      <div className="qr-placeholder center">QR CODE</div>
+      {/* QR Code */}
+      {qrCodeImage ? (
+        <div className="center">
+          <img src={qrCodeImage} alt="QR Code" style={{ maxWidth: '120px' }} />
+        </div>
+      ) : (
+        <div className="qr-placeholder center">QR CODE</div>
+      )}
+
+      {hashFourChars && (
+        <div className="center small-text bold">Q: {hashFourChars}</div>
+      )}
+      {documentHash && !hashFourChars && (
+        <div className="center small-text" style={{ fontSize: '8px', wordBreak: 'break-all' }}>
+          Hash: {documentHash.substring(0, 24)}…
+        </div>
+      )}
 
       <div className="separator"></div>
 
@@ -454,10 +502,11 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       {/* Legal Info */}
       {certificationNumber && (
-        <>
-          <div className="center small-text">uGSU-Processado por programa</div>
-          <div className="center small-text">certificado n° {certificationNumber}</div>
-        </>
+        <div className="center small-text">
+          Processado por programa certificado n.º{' '}
+          {certificationNumber.replace(/\s*\/AT\s*$/i, '').trim()}
+          /AT
+        </div>
       )}
 
       <div style={{ margin: '10px 0' }}></div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { generateQRCodeImage } from '../utils/qrCode';
 import { NavLink } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -41,7 +42,7 @@ import { useTranslation } from 'react-i18next';
 // import { transactionService } from '../services/transactionService';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
 import { customerLocalService } from '../lib/localDatabase';
-import ThermalReceipt, { ReceiptProps } from '../components/ThermalReceipt';
+import { ReceiptProps } from '../components/ThermalReceipt';
 import ReceiptHistorySelector from '../components/ReceiptHistorySelector';
 import { CustomerDialog } from '../components/CustomerDialog';
 import PaymentDialog from '../components/PaymentDialog';
@@ -404,6 +405,11 @@ const POS: React.FC = () => {
     <div className="h-screen flex bg-neutral-50">
       {/* Main Content Area - takes most space */}
       <div className="flex-1 flex flex-col">
+        {settings.fiscal.trainingMode && (
+          <div className="flex-none bg-orange-500 text-white text-center text-xl font-bold py-3 px-4">
+            MODO DE FORMAÇÃO — documentos sem valor fiscal
+          </div>
+        )}
         {/* Top Header - only over left sidebar + center, not cart */}
         <div className="flex-none bg-white shadow-sm border-b border-gray-200 px-4 py-3">
           <div className="flex items-center justify-between">
@@ -733,122 +739,100 @@ const POS: React.FC = () => {
             setCashReceived(0);
           }}
           onConfirm={async () => {
-            // Build receipt data
-            // Build series key per settings (monthly/yearly)
-            const now = new Date();
-            const y = now.getFullYear();
-            const m = String(now.getMonth() + 1).padStart(2, '0');
-            const seriesKey = settings.receipt.resetPolicy === 'monthly'
-              ? `${settings.receipt.seriesPrefix}-${y}${m}`
-              : `${settings.receipt.seriesPrefix}-${y}`;
+            const cartSnapshot = cart.map((ci) => ({ ...ci }));
+            const paymentMethod = cashReceived > 0 ? 'cash' : 'card' as const;
+            const employeeId = employee?.id || 'unknown-employee';
+            const employeeName = employee?.name || 'Employee';
 
-            // Compute next number (starting from 1000 via currentNumber default 999)
-            let nextNumber = settings.receipt.currentNumber;
-            let lastSeriesKey = settings.receipt.lastSeriesKey;
-            if (lastSeriesKey !== seriesKey) {
-              nextNumber = 999; // reset so first becomes 1000
-              lastSeriesKey = seriesKey;
-            }
-            nextNumber += 1;
-
-            const padded = String(nextNumber).padStart(settings.receipt.numericWidth, '0');
-            const documentNumber = `${seriesKey}-${padded}`; // reserved for future persistence in transaction
-
-            // Persist updated counter using settings updater
-            updateSettings({
-              receipt: {
-                lastSeriesKey,
-                currentNumber: nextNumber,
-              }
-            });
-
-            const receiptData = {
-              documentType: settings.receipt.defaultDocumentType as 'FATURA' | 'FATURA_SIMPLIFICADA',
-              date: new Date(),
-              counter: settings.receipt.counterLabel,
-              verificationCode: `${settings.receipt.atcudPrefix}-${seriesKey}-${padded}`,
-              // Replace FS placeholder number with our generated document number
-              // Downstream receipt component prints documentNumber value
-              documentNumber: documentNumber,
-              company: {
-                name: settings.company.name,
-                address: settings.company.address,
-                postalCode: settings.company.postalCode,
-                city: settings.company.city,
-                taxNumber: settings.company.taxNumber,
-                phone: settings.company.phone || undefined,
-                email: settings.company.email || undefined,
-              },
-              customer: selectedCustomer ? {
-                name: selectedCustomer.name
-              } : undefined,
-              items: cart.map(ci => ({
-                id: ci.product.id,
-                description: ci.product.name,
-                quantity: ci.quantity,
-                unitPrice: ci.product.price,
-                vatRate: Math.round((ci.product.iva_rate || 0) * 100),
-                // price is tax-included already; total line value equals unit*qty
-                total: Number((ci.product.price * ci.quantity).toFixed(2))
-              })),
-              totals: {
-                subtotal: Number(subtotal.toFixed(2)),
-                discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
-                discountPercentage: discount.type === 'percentage' ? discount.value : 0,
-                net: Number(finalSubtotal.toFixed(2)),
-                vat: Number(adjustedFinalTax.toFixed(2)),
-                total: Number(finalTotal.toFixed(2))
-              },
-              payment: {
-                method: cashReceived > 0 ? 'Numerário' : 'Multibanco',
-                amountGiven: Number(cashReceived.toFixed(2)),
-                change: Number(changeAmount.toFixed(2))
-              },
-              slogan: settings.company.slogan || undefined,
-              softwareInfo: settings.company.softwareInfo || undefined,
-              certificationNumber: settings.company.certificationNumber || undefined,
-            };
-
-            // Try to persist transaction to Supabase
             try {
-              if (isSupabaseConfigured() && await checkSupabaseConnection()) {
-                const employeeId = employee?.id || 'unknown-employee';
-                const employeeName = employee?.name || 'Employee';
-                // const transactionDate = now.toISOString().slice(0, 10); // YYYY-MM-DD
-                // const transactionTime = now.toTimeString().slice(0, 8); // HH:MM:SS
-
-                const paymentMethod = cashReceived > 0 ? 'cash' : 'card' as const;
-
-                // NOTE: Server insert payload is constructed inside processTransaction; inline sample removed.
-
-                await processTransaction({
+              const { fiscal } = await processTransaction(
+                {
                   paymentMethod,
                   amountPaid: cashReceived > 0 ? cashReceived : undefined,
                   employeeId,
                   employeeName,
-                  employeeNumber: employee?.employee_number
-                }, () => {
-                  // Reset discount after successful transaction
+                  employeeNumber: employee?.employee_number,
+                },
+                () => {
                   setDiscount({ type: 'none', value: 0 });
-                  console.log('POS: Discount reset after transaction');
-                }, {
+                },
+                {
                   type: discount.type,
                   value: discount.value,
-                  amount: discountAmount + customerDiscountAmount
-                });
-                // Attempt to push immediately when online (non-blocking)
-                try { syncManager.forceSync().catch(() => { }); } catch { }
-              }
-            } catch (e) {
-              console.warn('Transaction persistence failed, falling back to local receipt view.', e);
-            }
+                  amount: discountAmount + customerDiscountAmount,
+                },
+                { settings, updateSettings }
+              );
 
-            // Show receipt preview modal instead of navigation
-            setShowPayment(false);
-            setReceiptPreviewData(receiptData);
-            setLastCompletedReceipt(receiptData);
-            setRecentReceipts(prev => [receiptData, ...prev].slice(0, 20));
-            setShowReceiptPreview(true);
+              if (isSupabaseConfigured() && await checkSupabaseConnection()) {
+                try {
+                  syncManager.forceSync().catch(() => { });
+                } catch {
+                  /* ignore */
+                }
+              }
+
+              const qrCodeImage = fiscal
+                ? await generateQRCodeImage(fiscal.qrPayload)
+                : undefined;
+
+              const receiptData: ReceiptProps = {
+                documentType: settings.receipt.defaultDocumentType as 'FATURA' | 'FATURA_SIMPLIFICADA',
+                date: new Date(),
+                counter: settings.receipt.counterLabel,
+                verificationCode: fiscal?.atcudBody || '',
+                documentNumber: fiscal?.invoiceNo || '',
+                documentHash: fiscal?.hashBase64,
+                hashFourChars: fiscal?.hashFourChars,
+                qrCodeData: fiscal?.qrPayload,
+                qrCodeImage,
+                trainingMode: settings.fiscal.trainingMode,
+                company: {
+                  name: settings.company.name,
+                  address: settings.company.address,
+                  postalCode: settings.company.postalCode,
+                  city: settings.company.city,
+                  taxNumber: settings.company.taxNumber,
+                  phone: settings.company.phone || undefined,
+                  email: settings.company.email || undefined,
+                },
+                customer: selectedCustomer ? { name: selectedCustomer.name } : undefined,
+                items: cartSnapshot.map((ci) => ({
+                  id: ci.product.id,
+                  description: ci.product.name,
+                  quantity: ci.quantity,
+                  unitPrice: ci.product.price,
+                  vatRate: Math.round((ci.product.iva_rate || 0) * 100),
+                  total: Number((ci.product.price * ci.quantity).toFixed(2)),
+                })),
+                totals: {
+                  subtotal: Number(subtotal.toFixed(2)),
+                  discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
+                  discountPercentage: discount.type === 'percentage' ? discount.value : 0,
+                  net: Number(finalSubtotal.toFixed(2)),
+                  vat: Number(adjustedFinalTax.toFixed(2)),
+                  total: Number(finalTotal.toFixed(2)),
+                },
+                payment: {
+                  method: cashReceived > 0 ? 'Numerário' : 'Multibanco',
+                  amountGiven: Number(cashReceived.toFixed(2)),
+                  change: Number(changeAmount.toFixed(2)),
+                },
+                slogan: settings.company.slogan || undefined,
+                softwareInfo: settings.company.softwareInfo || undefined,
+                certificationNumber: settings.company.certificationNumber || undefined,
+                documentLabel: 'Original',
+              };
+
+              setShowPayment(false);
+              setReceiptPreviewData(receiptData);
+              setLastCompletedReceipt(receiptData);
+              setRecentReceipts((prev) => [receiptData, ...prev].slice(0, 20));
+              setShowReceiptPreview(true);
+            } catch (e) {
+              console.error('Checkout failed', e);
+              alert(e instanceof Error ? e.message : 'Pagamento falhou');
+            }
           }}
         />
       )}
@@ -863,14 +847,14 @@ const POS: React.FC = () => {
         />
       )}
 
-      {/* Receipt History Selector for Segunda via */}
+      {/* Receipt History Selector for Duplicado (2.ª via) */}
       <ReceiptHistorySelector
         open={showReceiptHistory}
         receipts={recentReceipts}
         onClose={() => setShowReceiptHistory(false)}
         onSelect={(r) => {
           setShowReceiptHistory(false);
-          setReceiptPreviewData({ ...r, documentLabel: 'Segunda via' });
+          setReceiptPreviewData({ ...r, documentLabel: 'Duplicado' });
           setShowReceiptPreview(true);
         }}
       />

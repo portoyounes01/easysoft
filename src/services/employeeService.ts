@@ -12,22 +12,24 @@ import {
 // Service class that manages employees with offline-first approach
 export class EmployeeService {
     private isInitialized = false;
+    /** Single-flight so parallel callers do not race `initializeLocalDatabase`. */
+    private initInFlight: Promise<void> | null = null;
     private syncInProgress = false;
     private syncCallbacks: Array<(status: 'syncing' | 'completed' | 'error', details?: any) => void> = [];
 
-    constructor() {
-        this.initialize();
-    }
-
     // Initialize the service and start connection monitoring
     private async initialize(): Promise<void> {
-        if (this.isInitialized) return;
+        if (this.isInitialized) {
+            return;
+        }
+        this.initInFlight ??= this.runInitialize();
+        await this.initInFlight;
+    }
 
+    private async runInitialize(): Promise<void> {
         try {
-            // Initialize local database first
             await initializeLocalDatabase();
 
-            // Listen for connection status changes
             connectionStatus.subscribe(({ isSupabaseOnline }) => {
                 if (isSupabaseOnline && !this.syncInProgress) {
                     this.performBackgroundSync();
@@ -37,22 +39,24 @@ export class EmployeeService {
             this.isInitialized = true;
             console.log('EmployeeService initialized successfully');
 
-            // Perform initial sync if online
             if (connectionStatus.getStatus().isSupabaseOnline) {
                 this.performBackgroundSync();
             }
         } catch (error) {
             console.error('Failed to initialize EmployeeService:', error);
-            
-            // Provide user-friendly error message for database issues
-            if (error instanceof Error && 
+
+            if (
+                error instanceof Error &&
                 (error.message.includes('Database is corrupted') ||
-                 error.message.includes('object store') ||
-                 error.message.includes('IndexedDB'))) {
+                    error.message.includes('object store') ||
+                    error.message.includes('IndexedDB'))
+            ) {
                 throw new Error('Database initialization failed. Please refresh the page or clear browser data.');
             }
-            
+
             throw error;
+        } finally {
+            this.initInFlight = null;
         }
     }
 
@@ -448,6 +452,7 @@ export class EmployeeService {
     destroy(): void {
         this.syncCallbacks = [];
         this.isInitialized = false;
+        this.initInFlight = null;
     }
 }
 

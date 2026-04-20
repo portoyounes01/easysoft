@@ -147,6 +147,15 @@ interface ElectronAPI {
     getVersion: () => Promise<string>;
     platform: string;
   };
+  /** Present in Electron build: PEM in `safeStorage`, sign in main via IPC */
+  fiscal?: {
+    hasSecureKey: () => Promise<boolean>;
+    storePrivateKeyPem: (pem: string) => Promise<{ success: boolean; error?: string }>;
+    clearSecureKey: () => Promise<{ success: boolean; error?: string }>;
+    signHashPlaintext: (
+      plaintext: string
+    ) => Promise<{ success: boolean; hashBase64?: string; error?: string }>;
+  };
   isDev: boolean;
 }
 

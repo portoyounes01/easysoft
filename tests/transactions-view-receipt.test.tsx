@@ -1,10 +1,46 @@
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Transactions from '../src/pages/Transactions';
 import { LanguageProvider } from '../src/contexts/LanguageContext';
 import { SettingsProvider } from '../src/contexts/SettingsContext';
+
+vi.mock('../src/lib/supabase', () => ({
+    isSupabaseConfigured: () => true,
+}));
+
+vi.mock('../src/contexts/SupabaseAuthContext', () => ({
+    useSupabaseAuth: () => ({
+        employee: { id: 'EMP003', name: 'Cashier 1', employee_number: '003' },
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+        user: null,
+        session: null,
+        signInWithEmailAndPassword: vi.fn(),
+        signInWithEmployeeCredentials: vi.fn(),
+        signOut: vi.fn(),
+        hasPermission: () => true,
+        refreshEmployeeSession: vi.fn(),
+        clearError: vi.fn(),
+    }),
+}));
+
+vi.mock('../src/lib/localDatabase', () => ({
+    initializeLocalDatabase: vi.fn().mockResolvedValue(undefined),
+    transactionLocalService: {
+        getAllTransactions: vi.fn().mockResolvedValue([]),
+        getTransactionById: vi.fn().mockResolvedValue(undefined),
+        getFiscalDocumentById: vi.fn(),
+    },
+}));
+
+vi.mock('../src/fiscal/creditNoteCheckout', () => ({
+    runFiscalCreditNoteForTransaction: vi.fn(),
+}));
+
+import { transactionLocalService } from '../src/lib/localDatabase';
 
 // Mock transactionService
 vi.mock('../src/services/transactionService', () => ({
@@ -64,6 +100,11 @@ const renderPage = () => {
 };
 
 describe('Transactions page - View receipt dialog', () => {
+    beforeEach(() => {
+        vi.mocked(transactionLocalService.getTransactionById).mockResolvedValue(undefined);
+        vi.mocked(transactionLocalService.getFiscalDocumentById).mockReset();
+    });
+
     test('opens receipt dialog when clicking View Receipt', async () => {
         renderPage();
 
@@ -80,6 +121,28 @@ describe('Transactions page - View receipt dialog', () => {
 
         // Assert dialog appears with heading
         expect(await screen.findByText(/receipt preview/i)).toBeInTheDocument();
+    });
+
+    test('shows Credit note (NC) when local Dexie has a non-NC fiscal document', async () => {
+        vi.mocked(transactionLocalService.getTransactionById).mockImplementation(async id => {
+            if (id !== 'trx-1') return undefined;
+            return {
+                id: 'trx-1',
+                fiscal_document_id: 'fd-1',
+                status: 'completed',
+                deleted_at: null,
+                total: 1.85,
+                items: [],
+            } as Awaited<ReturnType<typeof transactionLocalService.getTransactionById>>;
+        });
+        vi.mocked(transactionLocalService.getFiscalDocumentById).mockResolvedValue({
+            invoice_type: 'FT',
+        } as Awaited<ReturnType<typeof transactionLocalService.getFiscalDocumentById>>);
+
+        renderPage();
+        expect(await screen.findByText('TXN-001')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /expand transaction details/i }));
+        expect(await screen.findByRole('button', { name: /credit note \(nc\)/i })).toBeInTheDocument();
     });
 });
 

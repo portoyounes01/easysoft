@@ -133,6 +133,18 @@ export class TransactionSyncService {
                     const transactionItems = itemsToSync.filter(item => item.transaction_id === transaction.id);
 
                     // Convert LocalTransaction to server format
+                    let fiscalMeta: unknown = null;
+                    if (transaction.fiscal_metadata_json != null) {
+                        try {
+                            fiscalMeta =
+                                typeof transaction.fiscal_metadata_json === 'string'
+                                    ? JSON.parse(transaction.fiscal_metadata_json)
+                                    : transaction.fiscal_metadata_json;
+                        } catch {
+                            fiscalMeta = null;
+                        }
+                    }
+
                     const transactionData = {
                         id: transaction.id,
                         transaction_number: transaction.transaction_number,
@@ -152,6 +164,8 @@ export class TransactionSyncService {
                         status: transaction.status,
                         notes: transaction.notes,
                         receipt_number: transaction.receipt_number,
+                        fiscal_document_id: transaction.fiscal_document_id ?? null,
+                        fiscal_metadata_json: fiscalMeta ?? null,
                         created_at: transaction.created_at.toISOString(),
                         updated_at: transaction.updated_at.toISOString(),
                         deleted_at: transaction.deleted_at?.toISOString() || null
@@ -306,7 +320,8 @@ export class TransactionSyncService {
             const transactionsToPrune = oldTransactions.filter(t => 
                 t.transaction_date < cutoffDateString && 
                 !t.needs_push && 
-                t.last_synced_at
+                t.last_synced_at &&
+                !t.fiscal_document_id
             );
 
             if (transactionsToPrune.length > 0) {

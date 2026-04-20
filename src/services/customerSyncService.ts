@@ -99,6 +99,7 @@ export class CustomerSyncService {
             const customersData = customersToSync.map(customer => ({
                 id: customer.id,
                 name: customer.name,
+                tax_number: customer.tax_number,
                 email: customer.email,
                 phone: customer.phone,
                 address: customer.address,

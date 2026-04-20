@@ -234,7 +234,18 @@ interface ElectronAPI {
     getVersion(): Promise<string>;
     platform: string;
   };
-  
+
+  fiscal?: {
+    hasSecureKey(): Promise<boolean>;
+    storePrivateKeyPem(pem: string): Promise<{ success: boolean; error?: string }>;
+    clearSecureKey(): Promise<{ success: boolean; error?: string }>;
+    signHashPlaintext(plaintext: string): Promise<{
+      success: boolean;
+      hashBase64?: string;
+      error?: string;
+    }>;
+  };
+
   isDev: boolean;
 }
 

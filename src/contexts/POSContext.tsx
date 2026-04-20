@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useCallback, useContext, useReducer, useRef } from 'react';
 import { Transaction, CashDrawer } from '../types';
 import { LocalProduct, LocalCustomer } from '../types/supabase';
 import { transactionLocalService, customerLocalService } from '../lib/localDatabase';
@@ -6,6 +6,9 @@ import { supabase } from '../lib/supabase';
 import { transactionService } from '../services/transactionService';
 import { connectionStatus } from '../lib/supabase';
 import { calculateTaxAmount, calculatePriceWithoutTax } from '../types/supabase';
+import type { SystemSettings, DeepPartial } from './SettingsContext';
+import { runFiscalCheckout, type FiscalCheckoutResult } from '../fiscal/checkoutOrchestrator';
+import { localTransactionToServerInsert, localTransactionItemsToServerInsert } from '../fiscal/pushServer';
 
 interface POSState {
   currentTransaction: Partial<Transaction> | null;
@@ -27,7 +30,21 @@ interface POSContextType extends POSState {
   selectCustomer: (customer: LocalCustomer | null) => void;
   openDrawer: (initialFloat: number) => void;
   closeDrawer: (finalCount: number) => void;
-  processTransaction: (paymentData: any, onTransactionComplete?: () => void, globalDiscount?: { type: 'none' | 'percentage' | 'fixed'; value: number; amount: number }) => Promise<string>;
+  processTransaction: (
+    paymentData: {
+      paymentMethod: 'cash' | 'card' | 'mixed';
+      amountPaid?: number;
+      employeeId: string;
+      employeeName: string;
+      employeeNumber?: string;
+    },
+    onTransactionComplete?: () => void,
+    globalDiscount?: { type: 'none' | 'percentage' | 'fixed'; value: number; amount: number },
+    fiscalContext?: {
+      settings: SystemSettings;
+      updateSettings: (patch: DeepPartial<SystemSettings>) => void;
+    }
+  ) => Promise<{ receiptNumber: string; fiscal?: FiscalCheckoutResult }>;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -75,15 +92,17 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
             : item
         )
       };
-    case 'APPLY_DISCOUNT':
+    case 'APPLY_DISCOUNT': {
+      const clamped = Math.min(100, Math.max(0, action.payload.discount));
       return {
         ...state,
         cart: state.cart.map(item =>
           item.product.id === action.payload.productId
-            ? { ...item, discount: action.payload.discount }
+            ? { ...item, discount: clamped }
             : item
         )
       };
+    }
     case 'CLEAR_CART':
       return { ...state, cart: [], selectedCustomer: null };
     case 'SELECT_CUSTOMER':
@@ -113,32 +132,41 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     selectedCustomer: null
   });
 
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  /** Applies reducer to ref synchronously so async handlers see updates in the same tick as batched dispatches. */
+  const dispatchPos = useCallback((action: POSAction) => {
+    stateRef.current = posReducer(stateRef.current, action);
+    dispatch(action);
+  }, [dispatch]);
+
   const addToCart = (product: LocalProduct, quantity = 1) => {
-    dispatch({ type: 'ADD_TO_CART', payload: { product, quantity } });
+    dispatchPos({ type: 'ADD_TO_CART', payload: { product, quantity } });
   };
 
   const removeFromCart = (productId: string) => {
-    dispatch({ type: 'REMOVE_FROM_CART', payload: productId });
+    dispatchPos({ type: 'REMOVE_FROM_CART', payload: productId });
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
     if (quantity <= 0) {
       removeFromCart(productId);
     } else {
-      dispatch({ type: 'UPDATE_QUANTITY', payload: { productId, quantity } });
+      dispatchPos({ type: 'UPDATE_QUANTITY', payload: { productId, quantity } });
     }
   };
 
   const applyDiscount = (productId: string, discount: number) => {
-    dispatch({ type: 'APPLY_DISCOUNT', payload: { productId, discount } });
+    dispatchPos({ type: 'APPLY_DISCOUNT', payload: { productId, discount } });
   };
 
   const clearCart = () => {
-    dispatch({ type: 'CLEAR_CART' });
+    dispatchPos({ type: 'CLEAR_CART' });
   };
 
   const selectCustomer = (customer: LocalCustomer | null) => {
-    dispatch({ type: 'SELECT_CUSTOMER', payload: customer });
+    dispatchPos({ type: 'SELECT_CUSTOMER', payload: customer });
   };
 
   const openDrawer = (initialFloat: number) => {
@@ -150,36 +178,117 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       denominations: [],
       status: 'open'
     };
-    dispatch({ type: 'OPEN_DRAWER', payload: drawer });
+    dispatchPos({ type: 'OPEN_DRAWER', payload: drawer });
   };
 
   const closeDrawer = (finalCount: number) => {
-    dispatch({ type: 'CLOSE_DRAWER', payload: { finalCount } });
+    dispatchPos({ type: 'CLOSE_DRAWER', payload: { finalCount } });
   };
 
-  const processTransaction = async (paymentData: {
-    paymentMethod: 'cash' | 'card' | 'mixed';
-    amountPaid?: number;
-    employeeId: string;
-    employeeName: string;
-    employeeNumber?: string;
-  }, onTransactionComplete?: () => void, globalDiscount?: { type: 'none' | 'percentage' | 'fixed'; value: number; amount: number }): Promise<string> => {
+  const processTransaction = async (
+    paymentData: {
+      paymentMethod: 'cash' | 'card' | 'mixed';
+      amountPaid?: number;
+      employeeId: string;
+      employeeName: string;
+      employeeNumber?: string;
+    },
+    onTransactionComplete?: () => void,
+    globalDiscount?: { type: 'none' | 'percentage' | 'fixed'; value: number; amount: number },
+    fiscalContext?: {
+      settings: SystemSettings;
+      updateSettings: (patch: DeepPartial<SystemSettings>) => void;
+    }
+  ): Promise<{ receiptNumber: string; fiscal?: FiscalCheckoutResult }> => {
     try {
+      if (fiscalContext) {
+        const { cart: cartSnapshot, selectedCustomer: customerSnapshot } = stateRef.current;
+        const fiscalRes = await runFiscalCheckout({
+          settings: fiscalContext.settings,
+          cart: cartSnapshot.map(ci => ({
+            product: ci.product,
+            quantity: ci.quantity,
+            discount: ci.discount,
+          })),
+          selectedCustomer: customerSnapshot,
+          payment: paymentData,
+          globalDiscount,
+        });
+
+        fiscalContext.updateSettings({
+          receipt: {
+            lastSeriesKey: fiscalRes.seriesKey,
+            currentNumber: fiscalRes.sequentialNumber,
+          },
+        });
+
+        const loaded = await transactionLocalService.getTransactionById(fiscalRes.transactionId);
+        if (loaded?.items?.length) {
+          await transactionLocalService.updateProductStock(loaded.items);
+        }
+
+        const connectionState = connectionStatus.getStatus();
+        if (connectionState.isOnline && connectionState.isSupabaseOnline && loaded) {
+          try {
+            try {
+              const { productSyncService } = await import('../services/productService');
+              await productSyncService.fullSync();
+            } catch (syncError) {
+              console.warn('POS: Product sync failed before server push:', syncError);
+            }
+
+            let serverEmployeeId = paymentData.employeeId;
+            if (paymentData.employeeNumber) {
+              try {
+                const { data: empRow } = await supabase
+                  .from('employees')
+                  .select('id')
+                  .eq('employee_number', paymentData.employeeNumber)
+                  .single();
+                if (empRow?.id) serverEmployeeId = empRow.id;
+              } catch {
+                /* keep cashier id */
+              }
+            }
+
+            const dataIns = localTransactionToServerInsert(loaded, serverEmployeeId);
+            const itemsIns = localTransactionItemsToServerInsert(loaded.items);
+            await transactionService.createTransaction(dataIns, itemsIns);
+            await transactionLocalService.markTransactionSyncedFromServer(fiscalRes.transactionId);
+          } catch (error) {
+            console.warn('POS: Server push after fiscal checkout failed', error);
+          }
+        }
+
+        const customerAfterFiscal = stateRef.current.selectedCustomer;
+        if (customerAfterFiscal) {
+          await customerLocalService.updateCustomer(customerAfterFiscal.id, {
+            total_spent: (customerAfterFiscal.total_spent || 0) + fiscalRes.grossTotal,
+            transaction_count: (customerAfterFiscal.transaction_count || 0) + 1,
+          });
+        }
+
+        clearCart();
+        onTransactionComplete?.();
+
+        return { receiptNumber: fiscalRes.invoiceNo, fiscal: fiscalRes };
+      }
+
       // Calculate transaction totals
       // Subtotal should be the original amount before ANY discounts (individual or global)
-      const originalSubtotal = state.cart.reduce((sum, item) => {
+      const originalSubtotal = stateRef.current.cart.reduce((sum, item) => {
         const itemTotal = item.product.price * item.quantity;
         return sum + itemTotal;
       }, 0);
 
       // Calculate after individual item discounts but before global discount
-      const subtotalAfterItemDiscounts = state.cart.reduce((sum, item) => {
+      const subtotalAfterItemDiscounts = stateRef.current.cart.reduce((sum, item) => {
         const itemTotal = item.product.price * item.quantity;
         const discountAmount = (itemTotal * item.discount) / 100;
         return sum + (itemTotal - discountAmount);
       }, 0);
 
-      const totalTax = state.cart.reduce((sum, item) => {
+      const totalTax = stateRef.current.cart.reduce((sum, item) => {
         const itemTotal = item.product.price * item.quantity;
         const discountAmount = (itemTotal * item.discount) / 100;
         const discountedTotal = itemTotal - discountAmount;
@@ -207,16 +316,16 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         transaction_number: transactionNumber,
         employee_id: paymentData.employeeId,
         employee_name: paymentData.employeeName,
-        customer_id: state.selectedCustomer?.id || null,
-        customer_name: state.selectedCustomer?.name || null,
+        customer_id: stateRef.current.selectedCustomer?.id || null,
+        customer_name: stateRef.current.selectedCustomer?.name || null,
         transaction_date: transactionDate,
         transaction_time: transactionTime,
         subtotal: originalSubtotal,
         discount: totalDiscountAmount,
-        discount_type: ((globalDiscount && globalDiscount.type !== 'none') ? globalDiscount.type : (state.cart.some(i => i.discount > 0) ? 'percentage' : 'none')) as 'none' | 'percentage' | 'fixed',
+        discount_type: ((globalDiscount && globalDiscount.type !== 'none') ? globalDiscount.type : (stateRef.current.cart.some(i => i.discount > 0) ? 'percentage' : 'none')) as 'none' | 'percentage' | 'fixed',
         discount_percentage: (globalDiscount && globalDiscount.type === 'percentage')
           ? Number(globalDiscount.value)
-          : (state.cart.every(i => i.discount === state.cart[0]?.discount) ? Number(state.cart[0]?.discount || 0) : 0),
+          : (stateRef.current.cart.every(i => i.discount === stateRef.current.cart[0]?.discount) ? Number(stateRef.current.cart[0]?.discount || 0) : 0),
         tax: totalTax,
         total: total,
         payment_method: paymentData.paymentMethod,
@@ -229,7 +338,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
 
       // Create transaction items
-      const transactionItems = state.cart.map(item => {
+      const transactionItems = stateRef.current.cart.map(item => {
         const itemTotal = item.product.price * item.quantity;
         const discountAmount = (itemTotal * item.discount) / 100;
         const discountedTotal = itemTotal - discountAmount;
@@ -267,7 +376,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           console.log('POS: Processing transaction online...');
           console.log('POS: Transaction data:', transactionData);
           console.log('POS: Transaction items:', transactionItems);
-          console.log('POS: Cart state:', state.cart);
+          console.log('POS: Cart state:', stateRef.current.cart);
 
           // Check if any products in the cart need to be synced first
           console.log('POS: Checking if products need syncing before transaction...');
@@ -345,10 +454,11 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await transactionLocalService.updateProductStock(itemsForStockUpdate);
 
       // Update customer totals if customer selected
-      if (state.selectedCustomer) {
-        await customerLocalService.updateCustomer(state.selectedCustomer.id, {
-          total_spent: (state.selectedCustomer.total_spent || 0) + total,
-          transaction_count: (state.selectedCustomer.transaction_count || 0) + 1,
+      const customerForTotals = stateRef.current.selectedCustomer;
+      if (customerForTotals) {
+        await customerLocalService.updateCustomer(customerForTotals.id, {
+          total_spent: (customerForTotals.total_spent || 0) + total,
+          transaction_count: (customerForTotals.transaction_count || 0) + 1,
         });
       }
 
@@ -361,7 +471,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       console.log(`POS: Transaction ${transactionNumber} processed successfully`);
-      return receiptNumber;
+      return { receiptNumber };
 
     } catch (error) {
       console.error('POS: Transaction processing failed:', error);

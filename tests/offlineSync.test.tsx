@@ -42,6 +42,8 @@ describe('Offline Sync System', () => {
         await localDb.customers.clear();
         await localDb.transactions.clear();
         await localDb.transactionItems.clear();
+        await localDb.fiscalDocuments.clear();
+        await localDb.fiscalAuditEvents.clear();
         await localDb.customerSyncQueue.clear();
         await localDb.transactionSyncQueue.clear();
     });
@@ -51,6 +53,8 @@ describe('Offline Sync System', () => {
         await localDb.customers.clear();
         await localDb.transactions.clear();
         await localDb.transactionItems.clear();
+        await localDb.fiscalDocuments.clear();
+        await localDb.fiscalAuditEvents.clear();
         await localDb.customerSyncQueue.clear();
         await localDb.transactionSyncQueue.clear();
     });
@@ -59,6 +63,7 @@ describe('Offline Sync System', () => {
         it('should create customer locally with sync queue', async () => {
             const customerId = await customerLocalService.createCustomer({
                 name: 'Test Customer',
+                tax_number: null,
                 email: 'test@example.com',
                 phone: '123456789',
                 address: '123 Test St',
@@ -87,6 +92,7 @@ describe('Offline Sync System', () => {
         it('should update customer and queue sync operation', async () => {
             const customerId = await customerLocalService.createCustomer({
                 name: 'Test Customer',
+                tax_number: null,
                 email: 'test@example.com',
                 phone: '123456789',
                 address: '123 Test St',
@@ -115,6 +121,7 @@ describe('Offline Sync System', () => {
         it('should search customers by name, email, and phone', async () => {
             await customerLocalService.createCustomer({
                 name: 'John Doe',
+                tax_number: null,
                 email: 'john@example.com',
                 phone: '123456789',
                 address: '123 Test St',
@@ -127,6 +134,7 @@ describe('Offline Sync System', () => {
 
             await customerLocalService.createCustomer({
                 name: 'Jane Smith',
+                tax_number: null,
                 email: 'jane@example.com',
                 phone: '987654321',
                 address: '456 Test Ave',
@@ -311,6 +319,7 @@ describe('Offline Sync System', () => {
             // Create some test data for reporting
             const customerId = await customerLocalService.createCustomer({
                 name: 'Test Customer',
+                tax_number: null,
                 email: 'test@example.com',
                 phone: '123456789',
                 address: '123 Test St',
@@ -435,6 +444,7 @@ describe('Offline Sync System', () => {
             // Create test customers
             await customerLocalService.createCustomer({
                 name: 'Active Customer',
+                tax_number: null,
                 email: 'active@example.com',
                 phone: '123456789',
                 address: '123 Test St',
@@ -447,6 +457,7 @@ describe('Offline Sync System', () => {
 
             const inactiveId = await customerLocalService.createCustomer({
                 name: 'Inactive Customer',
+                tax_number: null,
                 email: 'inactive@example.com',
                 phone: '987654321',
                 address: '456 Test Ave',
@@ -459,6 +470,7 @@ describe('Offline Sync System', () => {
 
             const deletedId = await customerLocalService.createCustomer({
                 name: 'Deleted Customer',
+                tax_number: null,
                 email: 'deleted@example.com',
                 phone: '555555555',
                 address: '789 Test Blvd',

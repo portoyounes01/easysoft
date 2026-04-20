@@ -8,6 +8,8 @@ import {
     LocalTransaction,
     LocalTransactionItem,
     LocalDailySalesSummary,
+    LocalFiscalDocument,
+    LocalFiscalAuditEvent,
     PendingEmployeeOperation,
     PendingCategoryOperation,
     PendingProductOperation,
@@ -15,6 +17,10 @@ import {
     PendingTransactionOperation,
     SyncMetadata
 } from '../types/supabase';
+import type { FiscalCheckoutAtomicPayload, FiscalCheckoutResult, FiscalTransactionMetadata } from '../fiscal/types';
+import { buildHashPlaintext, extractQrHashFourChars } from '../fiscal/signing';
+import { buildAtQrPayloadString } from '../fiscal/qrPayload';
+import { buildInvoiceNo, computeNextSequential, formatSequential } from '../fiscal/seriesUtils';
 
 // Local database schema for offline-first POS management
 export class LocalPOSDatabase extends Dexie {
@@ -25,6 +31,8 @@ export class LocalPOSDatabase extends Dexie {
     customers!: Table<LocalCustomer>;
     transactions!: Table<LocalTransaction>;
     transactionItems!: Table<LocalTransactionItem>;
+    fiscalDocuments!: Table<LocalFiscalDocument>;
+    fiscalAuditEvents!: Table<LocalFiscalAuditEvent>;
     dailySalesSummaries!: Table<LocalDailySalesSummary>;
     
     // Sync queue tables
@@ -62,6 +70,22 @@ export class LocalPOSDatabase extends Dexie {
             transactionSyncQueue: 'id, type, transactionId, timestamp, retryCount'
         } as const;
 
+        const schemaV5 = {
+            ...schemaV3V4,
+            fiscalDocuments: 'id, chain_scope, sequential_number, transaction_id, created_at',
+            fiscalAuditEvents: 'id, event_type, created_at',
+            transactions:
+                'id, transaction_number, employee_id, customer_id, status, transaction_date, updated_at, needs_push, deleted_at, fiscal_document_id',
+        } as const;
+
+        const schemaV6 = {
+            ...schemaV5,
+            fiscalDocuments:
+                'id, &[chain_scope+sequential_number], transaction_id, chain_scope, sequential_number, created_at',
+            customers:
+                'id, name, email, phone, tax_number, is_active, updated_at, needs_push, deleted_at',
+        } as const;
+
         // Initial version (for fresh installs) - legacy schema
         this.version(1).stores(schemaV1V2);
 
@@ -97,6 +121,40 @@ export class LocalPOSDatabase extends Dexie {
                     });
                 }
             }
+        });
+
+        // Version 5: Portugal AT fiscal_documents + audit + transaction fiscal link
+        this.version(5).stores(schemaV5).upgrade(async () => {
+            console.log('Upgrading database to version 5 - fiscal documents (AT certification)');
+        });
+
+        // Version 6: unique (chain_scope, sequential_number); customer tax_number; fiscal export markers
+        this.version(6).stores(schemaV6).upgrade(async trans => {
+            const fiscalRows = await trans.table('fiscalDocuments').toArray();
+            const counts = new Map<string, number>();
+            for (const r of fiscalRows) {
+                const k = `${r.chain_scope}::${r.sequential_number}`;
+                counts.set(k, (counts.get(k) || 0) + 1);
+            }
+            const duplicates = [...counts.entries()].filter(([, n]) => n > 1);
+            if (duplicates.length > 0) {
+                throw new Error(
+                    `IndexedDB v6 upgrade blocked: duplicate fiscal sequential — ${duplicates[0][0]}. Resolve duplicates before opening the app.`
+                );
+            }
+            await trans
+                .table('fiscalDocuments')
+                .toCollection()
+                .modify((r: Record<string, unknown>) => {
+                    if (r.saft_exported_at === undefined) r.saft_exported_at = null;
+                    if (r.saft_export_batch_id === undefined) r.saft_export_batch_id = null;
+                });
+            await trans
+                .table('customers')
+                .toCollection()
+                .modify((c: Record<string, unknown>) => {
+                    if (c.tax_number === undefined) c.tax_number = null;
+                });
         });
 
         // Add hooks for auto-updating sync flags
@@ -572,6 +630,7 @@ export class CustomerLocalService {
         const customer: LocalCustomer = {
             ...customerData,
             id,
+            deleted_at: customerData.deleted_at ?? null,
             created_at: new Date(),
             updated_at: new Date(),
             needs_push: true,
@@ -579,10 +638,10 @@ export class CustomerLocalService {
             last_synced_at: null,
         };
 
-        await localDb.transaction('rw', [localDb.customers, localDb.customerSyncQueue, localDb.syncMetadata], async () => {
+        await localDb.transaction('rw', [localDb.customers], async () => {
             await localDb.customers.add(customer);
-            await this.queueOperation('CREATE', id, customer);
         });
+        await this.queueOperation('CREATE', id, customer);
 
         return id;
     }
@@ -595,23 +654,23 @@ export class CustomerLocalService {
             needs_push: true,
         };
 
-        await localDb.transaction('rw', [localDb.customers, localDb.customerSyncQueue, localDb.syncMetadata], async () => {
+        await localDb.transaction('rw', [localDb.customers], async () => {
             await localDb.customers.update(id, updateData);
-            await this.queueOperation('UPDATE', id, updateData);
         });
+        await this.queueOperation('UPDATE', id, updateData);
     }
 
     // Soft delete customer
     async deleteCustomer(id: string): Promise<void> {
-        await localDb.transaction('rw', [localDb.customers, localDb.customerSyncQueue, localDb.syncMetadata], async () => {
+        await localDb.transaction('rw', [localDb.customers], async () => {
             await localDb.customers.update(id, {
                 deleted_at: new Date(),
                 is_active: false,
                 needs_push: true,
                 updated_at: new Date(),
             });
-            await this.queueOperation('DELETE', id, null);
         });
+        await this.queueOperation('DELETE', id, null);
     }
 
     // Search customers
@@ -684,6 +743,7 @@ export class CustomerLocalService {
                 // Convert string dates to Date objects
                 const localCustomer: LocalCustomer = {
                     ...customer,
+                    tax_number: customer.tax_number ?? null,
                     created_at: new Date(customer.created_at),
                     updated_at: new Date(customer.updated_at),
                     last_synced_at: customer.last_synced_at ? new Date(customer.last_synced_at) : null,
@@ -825,6 +885,32 @@ export const customerLocalService = new CustomerLocalService();
 
 export class TransactionLocalService {
 
+    /** After a successful direct Supabase insert, avoid duplicate push from sync queue. */
+    async markTransactionSyncedFromServer(transactionId: string): Promise<void> {
+        const now = new Date();
+        await localDb.transaction('rw', [localDb.transactions, localDb.transactionItems, localDb.transactionSyncQueue], async () => {
+            await localDb.transactions.update(transactionId, {
+                needs_push: false,
+                last_synced_at: now,
+                updated_at: now,
+            });
+            await localDb.transactionItems
+                .where('transaction_id')
+                .equals(transactionId)
+                .modify({
+                    needs_push: false,
+                    last_synced_at: now,
+                    updated_at: now,
+                });
+            const ops = await localDb.transactionSyncQueue
+                .filter(op => op.transactionId === transactionId)
+                .toArray();
+            for (const op of ops) {
+                await localDb.transactionSyncQueue.delete(op.id);
+            }
+        });
+    }
+
     // Get all non-deleted transactions (includes all statuses)
     async getAllTransactions(): Promise<LocalTransaction[]> {
         const list = await localDb.transactions
@@ -848,6 +934,10 @@ export class TransactionLocalService {
             .toArray();
 
         return { ...transaction, items };
+    }
+
+    async getFiscalDocumentById(id: string): Promise<LocalFiscalDocument | undefined> {
+        return localDb.fiscalDocuments.get(id);
     }
 
     // Get transactions by employee ID
@@ -896,6 +986,7 @@ export class TransactionLocalService {
         const transaction: LocalTransaction = {
             ...transactionData,
             id: transactionId,
+            deleted_at: transactionData.deleted_at ?? null,
             created_at: new Date(),
             updated_at: new Date(),
             needs_push: true,
@@ -908,6 +999,7 @@ export class TransactionLocalService {
             ...item,
             id: generateUUID(),
             transaction_id: transactionId,
+            deleted_at: item.deleted_at ?? null,
             created_at: new Date(),
             updated_at: new Date(),
             needs_push: true,
@@ -915,11 +1007,357 @@ export class TransactionLocalService {
             last_synced_at: null,
         }));
 
-        await localDb.transaction('rw', [localDb.transactions, localDb.transactionItems, localDb.transactionSyncQueue, localDb.syncMetadata], async () => {
+        await localDb.transaction('rw', [localDb.transactions, localDb.transactionItems], async () => {
             await localDb.transactions.add(transaction);
             await localDb.transactionItems.bulkAdd(transactionItems);
-            await this.queueOperation('CREATE', transactionId, { ...transaction, items: transactionItems });
         });
+        await this.queueOperation('CREATE', transactionId, { ...transaction, items: transactionItems });
+
+        return transactionId;
+    }
+
+    async getLastFiscalDocumentInChain(chainScope: string): Promise<LocalFiscalDocument | undefined> {
+        const list = await localDb.fiscalDocuments
+            .where('chain_scope')
+            .equals(chainScope)
+            .toArray();
+        if (list.length === 0) return undefined;
+        return list.reduce((a, b) => (a.sequential_number > b.sequential_number ? a : b));
+    }
+
+    /**
+     * Allocate `sequential_number`, sign AT hash (outside IndexedDB — async Web Crypto must not run inside a Dexie txn),
+     * then insert fiscal + transaction + items + audit in one rw transaction with chain-tip verification and retry if the chain advanced.
+     */
+    async createFiscalCheckoutAtomic(payload: FiscalCheckoutAtomicPayload): Promise<FiscalCheckoutResult> {
+        const { settings, chainScope, atCode, seriesKey, payment } = payload;
+        const receipt = settings.receipt;
+        const company = settings.company;
+        const hashControl = settings.fiscal.hashControlVersion || '1';
+        const maxAttempts = 8;
+
+        const rwStores = [
+            localDb.transactions,
+            localDb.transactionItems,
+            localDb.fiscalDocuments,
+            localDb.fiscalAuditEvents,
+        ] as const;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const fiscalId = generateUUID();
+            const transactionId = generateUUID();
+            const persistedAt = new Date();
+
+            const tip = await localDb.transaction('r', [localDb.fiscalDocuments], async () => {
+                const chainDocs = await localDb.fiscalDocuments.where('chain_scope').equals(chainScope).toArray();
+                const lastDoc =
+                    chainDocs.length === 0
+                        ? undefined
+                        : chainDocs.reduce((a, b) => (a.sequential_number > b.sequential_number ? a : b));
+                return { lastDoc };
+            });
+
+            const lastDoc = tip.lastDoc;
+            const previousHash = lastDoc?.hash_base64 ?? '';
+            const lastSeq = lastDoc?.sequential_number;
+            const nextSequential = computeNextSequential(lastSeq, receipt.currentNumber);
+            const invoiceNo = buildInvoiceNo(
+                payload.invoiceTypeSaft,
+                receipt.seriesPrefix,
+                nextSequential,
+                receipt.numericWidth
+            );
+            const paddedSeq = formatSequential(receipt, nextSequential);
+            const atcudBody = `${atCode}-${paddedSeq}`;
+
+            const plaintext = buildHashPlaintext({
+                invoiceDate: payload.transactionDate,
+                systemEntryDate: payload.systemEntryDate,
+                invoiceNo,
+                grossTotal: payload.grossTotal,
+                previousHashBase64: previousHash,
+            });
+            const { hashBase64, hashPlaintext } = await payload.signer.signHashPlaintext(plaintext);
+            const hashFourChars = extractQrHashFourChars(hashBase64);
+
+            const sourceId = payment.employeeNumber?.trim() || payment.employeeId.slice(0, 12);
+
+            const qrPayload = buildAtQrPayloadString({
+                emitterTaxNumber: company.taxNumber.replace(/\s/g, ''),
+                customerTaxNumber: payload.customerTaxNumberForQr,
+                customerCountry: 'PT',
+                invoiceType: payload.invoiceTypeSaft,
+                invoiceDateYmd: payload.transactionDate,
+                invoiceNo,
+                atcudBody,
+                netTotal: payload.netRounded,
+                taxTotal: payload.taxTotal,
+                hashFourChars,
+                softwareCertificateNumber: (company.softwareCertNumber || '0').replace(/\s/g, ''),
+            });
+
+            const fiscalMetadata: FiscalTransactionMetadata = {
+                invoiceNo,
+                atcudBody,
+                hashBase64,
+                hashFourChars,
+                hashControl,
+                qrPayload,
+                chainScope,
+                sequentialNumber: nextSequential,
+                certificationMode: payload.certificationMode,
+            };
+
+            const transaction: LocalTransaction = {
+                ...payload.transactionBase,
+                id: transactionId,
+                fiscal_document_id: fiscalId,
+                transaction_number: invoiceNo,
+                receipt_number: invoiceNo,
+                fiscal_metadata_json: JSON.stringify(fiscalMetadata),
+                created_at: persistedAt,
+                updated_at: persistedAt,
+                needs_push: true,
+                is_conflicted: false,
+                last_synced_at: null,
+            };
+
+            const transactionItems: LocalTransactionItem[] = payload.transactionItems.map(item => ({
+                ...item,
+                id: generateUUID(),
+                transaction_id: transactionId,
+                created_at: persistedAt,
+                updated_at: persistedAt,
+                needs_push: true,
+                is_conflicted: false,
+                last_synced_at: null,
+            }));
+
+            const fiscalDoc: LocalFiscalDocument = {
+                chain_scope: chainScope,
+                series_key: seriesKey,
+                at_validation_code: atCode,
+                sequential_number: nextSequential,
+                invoice_no: invoiceNo,
+                invoice_type: payload.invoiceTypeSaft,
+                invoice_date: payload.transactionDate,
+                system_entry_date: payload.systemEntryDate,
+                gross_total: payload.grossTotal,
+                net_total: payload.netRounded,
+                tax_total: payload.taxTotal,
+                hash_base64: hashBase64,
+                hash_control: hashControl,
+                hash_plaintext: hashPlaintext,
+                previous_hash_base64: previousHash,
+                qr_payload: qrPayload,
+                source_id: sourceId,
+                certification_mode: payload.certificationMode,
+                customer_tax_id: payload.customerTaxId,
+                payment_method: payment.paymentMethod,
+                created_at: persistedAt.toISOString(),
+                atcud_body: atcudBody,
+                hash_four_chars: hashFourChars,
+                saft_exported_at: null,
+                saft_export_batch_id: null,
+                id: fiscalId,
+                transaction_id: transactionId,
+                needs_push: true,
+            };
+
+            const auditRow: LocalFiscalAuditEvent = {
+                id: generateUUID(),
+                event_type: 'FISCAL_DOCUMENT_CREATED',
+                payload_json: JSON.stringify({ transactionId, fiscalId, invoiceNo }),
+                employee_id: payment.employeeId,
+                created_at: new Date().toISOString(),
+            };
+
+            try {
+                let result: FiscalCheckoutResult | undefined;
+                await localDb.transaction('rw', [...rwStores], async () => {
+                    const chainDocs = await localDb.fiscalDocuments.where('chain_scope').equals(chainScope).toArray();
+                    const lastDocNow =
+                        chainDocs.length === 0
+                            ? undefined
+                            : chainDocs.reduce((a, b) => (a.sequential_number > b.sequential_number ? a : b));
+                    const prevNow = lastDocNow?.hash_base64 ?? '';
+                    const seqNow = lastDocNow?.sequential_number;
+                    if (prevNow !== previousHash || seqNow !== lastSeq) {
+                        throw new Error('FISCAL_CHAIN_ADVANCED');
+                    }
+                    const nextCheck = computeNextSequential(lastDocNow?.sequential_number, receipt.currentNumber);
+                    if (nextCheck !== nextSequential) {
+                        throw new Error('FISCAL_CHAIN_ADVANCED');
+                    }
+
+                    await localDb.fiscalDocuments.add(fiscalDoc);
+                    await localDb.transactions.add(transaction);
+                    await localDb.transactionItems.bulkAdd(transactionItems);
+                    await localDb.fiscalAuditEvents.add(auditRow);
+
+                    result = {
+                        transactionId,
+                        fiscalId,
+                        invoiceNo,
+                        atcudBody,
+                        hashBase64,
+                        hashFourChars,
+                        qrPayload,
+                        hashControl,
+                        certificationMode: payload.certificationMode,
+                        grossTotal: payload.grossTotal,
+                        netTotal: payload.netRounded,
+                        taxTotal: payload.taxTotal,
+                        systemEntryDate: payload.systemEntryDate,
+                        invoiceDate: payload.transactionDate,
+                        invoiceTypeSaft: payload.invoiceTypeSaft,
+                        sourceId,
+                        sequentialNumber: nextSequential,
+                        seriesKey,
+                    };
+                });
+                await this.queueOperation('CREATE', transactionId, { ...transaction, items: transactionItems });
+                return result as FiscalCheckoutResult;
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                if (msg === 'FISCAL_CHAIN_ADVANCED' && attempt < maxAttempts - 1) {
+                    continue;
+                }
+                throw e;
+            }
+        }
+
+        throw new Error('Fiscal checkout: excedidas tentativas (cadeia fiscal avançou durante a assinatura).');
+    }
+
+    /** Mark fiscal rows included in a SAF-T export (optional anti-duplicate workflow). */
+    async markFiscalDocumentsSaftExported(
+        fiscalIds: string[],
+        batchId: string,
+        exportedAtIso: string
+    ): Promise<void> {
+        if (fiscalIds.length === 0) return;
+        await localDb.transaction('rw', [localDb.fiscalDocuments], async () => {
+            for (const id of fiscalIds) {
+                await localDb.fiscalDocuments.update(id, {
+                    saft_exported_at: exportedAtIso,
+                    saft_export_batch_id: batchId,
+                });
+            }
+        });
+    }
+
+    /** Fiscal documents whose `invoice_date` falls in the closed range (YYYY-MM-DD). */
+    async getFiscalDocumentsByDateRange(startYmd: string, endYmd: string): Promise<LocalFiscalDocument[]> {
+        const list = await localDb.fiscalDocuments
+            .filter(
+                d => d.invoice_date >= startYmd && d.invoice_date <= endYmd
+            )
+            .toArray();
+        list.sort((a, b) => {
+            const c = a.invoice_date.localeCompare(b.invoice_date);
+            return c !== 0 ? c : a.sequential_number - b.sequential_number;
+        });
+        return list;
+    }
+
+    /** Append-only fiscal audit trail (void requests, settings changes, etc.). */
+    async appendFiscalAuditEvent(
+        event: Omit<LocalFiscalAuditEvent, 'id' | 'created_at'> & { id?: string; created_at?: string }
+    ): Promise<void> {
+        const row: LocalFiscalAuditEvent = {
+            ...event,
+            id: event.id ?? generateUUID(),
+            created_at: event.created_at ?? new Date().toISOString(),
+        };
+        await localDb.fiscalAuditEvents.add(row);
+    }
+
+    /**
+     * Records a void / annulment request for a finalized fiscal sale (does not remove the fiscal row).
+     */
+    async requestVoidFiscalTransaction(
+        transactionId: string,
+        employeeId: string,
+        reason: string
+    ): Promise<void> {
+        const tx = await localDb.transactions.get(transactionId);
+        if (!tx?.fiscal_document_id) {
+            throw new Error('Apenas transações com documento fiscal podem ser anuladas por este fluxo.');
+        }
+        await this.appendFiscalAuditEvent({
+            event_type: 'VOID_REQUESTED',
+            payload_json: JSON.stringify({
+                transactionId,
+                fiscalDocumentId: tx.fiscal_document_id,
+                reason,
+            }),
+            employee_id: employeeId,
+        });
+    }
+
+    /**
+     * Atomically persist fiscal document + transaction + items + audit (AT certification).
+     */
+    async createTransactionWithFiscal(
+        transactionId: string,
+        fiscalId: string,
+        transactionData: Omit<LocalTransaction, 'id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at' | 'fiscal_document_id'>,
+        items: Omit<LocalTransactionItem, 'id' | 'transaction_id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'>[],
+        fiscalRow: Omit<LocalFiscalDocument, 'needs_push' | 'id' | 'transaction_id'>,
+        audit: Omit<LocalFiscalAuditEvent, 'created_at'> & { id?: string; created_at?: string }
+    ): Promise<string> {
+        const transaction: LocalTransaction = {
+            ...transactionData,
+            id: transactionId,
+            fiscal_document_id: fiscalId,
+            created_at: new Date(),
+            updated_at: new Date(),
+            needs_push: true,
+            is_conflicted: false,
+            last_synced_at: null,
+        };
+
+        const fiscalDoc: LocalFiscalDocument = {
+            ...fiscalRow,
+            id: fiscalId,
+            transaction_id: transactionId,
+            needs_push: true,
+        };
+
+        const transactionItems: LocalTransactionItem[] = items.map(item => ({
+            ...item,
+            id: generateUUID(),
+            transaction_id: transactionId,
+            created_at: new Date(),
+            updated_at: new Date(),
+            needs_push: true,
+            is_conflicted: false,
+            last_synced_at: null,
+        }));
+
+        const auditRow: LocalFiscalAuditEvent = {
+            ...audit,
+            id: audit.id ?? generateUUID(),
+            created_at: audit.created_at ?? new Date().toISOString(),
+        };
+
+        await localDb.transaction(
+            'rw',
+            [
+                localDb.transactions,
+                localDb.transactionItems,
+                localDb.fiscalDocuments,
+                localDb.fiscalAuditEvents,
+            ],
+            async () => {
+                await localDb.fiscalDocuments.add(fiscalDoc);
+                await localDb.transactions.add(transaction);
+                await localDb.transactionItems.bulkAdd(transactionItems);
+                await localDb.fiscalAuditEvents.add(auditRow);
+            }
+        );
+        await this.queueOperation('CREATE', transactionId, { ...transaction, items: transactionItems });
 
         return transactionId;
     }
@@ -932,17 +1370,24 @@ export class TransactionLocalService {
             needs_push: true,
         };
 
-        await localDb.transaction('rw', [localDb.transactions, localDb.transactionSyncQueue, localDb.syncMetadata], async () => {
+        await localDb.transaction('rw', [localDb.transactions], async () => {
             await localDb.transactions.update(id, updateData);
-            await this.queueOperation('UPDATE', id, updateData);
         });
+        await this.queueOperation('UPDATE', id, updateData);
     }
 
     // Soft delete transaction (and its items)
     async deleteTransaction(id: string): Promise<void> {
+        const existing = await localDb.transactions.get(id);
+        if (existing?.fiscal_document_id) {
+            throw new Error(
+                'Documentos fiscais finalizados não podem ser eliminados. Utilize anulação ou nota de crédito.'
+            );
+        }
+
         const now = new Date();
         
-        await localDb.transaction('rw', [localDb.transactions, localDb.transactionItems, localDb.transactionSyncQueue, localDb.syncMetadata], async () => {
+        await localDb.transaction('rw', [localDb.transactions, localDb.transactionItems], async () => {
             // Soft delete the transaction
             await localDb.transactions.update(id, {
                 deleted_at: now,
@@ -959,9 +1404,8 @@ export class TransactionLocalService {
                     needs_push: true,
                     updated_at: now,
                 });
-
-            await this.queueOperation('DELETE', id, null);
         });
+        await this.queueOperation('DELETE', id, null);
     }
 
     // Search transactions by transaction number, customer name, or employee name
@@ -1272,46 +1716,72 @@ export class TransactionLocalService {
 // Export singleton service instance
 export const transactionLocalService = new TransactionLocalService();
 
-// Initialize the database with error recovery
-export const initializeLocalDatabase = async (): Promise<void> => {
+/** Serialize concurrent open() calls (StrictMode + bootstrap + services can race). */
+let localDatabaseInitInFlight: Promise<void> | null = null;
+
+function isIndexedDbOpenRecoverableError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+    const { name, message } = error;
+    return (
+        name === 'DatabaseClosedError' ||
+        name === 'InvalidStateError' ||
+        name === 'VersionError' ||
+        name === 'UpgradeError' ||
+        name === 'ModifyError' ||
+        name === 'AbortError' ||
+        message.includes('object store') ||
+        message.includes('NotFoundError') ||
+        message.includes('IDBTransaction') ||
+        message.includes('Dexie') ||
+        message.includes('Another connection')
+    );
+}
+
+async function openLocalDatabaseWithRecovery(): Promise<void> {
     try {
         await localDb.open();
         await initializeSyncMetadata();
         console.log('Local database initialized successfully');
     } catch (error) {
         console.error('Failed to initialize local database:', error);
-        
-        // Handle specific Dexie errors
-        if (error instanceof Error) {
-            // DexieError2 typically indicates schema mismatch or corruption
-            if (error.name === 'DatabaseClosedError' || 
-                error.name === 'InvalidStateError' ||
-                error.message.includes('object store') ||
-                error.message.includes('NotFoundError') ||
-                error.message.includes('IDBTransaction')) {
-                
-                console.warn('Database schema mismatch detected, attempting recovery...');
-                
-                try {
-                    // Close any existing connection
-                    localDb.close();
-                    
-                    // Delete the corrupted database
-                    await localDb.delete();
-                    
-                    // Reopen with fresh schema
-                    await localDb.open();
-                    await initializeSyncMetadata();
-                    
-                    console.log('Database recovered successfully after reset');
-                    return;
-                } catch (recoveryError) {
-                    console.error('Database recovery failed:', recoveryError);
-                    throw new Error('Database is corrupted and could not be recovered. Please clear browser data or use incognito mode.');
-                }
+
+        if (isIndexedDbOpenRecoverableError(error)) {
+            console.warn('Database schema mismatch or IndexedDB error detected, attempting recovery...');
+
+            try {
+                localDb.close();
+                await localDb.delete();
+                await localDb.open();
+                await initializeSyncMetadata();
+                console.log('Database recovered successfully after reset');
+                return;
+            } catch (recoveryError) {
+                console.error('Database recovery failed:', recoveryError);
+                throw new Error(
+                    'Database is corrupted and could not be recovered. Please clear browser data or use incognito mode.'
+                );
             }
         }
-        
+
         throw error;
     }
+}
+
+// Initialize the database with error recovery (single-flight)
+export const initializeLocalDatabase = async (): Promise<void> => {
+    if (localDb.isOpen()) {
+        return;
+    }
+    if (!localDatabaseInitInFlight) {
+        localDatabaseInitInFlight = (async () => {
+            try {
+                await openLocalDatabaseWithRecovery();
+            } finally {
+                localDatabaseInitInFlight = null;
+            }
+        })();
+    }
+    await localDatabaseInitInFlight;
 };
