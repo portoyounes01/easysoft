@@ -257,4 +257,107 @@ describe('SAF-T export', () => {
         const pay = xml.indexOf('<Payments>');
         expect(pay).toBeGreaterThan(si);
     });
+
+    it('includes SourceDocumentID on SalesInvoices lines for credit notes (NC) with settled ref', async () => {
+        const settledNo = 'FS A/0001';
+        const settledDate = '2026-04-10';
+        const fiscalNc: LocalFiscalDocument = {
+            id: 'fid-nc',
+            transaction_id: 'tid-nc',
+            chain_scope: 'ATCODE1::k',
+            series_key: 'k',
+            at_validation_code: 'ATCODE1',
+            sequential_number: 3,
+            invoice_no: 'NC A/0003',
+            invoice_type: 'NC',
+            settled_invoice_no: settledNo,
+            settled_invoice_date: settledDate,
+            invoice_date: '2026-04-12',
+            system_entry_date: '2026-04-12T10:00:00',
+            gross_total: -12.3,
+            net_total: -10,
+            tax_total: -2.3,
+            hash_base64: 'QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==',
+            hash_control: '1',
+            hash_plaintext: 'x',
+            previous_hash_base64: 'p',
+            qr_payload: 'Q',
+            source_id: 'u1',
+            certification_mode: 'production',
+            customer_tax_id: '999999990',
+            payment_method: 'cash',
+            created_at: '2026-04-12T10:00:00.000Z',
+            atcud_body: 'ATCODE1-0003',
+            hash_four_chars: 'a-b-c-d',
+            needs_push: false,
+        };
+
+        const item: LocalTransactionItem = {
+            id: 'i1',
+            transaction_id: 'tid-nc',
+            product_id: 'p1',
+            product_name: 'Item',
+            product_sku: 'SKU1',
+            category_id: 'c1',
+            category_name: 'Cat',
+            quantity: 1,
+            unit_price: 12.3,
+            unit_cost: 5,
+            iva_rate: 0.23,
+            line_total: -12.3,
+            tax_amount: -2.3,
+            profit_amount: 0,
+            discount_amount: 0,
+            discount_percentage: 0,
+            created_at: new Date(),
+            updated_at: new Date(),
+            needs_push: false,
+            is_conflicted: false,
+            last_synced_at: null,
+            deleted_at: null,
+        };
+
+        const txNc: LocalTransaction & { items: LocalTransactionItem[] } = {
+            id: 'tid-nc',
+            transaction_number: 'NC A/0003',
+            employee_id: 'e1',
+            employee_name: 'Emp',
+            customer_id: null,
+            customer_name: null,
+            transaction_date: '2026-04-12',
+            transaction_time: '10:00:00',
+            subtotal: -12.3,
+            discount: 0,
+            tax: -2.3,
+            total: -12.3,
+            payment_method: 'cash',
+            amount_paid: null,
+            change_given: 0,
+            status: 'completed',
+            notes: `NC referente ${settledNo}`,
+            receipt_number: 'NC A/0003',
+            fiscal_document_id: 'fid-nc',
+            fiscal_metadata_json: '{}',
+            created_at: new Date(),
+            updated_at: new Date(),
+            needs_push: false,
+            is_conflicted: false,
+            last_synced_at: null,
+            deleted_at: null,
+            items: [item],
+        };
+
+        const xml = await buildSaftAuditFileXml({
+            settings: minimalSettings,
+            startDateYmd: '2026-04-01',
+            endDateYmd: '2026-04-30',
+            fiscalDocuments: [fiscalNc],
+            loadTransaction: async id => (id === 'tid-nc' ? txNc : undefined),
+            productVersion: '0.1.0',
+        });
+
+        expect(xml).toContain('<InvoiceType>NC</InvoiceType>');
+        expect(xml).toContain('<OriginatingON>FS A/0001</OriginatingON>');
+        expect(xml).toContain(`<InvoiceDate>${settledDate}</InvoiceDate>`);
+    });
 });

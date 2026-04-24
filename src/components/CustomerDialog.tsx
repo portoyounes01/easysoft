@@ -217,7 +217,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         <BaseDialog
             open={open}
             onClose={onClose}
-            title={t('pos.selectCustomer') || 'Select Customer'}
+            title={t('pos.selectCustomerTitle')}
             width="55vw"
             height="80vh"
             footer={
@@ -249,12 +249,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             label={t('common.cancel') || 'Cancel'}
                             variant="secondary"
                             className="flex-1"
+                            style={{ height: '5vh', fontSize: '1.6vh' }}
                         />
                         <ActionButton
                             onClick={handleSubmit}
                             label={t('pos.customerForm.save')}
                             className="flex-1"
                             disabled={!newCustomerFormValid}
+                            style={{ height: '5vh', fontSize: '1.6vh' }}
                         />
                     </div>
                 ) : undefined
@@ -267,8 +269,8 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         value={view}
                         onChange={(val) => handleViewChange(val as ViewMode)}
                         options={[
-                            { value: 'list', label: t('pos.existingCustomer') || 'Existing Customer', icon: Users },
-                            { value: 'add', label: t('pos.newCustomer') || 'New Customer', icon: Plus }
+                            { value: 'list', label: t('pos.existingCustomer'), icon: Users },
+                            { value: 'add', label: t('pos.newCustomer'), icon: Plus }
                         ]}
                     />
                 </div>
@@ -282,7 +284,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                 <InputField
                                     ref={searchInputRef}
                                     icon={Search}
-                                    placeholder={t('pos.searchByNif') || 'Search by Name, NIF, Email...'}
+                                    placeholder={t('pos.searchByNif')}
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="rounded-2xl"
@@ -335,20 +337,18 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                     <Users className="w-16 h-16 text-gray-300 mb-4" />
                                     <p className="text-xl font-semibold text-gray-700 mb-2">
                                         {searchTerm.trim().length === 0
-                                            ? (t('pos.startSearchTitle') || 'Search for customers')
-                                            : (t('pos.noCustomersFoundTitle') || 'No customers found')
-                                        }
+                                            ? t('pos.startSearchTitle')
+                                            : t('pos.noCustomersFoundTitle')}
                                     </p>
                                     <p className="text-gray-500 mb-6">
                                         {searchTerm.trim().length === 0
-                                            ? (t('pos.startSearchMessage') || 'Start typing to search for customers')
-                                            : (t('pos.noCustomersFoundMessage') || 'No customers match your search')
-                                        }
+                                            ? t('pos.startSearchMessage')
+                                            : t('pos.noCustomersFoundMessage')}
                                     </p>
                                     {searchTerm.trim().length > 0 && (
                                         <ActionButton
                                             onClick={() => setView('add')}
-                                            label={t('pos.addNewCustomer') || 'Add New Customer'}
+                                            label={t('pos.addNewCustomer')}
                                         />
                                     )}
                                 </div>
