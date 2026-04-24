@@ -183,22 +183,34 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.log('Has pin:', !!employee.pin);
 
       let isValidCredentials = false;
+      const { verifyPasswordHash } = await import('../utils/hashUtils');
 
-      if (employee.role === 'admin' || employee.role === 'manager') {
-        // For admin/manager, check password_hash
+      if (employee.role === 'admin') {
+        // Admins use password_hash only (form collects password, not PIN)
         if (employee.password_hash) {
-          console.log('🔑 Verifying password hash for admin/manager...');
-          const { verifyPasswordHash } = await import('../utils/hashUtils');
+          console.log('🔑 Verifying password hash for admin...');
           isValidCredentials = await verifyPasswordHash(password, employee.password_hash);
           console.log('Password verification result:', isValidCredentials);
         } else {
-          console.log('❌ No password_hash found for admin/manager');
+          console.log('❌ No password_hash found for admin');
+        }
+      } else if (employee.role === 'manager') {
+        // Managers: password if set; otherwise PIN (UI only collects PIN for non-admin roles)
+        if (employee.password_hash) {
+          console.log('🔑 Verifying password hash for manager...');
+          isValidCredentials = await verifyPasswordHash(password, employee.password_hash);
+          console.log('Password verification result:', isValidCredentials);
+        } else if (employee.pin) {
+          console.log('🔢 Verifying PIN for manager (no password_hash)...');
+          isValidCredentials = await verifyPasswordHash(password, employee.pin);
+          console.log('PIN verification result:', isValidCredentials);
+        } else {
+          console.log('❌ Manager has neither password_hash nor pin');
         }
       } else {
-        // For other employees, check PIN
+        // Cashier / trainee / etc. — PIN
         if (employee.pin) {
           console.log('🔢 Verifying PIN for employee...');
-          const { verifyPasswordHash } = await import('../utils/hashUtils');
           isValidCredentials = await verifyPasswordHash(password, employee.pin);
           console.log('PIN verification result:', isValidCredentials);
         } else {
@@ -271,9 +283,13 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       let credentialHash: string | null = null;
       try {
         const { hashPassword } = await import('../utils/hashUtils');
-        credentialHash = employee.role === 'admin' || employee.role === 'manager'
-          ? (employee.password_hash ? employee.password_hash : await hashPassword(password))
-          : (employee.pin ? employee.pin : await hashPassword(password));
+        if (employee.role === 'admin') {
+          credentialHash = employee.password_hash ?? (await hashPassword(password));
+        } else if (employee.role === 'manager') {
+          credentialHash = employee.password_hash ?? employee.pin ?? (await hashPassword(password));
+        } else {
+          credentialHash = employee.pin ?? (await hashPassword(password));
+        }
       } catch (e) {
         console.warn('Failed to compute credential hash, proceeding without it');
       }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { SupabaseAuthProvider, useSupabaseAuth } from './contexts/SupabaseAuthContext';
 import { POSProvider } from './contexts/POSContext';
 import { SettingsProvider } from './contexts/SettingsContext';
@@ -21,16 +22,18 @@ import ElectronCashierTesting from './pages/ElectronCashierTesting';
 import PrinterTestPage from './pages/PrinterTestPage';
 import DevicePairing from './pages/DevicePairing';
 import DesignSystem from './pages/DesignSystem';
+import FiscalAudit from './pages/FiscalAudit';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useSupabaseAuth();
+  const { t } = useTranslation();
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">{t('app.loading')}</p>
         </div>
       </div>
     );
@@ -46,6 +49,7 @@ const PermissionRoute: React.FC<{
   fallbackPath?: string;
 }> = ({ children, permission, fallbackPath = '/pos' }) => {
   const { hasPermission, employee } = useSupabaseAuth();
+  const { t } = useTranslation();
 
   if (!hasPermission(permission)) {
     // Show access denied page for unauthorized access attempts
@@ -57,17 +61,17 @@ const PermissionRoute: React.FC<{
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m9-7a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-4">Access Denied</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-4">{t('app.accessDenied')}</h1>
           <p className="text-gray-600 mb-6">
-            Sorry <strong>{employee?.name}</strong>, you don't have permission to access this page.
+            {t('app.accessDeniedMessage', { name: employee?.name ?? '' })}
             <br />
             <span className="text-sm text-gray-500">
-              Your role: <span className="font-medium capitalize">{employee?.role}</span>
+              {t('app.yourRole')} <span className="font-medium capitalize">{employee?.role}</span>
             </span>
           </p>
           <div className="space-y-3">
             <Navigate to={fallbackPath} replace />
-            <p className="text-sm text-gray-500">Redirecting to your allowed area...</p>
+            <p className="text-sm text-gray-500">{t('app.redirecting')}</p>
           </div>
         </div>
       </div>
@@ -176,6 +180,14 @@ const AppContent: React.FC = () => {
                     element={
                       <PermissionRoute permission="transactions">
                         <Transactions />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/fiscal-audit"
+                    element={
+                      <PermissionRoute permission="settings">
+                        <FiscalAudit />
                       </PermissionRoute>
                     }
                   />

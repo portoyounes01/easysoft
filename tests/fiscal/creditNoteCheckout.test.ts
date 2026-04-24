@@ -105,6 +105,7 @@ function buildSalePayload(settings: SystemSettings, signer: WebCryptoRsaSha1Sign
         ],
         customerTaxId: '999999990',
         customerTaxNumberForQr: null,
+        customerCountryForQr: 'PT',
         payment: { paymentMethod: 'cash', amountPaid: 20, employeeId: 'e1', employeeName: 'Emp' },
         signer,
     };
@@ -151,8 +152,31 @@ describe('runFiscalCreditNoteForTransaction', () => {
         expect(ncFiscal?.invoice_type).toBe('NC');
         expect(ncFiscal?.gross_total).toBe(-12.3);
         expect(ncFiscal?.chain_scope).toBe('ATNC01::A-2026');
+        const saleFiscal = await transactionLocalService.getFiscalDocumentById(sale.fiscalId);
+        expect(ncFiscal?.settled_invoice_no).toBe(saleFiscal?.invoice_no);
+        expect(ncFiscal?.settled_invoice_date).toBe(saleFiscal?.invoice_date);
 
         const audits = await localDb.fiscalAuditEvents.toArray();
         expect(audits.some(a => a.event_type === 'CREDIT_NOTE_ISSUED')).toBe(true);
+    });
+
+    it('persists credit reason in notes and audit when provided', async () => {
+        const sale = await transactionLocalService.createFiscalCheckoutAtomic(buildSalePayload(settings, signer));
+        const reason = 'Devolução de artigo com defeito';
+        const nc = await runFiscalCreditNoteForTransaction({
+            settings,
+            originalTransactionId: sale.transactionId,
+            creditReason: reason,
+            payment: { paymentMethod: 'cash', employeeId: 'e2', employeeName: 'Other' },
+            signer,
+        });
+        const ncTx = await transactionLocalService.getTransactionById(nc.transactionId);
+        const saleFiscal = await transactionLocalService.getFiscalDocumentById(sale.fiscalId);
+        expect(ncTx?.notes).toBe(`NC referente ${saleFiscal?.invoice_no}. ${reason}`);
+        const audits = await localDb.fiscalAuditEvents.toArray();
+        const ev = audits.find(a => a.event_type === 'CREDIT_NOTE_ISSUED');
+        expect(ev).toBeDefined();
+        const p = ev ? (JSON.parse(ev.payload_json) as { creditReason?: string }) : {};
+        expect(p.creditReason).toBe(reason);
     });
 });

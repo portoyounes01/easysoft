@@ -20,6 +20,7 @@ import {
     Gift,
     Heart
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useProducts } from '../contexts/ProductsContext';
 import {
     CategoryFormData,
@@ -80,6 +81,8 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         updateCategory,
         isLoading
     } = useProducts();
+
+    const { t } = useTranslation();
 
     const [formData, setFormData] = useState<CategoryFormData>({
         name: '',
@@ -238,7 +241,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                             onClick={() => setShowKeyboard(!showKeyboard)}
                             className={`p-2 rounded-lg transition-colors ${showKeyboard ? 'bg-white bg-opacity-20' : 'hover:bg-white hover:bg-opacity-20'
                                 }`}
-                            title="Toggle virtual keyboard"
+                            title={t('forms.toggleKeyboard')}
                         >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm5.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L10.586 10 8.293 7.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -247,7 +250,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                         <button
                             onClick={onClose}
                             className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
-                            title="Close panel"
+                            title={t('forms.closePanel')}
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -274,7 +277,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                         onClick={() => handleTextFieldClick('name')}
                                         className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.name ? 'border-red-500' : activeField === 'name' ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
                                             }`}
-                                        placeholder="Enter category name"
+                                        placeholder={t('forms.categoryNamePlaceholder')}
                                     />
                                 </div>
                                 {errors.name && (
@@ -297,14 +300,14 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                     rows={3}
                                     className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${activeField === 'description' ? 'border-blue-400 bg-blue-50' : ''
                                         }`}
-                                    placeholder="Enter category description"
+                                    placeholder={t('forms.categoryDescriptionPlaceholder')}
                                 />
                             </div>
                         </div>
 
                         {/* Visual Appearance */}
                         <div className="space-y-4">
-                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">Visual Appearance</h3>
+                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('categories.form.visualAppearance')}</h3>
 
                             {/* Color Selection */}
                             <div>
@@ -400,7 +403,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                         value={formData.display_order}
                                         onChange={(e) => handleFieldChange('display_order', parseInt(e.target.value) || 1)}
                                         className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        placeholder="1"
+                                        placeholder={t('forms.displayOrderPlaceholder')}
                                     />
                                 </div>
                                 <p className="mt-1 text-xs text-gray-500">
@@ -456,7 +459,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                             {isSubmitting ? (
                                 <>
                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>Saving...</span>
+                                    <span>{t('categories.form.saving')}</span>
                                 </>
                             ) : (
                                 <>
@@ -476,7 +479,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                             onClose={() => setShowKeyboard(false)}
                             onConfirm={handleKeyboardInput}
                             initialValue={formData[activeField as keyof CategoryFormData]?.toString() || ''}
-                            title={`Enter ${activeField.replace('_', ' ')}`}
+                            title={t('forms.enterField', { field: activeField.replace('_', ' ') })}
                         />
                     </div>
                 )}

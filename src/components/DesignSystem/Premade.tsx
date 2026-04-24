@@ -1,9 +1,11 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, AlertCircle, X, Info, Search, Menu, Plus, Coffee, Grid } from 'lucide-react';
 import { CategoryFilterButton } from '../ui/CategoryFilterButton';
 import { ProductCard } from '../ui/ProductCard';
 
 const Premade: React.FC = () => {
+    const { t } = useTranslation();
     return (
         <div className="space-y-16">
             {/* Card Product */}
@@ -283,7 +285,7 @@ const Premade: React.FC = () => {
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
                                 <input
                                     type="text"
-                                    placeholder="Search..."
+                                    placeholder={t('designSystemPage.demo.searchGeneric')}
                                     className="w-full pl-9 pr-4 py-2 rounded-lg border border-neutral-200 text-sm focus:outline-none focus:border-primary-500"
                                 />
                             </div>

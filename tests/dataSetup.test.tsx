@@ -5,6 +5,18 @@ import DataSetup from '../src/components/DataSetup';
 import { populateTransactionData, clearTransactionData, checkTransactionDataExists } from '../src/utils/populateTransactionData';
 import React from 'react';
 
+vi.mock('../src/contexts/EmployeesContext', () => ({
+  useEmployees: () => ({
+    refreshEmployees: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
+vi.mock('../src/contexts/ProductsContext', () => ({
+  useProducts: () => ({
+    refreshData: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 // Mock the utility functions
 vi.mock('../src/utils/populateTransactionData', () => ({
   populateTransactionData: vi.fn(),

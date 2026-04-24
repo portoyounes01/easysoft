@@ -254,6 +254,10 @@ const sampleCustomers = [
         name: 'Maria Silva',
         email: 'maria.silva@email.com',
         phone: '+351 123 456 789',
+        address: 'Rua das Flores 10',
+        city: 'Lisboa',
+        postal_code: '1200-001',
+        country: 'PT',
         is_active: true
     },
     {
@@ -261,6 +265,10 @@ const sampleCustomers = [
         name: 'João Costa',
         email: 'joao.costa@email.com',
         phone: '+351 123 456 788',
+        address: 'Av. da República 50',
+        city: 'Porto',
+        postal_code: '4450-123',
+        country: 'PT',
         is_active: true
     },
     {
@@ -268,6 +276,10 @@ const sampleCustomers = [
         name: 'Ana Pereira',
         email: 'ana.pereira@email.com',
         phone: '+351 123 456 787',
+        address: 'Largo do Município 3',
+        city: 'Braga',
+        postal_code: '4700-223',
+        country: 'PT',
         is_active: true
     },
     {
@@ -275,6 +287,10 @@ const sampleCustomers = [
         name: 'Pedro Santos',
         email: 'pedro.santos@email.com',
         phone: '+351 123 456 786',
+        address: 'Rua Direita 7',
+        city: 'Coimbra',
+        postal_code: '3000-123',
+        country: 'PT',
         is_active: true
     },
     {
@@ -282,6 +298,10 @@ const sampleCustomers = [
         name: 'Carla Silva',
         email: 'carla.silva@email.com',
         phone: '+351 123 456 785',
+        address: 'Travessa do Sol 2',
+        city: 'Faro',
+        postal_code: '8000-123',
+        country: 'PT',
         is_active: true
     }
 ];

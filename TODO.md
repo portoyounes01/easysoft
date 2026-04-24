@@ -2,6 +2,13 @@
 
 > 📋 **IMPORTANT**: For security issues and vulnerabilities, see **`SECURITY_ISSUES.md`** - contains a comprehensive security audit with 12 categorized issues requiring attention.
 
+## AT certification (phased) — backlog
+
+- [x] **Phase 3 — Key rotation** — Settings admin action, `nextHashControlVersion`, `KEY_ROTATED` audit, tests (`src/fiscal/hashControl.ts`, `tests/fiscal/keyRotation.test.ts`).
+- [ ] **Phase 4 (deferred)** — Three-way `appMode` (production / training / debug) in Settings UI.
+- [ ] **Phase 4 (deferred)** — Emit `LOGIN_*` / `SETTINGS_*` fiscal audit events at real call-sites (types already exist).
+- [ ] **Phase 3 remaining** — Signing blocking UX, E2E fiscal pack, structured app logs (see `.cursor/plans/at_cert_blockers_phased.plan.md`).
+
 ## ⚡️ Current Status: Authentication Integration
 
 ### ✅ Completed Today

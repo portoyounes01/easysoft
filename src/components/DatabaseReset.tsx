@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Trash2, RefreshCw, AlertTriangle, CheckCircle, Bug, Eye, Info } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Database, Trash2, RefreshCw, AlertTriangle, CheckCircle, Bug, Info } from 'lucide-react';
 import { clearAndReinitializeDatabase } from '../utils/clearLocalDatabase';
 import { runDatabaseDiagnostics, fixDatabaseIssues, DatabaseDiagnostics } from '../utils/debugDatabase';
 
@@ -8,6 +9,7 @@ interface DatabaseResetProps {
 }
 
 const DatabaseReset: React.FC<DatabaseResetProps> = ({ onComplete }) => {
+    const { t } = useTranslation();
     const [isResetting, setIsResetting] = useState(false);
     const [resetComplete, setResetComplete] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ const DatabaseReset: React.FC<DatabaseResetProps> = ({ onComplete }) => {
     };
 
     const handleReset = async () => {
-        if (!confirm('This will clear all local data and reset the database. Are you sure?')) {
+        if (!confirm(t('database.resetConfirm'))) {
             return;
         }
 

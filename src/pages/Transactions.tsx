@@ -17,6 +17,7 @@ import {
     ShoppingCart,
     Users,
     FileMinus,
+    Printer,
 } from 'lucide-react';
 import { transactionService } from '../services/transactionService';
 import { useTranslation } from 'react-i18next';
@@ -26,9 +27,14 @@ import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import ReceiptDialog from '../components/ReceiptDialog';
 import type { ReceiptProps } from '../components/ThermalReceipt';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
-import { initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
+import { customerLocalService, initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
+import { generateQRCodeImage } from '../utils/qrCode';
+import type { FiscalTransactionMetadata } from '../fiscal/types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { runFiscalCreditNoteForTransaction } from '../fiscal/creditNoteCheckout';
+import { parseCreditNoteNotesFields } from '../fiscal/creditNoteNotes';
+import { runFiscalReciboForTransaction } from '../fiscal/reciboCheckout';
+import { saftTypeToReceiptDocumentType } from '../fiscal/saleDocumentType';
 
 interface Transaction {
     id: string;
@@ -56,6 +62,10 @@ interface Transaction {
     employeeId: string;
     /** True when local Dexie has a non-NC fiscal document for this sale (AT credit note allowed). */
     canIssueCreditNote?: boolean;
+    /** FT/FS sale without NC/recibo yet — emit standalone RG (table 4.4). */
+    canIssueRecibo?: boolean;
+    /** Local fiscal id when present. */
+    fiscalDocumentId?: string;
 }
 
 async function buildTransactionViewModel(dbTransaction: Record<string, unknown>): Promise<Transaction> {
@@ -70,16 +80,44 @@ async function buildTransactionViewModel(dbTransaction: Record<string, unknown>)
     }));
     const txNum = String(dbTransaction.transaction_number ?? '');
     const local = await transactionLocalService.getTransactionById(tid);
+    let customerNif: string | undefined;
+    if (local?.customer_id) {
+        const cust = await customerLocalService.getCustomerById(local.customer_id);
+        customerNif = cust?.tax_number?.trim() || undefined;
+    }
+
     let canIssueCreditNote = false;
-    if (
-        local?.fiscal_document_id &&
-        local.status === 'completed' &&
-        local.deleted_at == null &&
-        Number(local.total) > 0 &&
-        !txNum.trim().toUpperCase().startsWith('NC ')
-    ) {
+    let canIssueRecibo = false;
+    let fiscalDocumentId: string | undefined;
+
+    const salesTypes = new Set(['FT', 'FS', 'FR']);
+
+    // Any completed fiscal sale: expose fiscal id for receipt / segunda via (incl. NC and negative totals).
+    if (local?.fiscal_document_id && local.status === 'completed' && local.deleted_at == null) {
         const fiscal = await transactionLocalService.getFiscalDocumentById(local.fiscal_document_id);
-        canIssueCreditNote = Boolean(fiscal && fiscal.invoice_type !== 'NC');
+        if (fiscal) {
+            fiscalDocumentId = local.fiscal_document_id;
+        }
+        if (
+            fiscal &&
+            Number(local.total) > 0 &&
+            !txNum.trim().toUpperCase().startsWith('NC ') &&
+            !txNum.trim().toUpperCase().startsWith('RG ')
+        ) {
+            const hasNc = await transactionLocalService.hasCreditNoteForOriginalTransaction(tid);
+            const hasRec = await transactionLocalService.hasReciboForOriginalTransaction(tid);
+            if (salesTypes.has(fiscal.invoice_type) && !fiscal.cancelled_at && !hasNc && !hasRec) {
+                canIssueCreditNote = true;
+            }
+            if (
+                (fiscal.invoice_type === 'FT' || fiscal.invoice_type === 'FS') &&
+                !fiscal.cancelled_at &&
+                !hasNc &&
+                !hasRec
+            ) {
+                canIssueRecibo = true;
+            }
+        }
     }
     return {
         id: tid,
@@ -87,7 +125,7 @@ async function buildTransactionViewModel(dbTransaction: Record<string, unknown>)
         date: String(dbTransaction.transaction_date ?? ''),
         time: String(dbTransaction.transaction_time ?? ''),
         customerName: dbTransaction.customer_name ? String(dbTransaction.customer_name) : undefined,
-        customerNif: dbTransaction.customer_id ? String(dbTransaction.customer_id) : undefined,
+        customerNif,
         items,
         subtotal: Number(dbTransaction.subtotal ?? 0),
         discount: Number(dbTransaction.discount ?? 0),
@@ -100,6 +138,8 @@ async function buildTransactionViewModel(dbTransaction: Record<string, unknown>)
         employeeName: String(dbTransaction.employee_name ?? ''),
         employeeId: String(dbTransaction.employee_id ?? ''),
         canIssueCreditNote,
+        canIssueRecibo,
+        fiscalDocumentId,
     };
 }
 
@@ -120,6 +160,7 @@ const Transactions: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [creditNoteBusyId, setCreditNoteBusyId] = useState<string | null>(null);
+    const [reciboBusyId, setReciboBusyId] = useState<string | null>(null);
 
     const loadTransactions = async () => {
         try {
@@ -136,13 +177,20 @@ const Transactions: React.FC = () => {
                 }
             }
 
-            if (rows.length === 0) {
-                const locals = await transactionLocalService.getAllTransactions();
-                const active = locals.filter(t => t.deleted_at == null);
-                const full = (
-                    await Promise.all(active.map(t => transactionLocalService.getTransactionById(t.id)))
+            // Include any local transactions not yet on the server (e.g. nota de crédito, offline sales)
+            // so the list matches Dexie/audit; remote alone can omit recent local-only rows.
+            const serverIds = new Set(rows.map(r => String((r as { id?: string }).id)));
+            const activeLocal = (await transactionLocalService.getAllTransactions()).filter(
+                t => t.deleted_at == null
+            );
+            const onlyOnDevice = activeLocal.filter(t => !serverIds.has(t.id));
+            if (onlyOnDevice.length > 0) {
+                const withItems = (
+                    await Promise.all(onlyOnDevice.map(t => transactionLocalService.getTransactionById(t.id)))
                 ).filter((x): x is NonNullable<typeof x> => Boolean(x));
-                rows = full.map(l => ({ ...l, transaction_items: l.items })) as Record<string, unknown>[];
+                for (const l of withItems) {
+                    rows.push({ ...l, transaction_items: l.items } as Record<string, unknown>);
+                }
             }
 
             const transformed = await Promise.all(rows.map(r => buildTransactionViewModel(r)));
@@ -165,6 +213,43 @@ const Transactions: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only
     }, []);
 
+    const handleIssueRecibo = async (tx: Transaction) => {
+        if (!employee) {
+            window.alert(t('transactions.recibo.needEmployee'));
+            return;
+        }
+        if (
+            !window.confirm(t('transactions.recibo.confirm', { number: tx.transactionNumber }))
+        ) {
+            return;
+        }
+        try {
+            setReciboBusyId(tx.id);
+            const pm =
+                tx.paymentMethod === 'card' || tx.paymentMethod === 'mixed'
+                    ? tx.paymentMethod
+                    : 'cash';
+            const result = await runFiscalReciboForTransaction({
+                settings,
+                originalTransactionId: tx.id,
+                payment: {
+                    paymentMethod: pm,
+                    employeeId: employee.id,
+                    employeeName: employee.name,
+                    employeeNumber: employee.employee_number,
+                },
+            });
+            window.alert(t('transactions.recibo.success', { invoiceNo: result.invoiceNo }));
+            await loadTransactions();
+        } catch (e) {
+            console.error(e);
+            const msg = e instanceof Error ? e.message : '';
+            window.alert(msg ? `${t('transactions.recibo.error')} ${msg}` : t('transactions.recibo.error'));
+        } finally {
+            setReciboBusyId(null);
+        }
+    };
+
     const handleIssueCreditNote = async (tx: Transaction) => {
         if (!employee) {
             window.alert(t('transactions.creditNote.needEmployee'));
@@ -177,6 +262,10 @@ const Transactions: React.FC = () => {
         ) {
             return;
         }
+        const reason = window.prompt(t('transactions.creditNote.reasonPrompt'), '');
+        if (reason === null) {
+            return;
+        }
         try {
             setCreditNoteBusyId(tx.id);
             const pm =
@@ -186,6 +275,7 @@ const Transactions: React.FC = () => {
             const result = await runFiscalCreditNoteForTransaction({
                 settings,
                 originalTransactionId: tx.id,
+                creditReason: reason.trim() || undefined,
                 payment: {
                     paymentMethod: pm,
                     employeeId: employee.id,
@@ -268,90 +358,190 @@ const Transactions: React.FC = () => {
         });
     };
 
+    const buildReceiptPropsForTransaction = async (
+        txId: string,
+        documentLabel?: string
+    ): Promise<ReceiptProps | null> => {
+        const trx = await transactionLocalService.getTransactionById(txId);
+        const itemsSource = trx?.items;
+        const remoteTrx = trx ? null : await transactionService.getTransactionById(txId);
+        const rawItems = itemsSource ?? remoteTrx?.transaction_items ?? [];
+        if (!trx && !remoteTrx) return null;
+
+        const header = trx ?? remoteTrx!;
+        const date = new Date(`${header.transaction_date}T${header.transaction_time}`);
+
+        const inferredDiscountPct = (() => {
+            const pcts = (rawItems as { discount_percentage?: number }[])
+                .map(it => Number(it.discount_percentage || 0))
+                .filter(p => p > 0);
+            if (pcts.length > 0) {
+                const first = Math.round(pcts[0]);
+                const allSame = pcts.every(p => Math.abs(p - first) < 0.01);
+                if (allSame) return first;
+            }
+            const commonPercents = [5, 10, 12, 15, 20, 25, 30, 40, 50];
+            const ratio = header.subtotal > 0 ? (header.discount / header.subtotal) * 100 : 0;
+            const nearest = Math.round(ratio);
+            const withinTolerance = Math.abs(ratio - nearest) < 0.05;
+            if (withinTolerance && commonPercents.includes(nearest)) {
+                return nearest;
+            }
+            return 0;
+        })();
+
+        const headerDiscountPct = Number(header.discount_percentage || 0);
+        const headerDiscountType = (header.discount_type || 'none') as 'none' | 'percentage' | 'fixed';
+
+        let meta: FiscalTransactionMetadata | null = null;
+        if (trx?.fiscal_metadata_json) {
+            try {
+                meta = JSON.parse(trx.fiscal_metadata_json) as FiscalTransactionMetadata;
+            } catch {
+                meta = null;
+            }
+        }
+
+        const fiscal = trx?.fiscal_document_id
+            ? await transactionLocalService.getFiscalDocumentById(trx.fiscal_document_id)
+            : undefined;
+
+        const verificationCode = fiscal?.atcud_body ?? meta?.atcudBody ?? header.receipt_number ?? header.transaction_number;
+        const qrPayload = fiscal?.qr_payload ?? meta?.qrPayload;
+        const qrCodeImage = qrPayload ? await generateQRCodeImage(qrPayload) : undefined;
+
+        const customerRow = header.customer_id
+            ? await customerLocalService.getCustomerById(header.customer_id)
+            : undefined;
+        const customerTax = customerRow?.tax_number?.trim() || undefined;
+
+        const documentType: ReceiptProps['documentType'] = fiscal?.invoice_type
+            ? saftTypeToReceiptDocumentType(fiscal.invoice_type)
+            : settings.receipt.defaultDocumentType === 'FATURA'
+                ? 'FATURA'
+                : 'FATURA_SIMPLIFICADA';
+
+        const creditNoteDisplay =
+            documentType === 'NOTA_CREDITO'
+                ? parseCreditNoteNotesFields(
+                      header.notes,
+                      fiscal?.settled_invoice_no ?? null
+                  )
+                : null;
+
+        const receipt: ReceiptProps = {
+            documentNumber: fiscal?.invoice_no ?? header.receipt_number ?? header.transaction_number,
+            documentType,
+            date,
+            counter: settings.receipt.counterLabel,
+            verificationCode,
+            documentHash: fiscal?.hash_base64 ?? undefined,
+            hashFourChars: fiscal?.hash_four_chars ?? meta?.hashFourChars,
+            qrCodeData: qrPayload ?? undefined,
+            qrCodeImage,
+            trainingMode: settings.fiscal.trainingMode,
+            documentLabel,
+            emitterName: header.employee_name,
+            company: {
+                name: settings.company.name,
+                address: settings.company.address,
+                postalCode: settings.company.postalCode,
+                city: settings.company.city,
+                taxNumber: settings.company.taxNumber,
+                phone: settings.company.phone || undefined,
+                email: settings.company.email || undefined,
+            },
+            customer: header.customer_id
+                ? (() => {
+                    const morada = [
+                        customerRow?.address?.trim(),
+                        [customerRow?.postal_code?.trim(), customerRow?.city?.trim()]
+                            .filter(Boolean)
+                            .join(' '),
+                    ]
+                        .filter(Boolean)
+                        .join(', ');
+                    return {
+                        name: (customerRow?.name || header.customer_name || undefined) as
+                            | string
+                            | undefined,
+                        taxNumber: customerTax,
+                        address: morada || undefined,
+                    };
+                })()
+                : undefined,
+            items: rawItems.map((it: { id: string; product_name: string; quantity: number; unit_price: number; iva_rate?: number; line_total: number }) => ({
+                id: it.id,
+                description: it.product_name,
+                quantity: it.quantity,
+                unitPrice: it.unit_price,
+                vatRate: Math.round(((it.iva_rate || 0) as number) * 100),
+                total: it.line_total,
+            })),
+            totals: {
+                subtotal: header.subtotal,
+                discount: header.discount,
+                discountPercentage:
+                    headerDiscountType === 'percentage' && headerDiscountPct > 0
+                        ? Math.round(headerDiscountPct)
+                        : inferredDiscountPct,
+                net: header.total - header.tax,
+                vat: header.tax,
+                total: header.total,
+            },
+            payment: {
+                method:
+                    header.payment_method === 'cash'
+                        ? t('transactions.receipt.paymentCash')
+                        : header.payment_method === 'card'
+                            ? t('transactions.receipt.paymentCard')
+                            : t('transactions.receipt.paymentMixed'),
+                amountGiven: header.amount_paid ?? header.total,
+                change: header.change_given || 0,
+            },
+            slogan: settings.company.slogan || undefined,
+            softwareInfo: settings.company.softwareInfo || undefined,
+            certificationNumber: settings.company.certificationNumber || undefined,
+            ...(documentType === 'NOTA_CREDITO' && creditNoteDisplay
+                ? {
+                      originalInvoice: creditNoteDisplay.originalRef,
+                      creditReason: creditNoteDisplay.reason,
+                  }
+                : {}),
+        };
+
+        return receipt;
+    };
+
     const handleViewReceipt = async (id: string) => {
         try {
-            const trx = await transactionService.getTransactionById(id);
-            if (!trx) return;
+            const receipt = await buildReceiptPropsForTransaction(id, undefined);
+            if (receipt) {
+                setReceiptPreviewData(receipt);
+                setShowReceiptPreview(true);
+            }
+        } catch (e) {
+            console.error('Failed to build receipt preview:', e);
+        }
+    };
 
-            const date = new Date(`${trx.transaction_date}T${trx.transaction_time}`);
-            // Infer percentage discount for historical transactions
-            // Priority 1: If items carry a uniform non-zero discount_percentage, use it
-            // Priority 2: Otherwise, infer from header (discount/subtotal) ONLY when it matches a common percentage
-            const inferredDiscountPct = (() => {
-                const pcts = (trx.transaction_items || [])
-                    .map((it: any) => Number(it.discount_percentage || 0))
-                    .filter((p: number) => p > 0);
-                if (pcts.length > 0) {
-                    const first = Math.round(pcts[0]);
-                    const allSame = pcts.every((p: number) => Math.abs(p - first) < 0.01);
-                    if (allSame) return first;
-                }
-
-                // Header inference guarded by whitelist to avoid misclassifying fixed discounts
-                const commonPercents = [5, 10, 12, 15, 20, 25, 30, 40, 50];
-                const ratio = trx.subtotal > 0 ? (trx.discount / trx.subtotal) * 100 : 0;
-                const nearest = Math.round(ratio);
-                const withinTolerance = Math.abs(ratio - nearest) < 0.05; // 0.05pp tolerance
-                if (withinTolerance && commonPercents.includes(nearest)) {
-                    return nearest;
-                }
-                return 0;
-            })();
-
-            const headerDiscountPct = Number(trx.discount_percentage || 0);
-            const headerDiscountType = (trx.discount_type || 'none') as 'none' | 'percentage' | 'fixed';
-
-            const receipt: ReceiptProps = {
-                documentNumber: trx.receipt_number || trx.transaction_number,
-                documentType: settings.receipt.defaultDocumentType,
-                date,
-                counter: settings.receipt.counterLabel,
-                // Use real ATCUD format: AT validation code + sequential number
-                // Note: For older transactions, this will use current settings
-                verificationCode: `${settings.receipt.atValidationCode}-${trx.receipt_number?.split('-').pop() || trx.transaction_number}`,
-                company: {
-                    name: settings.company.name,
-                    address: settings.company.address,
-                    postalCode: settings.company.postalCode,
-                    city: settings.company.city,
-                    taxNumber: settings.company.taxNumber,
-                    phone: settings.company.phone || undefined,
-                    email: settings.company.email || undefined,
-                },
-                customer: trx.customer_id ? {
-                    name: trx.customer_name || undefined,
-                    taxNumber: trx.customers?.tax_id || undefined
-                } : undefined,
-                items: (trx.transaction_items || []).map((it: any) => ({
-                    id: it.id,
-                    description: it.product_name,
-                    quantity: it.quantity,
-                    unitPrice: it.unit_price,
-                    vatRate: Math.round(((it.iva_rate || 0) as number) * 100),
-                    total: it.line_total,
-                })),
-                totals: {
-                    subtotal: trx.subtotal,
-                    discount: trx.discount,
-                    discountPercentage: headerDiscountType === 'percentage' && headerDiscountPct > 0 ? Math.round(headerDiscountPct) : inferredDiscountPct,
-                    net: trx.total - trx.tax,
-                    vat: trx.tax,
-                    total: trx.total,
-                },
-                payment: {
-                    method: trx.payment_method === 'cash' ? 'Numerário' : 'Multibanco',
-                    amountGiven: trx.amount_paid || trx.total,
-                    change: trx.change_given || 0,
-                },
-                slogan: settings.company.slogan || undefined,
-                softwareInfo: settings.company.softwareInfo || undefined,
-                certificationNumber: settings.company.certificationNumber || undefined,
-            };
-
+    const handleSegundaVia = async (id: string) => {
+        if (!employee) {
+            window.alert(t('transactions.creditNote.needEmployee'));
+            return;
+        }
+        try {
+            const receipt = await buildReceiptPropsForTransaction(id, t('transactions.receipt.secondCopy'));
+            if (!receipt) return;
+            await transactionLocalService.appendFiscalAuditEvent({
+                event_type: 'REPRINT_REQUESTED',
+                payload_json: JSON.stringify({ transactionId: id, documentNumber: receipt.documentNumber }),
+                employee_id: employee.id,
+            });
             setReceiptPreviewData(receipt);
             setShowReceiptPreview(true);
         } catch (e) {
-            console.error('Failed to build receipt preview:', e);
+            console.error(e);
         }
     };
 
@@ -479,7 +669,7 @@ const Transactions: React.FC = () => {
                             icon={Receipt}
                             onClick={() => void loadTransactions()}
                             disabled={loading}
-                            title="Refresh transactions"
+                            title={t('transactions.refreshTooltip')}
                         />
                     </div>
                 </div>
@@ -549,7 +739,7 @@ const Transactions: React.FC = () => {
                                                 {getPaymentMethodIcon(transaction.paymentMethod)}
                                             </div>
                                             <div>
-                                                <div className="flex items-center space-x-2">
+                                                <div className="flex items-center space-x-2 flex-wrap gap-1">
                                                     <h3 className="font-semibold text-gray-900">{transaction.transactionNumber}</h3>
                                                     <span className={getStatusBadge(transaction.status)}>
                                                         {transaction.status.replace('_', ' ')}
@@ -661,13 +851,37 @@ const Transactions: React.FC = () => {
                                                     variant="outline"
                                                     label={t('transactions.list.viewReceipt')}
                                                     icon={Eye}
-                                                    onClick={() => handleViewReceipt(transaction.id)}
+                                                    onClick={() => void handleViewReceipt(transaction.id)}
                                                 />
+                                                {transaction.fiscalDocumentId && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void handleSegundaVia(transaction.id)}
+                                                        disabled={creditNoteBusyId !== null || reciboBusyId !== null}
+                                                        className="inline-flex items-center justify-center gap-2 min-h-[60px] px-6 rounded-2xl font-semibold text-xl text-white bg-blue-500 hover:bg-blue-600 transition-colors duration-200 disabled:opacity-50"
+                                                    >
+                                                        <Printer className="w-6 h-6 shrink-0" />
+                                                        Segunda via
+                                                    </button>
+                                                )}
+                                                {transaction.canIssueRecibo && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void handleIssueRecibo(transaction)}
+                                                        disabled={creditNoteBusyId !== null || reciboBusyId !== null}
+                                                        className="inline-flex items-center justify-center gap-2 min-h-[60px] px-6 rounded-2xl font-semibold text-xl text-white bg-emerald-500 hover:bg-emerald-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        <Receipt className="w-6 h-6 shrink-0" />
+                                                        {reciboBusyId === transaction.id
+                                                            ? t('transactions.recibo.issuing')
+                                                            : t('transactions.list.issueRecibo')}
+                                                    </button>
+                                                )}
                                                 {transaction.canIssueCreditNote && (
                                                     <button
                                                         type="button"
                                                         onClick={() => void handleIssueCreditNote(transaction)}
-                                                        disabled={creditNoteBusyId !== null}
+                                                        disabled={creditNoteBusyId !== null || reciboBusyId !== null}
                                                         className="inline-flex items-center justify-center gap-2 min-h-[60px] px-6 rounded-2xl font-semibold text-xl text-white bg-orange-500 hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
                                                         <FileMinus className="w-6 h-6 shrink-0" />

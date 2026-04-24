@@ -27,17 +27,31 @@ vi.mock('../src/contexts/SupabaseAuthContext', () => ({
     }),
 }));
 
+vi.mock('../src/utils/qrCode', () => ({
+    generateQRCodeImage: vi.fn().mockResolvedValue('data:image/png;base64,xx'),
+}));
+
 vi.mock('../src/lib/localDatabase', () => ({
     initializeLocalDatabase: vi.fn().mockResolvedValue(undefined),
+    customerLocalService: {
+        getCustomerById: vi.fn().mockResolvedValue(undefined),
+    },
     transactionLocalService: {
         getAllTransactions: vi.fn().mockResolvedValue([]),
         getTransactionById: vi.fn().mockResolvedValue(undefined),
         getFiscalDocumentById: vi.fn(),
+        hasCreditNoteForOriginalTransaction: vi.fn().mockResolvedValue(false),
+        hasReciboForOriginalTransaction: vi.fn().mockResolvedValue(false),
+        appendFiscalAuditEvent: vi.fn().mockResolvedValue(undefined),
     },
 }));
 
 vi.mock('../src/fiscal/creditNoteCheckout', () => ({
     runFiscalCreditNoteForTransaction: vi.fn(),
+}));
+
+vi.mock('../src/fiscal/reciboCheckout', () => ({
+    runFiscalReciboForTransaction: vi.fn(),
 }));
 
 import { transactionLocalService } from '../src/lib/localDatabase';

@@ -800,11 +800,11 @@ const Employees: React.FC = () => {
                                                         : 'border-gray-300'
                                                         }`}
                                                 >
-                                                    <option value="cashier">Cashier</option>
-                                                    <option value="manager">Manager</option>
+                                                    <option value="cashier">{t('employees.form.roles.cashier')}</option>
+                                                    <option value="manager">{t('employees.form.roles.manager')}</option>
                                                     {/* Only admins can create/assign admin role */}
                                                     {currentUser?.role === 'admin' && (
-                                                        <option value="admin">Admin</option>
+                                                        <option value="admin">{t('employees.form.roles.admin')}</option>
                                                     )}
                                                 </select>
                                             </div>
@@ -820,7 +820,7 @@ const Employees: React.FC = () => {
                                                             value={formData.phone ?? ''}
                                                             onChange={(e) => handleFormChange('phone', e.target.value)}
                                                             className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                            placeholder="+351 912 345 678"
+                                                            placeholder={t('forms.phonePlaceholder')}
                                                         />
                                                     </div>
                                                 </div>
@@ -871,7 +871,7 @@ const Employees: React.FC = () => {
                                                         value={formData.pin}
                                                         onChange={(e) => handleFormChange('pin', e.target.value.replace(/\D/g, '').slice(0, 8))}
                                                         className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formErrors.pin ? 'border-red-500' : 'border-gray-300'}`}
-                                                        placeholder={editingEmployee ? t('employees.form.placeholderPinKeep') : 'PIN'}
+                                                        placeholder={editingEmployee ? t('employees.form.placeholderPinKeep') : t('forms.pinPlaceholder')}
                                                         maxLength={8}
                                                     />
                                                     {formErrors.pin && (
@@ -986,8 +986,7 @@ const Employees: React.FC = () => {
                             </div>
 
                             <p className="text-gray-700 mb-6">
-                                Are you sure you want to delete <strong>{showDeleteConfirm.name}</strong>?
-                                This will remove all employee data and cannot be reversed.
+                                {t('employees.confirm.deleteQuestion', { name: showDeleteConfirm.name })}
                             </p>
 
                             <div className="flex space-x-3">
@@ -995,13 +994,13 @@ const Employees: React.FC = () => {
                                     onClick={() => setShowDeleteConfirm(null)}
                                     className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                                 >
-                                    Cancel
+                                    {t('employees.confirm.cancel')}
                                 </button>
                                 <button
                                     onClick={handleDeleteEmployee}
                                     className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                                 >
-                                    Delete
+                                    {t('employees.confirm.delete')}
                                 </button>
                             </div>
                         </div>

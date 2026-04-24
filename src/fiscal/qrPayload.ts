@@ -1,11 +1,11 @@
 import { CONSUMER_FINAL_CUSTOMER_TAX_ID, DEFAULT_INVOICE_STATUS, formatGrossTotalForHash } from './spec';
-import type { SaftInvoiceType } from './spec';
+import type { SaftFiscalDocumentType } from './spec';
 
 export interface AtQrPayloadInput {
     emitterTaxNumber: string;
     customerTaxNumber: string | null;
     customerCountry: string;
-    invoiceType: SaftInvoiceType;
+    invoiceType: SaftFiscalDocumentType;
     invoiceDateYmd: string;
     invoiceNo: string;
     /** e.g. CSDF7T5H-00035 (validation + hyphen + padded sequential) */

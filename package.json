@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "validate:saft": "npm test -- --run tests/fiscal/saftExport.test.ts",
+    "test:saft-xsd": "node scripts/validate-saft-xsd.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",

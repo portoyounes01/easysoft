@@ -23,7 +23,7 @@ describe('OrderSummaryPanel', () => {
 
         expect(screen.getByText('Classic Crispyburger')).toBeInTheDocument();
         expect(screen.getByText('Sprite')).toBeInTheDocument();
-        expect(screen.getByText(/Total/i)).toBeInTheDocument();
+        expect(screen.getByText('pos.totalLabel')).toBeInTheDocument();
     });
 
     test('fires clear all', () => {
@@ -38,6 +38,23 @@ describe('OrderSummaryPanel', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /Clear/i }));
         expect(onClearAll).toHaveBeenCalled();
+    });
+
+    test('tapping cart line calls onDecrementCartLine with product id', () => {
+        const onDecrement = vi.fn();
+        render(
+            <OrderSummaryPanel
+                items={items}
+                onClearAll={() => { }}
+                onCustomer={() => { }}
+                onDecrementCartLine={onDecrement}
+            />
+        );
+
+        const lineButtons = screen.getAllByRole('button', { name: /pos\.decrementCartLine/i });
+        expect(lineButtons.length).toBe(2);
+        fireEvent.click(lineButtons[0]);
+        expect(onDecrement).toHaveBeenCalledWith('1');
     });
 });
 

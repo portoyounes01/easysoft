@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, LogIn, User, Settings, Users } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { useEmployees } from '../../contexts/EmployeesContext';
 import VirtualKeyboard from '../VirtualKeyboard';
@@ -22,6 +23,7 @@ const getRoleColor = (role: string) => {
 };
 
 const LoginForm: React.FC = () => {
+  const { t } = useTranslation();
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeDisplay | null>(null);
   const [password, setPassword] = useState('');
@@ -80,9 +82,10 @@ const LoginForm: React.FC = () => {
     console.log('Password provided:', !!password);
 
     if (!selectedEmployee || !password) {
-      const authType = selectedEmployee?.role === 'admin' ? 'password' : 'PIN';
+      const authLabel =
+        selectedEmployee?.role === 'admin' ? t('login.credentialPassword') : t('login.credentialPin');
       console.log('❌ Missing employee or password');
-      setError(`Please select an employee and enter ${authType}`);
+      setError(t('login.selectEmployeeAndCredential', { type: authLabel }));
       return;
     }
 
@@ -92,17 +95,17 @@ const LoginForm: React.FC = () => {
       console.log('📋 Login result:', result);
 
       if (!result.success) {
-        const authType = selectedEmployee.role === 'admin' ? 'password' : 'PIN';
+        const authLabel = selectedEmployee.role === 'admin' ? t('login.credentialPassword') : t('login.credentialPin');
         console.log('❌ Login failed:', result.error);
-        setError(result.error || `Invalid employee or ${authType}`);
+        setError(result.error || t('login.invalidCredential', { type: authLabel }));
       } else {
         console.log('✅ Login successful!');
       }
       // If successful, the auth context will handle the state change and redirect
     } catch (error) {
-      const authType = selectedEmployee.role === 'admin' ? 'password' : 'PIN';
+      const authLabel = selectedEmployee.role === 'admin' ? t('login.credentialPassword') : t('login.credentialPin');
       console.log('💥 Login exception:', error);
-      setError(`Invalid employee or ${authType}`);
+      setError(t('login.invalidCredential', { type: authLabel }));
     }
   };
 
@@ -120,8 +123,8 @@ const LoginForm: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-slate-900 flex items-center justify-center p-6">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-          <h1 className="text-4xl font-bold text-white mb-2">Loading Employees...</h1>
-          <p className="text-xl text-blue-100">Please wait while we load the employee database</p>
+          <h1 className="text-4xl font-bold text-white mb-2">{t('login.loadingEmployees')}</h1>
+          <p className="text-xl text-blue-100">{t('login.loadingEmployeesSub')}</p>
         </div>
       </div>
     );
@@ -135,13 +138,13 @@ const LoginForm: React.FC = () => {
           <div className="bg-red-500 p-4 rounded-full mb-6 mx-auto w-16 h-16 flex items-center justify-center">
             <span className="text-white text-2xl">!</span>
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">Unable to Load Employees</h1>
+          <h1 className="text-4xl font-bold text-white mb-2">{t('login.loadErrorTitle')}</h1>
           <p className="text-xl text-blue-100 mb-4">{employeesContext.error}</p>
           <button
             onClick={() => employeesContext.refreshEmployees()}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold"
           >
-            Retry
+            {t('login.retry')}
           </button>
         </div>
       </div>
@@ -162,31 +165,31 @@ const LoginForm: React.FC = () => {
           ? 'bg-orange-500 hover:bg-orange-600 text-white'
           : 'bg-white hover:bg-gray-50 text-gray-700'
           }`}
-        title={isAdminMode ? 'Switch to Employee Mode' : 'Switch to Admin Mode'}
+        title={isAdminMode ? t('login.switchToEmployeeMode') : t('login.switchToAdminMode')}
       >
         {isAdminMode ? (
           <>
             <Users className="w-6 h-6" />
-            <span>Employee Mode</span>
+            <span>{t('login.employeeMode')}</span>
           </>
         ) : (
           <>
             <Settings className="w-6 h-6" />
-            <span>Admin Mode</span>
+            <span>{t('login.adminMode')}</span>
           </>
         )}
       </button>
 
       {/* Mode Indicator */}
       <div className="fixed top-6 left-6 z-10 px-6 py-3 rounded-full text-lg font-semibold bg-white/20 text-white backdrop-blur-sm">
-        {isAdminMode ? '🛠️ Admin Mode' : '👥 Employee Mode'}
+        {isAdminMode ? t('login.modeIndicatorAdmin') : t('login.modeIndicatorEmployee')}
       </div>
 
       {/* Sync Status Indicator */}
       {employeesContext.syncStatus && (
         <div className="fixed bottom-6 left-6 z-10 px-4 py-2 rounded-lg text-sm font-medium bg-white/20 text-white backdrop-blur-sm">
-          {employeesContext.syncStatus.isOnline ? '🟢 Online' : '🔴 Offline'}
-          {employeesContext.syncStatus.isSyncing && ' - Syncing...'}
+          {employeesContext.syncStatus.isOnline ? t('login.online') : t('login.offline')}
+          {employeesContext.syncStatus.isSyncing && ` — ${t('login.syncing')}`}
         </div>
       )}
 
@@ -195,11 +198,11 @@ const LoginForm: React.FC = () => {
           // Employee Selection Screen
           <div className="text-center">
             <div className="mb-12">
-              <h1 className="text-6xl font-bold text-white mb-4">Select Employee</h1>
-              <p className="text-2xl text-blue-100">Touch your name to continue</p>
+              <h1 className="text-6xl font-bold text-white mb-4">{t('login.selectEmployee')}</h1>
+              <p className="text-2xl text-blue-100">{t('login.touchNameToContinue')}</p>
               {currentEmployees.length === 0 && (
                 <p className="text-xl text-orange-200 mt-4">
-                  No {isAdminMode ? 'admin/manager' : 'cashier/trainee'} employees found
+                  {isAdminMode ? t('login.noStaffAdmin') : t('login.noStaffCashier')}
                 </p>
               )}
             </div>
@@ -242,7 +245,7 @@ const LoginForm: React.FC = () => {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <label className="block text-2xl font-semibold text-gray-700 mb-4">
-                    {selectedEmployee?.role === 'admin' ? 'Enter Password' : 'Enter PIN'}
+                    {selectedEmployee?.role === 'admin' ? t('login.enterPassword') : t('login.enterPin')}
                   </label>
                   <div className="relative">
                     <input
@@ -256,7 +259,7 @@ const LoginForm: React.FC = () => {
                         }
                       }}
                       className="w-full px-8 py-6 text-2xl bg-gray-50 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder={selectedEmployee?.role === 'admin' ? 'Enter your password' : 'Enter your PIN'}
+                      placeholder={selectedEmployee?.role === 'admin' ? t('login.placeholderPassword') : t('login.placeholderPin')}
                       disabled={isLoading}
                     />
                     {selectedEmployee?.role === 'admin' && (
@@ -277,11 +280,15 @@ const LoginForm: React.FC = () => {
                       onClick={() => setShowKeyboard(!showKeyboard)}
                       className="text-blue-600 hover:text-blue-800 font-medium text-lg"
                     >
-                      {showKeyboard ? 'Hide Keyboard' : 'Show Keyboard'}
+                      {showKeyboard ? t('login.hideKeyboard') : t('login.showKeyboard')}
                     </button>
 
                     <div className="text-sm text-gray-500">
-                      Demo {selectedEmployee?.role === 'admin' ? 'Password' : 'PIN'}: <span className="font-mono bg-gray-100 px-2 py-1 rounded">{selectedEmployee?.role === 'admin' ? 'password' : '1234'}</span>
+                      {t('login.demoCredential', {
+                        type:
+                          selectedEmployee?.role === 'admin' ? t('login.credentialPassword') : t('login.credentialPin'),
+                      })}{' '}
+                      <span className="font-mono bg-gray-100 px-2 py-1 rounded">{selectedEmployee?.role === 'admin' ? 'password' : '1234'}</span>
                     </div>
                   </div>
                 </div>
@@ -314,7 +321,7 @@ const LoginForm: React.FC = () => {
                     className="w-full bg-gray-500 hover:bg-gray-600 text-white py-6 rounded-2xl text-2xl font-semibold transition-all duration-200 min-h-[80px]"
                     disabled={isLoading}
                   >
-                    Back
+                    {t('login.back')}
                   </button>
 
                   <button
@@ -327,7 +334,7 @@ const LoginForm: React.FC = () => {
                     ) : (
                       <>
                         <LogIn className="w-8 h-8" />
-                        <span>Sign In</span>
+                        <span>{t('login.signIn')}</span>
                       </>
                     )}
                   </button>

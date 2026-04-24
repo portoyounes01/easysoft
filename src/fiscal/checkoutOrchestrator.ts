@@ -3,6 +3,7 @@ import type { LocalCustomer, LocalProduct } from '../types/supabase';
 import { calculateTaxAmount, calculatePriceWithoutTax } from '../types/supabase';
 import { transactionLocalService } from '../lib/localDatabase';
 import { mapDefaultDocumentTypeToSaft, CONSUMER_FINAL_CUSTOMER_TAX_ID } from './spec';
+import { resolveDefaultDocumentTypeForSale } from './saleDocumentType';
 import { createSignerFromSettings, type FiscalSigner } from './signing';
 import { buildChainScope, computeSeriesKey } from './seriesUtils';
 import type { CertificationMode, FiscalCheckoutAtomicPayload, FiscalCheckoutResult } from './types';
@@ -27,6 +28,28 @@ export interface FiscalPaymentInput {
     employeeId: string;
     employeeName: string;
     employeeNumber?: string;
+}
+
+/**
+ * Sale checkout must not emit negative line totals (NC uses a separate path).
+ */
+function assertNoNegativeSaleLineTotals(cart: FiscalCartLine[]): void {
+    for (const line of cart) {
+        if (line.quantity <= 0) {
+            throw new Error('Quantidade inválida numa linha do carrinho.');
+        }
+        if (line.product.price < 0) {
+            throw new Error('Preço de produto inválido (negativo).');
+        }
+        const itemTotal = line.product.price * line.quantity;
+        const discountAmount = (itemTotal * line.discount) / 100;
+        const discountedTotal = itemTotal - discountAmount;
+        if (discountedTotal < 0) {
+            throw new Error(
+                'Total de linha negativo não é permitido em venda — use nota de crédito para corrigir documentos.'
+            );
+        }
+    }
 }
 
 function assertDiscountGuards(cart: FiscalCartLine[], globalDiscount?: FiscalGlobalDiscount): void {
@@ -85,6 +108,7 @@ export async function runFiscalCheckout(params: {
     }
 
     assertDiscountGuards(cart, globalDiscount);
+    assertNoNegativeSaleLineTotals(cart);
 
     const certificationMode: CertificationMode = settings.fiscal.trainingMode ? 'training' : 'production';
 
@@ -133,7 +157,11 @@ export async function runFiscalCheckout(params: {
 
     const chainScope = buildChainScope(atCode, seriesKey);
 
-    const invoiceTypeSaft = mapDefaultDocumentTypeToSaft(settings.receipt.defaultDocumentType);
+    const resolvedDocumentType = resolveDefaultDocumentTypeForSale(
+        settings.receipt.defaultDocumentType,
+        selectedCustomer
+    );
+    const invoiceTypeSaft = mapDefaultDocumentTypeToSaft(resolvedDocumentType);
     const grossTotal = Number(total.toFixed(2));
     const taxTotal = Number(totalTax.toFixed(2));
     const netRounded = Number((grossTotal - taxTotal).toFixed(2));
@@ -201,6 +229,8 @@ export async function runFiscalCheckout(params: {
         deleted_at: null,
     };
 
+    const countryForQr = (selectedCustomer?.country || 'PT').trim().slice(0, 2).toUpperCase() || 'PT';
+
     const atomicPayload: FiscalCheckoutAtomicPayload = {
         settings,
         certificationMode,
@@ -222,6 +252,7 @@ export async function runFiscalCheckout(params: {
         transactionItems,
         customerTaxId: customerTaxIdForRow,
         customerTaxNumberForQr: customerNif,
+        customerCountryForQr: countryForQr,
         payment,
         signer,
     };

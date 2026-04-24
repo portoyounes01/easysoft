@@ -13,6 +13,19 @@
 export const SaftInvoiceTypes = ['FT', 'FS', 'FR', 'NC', 'ND'] as const;
 export type SaftInvoiceType = (typeof SaftInvoiceTypes)[number];
 
+/**
+ * SAFT-PT table 4.4 Payments — `PaymentType` (not the same as SalesInvoices `InvoiceType`).
+ * RG = outros recibos; RC = regime de IVA de caixa.
+ */
+export const SaftPaymentReceiptTypes = ['RG', 'RC'] as const;
+export type SaftPaymentReceiptType = (typeof SaftPaymentReceiptTypes)[number];
+
+export type SaftFiscalDocumentType = SaftInvoiceType | SaftPaymentReceiptType;
+
+export function isSaftPaymentReceiptType(t: string): t is SaftPaymentReceiptType {
+    return t === 'RG' || t === 'RC';
+}
+
 /** Maps POS UI document default to SAFT invoice type. */
 export function mapDefaultDocumentTypeToSaft(
     defaultType: 'FATURA' | 'FATURA_SIMPLIFICADA'

@@ -12,6 +12,7 @@ import {
     ToggleRight,
     Loader2
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useProducts } from '../contexts/ProductsContext';
 import {
     ProductFormData,
@@ -49,6 +50,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     product = null,
     onSuccess
 }) => {
+    const { t } = useTranslation();
     const {
         categories,
         createProduct,
@@ -348,7 +350,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     <div className="flex items-center space-x-3">
                         <Package className="w-6 h-6" />
                         <h2 className="text-lg font-bold">
-                            {product ? 'Edit Product' : 'Create New Product'}
+                            {product ? t('products.form.editTitle') : t('products.form.createTitle')}
                         </h2>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -357,7 +359,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             onClick={() => setShowKeyboard(!showKeyboard)}
                             className={`p-2 rounded-lg transition-colors ${showKeyboard ? 'bg-white bg-opacity-20' : 'hover:bg-white hover:bg-opacity-20'
                                 }`}
-                            title="Toggle virtual keyboard"
+                            title={t('forms.toggleKeyboard')}
                         >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm5.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L10.586 10 8.293 7.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -368,7 +370,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             onClick={() => setShowNumpad(!showNumpad)}
                             className={`p-2 rounded-lg transition-colors ${showNumpad ? 'bg-white bg-opacity-20' : 'hover:bg-white hover:bg-opacity-20'
                                 }`}
-                            title="Toggle virtual numpad"
+                            title={t('forms.toggleNumpad')}
                         >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M3 3a1 1 0 000 2h11a1 1 0 100-2H3zM3 7a1 1 0 000 2h7a1 1 0 100-2H3zM3 11a1 1 0 100 2h4a1 1 0 100-2H3zM13 16a1 1 0 102 0v-5.586l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 101.414 1.414L13 10.414V16z" clipRule="evenodd" />
@@ -377,7 +379,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                         <button
                             onClick={onClose}
                             className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
-                            title="Close panel"
+                            title={t('forms.closePanel')}
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -392,7 +394,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             {/* Product Name */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Product Name *
+                                    {t('products.form.productNameLabel')}
                                 </label>
                                 <div className="relative">
                                     <Package className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -403,7 +405,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                         onClick={() => handleTextFieldClick('name')}
                                         className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.name ? 'border-red-500' : activeField === 'name' ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
                                             }`}
-                                        placeholder="Enter product name"
+                                        placeholder={t('forms.productNamePlaceholder')}
                                     />
                                 </div>
                                 {errors.name && (
@@ -417,23 +419,23 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             {/* SKU */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    SKU (Auto-Generated)
+                                    {t('products.form.skuLabel')}
                                 </label>
                                 <div className="relative">
                                     <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                                     <div className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-700 font-mono">
-                                        {formData.sku || 'Will be generated when you enter name and category'}
+                                        {formData.sku || t('products.form.skuPending')}
                                     </div>
                                 </div>
                                 <p className="mt-1 text-xs text-gray-500">
-                                    Automatically generated from category and product name
+                                    {t('products.form.skuAutoHint')}
                                 </p>
                             </div>
 
                             {/* Category */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Category *
+                                    {t('products.form.categoryRequired')}
                                 </label>
                                 <select
                                     value={formData.category_id}
@@ -441,7 +443,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.category_id ? 'border-red-500' : 'border-gray-300'
                                         }`}
                                 >
-                                    <option value="">Select a category</option>
+                                    <option value="">{t('products.form.selectCategory')}</option>
                                     {activeCategories.map(category => (
                                         <option key={category.id} value={category.id}>
                                             {category.name}
@@ -459,12 +461,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
                         {/* Pricing and Tax */}
                         <div className="space-y-4">
-                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">Pricing & Tax</h3>
+                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('products.form.pricingTax')}</h3>
 
                             {/* Price */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Price (incl. IVA) *
+                                    {t('products.form.priceInclVat')}
                                 </label>
                                 <div className="relative">
                                     <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -477,7 +479,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                         onClick={() => handleNumberFieldClick('price')}
                                         className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.price ? 'border-red-500' : activeField === 'price' ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
                                             }`}
-                                        placeholder="0.00"
+                                        placeholder={t('forms.decimalPlaceholder')}
                                     />
                                 </div>
                                 {errors.price && (
@@ -491,7 +493,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             {/* Cost */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Cost (€)
+                                    {t('products.form.costEuro')}
                                 </label>
                                 <input
                                     type="number"
@@ -501,14 +503,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     onChange={(e) => handleFieldChange('cost', parseFloat(e.target.value) || 0)}
                                     onClick={() => handleNumberFieldClick('cost')}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder="0.00"
+                                    placeholder={t('forms.decimalPlaceholder')}
                                 />
                             </div>
 
                             {/* IVA Rate */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    IVA Rate *
+                                    {t('products.form.ivaRate')}
                                 </label>
                                 <select
                                     value={formData.iva_rate}
@@ -533,12 +535,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
                         {/* Inventory */}
                         <div className="space-y-4">
-                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">Inventory</h3>
+                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('products.form.inventory')}</h3>
 
                             {/* Stock */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Current Stock
+                                    {t('products.form.currentStock')}
                                 </label>
                                 <input
                                     type="number"
@@ -547,7 +549,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     onChange={(e) => handleFieldChange('stock', parseInt(e.target.value) || 0)}
                                     onClick={() => handleNumberFieldClick('stock')}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder="0"
+                                        placeholder={t('forms.intPlaceholder')}
                                 />
                             </div>
 
@@ -563,14 +565,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     onChange={(e) => handleFieldChange('min_stock', parseInt(e.target.value) || 0)}
                                     onClick={() => handleNumberFieldClick('min_stock')}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder="0"
+                                        placeholder={t('forms.intPlaceholder')}
                                 />
                             </div>
 
                             {/* Track Stock Toggle */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Track Inventory
+                                    {t('products.form.trackInventory')}
                                 </label>
                                 <button
                                     type="button"
@@ -585,19 +587,19 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     ) : (
                                         <ToggleLeft className="w-6 h-6 text-gray-400" />
                                     )}
-                                    <span>{formData.track_stock ? 'Enabled' : 'Disabled'}</span>
+                                    <span>{formData.track_stock ? t('common.enabled') : t('common.disabled')}</span>
                                 </button>
                             </div>
                         </div>
 
                         {/* Additional Information */}
                         <div className="space-y-4">
-                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">Additional Details</h3>
+                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('products.form.additionalDetails')}</h3>
 
                             {/* Description */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Description
+                                    {t('products.form.description')}
                                 </label>
                                 <textarea
                                     value={formData.description}
@@ -605,14 +607,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     onClick={() => handleTextFieldClick('description')}
                                     rows={3}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                                    placeholder="Enter product description"
+                                    placeholder={t('forms.productDescriptionPlaceholder')}
                                 />
                             </div>
 
                             {/* Image */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Product Image
+                                    {t('products.form.productImage')}
                                 </label>
                                 <ImageUploader
                                     value={formData.image_url}
@@ -636,7 +638,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             {/* Supplier */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Supplier
+                                    {t('products.form.supplier')}
                                 </label>
                                 <div className="relative">
                                     <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -646,7 +648,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                         onChange={(e) => handleFieldChange('supplier', e.target.value)}
                                         onClick={() => handleTextFieldClick('supplier')}
                                         className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        placeholder="Enter supplier name"
+                                        placeholder={t('forms.supplierPlaceholder')}
                                     />
                                 </div>
                             </div>
@@ -654,7 +656,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             {/* Location */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Storage Location
+                                    {t('products.form.storageLocation')}
                                 </label>
                                 <div className="relative">
                                     <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -664,7 +666,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                         onChange={(e) => handleFieldChange('location', e.target.value)}
                                         onClick={() => handleTextFieldClick('location')}
                                         className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        placeholder="Enter storage location"
+                                        placeholder={t('forms.storagePlaceholder')}
                                     />
                                 </div>
                             </div>
@@ -672,7 +674,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             {/* Active Status */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Product Status
+                                    {t('products.form.productStatus')}
                                 </label>
                                 <button
                                     type="button"
@@ -687,7 +689,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     ) : (
                                         <ToggleLeft className="w-6 h-6 text-red-600" />
                                     )}
-                                    <span>{formData.is_active ? 'Active' : 'Inactive'}</span>
+                                    <span>{formData.is_active ? t('common.active') : t('common.inactive')}</span>
                                 </button>
                             </div>
                         </div>
@@ -698,7 +700,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 <div className="bg-gray-50 px-4 py-3 border-t flex-shrink-0">
                     <div className="flex items-center justify-between mb-2">
                         <div className="text-xs text-gray-600">
-                            * Required fields
+                            {t('products.form.requiredFieldsNote')}
                         </div>
                     </div>
                     <div className="flex space-x-3">
@@ -707,7 +709,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             onClick={handleCancel}
                             className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                         >
-                            Cancel
+                            {t('products.form.cancel')}
                         </button>
                         <button
                             onClick={handleSubmit}
@@ -717,12 +719,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             {isSubmitting ? (
                                 <>
                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>Saving...</span>
+                                    <span>{t('common.saving')}</span>
                                 </>
                             ) : (
                                 <>
                                     <Save className="w-4 h-4" />
-                                    <span>{product ? 'Update' : 'Create'}</span>
+                                    <span>{product ? t('products.form.update') : t('products.form.create')}</span>
                                 </>
                             )}
                         </button>
@@ -737,7 +739,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             onClose={() => setShowKeyboard(false)}
                             onConfirm={handleKeyboardInput}
                             initialValue={formData[activeField as keyof ProductFormData]?.toString() || ''}
-                            title={`Enter ${activeField.replace('_', ' ')}`}
+                            title={t('forms.enterField', { field: activeField.replace('_', ' ') })}
                         />
                     </div>
                 )}
@@ -749,7 +751,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             isOpen={showNumpad}
                             onClose={() => setShowNumpad(false)}
                             onConfirm={handleNumpadInput}
-                            title={`Enter ${activeField.replace('_', ' ')}`}
+                            title={t('forms.enterField', { field: activeField.replace('_', ' ') })}
                             initialValue={formData[activeField as keyof ProductFormData]?.toString() || '0'}
                             allowDecimal={activeField === 'price' || activeField === 'cost' || activeField === 'iva_rate'}
                         />

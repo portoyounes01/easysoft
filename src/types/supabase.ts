@@ -600,9 +600,13 @@ export interface CustomerRow {
     name: string;
     /** NIF / VAT for fiscal documents (optional). */
     tax_number: string | null;
+    /** ISO 3166-1 alpha-2 for AT QR segment C (default PT). */
+    country: string | null;
     email: string | null;
     phone: string | null;
     address: string | null;
+    city: string | null;
+    postal_code: string | null;
     total_spent: number;
     transaction_count: number;
     loyalty_points: number;
@@ -619,9 +623,12 @@ export interface CustomerInsert {
     id?: string; // Optional, will be generated if not provided
     name: string;
     tax_number?: string | null;
+    country?: string | null;
     email?: string | null;
     phone?: string | null;
     address?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
     total_spent?: number;
     transaction_count?: number;
     loyalty_points?: number;
@@ -638,9 +645,12 @@ export interface CustomerUpdate {
     id?: never; // Can't update ID
     name?: string;
     tax_number?: string | null;
+    country?: string | null;
     email?: string | null;
     phone?: string | null;
     address?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
     total_spent?: number;
     transaction_count?: number;
     loyalty_points?: number;
@@ -688,6 +698,10 @@ export interface TransactionRow {
     fiscal_document_id?: string | null;
     /** Immutable fiscal snapshot JSON for sync / SAF-T */
     fiscal_metadata_json?: string | null;
+    /** Mirror of local fiscal cancellation (evidence on server). */
+    fiscal_cancelled_at?: string | null;
+    fiscal_cancelled_reason?: string | null;
+    fiscal_cancelled_by_employee_id?: string | null;
     created_at: string; // ISO timestamp
     updated_at: string; // ISO timestamp
     last_synced_at: string | null; // ISO timestamp
@@ -718,6 +732,9 @@ export interface TransactionInsert {
     receipt_number?: string | null;
     fiscal_document_id?: string | null;
     fiscal_metadata_json?: string | null;
+    fiscal_cancelled_at?: string | null;
+    fiscal_cancelled_reason?: string | null;
+    fiscal_cancelled_by_employee_id?: string | null;
     created_at?: string; // Will be auto-generated if not provided
     updated_at?: string; // Will be auto-generated
     last_synced_at?: string | null;
@@ -748,6 +765,9 @@ export interface TransactionUpdate {
     receipt_number?: string | null;
     fiscal_document_id?: string | null;
     fiscal_metadata_json?: string | null;
+    fiscal_cancelled_at?: string | null;
+    fiscal_cancelled_reason?: string | null;
+    fiscal_cancelled_by_employee_id?: string | null;
     updated_at?: string; // Will be auto-generated
     last_synced_at?: string | null;
     deleted_at?: string | null;

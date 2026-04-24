@@ -216,6 +216,37 @@ vi.mock('../src/services/employeeService', () => ({
 
 - **Browser / dev:** PEM PKCS#8 in Settings is imported with Web Crypto (`WebCryptoRsaSha1Signer`) in the renderer.
 - **Electron:** Prefer **Guardar chave no armazenamento seguro** (Settings): PEM is encrypted with `safeStorage` in the main process; signing runs over IPC (`fiscal:sign-hash-plaintext`) via `ElectronSafeStorageSigner`, so the private key is not kept in renderer memory or localStorage. If a secure key exists, `createSignerFromSettings` uses it before falling back to the PEM field.
+- **Key rotation:** After installing a new private key, an **admin** uses **Definições → Fiscal AT → Registar rotação de chave (HashControl +1)**. This bumps `fiscal.hashControlVersion` for **new** documents and appends a `KEY_ROTATED` row to the fiscal audit log (`/fiscal-audit`). Issued documents keep their stored `hash_control`.
+
+### Fiscal & transaction data (AT posture)
+
+**What is the “source of truth”?**
+
+- **Fiscal sales (FT/FS, etc.):** The **till** is the **first writer** — it must work **offline** and records the **hash chain + signature** and local fiscal rows (Dexie). The **integrity** of a document is the **cryptographic chain**, not an editable row.
+- **Server (Supabase):** Treat as a **replica and archive** for sync, reporting, and backup. It should **not** allow rewriting **sealed** fiscal documents. Conflicts on finalized docs are invalid: do not “merge by editing” — only **new** documents (e.g. **NC**).
+- **Master data (employees, products, categories):** The **server** is the usual **source of truth** for identity and catalog; those rows are not the AT invoice chain. They still need **RLS, auth, and least privilege** (separate concern from hash integrity).
+
+**Edge cases**
+
+- **Offline:** New sales are recorded **only** on device until sync; the app does not require the server to finalize fiscal checkout.
+- **Multi-till / multi-device:** Each scope keeps its own series/chain as configured; replication uses **stable IDs**, not shared editing of one invoice row.
+- **Long-term evidence:** A **server copy** is valuable only if **immutable** after sync; the **client** can be tampered with in DevTools, so **DB rules** (triggers / strict RLS) and **locked RPCs** matter for the replica.
+
+**Reversals — nota de crédito (NC) only for registered sales**
+
+- A finalized sale with a **fiscal document / hash** must **not** be “undone” with **soft-delete** (`deleted_at`) or by deleting lines. The app already blocks local `deleteTransaction` when `fiscal_document_id` is set; **the same rule must hold on the server** (no `UPDATE` that hides or rewrites a sealed FT/FS).
+- The **only** supported fiscal reversal is a **new** document: **nota de crédito (NC)** (see `runFiscalCreditNoteForTransaction` and the Transactions page). There is **no** in-app “void / anular document” path — that would pretend the original fiscal document did not exist; AT-compliant correction is always via **NC** (or the appropriate document type the law requires for the case).
+
+**Production build — routes and tools that must not ship to end users**
+
+- Today, routes such as **`/setup`** (DataSetup: populate / **clear** transaction data), **`/seed`** (SeedManagement), **`/receipt-demo`**, **`/design-system`**, and test pages (**`/cashier-testing`**, **`/electron-testing`**, **`/printer-test`**) are **not** environment-gated in `App.tsx` — they only use auth + permissions. For production POS deployments, **fail closed**:
+  - **Recommended:** `VITE_ENABLE_DANGEROUS_DATA_TOOLS` (or `import.meta.env.DEV`) — register these routes **only** when the flag is on; set it **false** in production `.env` and verify in CI that production builds never enable it.
+  - Use a **separate** Supabase project (or schema) for dev; never run mass-delete seed tools against a real tenant.
+  - **Electron:** Production builds should not point at dev-only APIs or include dev “reset” entry points in the menu.
+
+**Server / sync hardening (defense in depth)**
+
+- Harden or restrict **`upsert_transaction_with_items`** and any sync path that **replaces** `transaction_items` so **sealed** rows cannot be rewritten by a generic upsert. Prefer **insert-once** for new docs and **append-only** semantics for fiscal evidence.
 
 ---
 

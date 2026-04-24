@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { generateQRCodeImage } from '../utils/qrCode';
 
 interface ReceiptItem {
@@ -20,9 +21,11 @@ interface ReceiptCompany {
   email?: string;
 }
 
+/** `address` = full morada (single line), not split by postal/city. */
 interface ReceiptCustomer {
   taxNumber?: string;
   name?: string;
+  address?: string;
 }
 
 interface ReceiptPayment {
@@ -64,6 +67,8 @@ export interface ReceiptProps {
   originalInvoice?: string; // For credit notes
   creditReason?: string; // For credit notes
   documentLabel?: string; // e.g., 'Original' (default) or 'Segunda via'
+  /** Cashier / operator name for AT evidence */
+  emitterName?: string;
 }
 
 const ThermalReceipt: React.FC<ReceiptProps> = ({
@@ -87,9 +92,12 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   certificationNumber,
   originalInvoice,
   creditReason,
-  documentLabel
+  documentLabel,
+  emitterName
 }) => {
+  const { t } = useTranslation();
   const [qrCodeImage, setQrCodeImage] = useState<string>('');
+  const isCashPayment = ['Numerário', 'Cash', 'Dinheiro'].includes(payment.method);
 
   useEffect(() => {
     if (qrCodeImageProp) {
@@ -167,13 +175,13 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   const getDocumentTitle = (): string => {
     switch (documentType) {
       case 'FATURA':
-        return 'FATURA N°';
+        return t('thermalReceipt.docFatura');
       case 'FATURA_SIMPLIFICADA':
-        return 'FATURA SIMPLIFICADA N°';
+        return t('thermalReceipt.docFaturaSimplificada');
       case 'NOTA_CREDITO':
-        return 'NOTA DE CRÉDITO N°';
+        return t('thermalReceipt.docNotaCredito');
       default:
-        return 'DOCUMENTO N°';
+        return t('thermalReceipt.docGeneric');
     }
   };
 
@@ -285,6 +293,25 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
           line-height: 1.1;
         }
 
+        .atcud-after-separator {
+          margin-top: 8px;
+        }
+
+        .receipt-qr-block {
+          width: 100%;
+          text-align: center;
+        }
+
+        .receipt-qr-block img,
+        .receipt-qr-img {
+          display: block;
+          max-width: 120px;
+          width: 120px;
+          height: auto;
+          margin-left: auto;
+          margin-right: auto;
+        }
+
         .qr-placeholder {
           width: 60px;
           height: 60px;
@@ -317,63 +344,78 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       {trainingMode && (
         <div className="center bold small-text" style={{ border: '2px dashed #c00', padding: '6px', marginBottom: '8px' }}>
-          DOCUMENTO EM MODO DE FORMAÇÃO — SEM VALOR FISCAL
+          {t('thermalReceipt.trainingBanner')}
         </div>
       )}
 
       {/* Logo/Header */}
-      <div className="center company-logo">[LOGO]</div>
+      <div className="center company-logo">{t('thermalReceipt.logoPlaceholder')}</div>
 
       {/* Company Info */}
       <div className="center bold">{company.name}</div>
+      <div className="center small-text bold">
+        {t('thermalReceipt.nifLabel')} {company.taxNumber.replace(/\s/g, '')}
+      </div>
       <div className="center small-text">{company.address}</div>
       <div className="center small-text">{company.postalCode} {company.city}</div>
-      {company.phone && <div className="center small-text">Tel: {company.phone}</div>}
+      {company.phone && (
+        <div className="center small-text">
+          {t('thermalReceipt.telLabel')} {company.phone}
+        </div>
+      )}
       {company.email && <div className="center small-text">{company.email}</div>}
 
       <div className="separator"></div>
 
-      {/* Customer Info */}
-      {customer?.taxNumber && (
+      {/* Cliente: nome, NIF, morada (uma linha) */}
+      {customer && (customer.name || customer.taxNumber || customer.address) && (
         <>
-          <div className="center">Contrib: {customer.taxNumber} (cliente)</div>
+          {customer.name ? (
+            <div className="left small-text">{t('thermalReceipt.clientLineName', { name: customer.name })}</div>
+          ) : null}
+          {customer.taxNumber ? (
+            <div className="left small-text">
+              {t('thermalReceipt.clientLineNif', { n: customer.taxNumber.replace(/\s/g, '') })}
+            </div>
+          ) : null}
+          {customer.address ? (
+            <div className="left small-text">
+              {t('thermalReceipt.clientLineMorada', { morada: customer.address })}
+            </div>
+          ) : null}
           <div className="separator"></div>
         </>
       )}
 
-      {/* Verification Code (ATCUD) */}
-      <div className="center small-text bold">ATCUD: {verificationCode}</div>
-
-      {/* QR Code */}
-      {qrCodeImage ? (
-        <div className="center">
-          <img src={qrCodeImage} alt="QR Code" style={{ maxWidth: '120px' }} />
-        </div>
-      ) : (
-        <div className="qr-placeholder center">QR CODE</div>
+      {emitterName && (
+        <>
+          <div className="center small-text">
+            {t('thermalReceipt.operator')} {emitterName}
+          </div>
+          <div className="separator"></div>
+        </>
       )}
-
-      {hashFourChars && (
-        <div className="center small-text bold">Q: {hashFourChars}</div>
-      )}
-      {documentHash && !hashFourChars && (
-        <div className="center small-text" style={{ fontSize: '8px', wordBreak: 'break-all' }}>
-          Hash: {documentHash.substring(0, 24)}…
-        </div>
-      )}
-
-      <div className="separator"></div>
 
       {/* Document Header */}
       <div className="center bold">{getDocumentTitle()}</div>
-      <div className="center">{documentNumber} {documentLabel || 'Original'}</div>
-      <div className="center">Data: {formatDate(date)} {counter}</div>
+      <div className="center">
+        {documentNumber} {documentLabel || t('thermalReceipt.original')}
+      </div>
+      <div className="center">
+        {t('thermalReceipt.dateLabel')} {formatDate(date)} {counter}
+      </div>
 
       {/* Credit Note Specific Info */}
       {documentType === 'NOTA_CREDITO' && originalInvoice && (
         <div className="credit-note-info">
-          <div className="small-text">Ref. Fatura: {originalInvoice}</div>
-          {creditReason && <div className="small-text">Motivo: {creditReason}</div>}
+          <div className="small-text">
+            {t('thermalReceipt.refInvoice')} {originalInvoice}
+          </div>
+          {creditReason && (
+            <div className="small-text">
+              {t('thermalReceipt.reason')} {creditReason}
+            </div>
+          )}
         </div>
       )}
 
@@ -381,20 +423,24 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       {/* Items Grid: header + rows share the same grid tracks for perfect alignment */}
       <div className="receipt-grid header-info">
-        <span className="small-text bold">QTD</span>
-        <span className="small-text bold">UNI</span>
-        <span className="small-text bold">Descrição</span>
-        <span className="small-text bold">IVA</span>
-        <span className="small-text bold cell-end">Valor</span>
+        <span className="small-text bold">{t('thermalReceipt.qty')}</span>
+        <span className="small-text bold">{t('thermalReceipt.unitAbbr')}</span>
+        <span className="small-text bold">{t('thermalReceipt.description')}</span>
+        <span className="small-text bold">{t('thermalReceipt.vatPercent')}</span>
+        <span className="small-text bold cell-end">{t('thermalReceipt.value')}</span>
 
         {items.map((item, index) => (
           <React.Fragment key={item.id || index}>
             <span>{item.quantity}</span>
-            <span>Uni</span>
+            <span>{t('thermalReceipt.unit')}</span>
             <span className="item-desc">{item.description}</span>
             <span>{item.vatRate}%</span>
             <span className="cell-end">{formatCurrency(round2(item.total * grossFactor))}</span>
-            <span className="small-text grid-from-desc">Preço unitário: {formatCurrency(item.unitPrice)} €/Unidade</span>
+            <span className="small-text grid-from-desc">
+              {t('thermalReceipt.unitPriceLine', {
+                price: item.unitPrice.toFixed(2).replace('.', ','),
+              })}
+            </span>
             {index < items.length - 1 && <span className="spacer-row"></span>}
           </React.Fragment>
         ))}
@@ -402,14 +448,13 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       <div className="separator"></div>
 
-      {/* VAT Info aligned with a single grid container (header + rows) to keep tracks identical */}
-      <div className="center small-text">IVA Incluído à taxa indicada</div>
+      {/* VAT rate breakdown grid */}
       <div className="receipt-grid small-text">
         <span className="bold">%</span>
         <span></span>
         <span></span>
-        <span className="bold">IVA</span>
-        <span className="bold cell-end">Incidência</span>
+        <span className="bold">{t('thermalReceipt.vat')}</span>
+        <span className="bold cell-end">{t('thermalReceipt.incidence')}</span>
 
         {(() => {
           const vatGroups = items.reduce((acc, item) => {
@@ -442,30 +487,66 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       {totals.discount > 0 && (
         <>
           <div className="total-row">
-            <span>ILÍQUIDO</span>
+            <span>{t('thermalReceipt.net')}</span>
             <span>{formatCurrency(subtotalBeforeDiscount)}</span>
           </div>
           <div className="total-row">
-            <span>{discountPct > 0 ? `DESC.${discountPct}%` : 'DESC.'}</span>
+            <span>
+              {discountPct > 0
+                ? t('thermalReceipt.discountWithPct', { pct: discountPct })
+                : t('thermalReceipt.discountLabel')}
+            </span>
             <span>{formatCurrency(totals.discount)}</span>
           </div>
           <div className="total-row">
-            <span>LÍQUIDO</span>
+            <span>{t('thermalReceipt.gross')}</span>
             <span>{formatCurrency(totalBase)}</span>
           </div>
         </>
       )}
       <div className="total-row">
-        <span>IVA</span>
+        <span>{t('thermalReceipt.vat')}</span>
         <span>{formatCurrency(totalVat)}</span>
+      </div>
+
+      <div className="center small-text" style={{ margin: '6px 0' }}>
+        {t('thermalReceipt.vatIncludedFooter')}
       </div>
 
       <div className="double-separator"></div>
 
       {/* Final Total */}
       <div className="total-row final-total">
-        <span>TOTAL</span>
+        <span>{t('thermalReceipt.total')}</span>
         <span>{formatCurrency(totalGross)}</span>
+      </div>
+
+      <div className="separator"></div>
+
+      {/* ATCUD + QR + Q (below total, before slogan) */}
+      <div className="atcud-after-separator">
+        {verificationCode ? (
+          <div className="center small-text bold">
+            {t('thermalReceipt.atcudPrefix')} {verificationCode}
+          </div>
+        ) : null}
+        <div className="receipt-qr-block">
+          {qrCodeImage ? (
+            <img
+              className="receipt-qr-img"
+              src={qrCodeImage}
+              alt={t('thermalReceipt.qrAlt')}
+            />
+          ) : (
+            <div className="qr-placeholder">{t('thermalReceipt.qrPlaceholder')}</div>
+          )}
+        </div>
+        {hashFourChars ? <div className="center small-text bold">Q: {hashFourChars}</div> : null}
+        {documentHash && !hashFourChars ? (
+          <div className="center small-text" style={{ fontSize: '8px', wordBreak: 'break-all' }}>
+            {t('thermalReceipt.hashLabel')} {documentHash.substring(0, 24)}…
+          </div>
+        ) : null}
       </div>
 
       <div className="separator"></div>
@@ -484,15 +565,15 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       <div className="separator"></div>
 
       {/* Payment Info */}
-      <div className="left">Pago em {payment.method}</div>
-      {payment.method === 'Numerário' && (
+      <div className="left">{t('thermalReceipt.paidWith', { method: payment.method })}</div>
+      {isCashPayment && (
         <>
           <div className="item-row">
-            <span>Valor entregue:</span>
+            <span>{t('thermalReceipt.cashReceived')}</span>
             <span>{formatCurrency(payment.amountGiven)}</span>
           </div>
           <div className="item-row">
-            <span>Troco:</span>
+            <span>{t('thermalReceipt.change')}</span>
             <span>{formatCurrency(payment.change)}</span>
           </div>
         </>
@@ -503,23 +584,17 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       {/* Legal Info */}
       {certificationNumber && (
         <div className="center small-text">
-          Processado por programa certificado n.º{' '}
-          {certificationNumber.replace(/\s*\/AT\s*$/i, '').trim()}
-          /AT
+          {t('thermalReceipt.certifiedLine', {
+            num: certificationNumber.replace(/\s*\/AT\s*$/i, '').trim(),
+          })}
         </div>
       )}
 
       <div style={{ margin: '10px 0' }}></div>
 
-      <div className="small-text">
-        Os serviços e/ou bens foram realizados e/ou colocados à disposição do
-        adquirente nesta data (Art 36 do CIVA, N°5 alínea F)
+      <div className="center small-text">
+        {t('thermalReceipt.licensedTo')} {company.name}
       </div>
-
-      <div style={{ margin: '10px 0' }}></div>
-
-      <div className="center small-text">Licenciado a: {company.name}</div>
-      <div className="center small-text">Contribuinte: {company.taxNumber}</div>
 
       {/* Extra space for cutting */}
       <div style={{ height: '20px' }}></div>

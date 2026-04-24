@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   Settings, 
   Plus, 
@@ -19,6 +20,7 @@ import { printerWorkflowService } from '../services/printerWorkflowService';
 import ProductAssignmentManager from './ProductAssignmentManager';
 
 const PrinterWorkflowManager: React.FC = () => {
+  const { t } = useTranslation();
   const [stations, setStations] = useState<PrinterStation[]>([]);
   const [availablePrinters, setAvailablePrinters] = useState<ConfiguredPrinter[]>([]);
   const [categories] = useState<PrinterCategory[]>(printerWorkflowService.getAvailableCategories());
@@ -79,7 +81,7 @@ const PrinterWorkflowManager: React.FC = () => {
   };
 
   const handleDeleteStation = (stationId: string) => {
-    if (confirm('Are you sure you want to delete this station?')) {
+    if (confirm(t('printerWorkflow.deleteStationConfirm'))) {
       printerWorkflowService.removeStation(stationId);
       setStations(printerWorkflowService.getStations());
     }
@@ -107,14 +109,14 @@ const PrinterWorkflowManager: React.FC = () => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Settings className="h-6 w-6 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-900">Printer Workflow Configuration</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{t('printerWorkflow.workflowTitle')}</h2>
         </div>
         <button
           onClick={handleCreateStation}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
           <Plus className="h-4 w-4" />
-          Add Station
+          {t('printerWorkflow.addStation')}
         </button>
       </div>
 
@@ -123,14 +125,13 @@ const PrinterWorkflowManager: React.FC = () => {
         <div className="flex items-center gap-2 text-blue-800">
           <MapPin className="h-5 w-5" />
           <span className="font-medium">
-            Environment: {window.electronAPI ? 'POS Station' : 'Web Interface'}
+            {t('printerWorkflow.envLabel', {
+              env: window.electronAPI ? t('printerWorkflow.envPos') : t('printerWorkflow.envWeb'),
+            })}
           </span>
         </div>
         <p className="text-blue-700 text-sm mt-1">
-          {window.electronAPI 
-            ? 'Configure receipt and kitchen printing stations. Assign specific products to each station.'
-            : 'Administrative printing only. Kitchen stations are managed from POS terminals.'
-          }
+          {window.electronAPI ? t('printerWorkflow.hintElectron') : t('printerWorkflow.hintWeb')}
         </p>
       </div>
 
@@ -139,12 +140,12 @@ const PrinterWorkflowManager: React.FC = () => {
         {stations.length === 0 ? (
           <div className="text-center py-12 bg-gray-50 rounded-lg">
             <Settings className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">No printer stations configured</p>
+            <p className="text-gray-500">{t('printerWorkflow.noStations')}</p>
             <button
               onClick={handleCreateStation}
               className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              Create First Station
+              {t('printerWorkflow.createFirstStation')}
             </button>
           </div>
         ) : (
@@ -169,17 +170,20 @@ const PrinterWorkflowManager: React.FC = () => {
                       <p className="text-sm text-gray-600">{station.description}</p>
                       <div className="flex items-center gap-4 mt-2 text-sm">
                         <span className="text-gray-500">
-                          Category: {category.name}
+                          {t('printerWorkflow.categoryColon')} {category.name}
                         </span>
                         <span className="text-gray-500">
-                          Printers: {station.printerNames?.length || 0}
+                          {t('printerWorkflow.printersColon')} {station.printerNames?.length || 0}
                         </span>
                         <span className="text-gray-500">
-                          Products: {station.categoryId === 'receipt' ? 'All' : (station.productIds?.length || 0)}
+                          {t('printerWorkflow.productsColon')}{' '}
+                          {station.categoryId === 'receipt'
+                            ? t('printerWorkflow.productsAll')
+                            : station.productIds?.length || 0}
                         </span>
                         <div className={`flex items-center gap-1 ${status.color}`}>
                           <StatusIcon className="h-4 w-4" />
-                          <span className="capitalize">{status.status.replace('-', ' ')}</span>
+                          <span>{t(`printerWorkflow.status.${status.status}`)}</span>
                         </div>
                       </div>
                     </div>
@@ -189,14 +193,14 @@ const PrinterWorkflowManager: React.FC = () => {
                     <button
                       onClick={() => handleEditStation(station)}
                       className="p-2 text-gray-400 hover:text-blue-600 rounded"
-                      title="Edit Station"
+                      title={t('printerWorkflow.editStationTooltip')}
                     >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => handleDeleteStation(station.id)}
                       className="p-2 text-gray-400 hover:text-red-600 rounded"
-                      title="Delete Station"
+                      title={t('printerWorkflow.deleteStationTooltip')}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -206,7 +210,7 @@ const PrinterWorkflowManager: React.FC = () => {
                 {/* Station Details */}
                 {station.printerNames && station.printerNames.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-gray-100">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Assigned Printers:</h4>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">{t('printerWorkflow.assignedPrintersHeading')}</h4>
                     <div className="flex flex-wrap gap-2">
                       {station.printerNames.map((printerName) => {
                         const printer = availablePrinters.find(p => p.name === printerName);
@@ -233,7 +237,7 @@ const PrinterWorkflowManager: React.FC = () => {
                 {station.categoryId !== 'receipt' && station.productIds && station.productIds.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-gray-100">
                     <h4 className="text-sm font-medium text-gray-700 mb-2">
-                      Assigned Products ({station.productIds.length}):
+                      {t('printerWorkflow.assignedProductsHeading', { count: station.productIds.length })}
                     </h4>
                     <div className="flex flex-wrap gap-1">
                       {station.productIds.slice(0, 5).map((productId) => (
@@ -246,7 +250,7 @@ const PrinterWorkflowManager: React.FC = () => {
                       ))}
                       {station.productIds.length > 5 && (
                         <span className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-600">
-                          +{station.productIds.length - 5} more
+                          {t('printerWorkflow.moreCount', { count: station.productIds.length - 5 })}
                         </span>
                       )}
                     </div>
@@ -263,7 +267,7 @@ const PrinterWorkflowManager: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold mb-4">
-              {isEditing ? 'Edit Station' : 'Create Station'}
+              {isEditing ? t('printerWorkflow.editStation') : t('printerWorkflow.createStation')}
             </h3>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -272,7 +276,7 @@ const PrinterWorkflowManager: React.FC = () => {
                 {/* Basic Info */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Station Name
+                    {t('printerWorkflow.stationName')}
                   </label>
                   <input
                     type="text"
@@ -282,13 +286,13 @@ const PrinterWorkflowManager: React.FC = () => {
                       name: e.target.value
                     })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., Main Kitchen, Bar Station"
+                    placeholder={t('printerWorkflow.stationNamePlaceholder')}
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
+                    {t('printerWorkflow.description')}
                   </label>
                   <input
                     type="text"
@@ -298,14 +302,14 @@ const PrinterWorkflowManager: React.FC = () => {
                       description: e.target.value
                     })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Brief description of this station"
+                    placeholder={t('printerWorkflow.stationDescriptionPlaceholder')}
                   />
                 </div>
 
                 {/* Category Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Station Category
+                    {t('printerWorkflow.stationCategory')}
                   </label>
                   <select
                     value={selectedStation.categoryId}
@@ -332,11 +336,11 @@ const PrinterWorkflowManager: React.FC = () => {
                 {/* Printer Assignment */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Assigned Printers
+                    {t('printerWorkflow.assignedPrintersLabel')}
                   </label>
                   <div className="border border-gray-300 rounded-md p-3 max-h-32 overflow-y-auto">
                     {availablePrinters.length === 0 ? (
-                      <p className="text-gray-500 text-sm">No printers available</p>
+                      <p className="text-gray-500 text-sm">{t('printerWorkflow.noPrintersAvailable')}</p>
                     ) : (
                       availablePrinters.map((printer) => (
                         <label key={printer.name} className="flex items-center gap-2 py-1">
@@ -359,7 +363,7 @@ const PrinterWorkflowManager: React.FC = () => {
                           <span className="text-sm">
                             {printer.name}
                             <span className={`ml-2 ${printer.connected ? 'text-green-600' : 'text-red-600'}`}>
-                              ({printer.connected ? 'Connected' : 'Offline'})
+                              ({printer.connected ? t('printerWorkflow.printerConnected') : t('printerWorkflow.printerDisconnected')})
                             </span>
                           </span>
                         </label>
@@ -381,7 +385,7 @@ const PrinterWorkflowManager: React.FC = () => {
                     className="text-blue-600"
                   />
                   <label htmlFor="stationActive" className="text-sm font-medium text-gray-700">
-                    Station is active
+                    {t('printerWorkflow.stationIsActive')}
                   </label>
                 </div>
               </div>
@@ -403,14 +407,14 @@ const PrinterWorkflowManager: React.FC = () => {
                 }}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleSaveStation}
                 disabled={!selectedStation.name.trim()}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                {isEditing ? 'Update Station' : 'Create Station'}
+                {isEditing ? t('printerWorkflow.updateStation') : t('printerWorkflow.createStationBtn')}
               </button>
             </div>
           </div>

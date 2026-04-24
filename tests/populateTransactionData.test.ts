@@ -14,6 +14,7 @@ vi.mock('../src/lib/supabase', () => ({
       neq: vi.fn(),
       limit: vi.fn(),
     })),
+    rpc: vi.fn().mockResolvedValue({ error: null }),
   },
 }));
 
@@ -25,14 +26,15 @@ vi.mock('../src/utils/hashUtils', () => ({
 const mockSupabase = vi.mocked(supabase);
 
 describe('populateTransactionData utility functions', () => {
-  let mockFrom: any;
-  let mockUpsert: any;
-  let mockDelete: any;
-  let mockSelect: any;
-  let mockUpdate: any;
-  let mockEq: any;
-  let mockNeq: any;
-  let mockLimit: any;
+  let mockFrom: ReturnType<typeof vi.fn>;
+  let mockRpc: ReturnType<typeof vi.fn>;
+  let mockUpsert: ReturnType<typeof vi.fn>;
+  let mockDelete: ReturnType<typeof vi.fn>;
+  let mockSelect: ReturnType<typeof vi.fn>;
+  let mockUpdate: ReturnType<typeof vi.fn>;
+  let mockEq: ReturnType<typeof vi.fn>;
+  let mockNeq: ReturnType<typeof vi.fn>;
+  let mockLimit: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,6 +47,7 @@ describe('populateTransactionData utility functions', () => {
     mockEq = vi.fn().mockResolvedValue({ error: null });
     mockNeq = vi.fn().mockResolvedValue({ error: null });
     mockLimit = vi.fn().mockResolvedValue({ data: [], error: null });
+    mockRpc = vi.fn().mockResolvedValue({ error: null });
     
     mockFrom = vi.fn().mockReturnValue({
       upsert: mockUpsert,
@@ -57,6 +60,7 @@ describe('populateTransactionData utility functions', () => {
     });
     
     mockSupabase.from = mockFrom;
+    mockSupabase.rpc = mockRpc;
   });
 
   describe('populateTransactionData', () => {
@@ -158,29 +162,26 @@ describe('populateTransactionData utility functions', () => {
   });
 
   describe('clearTransactionData', () => {
-    it('successfully clears all data in correct order', async () => {
+    it('calls clear_all_transaction_data RPC when available', async () => {
+      mockRpc.mockResolvedValue({ error: null });
+
       const result = await clearTransactionData();
-      
+
       expect(result).toEqual({ success: true });
-      
-      // Verify deletion order (reverse of foreign key dependencies)
-      const fromCalls = mockFrom.mock.calls;
-      expect(fromCalls[0][0]).toBe('transaction_items');
-      expect(fromCalls[1][0]).toBe('transactions');
-      expect(fromCalls[2][0]).toBe('customers');
-      expect(fromCalls[3][0]).toBe('products');
-      expect(fromCalls[4][0]).toBe('categories');
-      expect(fromCalls[5][0]).toBe('employees');
-      
-      expect(mockFrom).toHaveBeenCalledTimes(6);
+      expect(mockRpc).toHaveBeenCalledWith('clear_all_transaction_data');
     });
 
-    it('handles deletion errors gracefully', async () => {
-      mockDelete.mockReturnValueOnce({
-        neq: vi.fn().mockRejectedValue(new Error('Deletion failed'))
-      });
-      
-      await expect(clearTransactionData()).rejects.toThrow('Deletion failed');
+    it('falls back to table deletes when RPC returns an error', async () => {
+      mockRpc.mockResolvedValue({ error: { message: 'function not found' } });
+      const gte = vi.fn().mockResolvedValue({ error: null });
+      mockDelete.mockReturnValue({ gte });
+
+      const result = await clearTransactionData();
+
+      expect(result).toEqual({ success: true });
+      expect(mockRpc).toHaveBeenCalledWith('clear_all_transaction_data');
+      expect(mockFrom).toHaveBeenCalledWith('daily_sales_summary');
+      expect(mockFrom).toHaveBeenCalledWith('transaction_items');
     });
   });
 

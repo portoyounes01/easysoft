@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Database,
     Upload,
@@ -30,6 +31,7 @@ interface SeedStatus {
 }
 
 const SeedManagement: React.FC = () => {
+    const { t } = useTranslation();
     const { refreshEmployees } = useEmployees();
     const { refreshData: refreshProducts } = useProducts();
     const [seedStatus, setSeedStatus] = useState<SeedStatus>({
@@ -72,15 +74,15 @@ const SeedManagement: React.FC = () => {
                     success: true,
                     message: result.message,
                     details: [
-                        `✅ ${result.details.employeesCount} employees seeded`,
-                        `✅ ${result.details.categoriesCount} categories seeded`,
-                        `✅ ${result.details.productsCount} products seeded`,
-                        `✅ ${result.details.customersCount} customers seeded`,
-                        `✅ ${result.details.transactionsCount} transactions seeded`,
-                        `✅ ${result.details.cashierTestsCount} cashier tests seeded`,
-                        `✅ ${result.details.cashDrawerLogsCount} cash drawer logs seeded`,
-                        '🔄 Data synced to Supabase (if online)',
-                        '📱 Local database updated'
+                        `✅ ${t('seedManagement.detailEmployees', { count: result.details.employeesCount })}`,
+                        `✅ ${t('seedManagement.detailCategories', { count: result.details.categoriesCount })}`,
+                        `✅ ${t('seedManagement.detailProducts', { count: result.details.productsCount })}`,
+                        `✅ ${t('seedManagement.detailCustomers', { count: result.details.customersCount })}`,
+                        `✅ ${t('seedManagement.detailTransactions', { count: result.details.transactionsCount })}`,
+                        `✅ ${t('seedManagement.detailCashierTests', { count: result.details.cashierTestsCount })}`,
+                        `✅ ${t('seedManagement.detailCashDrawerLogs', { count: result.details.cashDrawerLogsCount })}`,
+                        `🔄 ${t('seedManagement.detailSupabaseSync')}`,
+                        `📱 ${t('seedManagement.detailLocalDb')}`,
                     ]
                 });
 
@@ -101,25 +103,31 @@ const SeedManagement: React.FC = () => {
             setSeedStatus({
                 isRunning: false,
                 success: false,
-                message: `Seeding failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                message: t('seedManagement.failureMessage', {
+                    message: error instanceof Error ? error.message : t('seedManagement.unknownError'),
+                }),
                 details: [
-                    'Check that YAML files are present in /public/seed/',
-                    'Verify YAML file format is correct',
-                    'Check browser console for detailed errors'
+                    t('seedManagement.failureHints.yamlPath'),
+                    t('seedManagement.failureHints.format'),
+                    t('seedManagement.failureHints.console'),
                 ]
             });
         }
-    }, [refreshEmployees, refreshProducts]);
+    }, [refreshEmployees, refreshProducts, t]);
 
-    const seedFiles = [
-        { name: 'employees.yml', icon: Users, description: 'Employee data with roles and permissions', required: true },
-        { name: 'categories.yml', icon: Tag, description: 'Product categories with colors and icons', required: true },
-        { name: 'products.yml', icon: Package, description: 'Product catalog with pricing and inventory', required: false },
-        { name: 'customers.yml', icon: UserCheck, description: 'Customer information and loyalty data', required: false },
-        { name: 'transactions.yml', icon: CreditCard, description: 'Transaction history and sales data', required: false },
-        { name: 'cashier-tests.yml', icon: TestTube, description: 'Hardware testing logs (optional)', required: false },
-        { name: 'cash-drawer-logs.yml', icon: Archive, description: 'Cash drawer operation logs (optional)', required: false }
-    ];
+    const seedFiles = useMemo(
+        () =>
+            [
+                { name: 'employees.yml', icon: Users, descKey: 'employees' as const, required: true },
+                { name: 'categories.yml', icon: Tag, descKey: 'categories' as const, required: true },
+                { name: 'products.yml', icon: Package, descKey: 'products' as const, required: false },
+                { name: 'customers.yml', icon: UserCheck, descKey: 'customers' as const, required: false },
+                { name: 'transactions.yml', icon: CreditCard, descKey: 'transactions' as const, required: false },
+                { name: 'cashier-tests.yml', icon: TestTube, descKey: 'cashierTests' as const, required: false },
+                { name: 'cash-drawer-logs.yml', icon: Archive, descKey: 'cashDrawerLogs' as const, required: false },
+            ] as const,
+        []
+    );
 
     // Check if file is available
     const isFileAvailable = (filename: string) => filesAvailable.available.includes(filename);
@@ -134,8 +142,8 @@ const SeedManagement: React.FC = () => {
                             <Database className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900">Seed Management</h1>
-                            <p className="text-gray-600">Manage database seeding with YAML configuration files</p>
+                            <h1 className="text-3xl font-bold text-gray-900">{t('seedManagement.title')}</h1>
+                            <p className="text-gray-600">{t('seedManagement.subtitle')}</p>
                         </div>
                     </div>
                 </div>
@@ -145,12 +153,12 @@ const SeedManagement: React.FC = () => {
                     <div className="lg:col-span-2 space-y-6">
                         {/* File Status */}
                         <div className="bg-white rounded-xl shadow-lg p-6">
-                            <h2 className="text-xl font-semibold text-gray-900 mb-4">Seed Files Status</h2>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('seedManagement.filesStatus')}</h2>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="p-4 rounded-lg bg-green-50 border border-green-200">
                                     <div className="flex items-center space-x-2 mb-2">
                                         <CheckCircle className="w-5 h-5 text-green-600" />
-                                        <span className="font-semibold text-green-800">Available Files</span>
+                                        <span className="font-semibold text-green-800">{t('seedManagement.availableFiles')}</span>
                                     </div>
                                     <div className="text-sm text-green-700">
                                         {filesAvailable.available.length > 0 ? (
@@ -161,14 +169,14 @@ const SeedManagement: React.FC = () => {
                                                 </div>
                                             ))
                                         ) : (
-                                            <span className="text-gray-500">Loading...</span>
+                                            <span className="text-gray-500">{t('seedManagement.loading')}</span>
                                         )}
                                     </div>
                                 </div>
                                 <div className="p-4 rounded-lg bg-orange-50 border border-orange-200">
                                     <div className="flex items-center space-x-2 mb-2">
                                         <AlertTriangle className="w-5 h-5 text-orange-600" />
-                                        <span className="font-semibold text-orange-800">Missing Files</span>
+                                        <span className="font-semibold text-orange-800">{t('seedManagement.missingFiles')}</span>
                                     </div>
                                     <div className="text-sm text-orange-700">
                                         {filesAvailable.missing.length > 0 ? (
@@ -179,7 +187,7 @@ const SeedManagement: React.FC = () => {
                                                 </div>
                                             ))
                                         ) : (
-                                            <span className="text-green-600">All files found!</span>
+                                            <span className="text-green-600">{t('seedManagement.allFilesFound')}</span>
                                         )}
                                     </div>
                                 </div>
@@ -188,15 +196,15 @@ const SeedManagement: React.FC = () => {
 
                         {/* Run Seeding */}
                         <div className="bg-white rounded-xl shadow-lg p-6">
-                            <h2 className="text-xl font-semibold text-gray-900 mb-4">Execute Seeding</h2>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('seedManagement.execute')}</h2>
                             <div className="space-y-4">
                                 <div className="bg-gray-50 rounded-lg p-4">
                                     <div className="flex items-center space-x-2 text-sm text-gray-600 mb-2">
                                         <Info className="w-4 h-4" />
-                                        <span>Browser-based seeding from YAML files</span>
+                                        <span>{t('seedManagement.browserSeedingHint')}</span>
                                     </div>
                                     <p className="text-sm text-gray-600">
-                                        Seeds local database first, then syncs to Supabase (offline-first approach).
+                                        {t('seedManagement.offlineFirstHint')}
                                     </p>
                                 </div>
 
@@ -211,12 +219,12 @@ const SeedManagement: React.FC = () => {
                                     {seedStatus.isRunning ? (
                                         <>
                                             <RefreshCw className="w-5 h-5 animate-spin" />
-                                            <span>Running Seeding...</span>
+                                            <span>{t('seedManagement.running')}</span>
                                         </>
                                     ) : (
                                         <>
                                             <Play className="w-5 h-5" />
-                                            <span>Run YAML Seeding</span>
+                                            <span>{t('seedManagement.runButton')}</span>
                                         </>
                                     )}
                                 </button>
@@ -264,7 +272,7 @@ const SeedManagement: React.FC = () => {
                     {/* Sidebar - Seed Files */}
                     <div className="space-y-6">
                         <div className="bg-white rounded-xl shadow-lg p-6">
-                            <h2 className="text-xl font-semibold text-gray-900 mb-4">Seed Files</h2>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('seedManagement.filesListTitle')}</h2>
                             <div className="space-y-3">
                                 {seedFiles.map((file) => {
                                     const Icon = file.icon;
@@ -292,17 +300,17 @@ const SeedManagement: React.FC = () => {
                                                     </span>
                                                     {file.required && (
                                                         <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
-                                                            Required
+                                                            {t('seedManagement.required')}
                                                         </span>
                                                     )}
                                                     {available && (
                                                         <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                                                            Found
+                                                            {t('seedManagement.fileFound')}
                                                         </span>
                                                     )}
                                                 </div>
                                                 <p className={`text-xs mt-1 ${available ? 'text-green-700' : 'text-gray-500'}`}>
-                                                    {file.description}
+                                                    {t(`seedManagement.fileDescriptions.${file.descKey}`)}
                                                 </p>
                                             </div>
                                         </div>
@@ -313,10 +321,10 @@ const SeedManagement: React.FC = () => {
 
                         {/* Environment Status */}
                         <div className="bg-white rounded-xl shadow-lg p-6">
-                            <h2 className="text-xl font-semibold text-gray-900 mb-4">Environment</h2>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('seedManagement.environment')}</h2>
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-gray-600">Supabase URL</span>
+                                    <span className="text-sm text-gray-600">{t('seedManagement.supabaseUrl')}</span>
                                     <div className="flex items-center space-x-2">
                                         {import.meta.env.VITE_SUPABASE_URL ? (
                                             <CheckCircle className="w-4 h-4 text-green-600" />
@@ -324,15 +332,15 @@ const SeedManagement: React.FC = () => {
                                             <XCircle className="w-4 h-4 text-red-600" />
                                         )}
                                         <span className="text-xs">
-                                            {import.meta.env.VITE_SUPABASE_URL ? 'Configured' : 'Missing'}
+                                            {import.meta.env.VITE_SUPABASE_URL ? t('seedManagement.configured') : t('seedManagement.missing')}
                                         </span>
                                     </div>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <span className="text-sm text-gray-600">Service Role</span>
+                                    <span className="text-sm text-gray-600">{t('seedManagement.serviceRole')}</span>
                                     <div className="flex items-center space-x-2">
                                         <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                                        <span className="text-xs">Server-side only</span>
+                                        <span className="text-xs">{t('seedManagement.serverSideOnly')}</span>
                                     </div>
                                 </div>
                             </div>
@@ -340,34 +348,34 @@ const SeedManagement: React.FC = () => {
 
                         {/* Documentation */}
                         <div className="bg-white rounded-xl shadow-lg p-6">
-                            <h2 className="text-xl font-semibold text-gray-900 mb-4">How It Works</h2>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('seedManagement.howItWorks')}</h2>
                             <div className="space-y-3 text-sm">
                                 <div className="flex items-start space-x-2">
                                     <FileText className="w-4 h-4 text-blue-600 mt-0.5" />
                                     <div>
-                                        <p className="font-medium">1. Load YAML Files</p>
-                                        <p className="text-gray-600">Reads data from <code>/public/seed/</code> directory</p>
+                                        <p className="font-medium">{t('seedManagement.step1Title')}</p>
+                                        <p className="text-gray-600">{t('seedManagement.step1Desc')}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <Database className="w-4 h-4 text-blue-600 mt-0.5" />
                                     <div>
-                                        <p className="font-medium">2. Seed Local Database</p>
-                                        <p className="text-gray-600">Populates IndexedDB (offline-first)</p>
+                                        <p className="font-medium">{t('seedManagement.step2Title')}</p>
+                                        <p className="text-gray-600">{t('seedManagement.step2Desc')}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <RefreshCw className="w-4 h-4 text-blue-600 mt-0.5" />
                                     <div>
-                                        <p className="font-medium">3. Sync to Supabase</p>
-                                        <p className="text-gray-600">Automatically syncs to cloud (if online)</p>
+                                        <p className="font-medium">{t('seedManagement.step3Title')}</p>
+                                        <p className="text-gray-600">{t('seedManagement.step3Desc')}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-start space-x-2">
                                     <CheckCircle className="w-4 h-4 text-blue-600 mt-0.5" />
                                     <div>
-                                        <p className="font-medium">4. Update UI</p>
-                                        <p className="text-gray-600">Refreshes contexts to show new data</p>
+                                        <p className="font-medium">{t('seedManagement.step4Title')}</p>
+                                        <p className="text-gray-600">{t('seedManagement.step4Desc')}</p>
                                     </div>
                                 </div>
                             </div>

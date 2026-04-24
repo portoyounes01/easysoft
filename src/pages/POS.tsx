@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { generateQRCodeImage } from '../utils/qrCode';
 import { NavLink } from 'react-router-dom';
 import {
@@ -41,7 +41,9 @@ import { LocalProduct, LocalCustomer } from '../types/supabase';
 import { useTranslation } from 'react-i18next';
 // import { transactionService } from '../services/transactionService';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
-import { customerLocalService } from '../lib/localDatabase';
+import { customerLocalService, initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
+import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
+import { saftTypeToReceiptDocumentType } from '../fiscal/saleDocumentType';
 import { ReceiptProps } from '../components/ThermalReceipt';
 import ReceiptHistorySelector from '../components/ReceiptHistorySelector';
 import { CustomerDialog } from '../components/CustomerDialog';
@@ -62,7 +64,7 @@ const iconMap = {
 
 const POS: React.FC = () => {
   const { t } = useTranslation();
-  const { cart, addToCart, clearCart, selectedCustomer, selectCustomer, processTransaction } = usePOS();
+  const { cart, addToCart, clearCart, updateQuantity, selectedCustomer, selectCustomer, processTransaction } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
   const { settings, updateSettings } = useSettings();
   const {
@@ -85,6 +87,17 @@ const POS: React.FC = () => {
   const [lastCompletedReceipt, setLastCompletedReceipt] = useState<ReceiptProps | null>(null);
   const [recentReceipts, setRecentReceipts] = useState<ReceiptProps[]>([]);
   const [showReceiptHistory, setShowReceiptHistory] = useState(false);
+  const [nextReceiptAfterClose, setNextReceiptAfterClose] = useState<ReceiptProps | null>(null);
+  const [lastFiscalInvoiceNo, setLastFiscalInvoiceNo] = useState<string | null>(null);
+
+  const atValidationWarn = useMemo(() => {
+    const raw = settings.receipt.atValidationCodeIssuedAt?.trim();
+    if (!raw) return false;
+    const t = new Date(raw).getTime();
+    if (Number.isNaN(t)) return false;
+    const days = (Date.now() - t) / (86400 * 1000);
+    return days > 1000;
+  }, [settings.receipt.atValidationCodeIssuedAt]);
 
   // Stock validation helper function
   const canAddToCart = (product: LocalProduct, requestedQuantity = 1): boolean => {
@@ -111,7 +124,16 @@ const POS: React.FC = () => {
     }
   };
 
-  // Quantity edits handled in product grid; order panel is read-only summary
+  const handleDecrementCartLine = useCallback(
+    (productId: string) => {
+      const line = cart.find(item => item.product.id === productId);
+      if (!line) return;
+      updateQuantity(productId, line.quantity - 1);
+    },
+    [cart, updateQuantity]
+  );
+
+  // Quantity increases from product grid; order panel line tap removes one unit
   const [showPayment, setShowPayment] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
@@ -141,6 +163,34 @@ const POS: React.FC = () => {
   const [lastCartActivity, setLastCartActivity] = useState<number>(Date.now());
   const [cartClearCountdown, setCartClearCountdown] = useState<number>(0);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        await initializeLocalDatabase();
+        const now = new Date();
+        const sk = computeSeriesKey(settings.receipt, now);
+        const at = settings.receipt.atValidationCode.trim();
+        if (!at) {
+          if (!cancelled) setLastFiscalInvoiceNo(null);
+          return;
+        }
+        const cs = buildChainScope(at, sk);
+        const last = await transactionLocalService.getLastFiscalDocumentInChain(cs);
+        if (!cancelled) setLastFiscalInvoiceNo(last?.invoice_no ?? null);
+      } catch {
+        if (!cancelled) setLastFiscalInvoiceNo(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    settings.receipt.atValidationCode,
+    settings.receipt.seriesPrefix,
+    settings.receipt.resetPolicy,
+    settings.receipt.numericWidth,
+  ]);
 
   // Activity tracking for auto-logout
   useEffect(() => {
@@ -410,6 +460,16 @@ const POS: React.FC = () => {
             MODO DE FORMAÇÃO — documentos sem valor fiscal
           </div>
         )}
+        {settings.receipt.seriesDiscontinued && (
+          <div className="flex-none bg-amber-100 text-amber-950 text-center text-lg font-semibold py-2 px-4 border-b border-amber-300">
+            Série fiscal descontinuada — confirme junto da AT antes de faturar.
+          </div>
+        )}
+        {atValidationWarn && (
+          <div className="flex-none bg-red-100 text-red-900 text-center text-lg font-semibold py-2 px-4 border-b border-red-200">
+            Código de validação AT antigo — verifique renovação no Portal das Finanças.
+          </div>
+        )}
         {/* Top Header - only over left sidebar + center, not cart */}
         <div className="flex-none bg-white shadow-sm border-b border-gray-200 px-4 py-3">
           <div className="flex items-center justify-between">
@@ -418,7 +478,7 @@ const POS: React.FC = () => {
               <button
                 onClick={toggleNavigation}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Toggle Navigation"
+                title={t('pos.toggleNav')}
               >
                 <Menu className="w-6 h-6 text-gray-600" />
               </button>
@@ -430,7 +490,7 @@ const POS: React.FC = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search Product..."
+                  placeholder={t('pos.searchProductPlaceholder')}
                   className="w-full pl-10 pr-4 py-2 bg-neutral-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -458,8 +518,8 @@ const POS: React.FC = () => {
                       <FileText className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <h1 className="text-xl font-bold">POS System</h1>
-                      <p className="text-slate-400 text-sm">Professional Edition</p>
+                      <h1 className="text-xl font-bold">{t('pos.brandTitle')}</h1>
+                      <p className="text-slate-400 text-sm">{t('pos.brandSubtitle')}</p>
                     </div>
                   </div>
                   <button
@@ -523,7 +583,7 @@ const POS: React.FC = () => {
                   className="w-full flex items-center px-4 py-3 text-slate-300 hover:bg-red-600 hover:text-white rounded-lg transition-all duration-200 hover:transform hover:scale-105 space-x-3"
                 >
                   <LogOut className="w-5 h-5 group-hover:animate-pulse flex-shrink-0" />
-                  <span className="font-medium">Logout</span>
+                  <span className="font-medium">{t('common.logout')}</span>
                 </button>
               </div>
             </div>
@@ -562,7 +622,7 @@ const POS: React.FC = () => {
               {allCategories.length === 0 && (
                 <div className="text-center py-8">
                   <Grid className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-xs text-neutral-500">No categories available</p>
+                  <p className="text-xs text-neutral-500">{t('pos.noCategoriesAvailable')}</p>
                 </div>
               )}
             </div>
@@ -575,8 +635,8 @@ const POS: React.FC = () => {
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <Loader2 className="w-12 h-12 animate-spin text-blue-500 mx-auto mb-4" />
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Loading Products...</h2>
-                  <p className="text-gray-600">Please wait while we load your product catalog</p>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">{t('pos.loadingCatalogTitle')}</h2>
+                  <p className="text-gray-600">{t('pos.loadingCatalogSubtitle')}</p>
                 </div>
               </div>
             )}
@@ -649,10 +709,10 @@ const POS: React.FC = () => {
                         <div className="text-center py-20">
                           <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                           <h3 className="text-xl font-semibold text-gray-500 mb-2">
-                            {selectedCategoryId ? t('pos.noProductsFoundTitle') : 'No Products Available'}
+                            {selectedCategoryId ? t('pos.noProductsFoundTitle') : t('pos.noCatalogProductsTitle')}
                           </h3>
                           <p className="text-gray-400">
-                            {selectedCategoryId ? t('pos.noProductsFoundMessage') : 'No products found in your catalog'}
+                            {selectedCategoryId ? t('pos.noProductsFoundMessage') : t('pos.noCatalogProductsMessage')}
                           </p>
                         </div>
                       )}
@@ -669,6 +729,12 @@ const POS: React.FC = () => {
       <OrderSummaryPanel
         items={cart.map(item => ({ product: item.product, quantity: item.quantity }))}
         onClearAll={handleClearAll}
+        onDecrementCartLine={handleDecrementCartLine}
+        customerSummary={
+          selectedCustomer
+            ? { name: selectedCustomer.name, taxNumber: selectedCustomer.tax_number }
+            : undefined
+        }
         onCustomer={() => setShowCustomerModal(true)}
         onTables={() => { }}
         onDiscount={handleDiscountClick}
@@ -689,6 +755,7 @@ const POS: React.FC = () => {
           value: discount.value,
           amount: discountAmount + customerDiscountAmount
         }}
+        fiscalChainHint={lastFiscalInvoiceNo ?? undefined}
       />
 
       <DiscountDialog
@@ -777,7 +844,9 @@ const POS: React.FC = () => {
                 : undefined;
 
               const receiptData: ReceiptProps = {
-                documentType: settings.receipt.defaultDocumentType as 'FATURA' | 'FATURA_SIMPLIFICADA',
+                documentType: fiscal
+                  ? saftTypeToReceiptDocumentType(fiscal.invoiceTypeSaft)
+                  : (settings.receipt.defaultDocumentType as 'FATURA' | 'FATURA_SIMPLIFICADA'),
                 date: new Date(),
                 counter: settings.receipt.counterLabel,
                 verificationCode: fiscal?.atcudBody || '',
@@ -787,6 +856,8 @@ const POS: React.FC = () => {
                 qrCodeData: fiscal?.qrPayload,
                 qrCodeImage,
                 trainingMode: settings.fiscal.trainingMode,
+                documentLabel: 'Original',
+                emitterName: employeeName,
                 company: {
                   name: settings.company.name,
                   address: settings.company.address,
@@ -796,7 +867,24 @@ const POS: React.FC = () => {
                   phone: settings.company.phone || undefined,
                   email: settings.company.email || undefined,
                 },
-                customer: selectedCustomer ? { name: selectedCustomer.name } : undefined,
+                customer: selectedCustomer
+                  ? (() => {
+                      const c = selectedCustomer;
+                      const morada = [
+                        c.address?.trim(),
+                        [c.postal_code?.trim(), c.city?.trim()]
+                          .filter(Boolean)
+                          .join(' '),
+                      ]
+                        .filter(Boolean)
+                        .join(', ');
+                      return {
+                        name: c.name,
+                        taxNumber: c.tax_number?.trim() || undefined,
+                        address: morada || undefined,
+                      };
+                    })()
+                  : undefined,
                 items: cartSnapshot.map((ci) => ({
                   id: ci.product.id,
                   description: ci.product.name,
@@ -821,13 +909,20 @@ const POS: React.FC = () => {
                 slogan: settings.company.slogan || undefined,
                 softwareInfo: settings.company.softwareInfo || undefined,
                 certificationNumber: settings.company.certificationNumber || undefined,
-                documentLabel: 'Original',
               };
 
               setShowPayment(false);
               setReceiptPreviewData(receiptData);
               setLastCompletedReceipt(receiptData);
               setRecentReceipts((prev) => [receiptData, ...prev].slice(0, 20));
+              setNextReceiptAfterClose(
+                settings.receipt.printDuplicateOnIssue !== false
+                  ? { ...receiptData, documentLabel: 'Duplicado' }
+                  : null
+              );
+              if (fiscal?.invoiceNo) {
+                setLastFiscalInvoiceNo(fiscal.invoiceNo);
+              }
               setShowReceiptPreview(true);
             } catch (e) {
               console.error('Checkout failed', e);
@@ -842,7 +937,15 @@ const POS: React.FC = () => {
       {receiptPreviewData && (
         <ReceiptDialog
           open={showReceiptPreview}
-          onClose={() => setShowReceiptPreview(false)}
+          onClose={() => {
+            setShowReceiptPreview(false);
+            if (nextReceiptAfterClose) {
+              const next = nextReceiptAfterClose;
+              setNextReceiptAfterClose(null);
+              setReceiptPreviewData(next);
+              setShowReceiptPreview(true);
+            }
+          }}
           receipt={receiptPreviewData}
         />
       )}

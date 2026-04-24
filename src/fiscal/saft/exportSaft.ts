@@ -1,6 +1,7 @@
 import type { SystemSettings } from '../../contexts/SettingsContext';
 import type { LocalFiscalDocument, LocalTransaction, LocalTransactionItem } from '../../types/supabase';
-import { CONSUMER_FINAL_CUSTOMER_TAX_ID } from '../spec';
+import { customerLocalService } from '../../lib/localDatabase';
+import { CONSUMER_FINAL_CUSTOMER_TAX_ID, isSaftPaymentReceiptType } from '../spec';
 
 const NS = 'urn:OECD:StandardAuditFile-Tax:PT_1.04_01';
 
@@ -46,6 +47,10 @@ export interface BuildSaftAuditFileParams {
 /**
  * Builds a SAF-T (PT) 1.04_01 `AuditFile` XML string from persisted fiscal rows and local transactions.
  * Aligns namespace and header shape with `certification requirements/exemplo-xml.xml`.
+ *
+ * Real POS extract (FT-only, 1.04_01): `certification requirements/SAFT-517404419-2026-02-01-2026-02-28.xml`
+ * — restaurant retail lines, `InvoiceType` FT, `CreditAmount` lines, optional `Period`; that file has no `Payments` block.
+ * **RG/RC** (tabela 4.4) are emitted under `<Payments>` — not in `<SalesInvoices>` (`InvoiceType` has no RG in 4.1).
  */
 export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): Promise<string> {
     const { settings, startDateYmd, endDateYmd, fiscalDocuments, loadTransaction, productVersion } = params;
@@ -70,7 +75,31 @@ export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): P
 
     const taxEntries = new Map<string, { code: string; pct: number }>();
     const products = new Map<string, LocalTransactionItem>();
-    const customers = new Map<string, { taxId: string; name: string }>();
+
+    const customerById = new Map<string, Awaited<ReturnType<typeof customerLocalService.getCustomerById>>>();
+    const uniqueCustomerIds = [...new Set(loaded.map(l => l.tx.customer_id).filter((id): id is string => Boolean(id)))];
+    for (const cid of uniqueCustomerIds) {
+        const row = await customerLocalService.getCustomerById(cid);
+        if (row) customerById.set(cid, row);
+    }
+
+    type SaftCustomerRow = {
+        taxId: string;
+        name: string;
+        addressDetail: string;
+        city: string;
+        postalCode: string;
+        country: string;
+    };
+
+    const customers = new Map<string, SaftCustomerRow>();
+
+    const placeholderBilling: Omit<SaftCustomerRow, 'taxId' | 'name'> = {
+        addressDetail: 'Desconhecido',
+        city: 'Desconhecido',
+        postalCode: '0000-000',
+        country: 'PT',
+    };
 
     for (const { fiscal, tx } of loaded) {
         const taxId = fiscal.customer_tax_id?.replace(/\s/g, '') || CONSUMER_FINAL_CUSTOMER_TAX_ID;
@@ -78,7 +107,18 @@ export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): P
             taxId === CONSUMER_FINAL_CUSTOMER_TAX_ID
                 ? 'Consumidor final'
                 : tx.customer_name?.trim() || 'Cliente';
-        customers.set(taxId, { taxId, name: custName });
+
+        const linked = tx.customer_id ? customerById.get(tx.customer_id) : undefined;
+        const billing: Omit<SaftCustomerRow, 'taxId' | 'name'> = linked
+            ? {
+                  addressDetail: (linked.address ?? '').trim() || placeholderBilling.addressDetail,
+                  city: (linked.city ?? '').trim() || placeholderBilling.city,
+                  postalCode: (linked.postal_code ?? '').trim() || placeholderBilling.postalCode,
+                  country: (linked.country ?? 'PT').trim().slice(0, 2).toUpperCase() || 'PT',
+              }
+            : placeholderBilling;
+
+        customers.set(taxId, { taxId, name: custName, ...billing });
 
         for (const line of tx.items) {
             const code = mapIvaDecimalToSaftTaxCode(line.iva_rate);
@@ -93,6 +133,7 @@ export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): P
         customers.set(CONSUMER_FINAL_CUSTOMER_TAX_ID, {
             taxId: CONSUMER_FINAL_CUSTOMER_TAX_ID,
             name: 'Consumidor final',
+            ...placeholderBilling,
         });
     }
     if (taxEntries.size === 0) {
@@ -131,8 +172,8 @@ export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): P
   </Header>`;
 
     const customerXml = [...customers.entries()]
-        .map(([taxId, c]) => {
-            const cid = `C${taxId}`;
+        .map(([, c]) => {
+            const cid = `C${c.taxId}`;
             return `
     <Customer>
       <CustomerID>${xmlEscape(cid)}</CustomerID>
@@ -140,10 +181,10 @@ export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): P
       <CustomerTaxID>${xmlEscape(c.taxId)}</CustomerTaxID>
       <CompanyName>${xmlEscape(c.name)}</CompanyName>
       <BillingAddress>
-        <AddressDetail>${xmlEscape(company.address)}</AddressDetail>
-        <City>${xmlEscape(company.city)}</City>
-        <PostalCode>${xmlEscape(company.postalCode)}</PostalCode>
-        <Country>PT</Country>
+        <AddressDetail>${xmlEscape(c.addressDetail)}</AddressDetail>
+        <City>${xmlEscape(c.city)}</City>
+        <PostalCode>${xmlEscape(c.postalCode)}</PostalCode>
+        <Country>${xmlEscape(c.country)}</Country>
       </BillingAddress>
       <SelfBillingIndicator>0</SelfBillingIndicator>
     </Customer>`;
@@ -183,11 +224,14 @@ ${productXml}
     </TaxTable>
   </MasterFiles>`;
 
+    const invoiceLoaded = loaded.filter(l => !isSaftPaymentReceiptType(l.fiscal.invoice_type));
+    const paymentLoaded = loaded.filter(l => isSaftPaymentReceiptType(l.fiscal.invoice_type));
+
     let totalDebit = 0;
     let totalCredit = 0;
     const invoiceBlocks: string[] = [];
 
-    for (const { fiscal, tx } of loaded) {
+    for (const { fiscal, tx } of invoiceLoaded) {
         const taxId = fiscal.customer_tax_id?.replace(/\s/g, '') || CONSUMER_FINAL_CUSTOMER_TAX_ID;
         const customerId = `C${taxId}`;
         const gross = fiscal.gross_total;
@@ -196,6 +240,17 @@ ${productXml}
         } else {
             totalDebit += Math.abs(gross);
         }
+
+        const ncSettledNo = fiscal.invoice_type === 'NC' ? (fiscal.settled_invoice_no?.trim() ?? '') : '';
+        const ncSettledDate = fiscal.invoice_type === 'NC' ? (fiscal.settled_invoice_date?.trim() ?? '') : '';
+        const ncSourceDocBlock =
+            ncSettledNo && ncSettledDate
+                ? `
+          <SourceDocumentID>
+            <OriginatingON>${xmlEscape(ncSettledNo)}</OriginatingON>
+            <InvoiceDate>${xmlEscape(ncSettledDate)}</InvoiceDate>
+          </SourceDocumentID>`
+                : '';
 
         const lines = tx.items
             .map((it, idx) => {
@@ -206,7 +261,7 @@ ${productXml}
                 const unitGross = it.quantity > 0 ? lineGross / it.quantity : lineGross;
                 return `
         <Line>
-          <LineNumber>${idx + 1}</LineNumber>
+          <LineNumber>${idx + 1}</LineNumber>${ncSourceDocBlock}
           <ProductCode>${xmlEscape(code)}</ProductCode>
           <ProductDescription>${xmlEscape(it.product_name)}</ProductDescription>
           <Quantity>${fmtDec(it.quantity)}</Quantity>
@@ -225,13 +280,19 @@ ${productXml}
             })
             .join('');
 
+        const isCancelled = Boolean(fiscal.cancelled_at);
+        const invoiceStatus = isCancelled ? 'A' : 'N';
+        const invoiceStatusDate = isCancelled
+            ? (fiscal.cancelled_at as string).replace(/\.\d{3}Z$/, '').replace('Z', '')
+            : fiscal.system_entry_date;
+
         invoiceBlocks.push(`
       <Invoice>
         <InvoiceNo>${xmlEscape(fiscal.invoice_no)}</InvoiceNo>
         <ATCUD>${xmlEscape(fiscal.atcud_body)}</ATCUD>
         <DocumentStatus>
-          <InvoiceStatus>N</InvoiceStatus>
-          <InvoiceStatusDate>${xmlEscape(fiscal.system_entry_date)}</InvoiceStatusDate>
+          <InvoiceStatus>${invoiceStatus}</InvoiceStatus>
+          <InvoiceStatusDate>${xmlEscape(invoiceStatusDate)}</InvoiceStatusDate>
           <SourceID>${xmlEscape(fiscal.source_id)}</SourceID>
           <SourceBilling>P</SourceBilling>
         </DocumentStatus>
@@ -256,6 +317,71 @@ ${productXml}
       </Invoice>`);
     }
 
+    let payTotalDebit = 0;
+    let payTotalCredit = 0;
+    const paymentBlocks: string[] = [];
+
+    for (const { fiscal, tx } of paymentLoaded) {
+        const taxId = fiscal.customer_tax_id?.replace(/\s/g, '') || CONSUMER_FINAL_CUSTOMER_TAX_ID;
+        const customerId = `C${taxId}`;
+        payTotalCredit += Math.abs(fiscal.gross_total);
+
+        const settledNo = fiscal.settled_invoice_no?.trim() ?? '';
+        const settledDate = fiscal.settled_invoice_date?.trim() ?? '';
+
+        const payLines = tx.items
+            .map((it, idx) => {
+                const lineGross = Math.abs(it.line_total);
+                const taxCode = mapIvaDecimalToSaftTaxCode(it.iva_rate);
+                const taxPct = fmtDec(Math.round(it.iva_rate * 10000) / 100);
+                return `
+        <Line>
+          <LineNumber>${idx + 1}</LineNumber>
+          <SourceDocumentID>
+            <OriginatingON>${xmlEscape(settledNo)}</OriginatingON>
+            <InvoiceDate>${xmlEscape(settledDate)}</InvoiceDate>
+          </SourceDocumentID>
+          <CreditAmount>${fmtDec(lineGross)}</CreditAmount>
+          <Tax>
+            <TaxType>IVA</TaxType>
+            <TaxCountryRegion>PT</TaxCountryRegion>
+            <TaxCode>${xmlEscape(taxCode)}</TaxCode>
+            <TaxPercentage>${taxPct}</TaxPercentage>
+          </Tax>
+        </Line>`;
+            })
+            .join('');
+
+        const isPayCancelled = Boolean(fiscal.cancelled_at);
+        const payStatus = isPayCancelled ? 'A' : 'N';
+        const payStatusDate = isPayCancelled
+            ? (fiscal.cancelled_at as string).replace(/\.\d{3}Z$/, '').replace('Z', '')
+            : fiscal.system_entry_date;
+
+        paymentBlocks.push(`
+      <Payment>
+        <PaymentRefNo>${xmlEscape(fiscal.invoice_no)}</PaymentRefNo>
+        <ATCUD>${xmlEscape(fiscal.atcud_body)}</ATCUD>
+        <TransactionDate>${xmlEscape(fiscal.invoice_date)}</TransactionDate>
+        <PaymentType>${xmlEscape(fiscal.invoice_type)}</PaymentType>
+        <DocumentStatus>
+          <PaymentStatus>${payStatus}</PaymentStatus>
+          <PaymentStatusDate>${xmlEscape(payStatusDate)}</PaymentStatusDate>
+          <SourceID>${xmlEscape(fiscal.source_id)}</SourceID>
+          <SourcePayment>P</SourcePayment>
+        </DocumentStatus>
+        <SourceID>${xmlEscape(fiscal.source_id)}</SourceID>
+        <SystemEntryDate>${xmlEscape(fiscal.system_entry_date)}</SystemEntryDate>
+        <CustomerID>${xmlEscape(customerId)}</CustomerID>
+${payLines}
+        <DocumentTotals>
+          <TaxPayable>${fmtDec(fiscal.tax_total)}</TaxPayable>
+          <NetTotal>${fmtDec(fiscal.net_total)}</NetTotal>
+          <GrossTotal>${fmtDec(fiscal.gross_total)}</GrossTotal>
+        </DocumentTotals>
+      </Payment>`);
+    }
+
     const generalLedgerEntries = `
   <GeneralLedgerEntries>
     <NumberOfEntries>0</NumberOfEntries>
@@ -263,14 +389,25 @@ ${productXml}
     <TotalCredit>0.00</TotalCredit>
   </GeneralLedgerEntries>`;
 
+    const paymentsSection =
+        paymentLoaded.length > 0
+            ? `
+    <Payments>
+      <NumberOfEntries>${paymentLoaded.length}</NumberOfEntries>
+      <TotalDebit>${fmtDec(payTotalDebit)}</TotalDebit>
+      <TotalCredit>${fmtDec(payTotalCredit)}</TotalCredit>
+${paymentBlocks.join('\n')}
+    </Payments>`
+            : '';
+
     const salesInvoices = `
   <SourceDocuments>
     <SalesInvoices>
-      <NumberOfEntries>${loaded.length}</NumberOfEntries>
+      <NumberOfEntries>${invoiceLoaded.length}</NumberOfEntries>
       <TotalDebit>${fmtDec(totalDebit)}</TotalDebit>
       <TotalCredit>${fmtDec(totalCredit)}</TotalCredit>
 ${invoiceBlocks.join('\n')}
-    </SalesInvoices>
+    </SalesInvoices>${paymentsSection}
   </SourceDocuments>`;
 
     return `<?xml version="1.0" encoding="UTF-8"?>

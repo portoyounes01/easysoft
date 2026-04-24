@@ -22,33 +22,32 @@ function normalizeTaxIdForQr(raw: string | null | undefined): string | null {
 }
 
 /**
- * Emit a fiscal credit note (SAFT NC) that mirrors an original fiscal sale, continuing the same hash chain.
+ * Standalone payment receipt (SAFT table 4.4, PaymentType RG) settling a prior FT/FS, same hash chain.
  */
-export async function runFiscalCreditNoteForTransaction(params: {
+export async function runFiscalReciboForTransaction(params: {
     settings: SystemSettings;
     originalTransactionId: string;
     payment: FiscalCheckoutAtomicPayload['payment'];
-    /** Shown on receipt / audit; stored after `NC referente …` in transaction notes. */
-    creditReason?: string;
     signer?: FiscalSigner;
 }): Promise<FiscalCheckoutResult> {
-    const { settings, originalTransactionId, payment, creditReason } = params;
+    const { settings, originalTransactionId, payment } = params;
     const origTx = await transactionLocalService.getTransactionById(originalTransactionId);
     if (!origTx?.fiscal_document_id) {
-        throw new Error('Transação sem documento fiscal — não é possível emitir nota de crédito.');
+        throw new Error('Transação sem documento fiscal — não é possível emitir recibo.');
     }
     const origFiscal = await transactionLocalService.getFiscalDocumentById(origTx.fiscal_document_id);
     if (!origFiscal) {
         throw new Error('Documento fiscal original em falta.');
     }
-    if (origFiscal.invoice_type === 'NC') {
-        throw new Error('Notas de crédito sobre notas de crédito não são suportadas.');
-    }
-    if (origFiscal.invoice_type === 'RG' || origFiscal.invoice_type === 'RC') {
-        throw new Error('Nota de crédito deve referenciar uma fatura (FT ou FS), não um recibo.');
+    if (origFiscal.invoice_type === 'NC' || origFiscal.invoice_type === 'RG' || origFiscal.invoice_type === 'RC') {
+        throw new Error('Recibo só pode referenciar uma fatura (FT ou FS).');
     }
     if (origFiscal.cancelled_at) {
-        throw new Error('Não é possível emitir nota de crédito sobre um documento anulado.');
+        throw new Error('Não é possível emitir recibo sobre um documento anulado.');
+    }
+    const already = await transactionLocalService.hasReciboForOriginalTransaction(originalTransactionId);
+    if (already) {
+        throw new Error('Já existe recibo emitido para esta venda.');
     }
 
     const now = new Date();
@@ -56,11 +55,11 @@ export async function runFiscalCreditNoteForTransaction(params: {
     const transactionTime = now.toTimeString().split(' ')[0];
     const systemEntryDate = formatSystemEntryDate(now);
 
-    const grossTotal = -Math.abs(origFiscal.gross_total);
-    const taxTotal = -Math.abs(origFiscal.tax_total);
-    const netRounded = -Math.abs(origFiscal.net_total);
+    const grossTotal = Math.abs(origFiscal.gross_total);
+    const taxTotal = Math.abs(origFiscal.tax_total);
+    const netRounded = Math.abs(origFiscal.net_total);
     const total = grossTotal;
-    const originalSubtotal = -Math.abs(origTx.subtotal);
+    const originalSubtotal = Math.abs(origTx.subtotal);
     const totalDiscountAmount = Math.abs(origTx.discount);
     const discountNeg = origTx.discount ? -Math.abs(origTx.discount) : 0;
 
@@ -79,10 +78,10 @@ export async function runFiscalCreditNoteForTransaction(params: {
         unit_price: item.unit_price,
         unit_cost: item.unit_cost,
         iva_rate: item.iva_rate,
-        line_total: -Math.abs(item.line_total),
-        tax_amount: -Math.abs(item.tax_amount),
-        profit_amount: -Math.abs(item.profit_amount),
-        discount_amount: item.discount_amount ? -Math.abs(item.discount_amount) : 0,
+        line_total: Math.abs(item.line_total),
+        tax_amount: Math.abs(item.tax_amount),
+        profit_amount: Math.abs(item.profit_amount),
+        discount_amount: item.discount_amount ? Math.abs(item.discount_amount) : 0,
         discount_percentage: item.discount_percentage,
         deleted_at: null,
     }));
@@ -104,11 +103,7 @@ export async function runFiscalCreditNoteForTransaction(params: {
         amount_paid: null,
         change_given: 0,
         status: 'completed',
-        notes: (() => {
-            const base = `NC referente ${origFiscal.invoice_no}`;
-            const r = creditReason?.trim();
-            return r ? `${base}. ${r}` : base;
-        })(),
+        notes: `Recibo referente ${origFiscal.invoice_no}`,
         deleted_at: null,
     };
 
@@ -132,7 +127,9 @@ export async function runFiscalCreditNoteForTransaction(params: {
         seriesKey: origFiscal.series_key,
         chainScope: origFiscal.chain_scope,
         atCode: origFiscal.at_validation_code,
-        invoiceTypeSaft: 'NC',
+        invoiceTypeSaft: 'RG',
+        settledInvoiceNo: origFiscal.invoice_no,
+        settledInvoiceDateYmd: origFiscal.invoice_date,
         grossTotal,
         netRounded,
         taxTotal,
@@ -147,22 +144,18 @@ export async function runFiscalCreditNoteForTransaction(params: {
         customerCountryForQr,
         payment,
         signer,
-        settledInvoiceNo: origFiscal.invoice_no,
-        settledInvoiceDateYmd: origFiscal.invoice_date,
     };
 
     const result = await transactionLocalService.createFiscalCheckoutAtomic(atomicPayload);
 
     await transactionLocalService.appendFiscalAuditEvent({
-        event_type: 'CREDIT_NOTE_ISSUED',
+        event_type: 'RECIBO_ISSUED',
         payload_json: JSON.stringify({
             originalTransactionId,
             originalInvoiceNo: origFiscal.invoice_no,
-            originalInvoiceDate: origFiscal.invoice_date,
-            creditTransactionId: result.transactionId,
-            creditFiscalId: result.fiscalId,
-            creditInvoiceNo: result.invoiceNo,
-            ...(creditReason?.trim() ? { creditReason: creditReason.trim() } : {}),
+            reciboTransactionId: result.transactionId,
+            reciboFiscalId: result.fiscalId,
+            reciboInvoiceNo: result.invoiceNo,
         }),
         employee_id: payment.employeeId,
     });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Plus, UserCircle, Users, Check, AlertCircle, Phone, CreditCard as TaxIcon } from 'lucide-react';
+import { Search, Plus, Users, Check, AlertCircle, Phone, CreditCard as TaxIcon } from 'lucide-react';
 import { BaseDialog } from './ui/BaseDialog';
 import { ActionButton } from './ui/ActionButton';
 import { TabToggle } from './ui/TabToggle';
@@ -29,6 +29,8 @@ interface NewCustomerForm {
     phone: string;
     taxId: string;
     address: string;
+    city: string;
+    postalCode: string;
     country: string;
 }
 
@@ -37,8 +39,17 @@ const initialFormState: NewCustomerForm = {
     phone: '',
     taxId: '',
     address: '',
-    country: 'Portugal'
+    city: '',
+    postalCode: '',
+    country: 'PT'
 };
+
+/** Portugal postal: digits only in UI, formatted as 1234-567 */
+function formatPtPostalInput(raw: string): string {
+    const digits = raw.replace(/\D/g, '').slice(0, 7);
+    if (digits.length <= 4) return digits;
+    return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+}
 
 export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     open,
@@ -52,10 +63,10 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCustomer, setSelectedCustomer] = useState<LocalCustomer | null>(null);
     const [newCustomerForm, setNewCustomerForm] = useState<NewCustomerForm>(initialFormState);
+    const [formError, setFormError] = useState<string | null>(null);
 
     // Virtual Keyboard State
     const [activeField, setActiveField] = useState<string>('');
-    const [searchFocused, setSearchFocused] = useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const [keyboardConfig, setKeyboardConfig] = useState({
         isOpen: false,
@@ -73,6 +84,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             setView('list');
             setSearchTerm('');
             setNewCustomerForm(initialFormState);
+            setFormError(null);
             setActiveField(''); // Reset active field to hide keyboard
         }
     }, [open]);
@@ -102,22 +114,11 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         return 'invalid';
     };
 
-    const getNifFieldClasses = (nif: string, baseClasses: string) => {
-        const state = getNifValidationState(nif);
-        switch (state) {
-            case 'valid':
-                return `${baseClasses} border-green-500 focus:ring-green-500 focus:border-green-500`;
-            case 'invalid':
-                return `${baseClasses} border-red-500 focus:ring-red-500 focus:border-red-500`;
-            default:
-                return `${baseClasses} border-gray-300 focus:ring-blue-500 focus:border-transparent`;
-        }
-    };
-
-
-
     const handleFormChange = (field: string, value: string) => {
-        setNewCustomerForm(prev => ({ ...prev, [field]: value }));
+        setFormError(null);
+        const next =
+            field === 'postalCode' ? formatPtPostalInput(value) : value;
+        setNewCustomerForm(prev => ({ ...prev, [field]: next }));
     };
 
     const handleTextFieldClick = (field: string, allowNumbers = true, allowLetters = true, maxLength = 50) => {
@@ -130,6 +131,8 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 let finalValue = value;
                 if (field === 'taxId') {
                     finalValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+                } else if (field === 'postalCode') {
+                    finalValue = formatPtPostalInput(value);
                 }
                 handleFormChange(field, finalValue);
             },
@@ -140,13 +143,32 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     };
 
     const handleSubmit = async () => {
+        setFormError(null);
         if (!newCustomerForm.taxId.trim()) {
-            // You might want to use a toast here
             return;
         }
 
         const nifRegex = /^[A-Z0-9]{9}$/;
         if (!nifRegex.test(newCustomerForm.taxId.trim())) {
+            return;
+        }
+
+        const addr = newCustomerForm.address.trim();
+        const city = newCustomerForm.city.trim();
+        const postal = newCustomerForm.postalCode.trim();
+        const rawCountry = newCustomerForm.country.trim();
+        const countryIso =
+            rawCountry.length === 0 || rawCountry.toLowerCase() === 'portugal'
+                ? 'PT'
+                : rawCountry.slice(0, 2).toUpperCase();
+
+        if (!addr || !city || !postal) {
+            setFormError(t('pos.customerForm.fillAllAddressFields'));
+            return;
+        }
+
+        if (countryIso === 'PT' && !/^\d{4}-\d{3}$/.test(postal)) {
+            setFormError(t('pos.customerForm.invalidPostalPt'));
             return;
         }
 
@@ -156,9 +178,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         > = {
             name: newCustomerForm.name.trim() || `Cliente ${newCustomerForm.taxId.trim()}`,
             tax_number: newCustomerForm.taxId.trim(),
+            country: countryIso,
             email: null,
             phone: newCustomerForm.phone.trim() || null,
-            address: newCustomerForm.address.trim() || null,
+            address: addr,
+            city,
+            postal_code: postal,
             total_spent: 0,
             transaction_count: 0,
             loyalty_points: 0,
@@ -170,6 +195,23 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         await onRegisterCustomer(customerData);
         setView('list');
     };
+
+    const newCustomerFormValid =
+        getNifValidationState(newCustomerForm.taxId) === 'valid' &&
+        newCustomerForm.address.trim().length > 0 &&
+        newCustomerForm.city.trim().length > 0 &&
+        newCustomerForm.postalCode.trim().length > 0 &&
+        (() => {
+            const rawCountry = newCustomerForm.country.trim();
+            const countryIso =
+                rawCountry.length === 0 || rawCountry.toLowerCase() === 'portugal'
+                    ? 'PT'
+                    : rawCountry.slice(0, 2).toUpperCase();
+            if (countryIso === 'PT') {
+                return /^\d{4}-\d{3}$/.test(newCustomerForm.postalCode.trim());
+            }
+            return true;
+        })();
 
     return (
         <BaseDialog
@@ -210,9 +252,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         />
                         <ActionButton
                             onClick={handleSubmit}
-                            label="Save Customer"
+                            label={t('pos.customerForm.save')}
                             className="flex-1"
-                            disabled={!newCustomerForm.taxId || getNifValidationState(newCustomerForm.taxId) !== 'valid'}
+                            disabled={!newCustomerFormValid}
                         />
                     </div>
                 ) : undefined
@@ -273,7 +315,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                             >
                                                 <div className="flex items-center justify-between px-2">
                                                     <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>
-                                                        {(customer as any).nif || 'N/A'}
+                                                        {customer.tax_number || 'N/A'}
                                                     </p>
                                                     <p className="font-semibold text-gray-900" style={{ fontSize: '1.5vh' }}>
                                                         €{(customer.total_spent || 0).toFixed(2)}
@@ -317,6 +359,16 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     <div className="flex-1 flex flex-col overflow-hidden px-6 pb-6">
                         {/* Form */}
                         <div className="space-y-4">
+                            {formError && (
+                                <div
+                                    className="flex items-center gap-2 rounded-2xl border-2 border-red-200 bg-red-50 px-4 py-3 text-red-800"
+                                    style={{ fontSize: '1.5vh' }}
+                                    role="alert"
+                                >
+                                    <AlertCircle className="shrink-0" style={{ width: '2vh', height: '2vh' }} />
+                                    <span>{formError}</span>
+                                </div>
+                            )}
                             {/* Personal Info */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <InputField
@@ -325,7 +377,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                     onChange={(e) => handleFormChange('name', e.target.value)}
                                     onClick={() => handleTextFieldClick('name', true, true, 50)}
                                     className={activeField === 'name' ? 'bg-blue-50 border-blue-500' : ''}
-                                    placeholder="Enter customer name"
+                                    placeholder={t('forms.customerNamePlaceholder')}
                                 />
                                 <div className="relative">
                                     <InputField
@@ -335,33 +387,61 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                         onChange={(e) => handleFormChange('taxId', e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase())}
                                         onClick={() => handleTextFieldClick('taxId', true, true, 9)}
                                         className={activeField === 'taxId' ? 'bg-blue-50' : ''}
-                                        placeholder="123456789"
+                                        placeholder={t('forms.taxNumberExample')}
                                         error={newCustomerForm.taxId && getNifValidationState(newCustomerForm.taxId) !== 'valid' ? 'Invalid NIF' : undefined}
                                         rightIcon={newCustomerForm.taxId && getNifValidationState(newCustomerForm.taxId) === 'valid' ? Check : undefined}
                                     />
                                 </div>
                             </div>
 
-                            {/* Contact Info */}
+                            <InputField
+                                label="Phone"
+                                icon={Phone}
+                                type="tel"
+                                value={newCustomerForm.phone}
+                                onChange={(e) => handleFormChange('phone', e.target.value)}
+                                onClick={() => handleTextFieldClick('phone', true, true, 20)}
+                                className={activeField === 'phone' ? 'bg-blue-50 border-blue-500' : ''}
+                                placeholder={t('forms.phonePlaceholder')}
+                            />
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="md:col-span-2">
+                                    <InputField
+                                        label={t('pos.customerForm.address')}
+                                        value={newCustomerForm.address}
+                                        onChange={(e) => handleFormChange('address', e.target.value)}
+                                        onClick={() => handleTextFieldClick('address', true, true, 120)}
+                                        className={activeField === 'address' ? 'bg-blue-50 border-blue-500' : ''}
+                                        placeholder={t('pos.customerForm.addressPlaceholder')}
+                                    />
+                                </div>
                                 <InputField
-                                    label="Phone"
-                                    icon={Phone}
-                                    type="tel"
-                                    value={newCustomerForm.phone}
-                                    onChange={(e) => handleFormChange('phone', e.target.value)}
-                                    onClick={() => handleTextFieldClick('phone', true, true, 20)}
-                                    className={activeField === 'phone' ? 'bg-blue-50 border-blue-500' : ''}
-                                    placeholder="+351 912 345 678"
+                                    label={t('pos.customerForm.city')}
+                                    value={newCustomerForm.city}
+                                    onChange={(e) => handleFormChange('city', e.target.value)}
+                                    onClick={() => handleTextFieldClick('city', true, true, 80)}
+                                    className={activeField === 'city' ? 'bg-blue-50 border-blue-500' : ''}
+                                    placeholder={t('pos.customerForm.cityPlaceholder')}
                                 />
                                 <InputField
-                                    label="Country"
-                                    value={newCustomerForm.country}
-                                    onChange={(e) => handleFormChange('country', e.target.value)}
-                                    onClick={() => handleTextFieldClick('country', true, true, 30)}
-                                    className={activeField === 'country' ? 'bg-blue-50 border-blue-500' : ''}
-                                    placeholder="Portugal"
+                                    label={t('pos.customerForm.postalCode')}
+                                    value={newCustomerForm.postalCode}
+                                    onChange={(e) => handleFormChange('postalCode', e.target.value)}
+                                    onClick={() => handleTextFieldClick('postalCode', true, false, 8)}
+                                    className={activeField === 'postalCode' ? 'bg-blue-50 border-blue-500' : ''}
+                                    placeholder={t('pos.customerForm.postalPlaceholder')}
                                 />
+                                <div className="md:col-span-2">
+                                    <InputField
+                                        label={t('pos.customerForm.country')}
+                                        value={newCustomerForm.country}
+                                        onChange={(e) => handleFormChange('country', e.target.value)}
+                                        onClick={() => handleTextFieldClick('country', true, true, 30)}
+                                        className={activeField === 'country' ? 'bg-blue-50 border-blue-500' : ''}
+                                        placeholder={t('forms.countryCodePlaceholder')}
+                                    />
+                                </div>
                             </div>
                         </div>
 

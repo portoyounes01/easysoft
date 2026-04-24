@@ -197,14 +197,14 @@ const Reports: React.FC = () => {
                 <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                     <div className="flex items-center space-x-2">
                         <AlertCircle className="w-5 h-5 text-red-500" />
-                        <h3 className="text-red-800 font-medium">Error Loading Report Data</h3>
+                        <h3 className="text-red-800 font-medium">{t('reports.error.title')}</h3>
                     </div>
                     <p className="text-red-700 mt-2">{error}</p>
                     <button
                         onClick={() => window.location.reload()}
                         className="mt-4 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
                     >
-                        Retry
+                        {t('reports.error.retry')}
                     </button>
                 </div>
             </div>
@@ -263,7 +263,7 @@ const Reports: React.FC = () => {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Employee</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('reports.filters.employee')}</label>
                             <select
                                 value={filters.employeeId || ''}
                                 onChange={(e) => handleFilterChange('employeeId', e.target.value || undefined)}
@@ -338,7 +338,7 @@ const Reports: React.FC = () => {
                                         <BarChart3 className="w-6 h-6 text-white" />
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-medium text-blue-600">Transactions</p>
+                                        <p className="text-sm font-medium text-blue-600">{t('reports.overview.transactions')}</p>
                                         <p className="text-2xl font-bold text-blue-900">{overviewMetrics.totalTransactions}</p>
                                     </div>
                                 </div>
@@ -484,7 +484,7 @@ const Reports: React.FC = () => {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900">{product.quantitySold} units</div>
+                                                <div className="text-sm font-medium text-gray-900">{product.quantitySold} {t('reports.products.table.units')}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900">{formatCurrency(product.totalRevenue)}</div>
@@ -557,11 +557,11 @@ const Reports: React.FC = () => {
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className={`text-sm font-medium ${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-yellow-600' : 'text-gray-900'}`}>
-                                                            {product.stock} units
+                                                            {product.stock} {t('reports.products.table.units')}
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="text-sm text-gray-900">{product.min_stock} units</div>
+                                                        <div className="text-sm text-gray-900">{product.min_stock} {t('reports.products.table.units')}</div>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <div className="text-sm font-medium text-gray-900">{formatCurrency(stockValue)}</div>
@@ -570,27 +570,27 @@ const Reports: React.FC = () => {
                                                         {isOutOfStock ? (
                                                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                                                 <AlertCircle className="w-3 h-3 mr-1" />
-                                                                Out of Stock
+                                                                {t('products.status.outOfStock')}
                                                             </span>
                                                         ) : isLowStock ? (
                                                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                                                 <AlertCircle className="w-3 h-3 mr-1" />
-                                                                Low Stock
+                                                                {t('products.status.lowStock')}
                                                             </span>
                                                         ) : (
                                                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                                                 <CheckCircle className="w-3 h-3 mr-1" />
-                                                                In Stock
+                                                                {t('products.status.inStock')}
                                                             </span>
                                                         )}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         {isOutOfStock ? (
-                                                            <span className="text-red-600 text-sm font-medium">Urgent Restock</span>
+                                                            <span className="text-red-600 text-sm font-medium">{t('reports.inventory.table.urgentRestock')}</span>
                                                         ) : isLowStock ? (
-                                                            <span className="text-yellow-600 text-sm font-medium">Reorder Soon</span>
+                                                            <span className="text-yellow-600 text-sm font-medium">{t('reports.inventory.table.reorderSoon')}</span>
                                                         ) : (
-                                                            <span className="text-green-600 text-sm">No Action Needed</span>
+                                                            <span className="text-green-600 text-sm">{t('reports.inventory.table.noAction')}</span>
                                                         )}
                                                     </td>
                                                 </tr>

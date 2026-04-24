@@ -59,3 +59,39 @@ Anular documento:
 - unique DB for demo mode (formacao)
 - company NIF should be op top (with the rest of the company data)
 - add name of the user that emitted the document in the receipt
+
+
+
+- SAFT file:
+    - "periodo" is the month in numerical format (1-12)
+    - "movement of goods" is related to the inventory (investigate later, but we dont need it in our case, just to know)
+
+
+- local indexedDB is currently editable in local (that shouldnt be the case AT ALL)
+- documents also need to be in the remote database (supabase), currently they're only in the localDb
+
+
+check: weoinvoice.com
+
+center QR code in the receipt (both printed and on the screen)
+gerar nota de credito from the interface directly
+
+
+in the receipt:
+- change "contrib" to "NIF"
+- theres a duplicate company nif in the receipt
+- add other customer provided info alog with the nif (morada, codigo postal, local codigo postal, and pais, numero de tel nao é necessario)
+- fix transactions receipts (in the transaction page)
+- add SEARCH OPTION in the second copy dialog (if we have lots of previous orders)
+- add Document created with success dialog (or error dialog), after clicking process payment button 
+- we can only print the documents if they're created successfully (in the Database)
+- secunda via disappears after going to some other page
+
+
+
+fix transactions not appearing in transactions page
+
+
+questions:
+- unique serie per terminal? makes sense, but we'll need to communicate it to AT/financas every time we bring in a new terminal, or install it in a new location?
+- 

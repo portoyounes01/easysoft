@@ -98,7 +98,8 @@ const ReceiptDemo: React.FC<{ initialData?: ReceiptProps }> = ({ initialData }) 
     documentType: 'FATURA' as const,
     customer: {
       taxNumber: '517404419',
-      name: 'João Silva'
+      name: 'João Silva',
+      address: 'Rua Exemplo, 10, 1000-001 Lisboa',
     },
     items: [
       {

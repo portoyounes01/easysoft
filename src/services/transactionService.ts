@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabase';
+import {
+    isPgrstMissingTransactionsColumnError,
+    stripOptionalFiscalTransactionFields,
+} from '../utils/transactionFiscalServerColumns';
 
 // Coalesce concurrent getTransactionById calls per id
 const getTransactionByIdInFlight = new Map<string, Promise<any>>();
@@ -212,14 +216,29 @@ export const transactionService = {
         }
 
         // Create the transaction
-        const { data: transaction, error: transactionError } = await supabase
+        const insertPayload: Record<string, unknown> = {
+            ...transactionData,
+            transaction_number: transactionNumber,
+        };
+
+        let { data: transaction, error: transactionError } = await supabase
             .from('transactions')
-            .insert({
-                ...transactionData,
-                transaction_number: transactionNumber
-            })
+            .insert(insertPayload)
             .select()
             .single();
+
+        if (transactionError && isPgrstMissingTransactionsColumnError(transactionError)) {
+            console.warn(
+                'transactionService: Retrying without optional fiscal/discount columns. Run pending migrations (e.g. 20260413120000_transactions_fiscal_columns.sql, 2025-09-24_add_discount_metadata.sql) on Supabase so the server stores full data.'
+            );
+            const retry = await supabase
+                .from('transactions')
+                .insert(stripOptionalFiscalTransactionFields(insertPayload))
+                .select()
+                .single();
+            transaction = retry.data;
+            transactionError = retry.error;
+        }
 
         if (transactionError) {
             console.error('Error creating transaction:', transactionError);

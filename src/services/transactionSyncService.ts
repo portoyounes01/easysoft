@@ -1,6 +1,10 @@
 import { supabase, isSupabaseConfigured, connectionStatus } from '../lib/supabase';
 import { transactionLocalService } from '../lib/localDatabase';
 import {
+    isPgrstMissingTransactionsColumnError,
+    stripOptionalFiscalTransactionFields,
+} from '../utils/transactionFiscalServerColumns';
+import {
     TransactionRow,
     TransactionItemRow,
     TransactionInsert,
@@ -166,6 +170,9 @@ export class TransactionSyncService {
                         receipt_number: transaction.receipt_number,
                         fiscal_document_id: transaction.fiscal_document_id ?? null,
                         fiscal_metadata_json: fiscalMeta ?? null,
+                        fiscal_cancelled_at: transaction.fiscal_cancelled_at ?? null,
+                        fiscal_cancelled_reason: transaction.fiscal_cancelled_reason ?? null,
+                        fiscal_cancelled_by_employee_id: transaction.fiscal_cancelled_by_employee_id ?? null,
                         created_at: transaction.created_at.toISOString(),
                         updated_at: transaction.updated_at.toISOString(),
                         deleted_at: transaction.deleted_at?.toISOString() || null
@@ -205,9 +212,21 @@ export class TransactionSyncService {
                         if ((error as any).code === 'PGRST202' || (error as any).message?.includes('schema cache')) {
                             try {
                                 // Upsert transaction header first
-                                const { error: upsertTxnErr } = await supabase
+                                const td = transactionData as Record<string, unknown>;
+                                let { error: upsertTxnErr } = await supabase
                                     .from('transactions')
-                                    .upsert([transactionData], { onConflict: 'id' });
+                                    .upsert([td], { onConflict: 'id' });
+                                if (
+                                    upsertTxnErr &&
+                                    isPgrstMissingTransactionsColumnError(upsertTxnErr)
+                                ) {
+                                    const retry = await supabase
+                                        .from('transactions')
+                                        .upsert([stripOptionalFiscalTransactionFields(td)], {
+                                            onConflict: 'id',
+                                        });
+                                    upsertTxnErr = retry.error;
+                                }
                                 if (upsertTxnErr) throw upsertTxnErr;
 
                                 // Only replace items if we actually have items to push

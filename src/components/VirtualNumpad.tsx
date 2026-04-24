@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Delete, Check, X } from 'lucide-react';
 import { NumpadButton } from './ui/NumpadButton';
 
@@ -21,12 +22,14 @@ const VirtualNumpad: React.FC<VirtualNumpadProps> = ({
     onConfirm,
     title,
     initialValue = '',
-    placeholder = '0.00',
+    placeholder: placeholderProp,
     prefix = '',
     suffix = '',
     maxLength = 10,
     allowDecimal = true
 }) => {
+    const { t } = useTranslation();
+    const placeholder = placeholderProp ?? t('forms.decimalPlaceholder');
     const [value, setValue] = useState(initialValue);
 
     const handleNumberClick = (num: string) => {
@@ -106,11 +109,11 @@ const VirtualNumpad: React.FC<VirtualNumpadProps> = ({
                         className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
                     >
                         <X className="w-5 h-5" />
-                        <span>Cancel</span>
+                        <span>{t('virtualNumpad.cancel')}</span>
                     </button>
                     <NumpadButton
                         variant="confirm"
-                        label="Confirm"
+                        label={t('common.confirm')}
                         icon={Check}
                         onClick={handleConfirm}
                         className="flex-1 py-4"

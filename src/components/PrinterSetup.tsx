@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Wifi, Printer, Search, CheckCircle, AlertCircle, Loader, Usb, RefreshCw } from 'lucide-react';
 
 interface NetworkPrinter {
@@ -27,6 +28,7 @@ interface PrinterSetupProps {
 }
 
 const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose }) => {
+  const { t } = useTranslation();
   const [isScanning, setIsScanning] = useState(false);
   const [discoveredPrinters, setDiscoveredPrinters] = useState<NetworkPrinter[]>([]);
   const [usbPrinters, setUsbPrinters] = useState<USBPrinter[]>([]);
@@ -489,7 +491,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               {/* Manual Setup Tab */}
               <div className="space-y-4">
                 <p className="text-gray-600">
-                  Connect to a thermal printer using its IP address
+                  {t('printerSetup.manualIntro')}
                 </p>
 
                 <div className="space-y-4">
@@ -508,7 +510,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Port
+                      {t('printerSetup.portLabel')}
                     </label>
                     <input
                       type="number"
@@ -518,7 +520,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     <p className="mt-1 text-xs text-gray-500">
-                      Most thermal printers use port 9100
+                      {t('printerSetup.portHint')}
                     </p>
                   </div>
 

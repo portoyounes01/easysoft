@@ -137,7 +137,7 @@ const Products: React.FC = () => {
       return (
         <span className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
           <AlertTriangle className="w-3 h-3" />
-          <span>Out of Stock</span>
+          <span>{t('products.status.outOfStock')}</span>
         </span>
       );
     }
@@ -146,14 +146,14 @@ const Products: React.FC = () => {
       return (
         <span className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
           <AlertTriangle className="w-3 h-3" />
-          <span>Low Stock</span>
+          <span>{t('products.status.lowStock')}</span>
         </span>
       );
     }
 
     return (
       <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-        In Stock
+        {t('products.status.inStock')}
       </span>
     );
   };

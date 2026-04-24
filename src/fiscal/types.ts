@@ -1,6 +1,6 @@
 import type { SystemSettings } from '../contexts/SettingsContext';
 import type { LocalTransaction, LocalTransactionItem } from '../types/supabase';
-import type { SaftInvoiceType } from './spec';
+import type { SaftFiscalDocumentType, SaftInvoiceType } from './spec';
 import type { FiscalSigner } from './signing';
 
 export type CertificationMode = 'production' | 'training';
@@ -14,9 +14,13 @@ export interface FiscalDocumentRow {
     series_key: string;
     at_validation_code: string;
     sequential_number: number;
-    /** SAFT InvoiceNo e.g. FS ABC/1000 */
+    /** SAFT InvoiceNo e.g. FS ABC/1000 — or RG/RC payment ref under table 4.4 */
     invoice_no: string;
-    invoice_type: SaftInvoiceType;
+    invoice_type: SaftFiscalDocumentType;
+    /** For RG/RC: settled sales document no (e.g. FT …) */
+    settled_invoice_no?: string | null;
+    /** For RG/RC: invoice date of settled document (YYYY-MM-DD) */
+    settled_invoice_date?: string | null;
     invoice_date: string;
     /** ISO local date-time without Z — SAFT SystemEntryDate style */
     system_entry_date: string;
@@ -42,6 +46,10 @@ export interface FiscalDocumentRow {
     /** Set when included in a SAF-T export batch (optional AT workflow). */
     saft_exported_at?: string | null;
     saft_export_batch_id?: string | null;
+    /** When set, document is cancelled (anulado); row is never deleted. */
+    cancelled_at?: string | null;
+    cancelled_reason?: string | null;
+    cancelled_by_employee_id?: string | null;
 }
 
 /** Snapshot passed to receipt / QR builder after persistence. */
@@ -63,7 +71,7 @@ export interface FiscalCheckoutResult {
     taxTotal: number;
     systemEntryDate: string;
     invoiceDate: string;
-    invoiceTypeSaft: SaftInvoiceType;
+    invoiceTypeSaft: SaftFiscalDocumentType;
     sourceId: string;
     sequentialNumber: number;
     seriesKey: string;
@@ -99,7 +107,10 @@ export interface FiscalCheckoutAtomicPayload {
     seriesKey: string;
     chainScope: string;
     atCode: string;
-    invoiceTypeSaft: SaftInvoiceType;
+    invoiceTypeSaft: SaftFiscalDocumentType;
+    /** When issuing RG/RC — FT/FS invoice being acknowledged */
+    settledInvoiceNo?: string;
+    settledInvoiceDateYmd?: string;
     grossTotal: number;
     netRounded: number;
     taxTotal: number;
@@ -111,6 +122,8 @@ export interface FiscalCheckoutAtomicPayload {
     transactionItems: FiscalCheckoutItemBase[];
     customerTaxId: string | null;
     customerTaxNumberForQr: string | null;
+    /** ISO 3166-1 alpha-2 for QR segment C (default PT). */
+    customerCountryForQr: string;
     payment: {
         paymentMethod: 'cash' | 'card' | 'mixed';
         amountPaid?: number;
@@ -137,8 +150,16 @@ export interface FiscalTransactionMetadata {
 export type FiscalAuditEventType =
     | 'FISCAL_DOCUMENT_CREATED'
     | 'VOID_REQUESTED'
+    | 'FISCAL_DOCUMENT_CANCELLED'
+    | 'REPRINT_REQUESTED'
     | 'CREDIT_NOTE_ISSUED'
-    | 'SETTINGS_FISCAL_CHANGED';
+    | 'RECIBO_ISSUED'
+    | 'SETTINGS_FISCAL_CHANGED'
+    | 'SETTINGS_CHANGED'
+    | 'SAFT_EXPORTED'
+    | 'LOGIN_SUCCESS'
+    | 'LOGIN_FAILURE'
+    | 'KEY_ROTATED';
 
 export interface FiscalAuditEventRow {
     id: string;

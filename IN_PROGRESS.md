@@ -12,6 +12,7 @@
   - Added `discountInfo` prop with proper formatting: percentage with amount in parens, or fixed amount
   - Updated clear cart to reset discount state
 - Integrated into `src/pages/POS.tsx`, replacing legacy cart sidebar UI
+- Cart lines: tap row decrements quantity by 1 (removes line at qty 1); removed per-line X button (`onDecrementCartLine` + `pos.decrementCartLine`)
 - Added i18n keys for: orderDetails, dineIn, takeAway, saveBill, tables, clearAllOrder
 - Pending: refine styles to match touch target/typography specs; add tests; update DONE.md after verification
 

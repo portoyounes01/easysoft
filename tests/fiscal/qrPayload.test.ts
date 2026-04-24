@@ -21,6 +21,23 @@ describe('buildAtQrPayloadString', () => {
         );
     });
 
+    it('uses customer country code in segment C', () => {
+        const s = buildAtQrPayloadString({
+            emitterTaxNumber: '514524391',
+            customerTaxNumber: null,
+            customerCountry: 'ES',
+            invoiceType: 'FS',
+            invoiceDateYmd: '2026-03-30',
+            invoiceNo: 'FS A/1',
+            atcudBody: 'CSDF7T5H-00001',
+            netTotal: 100,
+            taxTotal: 23,
+            hashFourChars: 'a-b-c-d',
+            softwareCertificateNumber: '1234',
+        });
+        expect(s).toContain('*C:ES*');
+    });
+
     it('formats negative net and tax totals for credit notes (two decimals)', () => {
         const s = buildAtQrPayloadString({
             emitterTaxNumber: '514524391',

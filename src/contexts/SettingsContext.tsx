@@ -36,6 +36,8 @@ export interface SystemSettings {
     };
     receipt: {
         series: string; // e.g., 'FAT2026' - series name for AT registration
+        /** Shown on thermal header / SAFT human-readable series title. */
+        seriesDescription?: string;
         seriesPrefix: string; // e.g., 'ABC' (legacy, for numbering)
         numericWidth: number; // e.g., 4 → 1000 minimum
         resetPolicy: 'monthly' | 'yearly';
@@ -44,7 +46,11 @@ export interface SystemSettings {
         defaultDocumentType: 'FATURA' | 'FATURA_SIMPLIFICADA';
         counterLabel: string; // e.g., 'BALCÃO 1'
         atValidationCode: string; // e.g., 'AT56789X1' - from AT portal registration
+        /** ISO date when validation code was issued (optional; expiry warnings). */
+        atValidationCodeIssuedAt?: string;
         seriesDiscontinued?: boolean;
+        /** After checkout, show Duplicado receipt immediately after Original. */
+        printDuplicateOnIssue?: boolean;
     };
     /** Portugal AT: signing, training mode, key version (HashControl). */
     fiscal: {
@@ -105,7 +111,8 @@ const defaultSettings: SystemSettings = {
     },
     receipt: {
         series: 'FAT2026', // Series name for AT registration
-        seriesPrefix: 'ABC',
+        seriesDescription: '',
+        seriesPrefix: '',
         numericWidth: 4,
         resetPolicy: 'monthly',
         lastSeriesKey: '',
@@ -114,6 +121,7 @@ const defaultSettings: SystemSettings = {
         counterLabel: 'BALCÃO 1',
         atValidationCode: 'AT0000001', // Placeholder - replace with real code from AT portal
         seriesDiscontinued: false,
+        printDuplicateOnIssue: true,
     },
     fiscal: {
         hashControlVersion: '1',

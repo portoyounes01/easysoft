@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import i18n from '../i18n';
 
 // Web Serial API types
 interface SerialPort {
@@ -147,7 +148,7 @@ export const useWebSerialPrinter = () => {
       setIsConnected(connected);
       return connected;
     } else {
-      alert('Web Serial API not supported. Use Chrome or Edge browser.');
+      alert(i18n.t('hardwareTesting.webSerialUnsupported'));
       return false;
     }
   };

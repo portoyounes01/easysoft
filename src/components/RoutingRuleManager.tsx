@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Edit, Trash2, Tag, Package, Menu, Hash, AlertCircle } from 'lucide-react';
 import { PrinterStation, PrinterRoutingRule } from '../types/printerWorkflow';
 import { printerWorkflowService } from '../services/printerWorkflowService';
@@ -9,6 +10,7 @@ interface RoutingRuleManagerProps {
 }
 
 const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStationUpdate }) => {
+  const { t } = useTranslation();
   const [rules, setRules] = useState<PrinterRoutingRule[]>(station.routingRules || []);
   const [editingRule, setEditingRule] = useState<PrinterRoutingRule | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -35,7 +37,7 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
   };
 
   const handleDeleteRule = (ruleId: string) => {
-    if (confirm('Delete this routing rule?')) {
+    if (confirm(t('printerWorkflow.deleteRuleConfirm'))) {
       const updatedRules = rules.filter(rule => rule.id !== ruleId);
       setRules(updatedRules);
       
@@ -74,32 +76,32 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
 
   const getRuleTypeDescription = (type: string) => {
     switch (type) {
-      case 'product': return 'Specific product by ID or SKU';
-      case 'category': return 'All products in a category';
-      case 'menu': return 'All items from a specific menu';
-      case 'tag': return 'Products with specific tags';
-      default: return 'Unknown rule type';
+      case 'product': return t('printerWorkflow.descProduct');
+      case 'category': return t('printerWorkflow.descCategory');
+      case 'menu': return t('printerWorkflow.descMenu');
+      case 'tag': return t('printerWorkflow.descTag');
+      default: return t('printerWorkflow.unknownRuleType');
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h4 className="font-medium text-gray-900">Routing Rules</h4>
+        <h4 className="font-medium text-gray-900">{t('printerWorkflow.routingRulesTitle')}</h4>
         <button
           onClick={handleCreateRule}
           className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
         >
           <Plus className="h-3 w-3" />
-          Add Rule
+          {t('printerWorkflow.addRule')}
         </button>
       </div>
 
       {rules.length === 0 ? (
         <div className="text-center py-6 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
           <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p>No routing rules configured</p>
-          <p className="text-sm">Add rules to control what prints to this station</p>
+          <p>{t('printerWorkflow.noRules')}</p>
+          <p className="text-sm">{t('printerWorkflow.noRulesHint')}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -123,11 +125,11 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                         {rule.type}: {rule.condition}
                       </span>
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                        Priority: {rule.priority}
+                        {t('printerWorkflow.priorityBadge', { priority: rule.priority })}
                       </span>
                       {!rule.isActive && (
                         <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">
-                          Disabled
+                          {t('printerWorkflow.disabled')}
                         </span>
                       )}
                     </div>
@@ -141,14 +143,14 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                   <button
                     onClick={() => handleEditRule(rule)}
                     className="p-1 text-gray-400 hover:text-blue-600 rounded"
-                    title="Edit Rule"
+                    title={t('printerWorkflow.editRuleTooltip')}
                   >
                     <Edit className="h-3 w-3" />
                   </button>
                   <button
                     onClick={() => handleDeleteRule(rule.id)}
                     className="p-1 text-gray-400 hover:text-red-600 rounded"
-                    title="Delete Rule"
+                    title={t('printerWorkflow.deleteRuleTooltip')}
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
@@ -163,14 +165,14 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-lg">
             <h3 className="text-lg font-bold mb-4">
-              {editingRule.id.startsWith('new-') ? 'Create Routing Rule' : 'Edit Routing Rule'}
+              {editingRule.id.startsWith('new-') ? t('printerWorkflow.createRuleTitle') : t('printerWorkflow.editRuleTitleModal')}
             </h3>
 
             <div className="space-y-4">
               {/* Rule Type */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Rule Type
+                  {t('printerWorkflow.ruleType')}
                 </label>
                 <select
                   value={editingRule.type}
@@ -180,10 +182,10 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                   })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="category">Product Category</option>
-                  <option value="product">Specific Product</option>
-                  <option value="menu">Menu Section</option>
-                  <option value="tag">Product Tag</option>
+                  <option value="category">{t('printerWorkflow.optionCategory')}</option>
+                  <option value="product">{t('printerWorkflow.optionProduct')}</option>
+                  <option value="menu">{t('printerWorkflow.optionMenu')}</option>
+                  <option value="tag">{t('printerWorkflow.optionTag')}</option>
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
                   {getRuleTypeDescription(editingRule.type)}
@@ -193,7 +195,7 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
               {/* Condition */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Condition
+                  {t('printerWorkflow.condition')}
                 </label>
                 <input
                   type="text"
@@ -204,10 +206,10 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                   })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder={
-                    editingRule.type === 'category' ? 'Category ID (or * for all)' :
-                    editingRule.type === 'product' ? 'Product ID or SKU' :
-                    editingRule.type === 'menu' ? 'Menu name' :
-                    editingRule.type === 'tag' ? 'Tag name' : 'Condition value'
+                    editingRule.type === 'category' ? t('printerWorkflow.placeholderCategory') :
+                    editingRule.type === 'product' ? t('printerWorkflow.placeholderProduct') :
+                    editingRule.type === 'menu' ? t('printerWorkflow.placeholderMenu') :
+                    editingRule.type === 'tag' ? t('printerWorkflow.placeholderTag') : t('printerWorkflow.placeholderConditionDefault')
                   }
                 />
               </div>
@@ -215,7 +217,7 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
               {/* Priority */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Priority (1-100)
+                  {t('printerWorkflow.priorityRange')}
                 </label>
                 <input
                   type="number"
@@ -229,14 +231,14 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Higher priority rules are evaluated first
+                  {t('printerWorkflow.priorityHint')}
                 </p>
               </div>
 
               {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes (optional)
+                  {t('printerWorkflow.notesOptional')}
                 </label>
                 <input
                   type="text"
@@ -246,7 +248,7 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                     notes: e.target.value
                   })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Description of this rule"
+                  placeholder={t('printerWorkflow.ruleDescriptionPlaceholder')}
                 />
               </div>
 
@@ -263,7 +265,7 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                   className="text-blue-600"
                 />
                 <label htmlFor="ruleActive" className="text-sm font-medium text-gray-700">
-                  Rule is active
+                  {t('printerWorkflow.ruleIsActive')}
                 </label>
               </div>
             </div>
@@ -276,14 +278,14 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                 }}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleSaveRule}
                 disabled={!editingRule.condition.trim()}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                {editingRule.id.startsWith('new-') ? 'Create Rule' : 'Update Rule'}
+                {editingRule.id.startsWith('new-') ? t('printerWorkflow.createRuleBtn') : t('printerWorkflow.updateRuleBtn')}
               </button>
             </div>
           </div>

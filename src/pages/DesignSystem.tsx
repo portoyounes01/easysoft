@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import ColorPalette from '../components/DesignSystem/ColorPalette';
 import Typography from '../components/DesignSystem/Typography';
 import Buttons from '../components/DesignSystem/Buttons';
@@ -10,7 +11,24 @@ import Premade from '../components/DesignSystem/Premade';
 type Section = 'text-style' | 'color-style' | 'buttons' | 'icons' | 'input-fields' | 'table' | 'base' | 'premade' | 'illustration' | 'elevation';
 
 const DesignSystem: React.FC = () => {
+  const { t } = useTranslation();
   const [activeSection, setActiveSection] = useState<Section>('text-style');
+
+  const navItems: { id: Section; label: string }[] = useMemo(
+    () => [
+      { id: 'text-style', label: t('designSystemPage.nav.textStyle') },
+      { id: 'color-style', label: t('designSystemPage.nav.colorStyle') },
+      { id: 'buttons', label: t('designSystemPage.nav.buttons') },
+      { id: 'icons', label: t('designSystemPage.nav.icons') },
+      { id: 'input-fields', label: t('designSystemPage.nav.inputFields') },
+      { id: 'table', label: t('designSystemPage.nav.table') },
+      { id: 'base', label: t('designSystemPage.nav.base') },
+      { id: 'premade', label: t('designSystemPage.nav.premade') },
+      { id: 'illustration', label: t('designSystemPage.nav.illustration') },
+      { id: 'elevation', label: t('designSystemPage.nav.elevation') },
+    ],
+    [t]
+  );
 
   const renderSection = () => {
     switch (activeSection) {
@@ -31,33 +49,20 @@ const DesignSystem: React.FC = () => {
       default:
         return (
           <div className="p-8 text-center text-gray-500">
-            <h2 className="text-xl font-semibold mb-2">Coming Soon</h2>
-            <p>The {activeSection.replace('-', ' ')} section is under construction.</p>
+            <h2 className="text-xl font-semibold mb-2">{t('designSystemPage.comingSoon')}</h2>
+            <p>{t('designSystemPage.sectionUnderConstruction', { section: activeSection.replace('-', ' ') })}</p>
           </div>
         );
     }
   };
-
-  const navItems: { id: Section; label: string }[] = [
-    { id: 'text-style', label: 'Text Style' },
-    { id: 'color-style', label: 'Color Style' },
-    { id: 'buttons', label: 'Buttons' },
-    { id: 'icons', label: 'Icons' },
-    { id: 'input-fields', label: 'Input Fields' },
-    { id: 'table', label: 'Table' },
-    { id: 'base', label: 'Base' },
-    { id: 'premade', label: 'Premade' },
-    { id: 'illustration', label: 'Illustration' },
-    { id: 'elevation', label: 'Elevation' },
-  ];
 
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
       <div className="w-64 bg-white border-r border-gray-200 overflow-y-auto">
         <div className="p-6">
-          <h1 className="text-2xl font-bold text-gray-900">Design System</h1>
-          <p className="text-sm text-gray-500 mt-1">Style Guide & Components</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('designSystemPage.title')}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t('designSystemPage.subtitle')}</p>
         </div>
         <nav className="px-4 pb-6">
           <ul className="space-y-1">
@@ -84,7 +89,7 @@ const DesignSystem: React.FC = () => {
           <div className="max-w-6xl mx-auto">
             <div className="mb-8">
               <h2 className="text-3xl font-bold text-gray-900 capitalize">
-                {activeSection.replace('-', ' ')}
+                {navItems.find((i) => i.id === activeSection)?.label ?? activeSection}
               </h2>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">

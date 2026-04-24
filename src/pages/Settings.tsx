@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Settings as SettingsIcon,
     Clock,
@@ -13,16 +13,21 @@ import {
     Bell,
     Printer,
     FileDown,
+    Key,
 } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useTranslation } from 'react-i18next';
-import { transactionLocalService } from '../lib/localDatabase';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
+import { initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import { buildSaftAuditFileXml } from '../fiscal/saft/exportSaft';
+import { nextHashControlVersion } from '../fiscal/hashControl';
+import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
 import { generateUUID } from '../utils/uuid';
 // import PrinterSetup from '../components/PrinterSetup';
 
 const Settings: React.FC = () => {
     const { settings, updateSettings, resetToDefaults, isLoading } = useSettings();
+    const { employee } = useSupabaseAuth();
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState('security');
     const [pendingChanges, setPendingChanges] = useState(false);
@@ -32,45 +37,135 @@ const Settings: React.FC = () => {
     const [saftBusy, setSaftBusy] = useState(false);
     const [saftMessage, setSaftMessage] = useState<string | null>(null);
     const [fiscalElectronMsg, setFiscalElectronMsg] = useState<string | null>(null);
+    const [lastFiscalInvoiceNo, setLastFiscalInvoiceNo] = useState<string | null>(null);
+    const [keyRotationBusy, setKeyRotationBusy] = useState(false);
+    const [keyRotationMessage, setKeyRotationMessage] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                await initializeLocalDatabase();
+                const now = new Date();
+                const sk = computeSeriesKey(settings.receipt, now);
+                const at = settings.receipt.atValidationCode.trim();
+                if (!at) {
+                    if (!cancelled) setLastFiscalInvoiceNo(null);
+                    return;
+                }
+                const cs = buildChainScope(at, sk);
+                const last = await transactionLocalService.getLastFiscalDocumentInChain(cs);
+                if (!cancelled) setLastFiscalInvoiceNo(last?.invoice_no ?? null);
+            } catch {
+                if (!cancelled) setLastFiscalInvoiceNo(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        settings.receipt.atValidationCode,
+        settings.receipt.seriesPrefix,
+        settings.receipt.resetPolicy,
+        settings.receipt.numericWidth,
+    ]);
+
     // const [showPrinterSetup, setShowPrinterSetup] = useState(false);
     // const [printerStatus, setPrinterStatus] = useState<any>(null);
 
-    const tabs = [
-        {
-            id: 'security',
-            label: 'Security & Auto-Logout',
-            icon: Shield,
-            description: 'Session timeout and security settings'
-        },
-        {
-            id: 'pos',
-            label: 'POS Configuration',
-            icon: DollarSign,
-            description: 'Currency, tax rates, and checkout settings'
-        },
-        {
-            id: 'display',
-            label: 'Display & Interface',
-            icon: Monitor,
-            description: 'UI preferences and display options'
-        },
-        {
-            id: 'hardware',
-            label: 'Hardware & Printers',
-            icon: Printer,
-            description: 'Thermal printer and cash drawer setup'
-        },
-        {
-            id: 'company',
-            label: 'Company & Fiscal',
-            icon: SettingsIcon,
-            description: 'Company details and receipt numbering'
-        },
-    ];
+    const tabs = useMemo(
+        () => [
+            {
+                id: 'security',
+                label: t('settings.tabs.security.label'),
+                icon: Shield,
+                description: t('settings.tabs.security.description'),
+            },
+            {
+                id: 'pos',
+                label: t('settings.tabs.pos.label'),
+                icon: DollarSign,
+                description: t('settings.tabs.pos.description'),
+            },
+            {
+                id: 'display',
+                label: t('settings.tabs.display.label'),
+                icon: Monitor,
+                description: t('settings.tabs.display.description'),
+            },
+            {
+                id: 'hardware',
+                label: t('settings.tabs.hardware.label'),
+                icon: Printer,
+                description: t('settings.tabs.hardware.description'),
+            },
+            {
+                id: 'company',
+                label: t('settings.tabs.company.label'),
+                icon: SettingsIcon,
+                description: t('settings.tabs.company.description'),
+            },
+        ],
+        [t]
+    );
 
     const handleSettingsChange = (category: string, field: string, value: any) => {
         updateSettings({ [category]: { [field]: value } } as any);
         setPendingChanges(true);
+    };
+
+    const handleRegisterKeyRotation = async () => {
+        if (employee?.role !== 'admin') {
+            return;
+        }
+        if (
+            !window.confirm(t('settings.confirm.keyRotation'))
+        ) {
+            return;
+        }
+        setKeyRotationMessage(null);
+        try {
+            setKeyRotationBusy(true);
+            const rawPrev = (settings.fiscal.hashControlVersion || '1').trim();
+            const prev = rawPrev || '1';
+            const next = nextHashControlVersion(prev);
+            updateSettings({ fiscal: { hashControlVersion: next } });
+            await initializeLocalDatabase();
+            await transactionLocalService.appendFiscalAuditEvent({
+                event_type: 'KEY_ROTATED',
+                payload_json: JSON.stringify({
+                    previousHashControl: prev,
+                    nextHashControl: next,
+                }),
+                employee_id: employee.id,
+            });
+            setPendingChanges(false);
+            setKeyRotationMessage(t('settings.messages.keyRotationSuccess', { prev, next }));
+        } catch (e) {
+            console.error(e);
+            setKeyRotationMessage(
+                e instanceof Error ? e.message : t('settings.messages.keyRotationFail')
+            );
+        } finally {
+            setKeyRotationBusy(false);
+        }
+    };
+
+    const handleTrainingModeChange = (next: boolean) => {
+        const msg = next ? t('settings.confirm.trainingOn') : t('settings.confirm.trainingOff');
+        if (!window.confirm(msg)) return;
+        try {
+            if (next) {
+                localStorage.setItem('pos_dexie_slot', 'training');
+            } else {
+                localStorage.removeItem('pos_dexie_slot');
+            }
+        } catch {
+            /* ignore */
+        }
+        updateSettings({ fiscal: { trainingMode: next } });
+        setPendingChanges(false);
+        window.setTimeout(() => window.location.reload(), 200);
     };
 
     const handleSave = async () => {
@@ -86,7 +181,7 @@ const Settings: React.FC = () => {
     };
 
     const handleReset = () => {
-        if (confirm('Are you sure you want to reset all settings to defaults? This action cannot be undone.')) {
+        if (confirm(t('settings.confirm.resetAll'))) {
             resetToDefaults();
             setPendingChanges(false);
             setSaveStatus('idle');
@@ -97,21 +192,19 @@ const Settings: React.FC = () => {
         setFiscalElectronMsg(null);
         const api = typeof window !== 'undefined' ? window.electronAPI?.fiscal : undefined;
         if (!api) {
-            setFiscalElectronMsg('Disponível apenas na aplicação Electron.');
+            setFiscalElectronMsg(t('settings.messages.electronOnly'));
             return;
         }
         const pem = settings.fiscal.privateKeyPem?.trim();
         if (!pem) {
-            setFiscalElectronMsg('Cole a chave PEM antes de guardar.');
+            setFiscalElectronMsg(t('settings.messages.pastePemFirst'));
             return;
         }
         const r = await api.storePrivateKeyPem(pem);
         if (r.success) {
-            setFiscalElectronMsg(
-                'Chave guardada no armazenamento seguro do sistema. Pode limpar o campo local se já não precisar dele no browser.'
-            );
+            setFiscalElectronMsg(t('settings.messages.pemStored'));
         } else {
-            setFiscalElectronMsg(r.error || 'Falha ao guardar.');
+            setFiscalElectronMsg(r.error || t('settings.messages.pemStoreFail'));
         }
     };
 
@@ -136,14 +229,26 @@ const Settings: React.FC = () => {
             a.click();
             URL.revokeObjectURL(url);
             const batchId = generateUUID();
+            const exportedAt = new Date().toISOString();
             await transactionLocalService.markFiscalDocumentsSaftExported(
                 fiscalDocs.map(d => d.id),
                 batchId,
-                new Date().toISOString()
+                exportedAt
             );
-            setSaftMessage(`Exportadas ${fiscalDocs.length} faturas (intervalo local).`);
+            await transactionLocalService.appendFiscalAuditEvent({
+                event_type: 'SAFT_EXPORTED',
+                payload_json: JSON.stringify({
+                    startDateYmd: saftStart,
+                    endDateYmd: saftEnd,
+                    documentCount: fiscalDocs.length,
+                    batchId,
+                    exportedAt,
+                }),
+                employee_id: null,
+            });
+            setSaftMessage(t('settings.messages.saftExported', { count: fiscalDocs.length }));
         } catch (e) {
-            setSaftMessage(e instanceof Error ? e.message : 'Falha na exportação SAF-T.');
+            setSaftMessage(e instanceof Error ? e.message : t('settings.messages.saftExportFail'));
         } finally {
             setSaftBusy(false);
         }
@@ -154,7 +259,7 @@ const Settings: React.FC = () => {
             <div className="flex items-center justify-center h-64">
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading settings...</p>
+                    <p className="text-gray-600">{t('settings.loading')}</p>
                 </div>
             </div>
         );
@@ -247,15 +352,15 @@ const Settings: React.FC = () => {
                         <div className="space-y-6">
                             <div className="flex items-center space-x-3 mb-6">
                                 <Shield className="w-6 h-6 text-blue-600" />
-                                <h2 className="text-2xl font-bold text-gray-800">Security & Auto-Logout</h2>
+                                <h2 className="text-2xl font-bold text-gray-800">{t('settings.security.title')}</h2>
                             </div>
 
                             {/* Auto-Logout Enable/Disable */}
                             <div className="p-6 bg-blue-50 rounded-xl border border-blue-200">
                                 <div className="flex items-center justify-between mb-4">
                                     <div>
-                                        <h3 className="text-lg font-semibold text-gray-800">Auto-Logout Protection</h3>
-                                        <p className="text-sm text-gray-600">Automatically log out inactive users for security</p>
+                                        <h3 className="text-lg font-semibold text-gray-800">{t('settings.security.autoLogoutTitle')}</h3>
+                                        <p className="text-sm text-gray-600">{t('settings.security.autoLogoutDesc')}</p>
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
                                         <input
@@ -275,42 +380,42 @@ const Settings: React.FC = () => {
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                                     <Clock className="w-4 h-4 inline mr-2" />
-                                                    Timeout Duration (minutes)
+                                                    {t('settings.security.timeoutLabel')}
                                                 </label>
                                                 <select
                                                     value={settings.autoLogout.timeoutMinutes}
                                                     onChange={(e) => handleSettingsChange('autoLogout', 'timeoutMinutes', parseInt(e.target.value))}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 >
-                                                    <option value={1}>1 minute</option>
-                                                    <option value={5}>5 minutes</option>
-                                                    <option value={10}>10 minutes</option>
-                                                    <option value={15}>15 minutes</option>
-                                                    <option value={20}>20 minutes</option>
-                                                    <option value={30}>30 minutes</option>
-                                                    <option value={45}>45 minutes</option>
-                                                    <option value={60}>1 hour</option>
-                                                    <option value={120}>2 hours</option>
+                                                    <option value={1}>{t('settings.security.durations.m1')}</option>
+                                                    <option value={5}>{t('settings.security.durations.m5')}</option>
+                                                    <option value={10}>{t('settings.security.durations.m10')}</option>
+                                                    <option value={15}>{t('settings.security.durations.m15')}</option>
+                                                    <option value={20}>{t('settings.security.durations.m20')}</option>
+                                                    <option value={30}>{t('settings.security.durations.m30')}</option>
+                                                    <option value={45}>{t('settings.security.durations.m45')}</option>
+                                                    <option value={60}>{t('settings.security.durations.h1')}</option>
+                                                    <option value={120}>{t('settings.security.durations.h2')}</option>
                                                 </select>
                                             </div>
 
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                                     <Bell className="w-4 h-4 inline mr-2" />
-                                                    Warning Time (seconds)
+                                                    {t('settings.security.warningLabel')}
                                                 </label>
                                                 <select
                                                     value={settings.autoLogout.warningSeconds}
                                                     onChange={(e) => handleSettingsChange('autoLogout', 'warningSeconds', parseInt(e.target.value))}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 >
-                                                    <option value={10}>10 seconds</option>
-                                                    <option value={15}>15 seconds</option>
-                                                    <option value={30}>30 seconds</option>
-                                                    <option value={45}>45 seconds</option>
-                                                    <option value={60}>1 minute</option>
-                                                    <option value={90}>90 seconds</option>
-                                                    <option value={120}>2 minutes</option>
+                                                    <option value={10}>{t('settings.security.durations.s10')}</option>
+                                                    <option value={15}>{t('settings.security.durations.s15')}</option>
+                                                    <option value={30}>{t('settings.security.durations.s30')}</option>
+                                                    <option value={45}>{t('settings.security.durations.s45')}</option>
+                                                    <option value={60}>{t('settings.security.durations.s60')}</option>
+                                                    <option value={90}>{t('settings.security.durations.s90')}</option>
+                                                    <option value={120}>{t('settings.security.durations.s120')}</option>
                                                 </select>
                                             </div>
                                         </div>
@@ -318,8 +423,8 @@ const Settings: React.FC = () => {
                                         {/* Cart Protection */}
                                         <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200">
                                             <div>
-                                                <h4 className="font-medium text-gray-800">Protect Active Sales</h4>
-                                                <p className="text-sm text-gray-600">Prevent logout when cart contains items</p>
+                                                <h4 className="font-medium text-gray-800">{t('settings.security.protectActiveSales')}</h4>
+                                                <p className="text-sm text-gray-600">{t('settings.security.protectActiveSalesDesc')}</p>
                                             </div>
                                             <label className="relative inline-flex items-center cursor-pointer">
                                                 <input
@@ -334,11 +439,11 @@ const Settings: React.FC = () => {
 
                                         {/* Preview */}
                                         <div className="p-4 bg-gray-50 rounded-lg">
-                                            <h4 className="font-medium text-gray-800 mb-2">Current Configuration</h4>
+                                            <h4 className="font-medium text-gray-800 mb-2">{t('settings.security.currentConfig')}</h4>
                                             <div className="text-sm text-gray-600 space-y-1">
-                                                <p>• Users will be logged out after <strong>{settings.autoLogout.timeoutMinutes} minutes</strong> of inactivity</p>
-                                                <p>• Warning will appear <strong>{settings.autoLogout.warningSeconds} seconds</strong> before logout</p>
-                                                <p>• {settings.autoLogout.protectWhenCartHasItems ? 'Active sales are protected' : 'No protection for active sales'}</p>
+                                                <p>{t('settings.security.summaryMinutes', { minutes: settings.autoLogout.timeoutMinutes })}</p>
+                                                <p>{t('settings.security.summaryWarning', { seconds: settings.autoLogout.warningSeconds })}</p>
+                                                <p>{settings.autoLogout.protectWhenCartHasItems ? t('settings.security.summaryProtectOn') : t('settings.security.summaryProtectOff')}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -352,30 +457,30 @@ const Settings: React.FC = () => {
                         <div className="space-y-6">
                             <div className="flex items-center space-x-3 mb-6">
                                 <DollarSign className="w-6 h-6 text-green-600" />
-                                <h2 className="text-2xl font-bold text-gray-800">POS Configuration</h2>
+                                <h2 className="text-2xl font-bold text-gray-800">{t('settings.pos.title')}</h2>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="p-6 bg-green-50 rounded-xl border border-green-200">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Currency Settings</h3>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('settings.pos.currencySettings')}</h3>
 
                                     <div className="space-y-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Currency Symbol</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.pos.currencySymbol')}</label>
                                             <select
                                                 value={settings.pos.currencySymbol}
                                                 onChange={(e) => handleSettingsChange('pos', 'currencySymbol', e.target.value)}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             >
-                                                <option value="€">€ Euro</option>
-                                                <option value="$">$ Dollar</option>
-                                                <option value="£">£ Pound</option>
-                                                <option value="¥">¥ Yen</option>
+                                                <option value="€">{t('settings.pos.currency.euro')}</option>
+                                                <option value="$">{t('settings.pos.currency.dollar')}</option>
+                                                <option value="£">{t('settings.pos.currency.pound')}</option>
+                                                <option value="¥">{t('settings.pos.currency.yen')}</option>
                                             </select>
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Default Tax Rate</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.pos.defaultTaxRate')}</label>
                                             <input
                                                 type="number"
                                                 min="0"
@@ -385,18 +490,18 @@ const Settings: React.FC = () => {
                                                 onChange={(e) => handleSettingsChange('pos', 'taxRate', parseFloat(e.target.value))}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
-                                            <p className="text-sm text-gray-500 mt-1">{(settings.pos.taxRate * 100).toFixed(1)}% tax rate</p>
+                                            <p className="text-sm text-gray-500 mt-1">{t('settings.pos.taxRateSuffix', { percent: (settings.pos.taxRate * 100).toFixed(1) })}</p>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="p-6 bg-orange-50 rounded-xl border border-orange-200">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Inventory Settings</h3>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('settings.pos.inventorySettings')}</h3>
 
                                     <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200">
                                         <div>
-                                            <h4 className="font-medium text-gray-800">Allow Negative Stock</h4>
-                                            <p className="text-sm text-gray-600">Permit sales even when stock is low</p>
+                                            <h4 className="font-medium text-gray-800">{t('settings.pos.allowNegativeStock')}</h4>
+                                            <p className="text-sm text-gray-600">{t('settings.pos.allowNegativeStockDesc')}</p>
                                         </div>
                                         <label className="relative inline-flex items-center cursor-pointer">
                                             <input
@@ -414,8 +519,8 @@ const Settings: React.FC = () => {
                                 <div className="p-6 bg-yellow-50 rounded-xl border border-yellow-200 md:col-span-2">
                                     <div className="flex items-center justify-between mb-4">
                                         <div>
-                                            <h3 className="text-lg font-semibold text-gray-800">Auto-Clear Cart</h3>
-                                            <p className="text-sm text-gray-600">Automatically clear cart after period of inactivity</p>
+                                            <h3 className="text-lg font-semibold text-gray-800">{t('settings.pos.autoClearCart')}</h3>
+                                            <p className="text-sm text-gray-600">{t('settings.pos.autoClearCartDesc')}</p>
                                         </div>
                                         <label className="relative inline-flex items-center cursor-pointer">
                                             <input
@@ -436,7 +541,7 @@ const Settings: React.FC = () => {
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                                     <Clock className="w-4 h-4 inline mr-2" />
-                                                    Clear Cart After (minutes)
+                                                    {t('settings.pos.clearCartAfter')}
                                                 </label>
                                                 <select
                                                     value={settings.pos.autoClearCart.timeoutMinutes}
@@ -446,25 +551,25 @@ const Settings: React.FC = () => {
                                                     })}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                                                 >
-                                                    <option value={0}>Never</option>
-                                                    <option value={1}>1 minute</option>
-                                                    <option value={2}>2 minutes</option>
-                                                    <option value={5}>5 minutes</option>
-                                                    <option value={10}>10 minutes</option>
-                                                    <option value={15}>15 minutes</option>
-                                                    <option value={30}>30 minutes</option>
-                                                    <option value={60}>1 hour</option>
+                                                    <option value={0}>{t('settings.pos.never')}</option>
+                                                    <option value={1}>{t('settings.security.durations.m1')}</option>
+                                                    <option value={2}>{t('settings.security.durations.m2')}</option>
+                                                    <option value={5}>{t('settings.security.durations.m5')}</option>
+                                                    <option value={10}>{t('settings.security.durations.m10')}</option>
+                                                    <option value={15}>{t('settings.security.durations.m15')}</option>
+                                                    <option value={30}>{t('settings.security.durations.m30')}</option>
+                                                    <option value={60}>{t('settings.security.durations.h1')}</option>
                                                 </select>
                                             </div>
 
                                             {/* Preview */}
                                             <div className="p-4 bg-white rounded-lg border border-gray-200">
-                                                <h4 className="font-medium text-gray-800 mb-2">Current Configuration</h4>
+                                                <h4 className="font-medium text-gray-800 mb-2">{t('settings.pos.autoClearPreview')}</h4>
                                                 <div className="text-sm text-gray-600">
                                                     {settings.pos.autoClearCart.timeoutMinutes === 0 ? (
-                                                        <p>• Cart will <strong>never</strong> be automatically cleared</p>
+                                                        <p>{t('settings.pos.neverCleared')}</p>
                                                     ) : (
-                                                        <p>• Cart will be cleared after <strong>{settings.pos.autoClearCart.timeoutMinutes} minutes</strong> of inactivity</p>
+                                                        <p>{t('settings.pos.clearedAfter', { minutes: settings.pos.autoClearCart.timeoutMinutes })}</p>
                                                     )}
                                                 </div>
                                             </div>
@@ -480,32 +585,32 @@ const Settings: React.FC = () => {
                         <div className="space-y-6">
                             <div className="flex items-center space-x-3 mb-6">
                                 <Monitor className="w-6 h-6 text-purple-600" />
-                                <h2 className="text-2xl font-bold text-gray-800">Display & Interface</h2>
+                                <h2 className="text-2xl font-bold text-gray-800">{t('settings.display.title')}</h2>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="p-6 bg-purple-50 rounded-xl border border-purple-200">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Display Preferences</h3>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('settings.display.displayPreferences')}</h3>
 
                                     <div className="space-y-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Items Per Page</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.display.itemsPerPage')}</label>
                                             <select
                                                 value={settings.display.itemsPerPage}
                                                 onChange={(e) => handleSettingsChange('display', 'itemsPerPage', parseInt(e.target.value))}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                             >
-                                                <option value={10}>10 items</option>
-                                                <option value={20}>20 items</option>
-                                                <option value={50}>50 items</option>
-                                                <option value={100}>100 items</option>
+                                                <option value={10}>{t('settings.display.itemsOption', { count: 10 })}</option>
+                                                <option value={20}>{t('settings.display.itemsOption', { count: 20 })}</option>
+                                                <option value={50}>{t('settings.display.itemsOption', { count: 50 })}</option>
+                                                <option value={100}>{t('settings.display.itemsOption', { count: 100 })}</option>
                                             </select>
                                         </div>
 
                                         <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200">
                                             <div>
-                                                <h4 className="font-medium text-gray-800">Compact Mode</h4>
-                                                <p className="text-sm text-gray-600">Reduce spacing for smaller screens</p>
+                                                <h4 className="font-medium text-gray-800">{t('settings.display.compactMode')}</h4>
+                                                <p className="text-sm text-gray-600">{t('settings.display.compactModeDesc')}</p>
                                             </div>
                                             <label className="relative inline-flex items-center cursor-pointer">
                                                 <input
@@ -521,12 +626,12 @@ const Settings: React.FC = () => {
                                 </div>
 
                                 <div className="p-6 bg-indigo-50 rounded-xl border border-indigo-200">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Employee Interface</h3>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('settings.display.employeeInterface')}</h3>
 
                                     <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200">
                                         <div>
-                                            <h4 className="font-medium text-gray-800">Show Employee Photos</h4>
-                                            <p className="text-sm text-gray-600">Display profile pictures in employee lists</p>
+                                            <h4 className="font-medium text-gray-800">{t('settings.display.showEmployeePhotos')}</h4>
+                                            <p className="text-sm text-gray-600">{t('settings.display.showEmployeePhotosDesc')}</p>
                                         </div>
                                         <label className="relative inline-flex items-center cursor-pointer">
                                             <input
@@ -548,16 +653,16 @@ const Settings: React.FC = () => {
                         <div className="space-y-6">
                             <div className="flex items-center space-x-3 mb-6">
                                 <SettingsIcon className="w-6 h-6 text-slate-600" />
-                                <h2 className="text-2xl font-bold text-gray-800">Company & Fiscal</h2>
+                                <h2 className="text-2xl font-bold text-gray-800">{t('settings.company.title')}</h2>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="p-6 bg-slate-50 rounded-xl border border-slate-200">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Company Information</h3>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('settings.company.companyInfo')}</h3>
 
                                     <div className="space-y-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.companyName')}</label>
                                             <input
                                                 type="text"
                                                 value={settings.company.name}
@@ -566,7 +671,7 @@ const Settings: React.FC = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.address')}</label>
                                             <input
                                                 type="text"
                                                 value={settings.company.address}
@@ -576,7 +681,7 @@ const Settings: React.FC = () => {
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             <div className="md:col-span-1">
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Postal Code</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.postalCode')}</label>
                                                 <input
                                                     type="text"
                                                     value={settings.company.postalCode}
@@ -585,7 +690,7 @@ const Settings: React.FC = () => {
                                                 />
                                             </div>
                                             <div className="md:col-span-2">
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.city')}</label>
                                                 <input
                                                     type="text"
                                                     value={settings.company.city}
@@ -595,7 +700,7 @@ const Settings: React.FC = () => {
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Tax Number (NIF)</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.taxNumber')}</label>
                                             <input
                                                 type="text"
                                                 value={settings.company.taxNumber}
@@ -605,7 +710,7 @@ const Settings: React.FC = () => {
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.phone')}</label>
                                                 <input
                                                     type="text"
                                                     value={settings.company.phone || ''}
@@ -614,7 +719,7 @@ const Settings: React.FC = () => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.email')}</label>
                                                 <input
                                                     type="email"
                                                     value={settings.company.email || ''}
@@ -624,7 +729,7 @@ const Settings: React.FC = () => {
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Slogan (optional)</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.slogan')}</label>
                                             <input
                                                 type="text"
                                                 value={settings.company.slogan || ''}
@@ -633,7 +738,7 @@ const Settings: React.FC = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Software Info (optional)</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.softwareInfo')}</label>
                                             <input
                                                 type="text"
                                                 value={settings.company.softwareInfo || ''}
@@ -642,7 +747,7 @@ const Settings: React.FC = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Certification Number (optional)</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.certificationNumber')}</label>
                                             <input
                                                 type="text"
                                                 value={settings.company.certificationNumber || ''}
@@ -651,45 +756,56 @@ const Settings: React.FC = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Software Certification Number (AT)</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.softwareCertNumber')}</label>
                                             <input
                                                 type="text"
                                                 value={settings.company.softwareCertNumber || ''}
                                                 onChange={(e) => handleSettingsChange('company', 'softwareCertNumber', e.target.value)}
-                                                placeholder="PTR-A-001"
+                                                placeholder={t('settings.company.softwareCertPlaceholder')}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
                                             />
-                                            <p className="text-xs text-gray-500 mt-1">Official AT certification number for software</p>
+                                            <p className="text-xs text-gray-500 mt-1">{t('settings.company.softwareCertHelp')}</p>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="p-6 bg-blue-50 rounded-xl border border-blue-200">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Receipt Numbering</h3>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('settings.company.receiptNumbering')}</h3>
                                     <div className="space-y-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">Series Name (for AT Registration)</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesForAT')}</label>
                                             <input
                                                 type="text"
                                                 value={settings.receipt.series}
                                                 onChange={(e) => handleSettingsChange('receipt', 'series', e.target.value)}
-                                                placeholder="FAT2026"
+                                                placeholder={t('settings.company.seriesForATPlaceholder')}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                             />
-                                            <p className="text-xs text-gray-500 mt-1">Series identifier to register with AT portal</p>
+                                            <p className="text-xs text-gray-500 mt-1">{t('settings.company.seriesForATHelp')}</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesDescription')}</label>
+                                            <input
+                                                type="text"
+                                                value={settings.receipt.seriesDescription ?? ''}
+                                                onChange={(e) => handleSettingsChange('receipt', 'seriesDescription', e.target.value)}
+                                                placeholder={t('settings.company.seriesDescriptionPlaceholder')}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Series Prefix</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesPrefix')}</label>
                                                 <input
                                                     type="text"
                                                     value={settings.receipt.seriesPrefix}
                                                     onChange={(e) => handleSettingsChange('receipt', 'seriesPrefix', e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 />
+                                                <p className="text-xs text-amber-700 mt-1">{t('settings.company.seriesPrefixHelp')}</p>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Numeric Width</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.numericWidth')}</label>
                                                 <input
                                                     type="number"
                                                     min={1}
@@ -701,31 +817,31 @@ const Settings: React.FC = () => {
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Reset Policy</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.resetPolicy')}</label>
                                                 <select
                                                     value={settings.receipt.resetPolicy}
                                                     onChange={(e) => handleSettingsChange('receipt', 'resetPolicy', e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 >
-                                                    <option value="monthly">Monthly</option>
-                                                    <option value="yearly">Yearly</option>
+                                                    <option value="monthly">{t('settings.company.monthly')}</option>
+                                                    <option value="yearly">{t('settings.company.yearly')}</option>
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Default Document Type</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.defaultDocumentType')}</label>
                                                 <select
                                                     value={settings.receipt.defaultDocumentType}
                                                     onChange={(e) => handleSettingsChange('receipt', 'defaultDocumentType', e.target.value)}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 >
-                                                    <option value="FATURA_SIMPLIFICADA">Fatura Simplificada</option>
-                                                    <option value="FATURA">Fatura</option>
+                                                    <option value="FATURA_SIMPLIFICADA">{t('settings.company.docTypeSimplified')}</option>
+                                                    <option value="FATURA">{t('settings.company.docTypeInvoice')}</option>
                                                 </select>
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Counter Label</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.counterLabel')}</label>
                                                 <input
                                                     type="text"
                                                     value={settings.receipt.counterLabel}
@@ -734,22 +850,22 @@ const Settings: React.FC = () => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">AT Validation Code (ATCUD)</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.atValidationCode')}</label>
                                                 <input
                                                     type="text"
                                                     value={settings.receipt.atValidationCode}
                                                     onChange={(e) => handleSettingsChange('receipt', 'atValidationCode', e.target.value)}
-                                                    placeholder="AT56789X1"
+                                                    placeholder={t('settings.company.atValidationPlaceholder')}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 />
-                                                <p className="text-xs text-gray-500 mt-1">Code from AT portal after series registration</p>
+                                                <p className="text-xs text-gray-500 mt-1">{t('settings.company.atValidationHelp')}</p>
                                             </div>
                                         </div>
 
                                         <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 min-h-[60px]">
                                             <div>
-                                                <h4 className="font-medium text-gray-800">Série descontinuada</h4>
-                                                <p className="text-sm text-gray-600">Impede novas emissões nesta série (AT).</p>
+                                                <h4 className="font-medium text-gray-800">{t('settings.company.seriesDiscontinuedTitle')}</h4>
+                                                <p className="text-sm text-gray-600">{t('settings.company.seriesDiscontinuedDesc')}</p>
                                             </div>
                                             <label className="relative inline-flex items-center cursor-pointer">
                                                 <input
@@ -762,21 +878,78 @@ const Settings: React.FC = () => {
                                             </label>
                                         </div>
 
+                                        <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 min-h-[60px]">
+                                            <div>
+                                                <h4 className="font-medium text-gray-800">{t('settings.company.printDuplicateTitle')}</h4>
+                                                <p className="text-sm text-gray-600">{t('settings.company.printDuplicateDesc')}</p>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    className="sr-only peer"
+                                                    checked={settings.receipt.printDuplicateOnIssue !== false}
+                                                    onChange={(e) => handleSettingsChange('receipt', 'printDuplicateOnIssue', e.target.checked)}
+                                                />
+                                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            </label>
+                                        </div>
+
                                         {/* Current Series Preview */}
                                         <div className="p-4 bg-white rounded-lg border border-gray-200">
-                                            <h4 className="font-medium text-gray-800 mb-2">Current Series Status</h4>
-                                            <p className="text-sm text-gray-600">Last series key: <strong>{settings.receipt.lastSeriesKey || '—'}</strong></p>
-                                            <p className="text-sm text-gray-600">Current number: <strong>{settings.receipt.currentNumber}</strong></p>
+                                            <h4 className="font-medium text-gray-800 mb-2">{t('settings.company.seriesStatus')}</h4>
+                                            <p className="text-sm text-gray-600">{t('settings.company.lastSeriesKey')} <strong>{settings.receipt.lastSeriesKey || '—'}</strong></p>
+                                            <p className="text-sm text-gray-600">{t('settings.company.currentNumber')} <strong>{settings.receipt.currentNumber}</strong></p>
+                                            <p className="text-sm text-gray-600">{t('settings.company.lastDocInChain')} <strong>{lastFiscalInvoiceNo ?? '—'}</strong></p>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="p-6 bg-emerald-50 rounded-xl border border-emerald-200 md:col-span-2">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Fiscal AT (certificação)</h3>
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('settings.fiscalAT.sectionTitle')}</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="p-4 bg-white rounded-lg border border-gray-200 space-y-3 md:col-span-2">
+                                            <div className="flex items-start gap-3">
+                                                <Key className="w-6 h-6 text-emerald-700 shrink-0 mt-1" aria-hidden />
+                                                <div>
+                                                    <h4 className="font-medium text-gray-800">{t('settings.fiscalAT.hashTitle')}</h4>
+                                                    <p className="text-sm text-gray-600 mt-1">
+                                                        {t('settings.fiscalAT.hashDesc')}
+                                                    </p>
+                                                    <p className="text-lg font-semibold text-gray-900 mt-2">
+                                                        {t('settings.fiscalAT.hashCurrent')}{' '}
+                                                        <span className="font-mono">
+                                                            {settings.fiscal.hashControlVersion?.trim() || '1'}
+                                                        </span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {employee?.role === 'admin' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleRegisterKeyRotation()}
+                                                    disabled={keyRotationBusy}
+                                                    className="inline-flex items-center justify-center gap-2 min-h-[60px] px-6 rounded-2xl font-semibold text-xl text-white bg-orange-500 hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {keyRotationBusy
+                                                        ? t('settings.fiscalAT.keyRotationBusy')
+                                                        : t('settings.fiscalAT.keyRotationButton')}
+                                                </button>
+                                            )}
+                                            {employee?.role !== 'admin' && (
+                                                <p className="text-sm text-gray-500">
+                                                    {t('settings.fiscalAT.keyRotationAdminOnly')}
+                                                </p>
+                                            )}
+                                            {keyRotationMessage && (
+                                                <p className="text-sm text-gray-800 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                                                    {keyRotationMessage}
+                                                </p>
+                                            )}
+                                        </div>
                                         <div className="space-y-4">
+                                            {import.meta.env.DEV && (
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">HashControl (versão)</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.fiscalAT.hashDevLabel')}</label>
                                                 <input
                                                     type="text"
                                                     value={settings.fiscal.hashControlVersion}
@@ -784,17 +957,18 @@ const Settings: React.FC = () => {
                                                     className="w-full min-h-[60px] px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-xl"
                                                 />
                                             </div>
+                                            )}
                                             <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 min-h-[60px]">
                                                 <div>
-                                                    <h4 className="font-medium text-gray-800">Modo de formação</h4>
-                                                    <p className="text-sm text-gray-600">Documentos sem valor fiscal (AT).</p>
+                                                    <h4 className="font-medium text-gray-800">{t('settings.fiscalAT.trainingTitle')}</h4>
+                                                    <p className="text-sm text-gray-600">{t('settings.fiscalAT.trainingDesc')}</p>
                                                 </div>
                                                 <label className="relative inline-flex items-center cursor-pointer">
                                                     <input
                                                         type="checkbox"
                                                         className="sr-only peer"
                                                         checked={settings.fiscal.trainingMode}
-                                                        onChange={(e) => handleSettingsChange('fiscal', 'trainingMode', e.target.checked)}
+                                                        onChange={(e) => handleTrainingModeChange(e.target.checked)}
                                                     />
                                                     <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
                                                 </label>
@@ -802,12 +976,12 @@ const Settings: React.FC = () => {
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Chave privada RSA (PEM PKCS#8 ou PKCS#1) — apenas ambiente controlado
+                                                {t('settings.fiscalAT.pemLabel')}
                                             </label>
                                             <textarea
                                                 value={settings.fiscal.privateKeyPem || ''}
                                                 onChange={(e) => handleSettingsChange('fiscal', 'privateKeyPem', e.target.value)}
-                                                placeholder="-----BEGIN PRIVATE KEY----- ou -----BEGIN RSA PRIVATE KEY-----"
+                                                placeholder={t('settings.fiscalAT.pemPlaceholder')}
                                                 rows={6}
                                                 className="w-full font-mono text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                                             />
@@ -817,7 +991,7 @@ const Settings: React.FC = () => {
                                                     onClick={handleStoreFiscalPemInElectron}
                                                     className="mt-3 w-full md:w-auto min-h-[60px] px-6 rounded-2xl font-semibold text-xl text-white bg-green-500 hover:bg-green-600 transition-colors duration-200"
                                                 >
-                                                    Guardar chave no armazenamento seguro (Electron)
+                                                    {t('settings.fiscalAT.electronStoreButton')}
                                                 </button>
                                             )}
                                             {fiscalElectronMsg && (
@@ -827,13 +1001,13 @@ const Settings: React.FC = () => {
                                     </div>
 
                                     <div className="mt-8 pt-6 border-t border-emerald-200">
-                                        <h4 className="text-md font-semibold text-gray-800 mb-3">Exportar SAF-T (PT) 1.04_01</h4>
+                                        <h4 className="text-md font-semibold text-gray-800 mb-3">{t('settings.fiscalAT.saftTitle')}</h4>
                                         <p className="text-sm text-gray-600 mb-4">
-                                            Gera ficheiro XML a partir de documentos fiscais guardados localmente (intervalo de datas).
+                                            {t('settings.fiscalAT.saftDesc')}
                                         </p>
                                         <div className="flex flex-col md:flex-row gap-4 md:items-end">
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">De</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.fiscalAT.dateFrom')}</label>
                                                 <input
                                                     type="date"
                                                     value={saftStart}
@@ -842,7 +1016,7 @@ const Settings: React.FC = () => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Até</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.fiscalAT.dateTo')}</label>
                                                 <input
                                                     type="date"
                                                     value={saftEnd}
@@ -857,7 +1031,7 @@ const Settings: React.FC = () => {
                                                 className="inline-flex items-center justify-center gap-2 min-h-[80px] px-6 rounded-2xl font-semibold text-xl text-white bg-green-500 hover:bg-green-600 transition-colors duration-200 disabled:opacity-50"
                                             >
                                                 <FileDown className="w-6 h-6" />
-                                                {saftBusy ? 'A exportar…' : 'Descarregar SAF-T'}
+                                                {saftBusy ? t('settings.fiscalAT.saftExporting') : t('settings.fiscalAT.saftDownload')}
                                             </button>
                                         </div>
                                         {saftMessage && (

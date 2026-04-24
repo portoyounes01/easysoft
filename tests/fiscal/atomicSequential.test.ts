@@ -104,6 +104,7 @@ function buildSalePayload(settings: SystemSettings, signer: WebCryptoRsaSha1Sign
         ],
         customerTaxId: '999999990',
         customerTaxNumberForQr: null,
+        customerCountryForQr: 'PT',
         payment: { paymentMethod: 'cash', amountPaid: 1, employeeId: 'e1', employeeName: 'Emp' },
         signer,
     };

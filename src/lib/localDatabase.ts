@@ -21,6 +21,20 @@ import type { FiscalCheckoutAtomicPayload, FiscalCheckoutResult, FiscalTransacti
 import { buildHashPlaintext, extractQrHashFourChars } from '../fiscal/signing';
 import { buildAtQrPayloadString } from '../fiscal/qrPayload';
 import { buildInvoiceNo, computeNextSequential, formatSequential } from '../fiscal/seriesUtils';
+const DEXIE_NAME_PRODUCTION = 'POSDatabase';
+const DEXIE_NAME_TRAINING = 'restaurante_pos_training';
+
+/** Separate IndexedDB when modo formação — read before first open (reload after toggle). */
+export function resolveDexieDbName(): string {
+    try {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('pos_dexie_slot') === 'training') {
+            return DEXIE_NAME_TRAINING;
+        }
+    } catch {
+        /* ignore */
+    }
+    return DEXIE_NAME_PRODUCTION;
+}
 
 // Local database schema for offline-first POS management
 export class LocalPOSDatabase extends Dexie {
@@ -45,8 +59,8 @@ export class LocalPOSDatabase extends Dexie {
     // Metadata table
     syncMetadata!: Table<SyncMetadata & { id: string }>;
 
-    constructor() {
-        super('POSDatabase');
+    constructor(dbName?: string) {
+        super(dbName ?? DEXIE_NAME_PRODUCTION);
 
         // Central place for the schema so we can reuse for upgrades
         const schemaV1V2 = {
@@ -155,6 +169,49 @@ export class LocalPOSDatabase extends Dexie {
                 .modify((c: Record<string, unknown>) => {
                     if (c.tax_number === undefined) c.tax_number = null;
                 });
+        });
+
+        // Version 7: fiscal cancellation fields; customer country (QR C:); transaction fiscal cancel mirror
+        const schemaV7 = {
+            ...schemaV6,
+        } as const;
+
+        this.version(7).stores(schemaV7).upgrade(async trans => {
+            await trans.table('fiscalDocuments').toCollection().modify((r: Record<string, unknown>) => {
+                if (r.cancelled_at === undefined) r.cancelled_at = null;
+                if (r.cancelled_reason === undefined) r.cancelled_reason = null;
+                if (r.cancelled_by_employee_id === undefined) r.cancelled_by_employee_id = null;
+            });
+            await trans.table('customers').toCollection().modify((c: Record<string, unknown>) => {
+                if (c.country === undefined) c.country = 'PT';
+            });
+            await trans.table('transactions').toCollection().modify((t: Record<string, unknown>) => {
+                if (t.fiscal_cancelled_at === undefined) t.fiscal_cancelled_at = null;
+                if (t.fiscal_cancelled_reason === undefined) t.fiscal_cancelled_reason = null;
+                if (t.fiscal_cancelled_by_employee_id === undefined) t.fiscal_cancelled_by_employee_id = null;
+            });
+        });
+
+        const schemaV8 = {
+            ...schemaV7,
+        } as const;
+
+        this.version(8).stores(schemaV8).upgrade(async trans => {
+            await trans.table('customers').toCollection().modify((c: Record<string, unknown>) => {
+                if (c.city === undefined) c.city = null;
+                if (c.postal_code === undefined) c.postal_code = null;
+            });
+        });
+
+        const schemaV9 = {
+            ...schemaV8,
+        } as const;
+
+        this.version(9).stores(schemaV9).upgrade(async trans => {
+            await trans.table('fiscalDocuments').toCollection().modify((r: Record<string, unknown>) => {
+                if (r.settled_invoice_no === undefined) r.settled_invoice_no = null;
+                if (r.settled_invoice_date === undefined) r.settled_invoice_date = null;
+            });
         });
 
         // Add hooks for auto-updating sync flags
@@ -299,8 +356,8 @@ export class LocalPOSDatabase extends Dexie {
     }
 }
 
-// Create singleton instance
-export const localDb = new LocalPOSDatabase();
+// Create singleton instance (name fixed at first import — reload app after switching pos_dexie_slot)
+export const localDb = new LocalPOSDatabase(resolveDexieDbName());
 
 // Initialize sync metadata if it doesn't exist
 export const initializeSyncMetadata = async (): Promise<void> => {
@@ -629,6 +686,9 @@ export class CustomerLocalService {
         const id = generateUUID();
         const customer: LocalCustomer = {
             ...customerData,
+            country: customerData.country ?? 'PT',
+            city: customerData.city ?? null,
+            postal_code: customerData.postal_code ?? null,
             id,
             deleted_at: customerData.deleted_at ?? null,
             created_at: new Date(),
@@ -680,6 +740,7 @@ export class CustomerLocalService {
             .filter(customer =>
                 customer.deleted_at === null &&
                 (customer.name.toLowerCase().includes(normalizedQuery) ||
+                    ((customer.tax_number ?? '').toLowerCase().includes(normalizedQuery)) ||
                     ((customer.email ?? '').toLowerCase().includes(normalizedQuery)) ||
                     ((customer.phone ?? '').toLowerCase().includes(normalizedQuery)))
             )
@@ -744,6 +805,9 @@ export class CustomerLocalService {
                 const localCustomer: LocalCustomer = {
                     ...customer,
                     tax_number: customer.tax_number ?? null,
+                    country: customer.country ?? 'PT',
+                    city: customer.city ?? null,
+                    postal_code: customer.postal_code ?? null,
                     created_at: new Date(customer.created_at),
                     updated_at: new Date(customer.updated_at),
                     last_synced_at: customer.last_synced_at ? new Date(customer.last_synced_at) : null,
@@ -940,6 +1004,55 @@ export class TransactionLocalService {
         return localDb.fiscalDocuments.get(id);
     }
 
+    /** True if a payment receipt (RG) already settles this sale (same FT/FS ref in chain). */
+    async hasReciboForOriginalTransaction(originalTransactionId: string): Promise<boolean> {
+        const origTx = await this.getTransactionById(originalTransactionId);
+        if (!origTx?.fiscal_document_id) return false;
+        const origFiscal = await this.getFiscalDocumentById(origTx.fiscal_document_id);
+        if (!origFiscal) return false;
+        const settledNo = origFiscal.invoice_no;
+        const settledDate = origFiscal.invoice_date;
+        const chain = origFiscal.chain_scope;
+        const matches = await localDb.fiscalDocuments
+            .where('chain_scope')
+            .equals(chain)
+            .filter(
+                d =>
+                    d.invoice_type === 'RG' &&
+                    d.settled_invoice_no === settledNo &&
+                    (d.settled_invoice_date ?? '') === settledDate &&
+                    !d.cancelled_at
+            )
+            .first();
+        return Boolean(matches);
+    }
+
+    /** True if a credit note (NC) was already issued for this original sale (notes link). */
+    async hasCreditNoteForOriginalTransaction(originalTransactionId: string): Promise<boolean> {
+        const origTx = await this.getTransactionById(originalTransactionId);
+        if (!origTx?.fiscal_document_id) return false;
+        const origFiscal = await this.getFiscalDocumentById(origTx.fiscal_document_id);
+        if (!origFiscal) return false;
+        const expectedNote = `NC referente ${origFiscal.invoice_no}`;
+        const chain = origFiscal.chain_scope;
+        const ncs = await localDb.fiscalDocuments
+            .where('chain_scope')
+            .equals(chain)
+            .filter(d => d.invoice_type === 'NC')
+            .toArray();
+        for (const nc of ncs) {
+            if (!nc.transaction_id) continue;
+            const t = await localDb.transactions.get(nc.transaction_id);
+            if (t?.notes?.trim() === expectedNote) return true;
+        }
+        return false;
+    }
+
+    /** Recent fiscal audit events (newest first). */
+    async listFiscalAuditEvents(limit = 500): Promise<LocalFiscalAuditEvent[]> {
+        return localDb.fiscalAuditEvents.orderBy('created_at').reverse().limit(limit).toArray();
+    }
+
     // Get transactions by employee ID
     async getTransactionsByEmployee(employeeId: string): Promise<LocalTransaction[]> {
         const list = await localDb.transactions
@@ -1030,10 +1143,16 @@ export class TransactionLocalService {
      * then insert fiscal + transaction + items + audit in one rw transaction with chain-tip verification and retry if the chain advanced.
      */
     async createFiscalCheckoutAtomic(payload: FiscalCheckoutAtomicPayload): Promise<FiscalCheckoutResult> {
-        const { settings, chainScope, atCode, seriesKey, payment } = payload;
+        const { settings, chainScope, atCode, seriesKey, payment, customerCountryForQr } = payload;
         const receipt = settings.receipt;
         const company = settings.company;
         const hashControl = settings.fiscal.hashControlVersion || '1';
+        const qrCountry =
+            (customerCountryForQr || 'PT').trim().slice(0, 2).toUpperCase() || 'PT';
+        const prefix = (settings.receipt.seriesPrefix || '').trim();
+        if (!prefix) {
+            throw new Error('Prefixo da série em falta (Definições > Recibo).');
+        }
         const maxAttempts = 8;
 
         const rwStores = [
@@ -1063,7 +1182,7 @@ export class TransactionLocalService {
             const nextSequential = computeNextSequential(lastSeq, receipt.currentNumber);
             const invoiceNo = buildInvoiceNo(
                 payload.invoiceTypeSaft,
-                receipt.seriesPrefix,
+                prefix,
                 nextSequential,
                 receipt.numericWidth
             );
@@ -1085,7 +1204,7 @@ export class TransactionLocalService {
             const qrPayload = buildAtQrPayloadString({
                 emitterTaxNumber: company.taxNumber.replace(/\s/g, ''),
                 customerTaxNumber: payload.customerTaxNumberForQr,
-                customerCountry: 'PT',
+                customerCountry: qrCountry,
                 invoiceType: payload.invoiceTypeSaft,
                 invoiceDateYmd: payload.transactionDate,
                 invoiceNo,
@@ -1140,6 +1259,8 @@ export class TransactionLocalService {
                 sequential_number: nextSequential,
                 invoice_no: invoiceNo,
                 invoice_type: payload.invoiceTypeSaft,
+                settled_invoice_no: payload.settledInvoiceNo ?? null,
+                settled_invoice_date: payload.settledInvoiceDateYmd ?? null,
                 invoice_date: payload.transactionDate,
                 system_entry_date: payload.systemEntryDate,
                 gross_total: payload.grossTotal,
@@ -1188,6 +1309,14 @@ export class TransactionLocalService {
                     const nextCheck = computeNextSequential(lastDocNow?.sequential_number, receipt.currentNumber);
                     if (nextCheck !== nextSequential) {
                         throw new Error('FISCAL_CHAIN_ADVANCED');
+                    }
+
+                    const dupCount = await localDb.fiscalDocuments
+                        .where('transaction_id')
+                        .equals(transactionId)
+                        .count();
+                    if (dupCount > 0) {
+                        throw new Error('Já existe documento fiscal para esta transação.');
                     }
 
                     await localDb.fiscalDocuments.add(fiscalDoc);
@@ -1271,29 +1400,6 @@ export class TransactionLocalService {
             created_at: event.created_at ?? new Date().toISOString(),
         };
         await localDb.fiscalAuditEvents.add(row);
-    }
-
-    /**
-     * Records a void / annulment request for a finalized fiscal sale (does not remove the fiscal row).
-     */
-    async requestVoidFiscalTransaction(
-        transactionId: string,
-        employeeId: string,
-        reason: string
-    ): Promise<void> {
-        const tx = await localDb.transactions.get(transactionId);
-        if (!tx?.fiscal_document_id) {
-            throw new Error('Apenas transações com documento fiscal podem ser anuladas por este fluxo.');
-        }
-        await this.appendFiscalAuditEvent({
-            event_type: 'VOID_REQUESTED',
-            payload_json: JSON.stringify({
-                transactionId,
-                fiscalDocumentId: tx.fiscal_document_id,
-                reason,
-            }),
-            employee_id: employeeId,
-        });
     }
 
     /**

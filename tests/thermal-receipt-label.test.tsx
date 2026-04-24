@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import React from 'react';
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, beforeEach } from 'vitest';
 import '@testing-library/jest-dom';
 import ThermalReceipt, { ReceiptProps } from '../src/components/ThermalReceipt';
+import i18n from '../src/i18n';
 
 const base: ReceiptProps = {
     documentNumber: 'ABC-202508-1001',
@@ -17,6 +18,10 @@ const base: ReceiptProps = {
 };
 
 describe('ThermalReceipt documentLabel', () => {
+    beforeEach(async () => {
+        await i18n.changeLanguage('en');
+    });
+
     test('defaults to Original', () => {
         render(<ThermalReceipt {...base} />);
         expect(screen.getByText(/ABC-202508-1001 Original/)).toBeInTheDocument();
@@ -27,9 +32,16 @@ describe('ThermalReceipt documentLabel', () => {
         expect(screen.getByText(/ABC-202508-1001 Duplicado/)).toBeInTheDocument();
     });
 
-    test('renders certification phrase with /AT suffix', () => {
+    test('renders certification phrase with /AT suffix', async () => {
+        await i18n.changeLanguage('pt');
         render(<ThermalReceipt {...base} certificationNumber="196/AT" />);
-        expect(screen.getByText(/Processado por programa certificado n\.º\s+196\/AT/)).toBeInTheDocument();
+        expect(
+            screen.getByText(
+                i18n.t('thermalReceipt.certifiedLine', {
+                    num: '196',
+                })
+            )
+        ).toBeInTheDocument();
     });
 });
 

@@ -45,12 +45,13 @@ Legend: **Done** = code present and tested, **In progress** = partial / code sca
 - Vitest hash‑chain fixtures: `tests/fiscal/signing.chain.test.ts`, `tests/fiscal/pemExtract.test.ts`.
 
 **In progress**
-- `HashControl` field: present in DB + SAF‑T, but default hardcoded to `"1"`; no UI for key rotation / version increment when a new key is loaded.
 - Documentation (cert pack) of signing locus (server vs Electron secure IPC) is drafted in the plan but not in `AGENTS.md` / public docs yet.
 
 **Missing**
-- Key rotation UI + audit event (`KEY_ROTATED`) and automatic `HashControl` bump.
 - Server‑side signer (real `RemoteFiscalSigner`) for a production backend (HSM / KMS) — kept as optional phase 2.
+
+**Done (key rotation)**
+- `HashControl` in settings + SAF‑T; **admin** action **Registar rotação de chave** increments version for new docs, `KEY_ROTATED` fiscal audit (`src/fiscal/hashControl.ts`, `src/pages/Settings.tsx`, `tests/fiscal/keyRotation.test.ts`).
 
 ---
 
@@ -274,13 +275,13 @@ Legend: **Done** = code present and tested, **In progress** = partial / code sca
 - Private key management: PEM field + Electron “guardar chave no armazenamento seguro”.
 
 **In progress**
-- Hide `HashControl` from Settings UI (notes: “Cannot be exposed in the settings even for sys admin”) — the field is not directly editable but the key version is implicit; audit the Settings page to make sure it is never rendered.
+- Cert PDF asks that `HashControl` not be exposed in Settings; we show **read-only** current version + admin **rotation** action (no free editing in production). Confirm with auditor whether this satisfies “not exposed” or if the label must be removed entirely.
 
 **Missing**
 - Series **description** field (3.1).
 - Remove / replace default `seriesPrefix: 'ABC'` sentinel (2.1 UX + 3.1).
 - “No reset policy for the same series — only a new series resets numbering” — today `resetPolicy: 'monthly' | 'yearly'` is offered; reconcile with notes (likely keep only “never, until replaced by new series”).
-- Mode selector (`test` / `stage` / `formation` / `debug`) as explicit Settings enum (notes).
+- Mode selector (`test` / `stage` / `formation` / `debug`) as explicit Settings enum — **deferred** to Phase 4 (see `TODO.md`).
 
 ---
 

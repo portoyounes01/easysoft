@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Package, Search, X, ChevronDown, ChevronRight, Check, Minus } from 'lucide-react';
 import { PrinterStation } from '../types/printerWorkflow';
 import { printerWorkflowService } from '../services/printerWorkflowService';
@@ -28,6 +29,7 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
   station, 
   onStationUpdate 
 }) => {
+  const { t } = useTranslation();
   const { products, categories } = useProducts();
   const [productIds, setProductIds] = useState<string[]>(station.productIds || []);
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,7 +46,7 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
     // Get all categories, including a default one for products without category
     const allCategories = [
       ...categories,
-      { id: 'uncategorized', name: 'Uncategorized', display_order: 999 }
+      { id: 'uncategorized', name: t('products.table.noCategory'), display_order: 999 }
     ];
 
     allCategories.forEach(category => {
@@ -82,7 +84,7 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
     });
 
     return grouped.sort((a, b) => a.name.localeCompare(b.name));
-  }, [products, categories, productIds, searchTerm, expandedCategories]);
+  }, [products, categories, productIds, searchTerm, expandedCategories, t]);
 
   const updateProductAssignment = (newProductIds: string[]) => {
     setProductIds(newProductIds);
@@ -173,7 +175,7 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search products..."
+              placeholder={t('printerWorkflow.searchProductsPlaceholder')}
               className="w-full px-3 py-2 pl-9 pr-8 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />

@@ -34,6 +34,12 @@ export interface OrderSummaryPanelProps {
         value: number;
         amount: number;
     };
+    /** Last issued invoice no in current AT chain (local Dexie). */
+    fiscalChainHint?: string;
+    /** Tap cart line: subtract 1 unit; removes line when quantity was 1. */
+    onDecrementCartLine?: (productId: string) => void;
+    /** Selected invoice customer for display (name + NIF). */
+    customerSummary?: { name: string; taxNumber?: string | null };
 }
 
 type ServiceType = 'dine-in' | 'take-away';
@@ -49,7 +55,10 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     canSaveBill = false,
     className = '',
     totalsOverride,
-    discountInfo
+    discountInfo,
+    fiscalChainHint,
+    onDecrementCartLine,
+    customerSummary
 }) => {
     // 1. Hooks
     const { t } = useTranslation();
@@ -176,7 +185,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                             label={t('pos.tables')}
                             disabled={true}
                             variant="disabled"
-                            title="Disabled"
+                            title={t('pos.paymentDisabled')}
                             style={{ padding: '0.5vh', height: '6vh' }}
                             className="w-full"
                         />
@@ -201,6 +210,21 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                 onChange={handleSetServiceType}
                             />
                         </div>
+                        {customerSummary && (
+                            <div
+                                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 mb-2"
+                                data-testid="order-panel-customer-summary"
+                            >
+                                <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.5vh' }} title={customerSummary.name}>
+                                    {customerSummary.name}
+                                </p>
+                                {customerSummary.taxNumber ? (
+                                    <p className="text-gray-600 mt-0.5" style={{ fontSize: '1.35vh' }}>
+                                        NIF {customerSummary.taxNumber}
+                                    </p>
+                                ) : null}
+                            </div>
+                        )}
                     </div>
 
                     {/* Items list - takes most space */}
@@ -218,24 +242,43 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                 </div>
                             ) : (
                                 <ul className="divide-y divide-gray-100">
-                                    {items.map((ci, index) => (
-                                        <li key={ci.product.id} style={{ paddingTop: index === 0 ? '2vh' : '1.5vh', paddingBottom: '1vh' }}>
-                                            <div className="flex items-center justify-between">
-                                                <p
-                                                    className="font-semibold text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap"
-                                                    style={{ fontSize: '1.7vh', maxWidth: '14vw' }}
-                                                    title={ci.product.name}
-                                                >
-                                                    {ci.product.name}
-                                                </p>
-                                                <p className="font-semibold text-gray-900 whitespace-nowrap" style={{ fontSize: '1.5vh' }}>{formatCurrency(ci.product.price)}</p>
+                                    {items.map((ci, index) => {
+                                        const linePadding = { paddingTop: index === 0 ? '2vh' : '1.5vh', paddingBottom: '1vh' } as const;
+                                        const lineInner = (
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p
+                                                        className="font-semibold text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap"
+                                                        style={{ fontSize: '1.7vh', maxWidth: '14vw' }}
+                                                        title={ci.product.name}
+                                                    >
+                                                        {ci.product.name}
+                                                    </p>
+                                                    <p className="font-semibold text-gray-900 whitespace-nowrap shrink-0" style={{ fontSize: '1.5vh' }}>{formatCurrency(ci.product.price * ci.quantity)}</p>
+                                                </div>
+                                                <div className="flex items-center space-x-3 text-gray-500" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
+                                                    <span className="font-medium" style={{ fontSize: '1.3vh' }}>x{ci.quantity}</span>
+                                                    <span style={{ fontSize: '1.3vh' }}>{formatCurrency(ci.product.price)}</span>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center space-x-3 text-gray-500" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
-                                                <span className="font-medium" style={{ fontSize: '1.3vh' }}>x{ci.quantity}</span>
-                                                <span style={{ fontSize: '1.3vh' }}>{formatCurrency(ci.product.price * ci.quantity)}</span>
-                                            </div>
-                                        </li>
-                                    ))}
+                                        );
+                                        return (
+                                            <li key={ci.product.id} style={linePadding}>
+                                                {onDecrementCartLine ? (
+                                                    <button
+                                                        type="button"
+                                                        className="flex w-full min-h-[60px] items-stretch gap-1 rounded-xl border border-transparent px-1 text-left text-inherit transition-colors duration-200 hover:bg-gray-50 active:bg-gray-100"
+                                                        aria-label={`${t('pos.decrementCartLine')}: ${ci.product.name}`}
+                                                        onClick={() => onDecrementCartLine(ci.product.id)}
+                                                    >
+                                                        {lineInner}
+                                                    </button>
+                                                ) : (
+                                                    <div className="flex min-h-[60px] items-stretch gap-1 px-1">{lineInner}</div>
+                                                )}
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             )}
                         </div>
@@ -265,6 +308,11 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                 <div className="h-full overflow-hidden flex flex-col justify-between">
                     {/* Totals section */}
                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden" style={{ padding: '1vh', height: 'calc(26.5vh - 8vh - 2vh)' }}>
+                        {fiscalChainHint && (
+                            <p className="text-gray-600 mb-1" style={{ fontSize: '1.25vh' }} title={t('pos.lastFiscalDocumentTooltip')}>
+                                Último doc.: <span className="font-semibold text-gray-800">{fiscalChainHint}</span>
+                            </p>
+                        )}
                         <div className="flex items-center justify-between" style={{ marginBottom: '0.5vh', paddingTop: '0.25vh' }}>
                             <span className="text-gray-500 font-medium" style={{ fontSize: '1.5vh' }}>{t('pos.subtotalLabel')}</span>
                             <span className="text-gray-600 font-semibold" style={{ fontSize: '1.5vh' }}>{formatCurrency(displayTotals.subtotal)}</span>

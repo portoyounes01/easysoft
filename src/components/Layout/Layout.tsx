@@ -1,12 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { useSettings } from '../../contexts/SettingsContext';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { settings } = useSettings();
+
+  const validationCodeStale = useMemo(() => {
+    const raw = settings.receipt.atValidationCodeIssuedAt?.trim();
+    if (!raw) return false;
+    const t = new Date(raw).getTime();
+    if (Number.isNaN(t)) return false;
+    const days = (Date.now() - t) / (86400 * 1000);
+    return days > 1000;
+  }, [settings.receipt.atValidationCodeIssuedAt]);
+
   // Load sidebar state from localStorage, default to expanded on desktop
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
@@ -70,6 +82,29 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="flex-1 flex flex-col overflow-hidden relative z-10 w-full">
         {/* <Header onToggleSidebar={toggleSidebar} isSidebarCollapsed={isSidebarCollapsed} /> */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
+          {settings.fiscal.trainingMode && (
+            <div
+              className="mb-4 rounded-2xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-amber-950 text-center font-semibold text-lg"
+              role="status"
+            >
+              FORMAÇÃO — documentos sem valor fiscal. Base de dados local de treino.
+            </div>
+          )}
+          {import.meta.env.DEV && (
+            <div className="mb-4 rounded-2xl border border-violet-300 bg-violet-50 px-4 py-2 text-violet-900 text-center text-base">
+              Debug build — fiscal HashControl e ferramentas extra podem estar visíveis.
+            </div>
+          )}
+          {settings.receipt.seriesDiscontinued && (
+            <div className="mb-4 rounded-2xl border-2 border-orange-400 bg-orange-50 px-4 py-3 text-orange-950 text-center font-semibold text-lg">
+              Série fiscal marcada como descontinuada — confirme a série junto da AT antes de continuar a faturar.
+            </div>
+          )}
+          {validationCodeStale && (
+            <div className="mb-4 rounded-2xl border-2 border-red-300 bg-red-50 px-4 py-3 text-red-900 text-center font-semibold text-lg">
+              Código de validação AT com mais de ~3 anos — verifique renovação no Portal das Finanças.
+            </div>
+          )}
           {children}
         </main>
       </div>

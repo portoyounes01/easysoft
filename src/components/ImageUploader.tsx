@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { supabase, connectionStatus } from '../lib/supabase';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
+import { useTranslation } from 'react-i18next';
 
 // Image optimization configuration
 const IMAGE_CONFIG = {
@@ -65,6 +66,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
 
     // Auth context for upload proof and identity
     const { employee, credentialHash } = useSupabaseAuth();
+    const { t } = useTranslation();
 
     const [state, setState] = useState<ImageUploadState>({
         isUploading: false,
@@ -672,7 +674,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                                         handleUrlSubmit();
                                     }
                                 }}
-                                placeholder="https://example.com/image.jpg"
+                                placeholder={t('forms.imageUrlPlaceholder')}
                                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                         </div>
