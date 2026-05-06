@@ -22,9 +22,9 @@ alwaysApply: true
 - **NEVER** introduce new colors without updating the style guide
 
 ### **Touch Screen Requirements (CRITICAL)**
-- **MINIMUM** 60px touch targets (`min-h-[60px]`)
-- **LARGE** action buttons (`min-h-[80px]`)
-- **EMPLOYEE** cards (`min-h-[280px]`)
+- **MINIMUM** ~60px touch targets at default root (`min-h-touch` = `3.75rem`); menus `min-h-touch-sm`; compact `min-h-touch-xs`
+- **LARGE** action buttons (`min-h-20` / ~5rem)
+- **EMPLOYEE** cards (`min-h-70` / ~17.5rem)
 - **AVOID** dropdowns, hover-dependent interactions, small fonts (<16px)
 
 ### **Typography Scale**

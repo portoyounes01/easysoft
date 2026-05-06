@@ -120,14 +120,17 @@ function EmployeeList() {
   const {
     employees,
     isLoading,
-    error,
+    loadError,
+    syncError,
+    operationError,
     createEmployee,
     updateEmployee,
     deleteEmployee,
   } = useEmployees();
 
-  // employees array is always available, even offline
-  // operations work offline and sync when connection is restored
+  // `loadError`: failed to read local employee list (blocking for list UIs).
+  // `syncError`: background Supabase sync failed (non-blocking; staff from Dexie still shown).
+  // `operationError`: create/update/delete failed (admin Employees page).
 }
 ```
 

@@ -64,6 +64,11 @@ const resources = {
                 loadingEmployees: 'Loading Employees...',
                 loadingEmployeesSub: 'Please wait while we load the employee database',
                 loadErrorTitle: 'Unable to Load Employees',
+                loadErrorLocalDbTitle: 'Local storage could not be opened',
+                loadErrorLocalDbBody:
+                    'This device could not open the offline database (IndexedDB). That is separate from the cloud: fixing DNS or Wi‑Fi will not repair it. Try closing other tabs using this app, restart the browser, clear site data for this origin, or use a private window.',
+                loadErrorGenericHint:
+                    'If staff still appear briefly then this message returns, a background refresh may be failing — check the browser console for IndexedDB errors.',
                 retry: 'Retry',
                 switchToEmployeeMode: 'Switch to Employee Mode',
                 switchToAdminMode: 'Switch to Admin Mode',
@@ -93,6 +98,9 @@ const resources = {
                 invalidCredential: 'Invalid employee or {{type}}',
                 authPassword: 'password',
                 authPin: 'PIN',
+                syncDegradedTitle: 'Could not reach server',
+                syncDegradedBody: 'You can still sign in with staff stored on this device.',
+                syncDegradedDismiss: 'Dismiss',
             },
             fiscalAudit: {
                 title: 'Fiscal audit log',
@@ -262,6 +270,7 @@ const resources = {
                 },
             },
             products: {
+                pageTitle: 'Product',
                 header: {
                     searchPlaceholder: 'Search product name...',
                     sort: 'Sort',
@@ -270,6 +279,8 @@ const resources = {
                     allCategories: 'All Categories',
                     addProduct: 'Add Product',
                     createCategoryFirst: 'Please create a category first before adding products.',
+                    nameAsc: 'Name A→Z',
+                    nameDesc: 'Name Z→A',
                 },
                 stats: {
                     totalProducts: 'Total Products',
@@ -282,6 +293,7 @@ const resources = {
                     title: 'Products',
                     id: 'ID',
                     product: 'Product',
+                    productNameColumn: 'Product name',
                     category: 'Category',
                     stock: 'Stock',
                     price: 'Price',
@@ -294,6 +306,11 @@ const resources = {
                     edit: 'Edit',
                     delete: 'Delete',
                     actionsTitle: 'Actions',
+                    productCount_one: '{{count}} product',
+                    productCount_other: '{{count}} products',
+                    rowsPerPage: 'Rows per page',
+                    prevPage: 'Previous page',
+                    nextPage: 'Next page',
                 },
                 status: {
                     inactive: 'Inactive',
@@ -369,7 +386,7 @@ const resources = {
             },
             categories: {
                 title: 'Category Management',
-                subtitle: 'Create and organize your product categories',
+                subtitle: 'Create and organize product categories',
                 addCategory: 'Add Category',
                 stats: {
                     totalCategories: 'Total Categories',
@@ -862,6 +879,25 @@ const resources = {
                     illustration: 'Illustration',
                     elevation: 'Elevation',
                 },
+                productsReference: {
+                    title: 'Products page (reference)',
+                    blurb:
+                        'Static mirror of the `/products` screen: toolbar with search, sort and filter popovers, stats row, status badges, data table with kebab menu, loading and error states, and the view-details modal shell. Use this when wiring Design System 2 tokens and shared components into the real page.',
+                    sectionToolbar: 'Toolbar',
+                    sectionStats: 'Stats cards',
+                    sectionBadges: 'Status badges',
+                    sectionTable: 'Table and row overflow menu',
+                    sectionPageStates: 'Page states',
+                    sectionModal: 'View modal',
+                    demoFilterOptionBeverages: 'Beverages',
+                    openViewModal: 'Open sample view modal',
+                    tableCountLabel: '{{count}} products',
+                    loadingLabel: 'Loading',
+                    errorLabel: 'Load error',
+                    errorDemoMessage: 'Could not load products. Check your connection and try again.',
+                    demoProductName: 'Demo espresso beans',
+                    demoSku: 'DEMO-ESP-001',
+                },
             },
             virtualNumpad: {
                 cancel: 'Cancel',
@@ -1142,6 +1178,10 @@ const resources = {
                 emptyCatalogMessage: 'Your product catalog is empty. Add some categories to get started.',
                 errorLoadingData: 'Error Loading Data',
                 failedToLoadData: 'Failed to load data',
+                syncDegradedTitle: 'Catalog sync unavailable',
+                syncDegradedBody: 'Selling with the last saved catalog on this device. Retry when the connection is back.',
+                syncDegradedDismiss: 'Dismiss',
+                syncDegradedRetry: 'Retry sync',
                 retry: 'Retry',
                 syncData: 'Sync Data',
                 refresh: 'Refresh',
@@ -1238,6 +1278,11 @@ const resources = {
                 loadingEmployees: 'A carregar funcionários...',
                 loadingEmployeesSub: 'Aguarde enquanto carregamos a base de dados',
                 loadErrorTitle: 'Não foi possível carregar funcionários',
+                loadErrorLocalDbTitle: 'Não foi possível abrir o armazenamento local',
+                loadErrorLocalDbBody:
+                    'Este dispositivo não conseguiu abrir a base de dados offline (IndexedDB). Isto é independente da cloud: corrigir DNS ou Wi‑Fi não resolve. Tente fechar outros separadores desta app, reiniciar o browser, limpar dados do site para este domínio, ou usar uma janela privada.',
+                loadErrorGenericHint:
+                    'Se a lista de staff aparecer um instante e esta mensagem voltar, uma atualização em segundo plano pode estar a falhar — veja a consola do browser por erros IndexedDB.',
                 retry: 'Tentar novamente',
                 switchToEmployeeMode: 'Mudar para modo funcionário',
                 switchToAdminMode: 'Mudar para modo administrador',
@@ -1267,6 +1312,9 @@ const resources = {
                 invalidCredential: 'Funcionário ou {{type}} inválido',
                 authPassword: 'palavra-passe',
                 authPin: 'PIN',
+                syncDegradedTitle: 'Não foi possível contactar o servidor',
+                syncDegradedBody: 'Ainda pode iniciar sessão com a equipa guardada neste dispositivo.',
+                syncDegradedDismiss: 'Fechar',
             },
             fiscalAudit: {
                 title: 'Registo de auditoria fiscal',
@@ -1436,6 +1484,7 @@ const resources = {
                 },
             },
             products: {
+                pageTitle: 'Produto',
                 header: {
                     searchPlaceholder: 'Pesquisar nome do produto...',
                     sort: 'Ordenar',
@@ -1444,6 +1493,8 @@ const resources = {
                     allCategories: 'Todas as Categorias',
                     addProduct: 'Adicionar Produto',
                     createCategoryFirst: 'Crie uma categoria primeiro antes de adicionar produtos.',
+                    nameAsc: 'Nome A→Z',
+                    nameDesc: 'Nome Z→A',
                 },
                 stats: {
                     totalProducts: 'Total de Produtos',
@@ -1456,6 +1507,7 @@ const resources = {
                     title: 'Produtos',
                     id: 'ID',
                     product: 'Produto',
+                    productNameColumn: 'Nome do produto',
                     category: 'Categoria',
                     stock: 'Stock',
                     price: 'Preço',
@@ -1468,6 +1520,11 @@ const resources = {
                     edit: 'Editar',
                     delete: 'Eliminar',
                     actionsTitle: 'Ações',
+                    productCount_one: '{{count}} produto',
+                    productCount_other: '{{count}} produtos',
+                    rowsPerPage: 'Linhas por página',
+                    prevPage: 'Página anterior',
+                    nextPage: 'Página seguinte',
                 },
                 status: {
                     inactive: 'Inativo',
@@ -1543,7 +1600,7 @@ const resources = {
             },
             categories: {
                 title: 'Gestão de Categorias',
-                subtitle: 'Crie e organize as suas categorias de produtos',
+                subtitle: 'Crie e organize as categorias de produtos',
                 addCategory: 'Adicionar Categoria',
                 stats: {
                     totalCategories: 'Total de Categorias',
@@ -2037,6 +2094,25 @@ const resources = {
                     illustration: 'Ilustração',
                     elevation: 'Elevação',
                 },
+                productsReference: {
+                    title: 'Página de produtos (referência)',
+                    blurb:
+                        'Réplica estática do ecrã `/products`: barra com pesquisa, ordenação e filtros em popover, cartões de estatísticas, etiquetas de estado, tabela com menu de contexto, estados de carregamento e erro, e o esqueleto do modal de detalhes. Use ao ligar o Design System 2 e componentes partilhados à página real.',
+                    sectionToolbar: 'Barra de ferramentas',
+                    sectionStats: 'Cartões de estatísticas',
+                    sectionBadges: 'Etiquetas de estado',
+                    sectionTable: 'Tabela e menu de overflow',
+                    sectionPageStates: 'Estados da página',
+                    sectionModal: 'Modal de visualização',
+                    demoFilterOptionBeverages: 'Bebidas',
+                    openViewModal: 'Abrir modal de exemplo',
+                    tableCountLabel: '{{count}} produtos',
+                    loadingLabel: 'A carregar',
+                    errorLabel: 'Erro ao carregar',
+                    errorDemoMessage: 'Não foi possível carregar os produtos. Verifique a ligação e tente novamente.',
+                    demoProductName: 'Grão de demonstração',
+                    demoSku: 'DEMO-ESP-001',
+                },
             },
             virtualNumpad: {
                 cancel: 'Cancelar',
@@ -2319,6 +2395,10 @@ const resources = {
                 emptyCatalogMessage: 'Seu catálogo de produtos está vazio. Adicione algumas categorias para começar.',
                 errorLoadingData: 'Erro ao Carregar Dados',
                 failedToLoadData: 'Falha ao carregar dados',
+                syncDegradedTitle: 'Sincronização do catálogo indisponível',
+                syncDegradedBody: 'Pode vender com o último catálogo guardado neste dispositivo. Tente sincronizar quando a ligação voltar.',
+                syncDegradedDismiss: 'Fechar',
+                syncDegradedRetry: 'Tentar sincronizar',
                 retry: 'Tentar Novamente',
                 syncData: 'Sincronizar Dados',
                 refresh: 'Atualizar',

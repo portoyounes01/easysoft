@@ -1830,6 +1830,12 @@ function isIndexedDbOpenRecoverableError(error: unknown): boolean {
         return false;
     }
     const { name, message } = error;
+    const lower = message.toLowerCase();
+    // Chrome often surfaces corrupt / stuck IDB as UnknownError + "backing store"
+    const isBackingStoreFailure =
+        lower.includes('backing store') ||
+        lower.includes('internal error opening backing store') ||
+        lower.includes('indexeddb.open');
     return (
         name === 'DatabaseClosedError' ||
         name === 'InvalidStateError' ||
@@ -1837,11 +1843,13 @@ function isIndexedDbOpenRecoverableError(error: unknown): boolean {
         name === 'UpgradeError' ||
         name === 'ModifyError' ||
         name === 'AbortError' ||
+        (name === 'UnknownError' && isBackingStoreFailure) ||
         message.includes('object store') ||
         message.includes('NotFoundError') ||
         message.includes('IDBTransaction') ||
         message.includes('Dexie') ||
-        message.includes('Another connection')
+        message.includes('Another connection') ||
+        isBackingStoreFailure
     );
 }
 

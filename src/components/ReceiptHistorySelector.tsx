@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search } from 'lucide-react';
+import { FileText, Search } from 'lucide-react';
 import type { ReceiptProps } from './ThermalReceipt';
 import { BaseDialog } from './ui/BaseDialog';
 import { InputField } from './ui/InputField';
+import SimpleNumpad from './SimpleNumpad';
 
 interface ReceiptHistorySelectorProps {
     open: boolean;
@@ -38,6 +39,7 @@ function receiptMatchesSearch(receipt: ReceiptProps, rawTerm: string): boolean {
 const ReceiptHistorySelector: React.FC<ReceiptHistorySelectorProps> = ({ open, receipts, onSelect, onClose }) => {
     const { t } = useTranslation();
     const [searchTerm, setSearchTerm] = useState('');
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (open) {
@@ -57,64 +59,100 @@ const ReceiptHistorySelector: React.FC<ReceiptHistorySelectorProps> = ({ open, r
             open={open}
             onClose={onClose}
             title={t('pos.receiptHistory.title')}
-            width="40vw"
-            height="64vh"
+            width="55vw"
+            height="80vh"
             className="max-w-[95vw]"
         >
-            <div className="flex-1 flex flex-col min-h-0" style={{ padding: '2vh' }}>
+            <div className="flex flex-col h-full min-h-0">
                 {receipts.length === 0 ? (
-                    <div className="flex-1 flex items-center justify-center text-gray-500 py-12">
+                    <div className="flex-1 flex items-center justify-center text-gray-500 px-6 py-12 text-xl">
                         {t('pos.receiptHistory.empty')}
                     </div>
                 ) : (
-                    <>
-                        <div className="shrink-0 mb-3">
-                            <InputField
-                                icon={Search}
-                                placeholder={t('pos.receiptHistory.searchPlaceholder')}
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="rounded-2xl"
-                            />
+                    <div className="flex-1 flex space-x-6 px-6 pb-6 pt-6 overflow-hidden min-h-0">
+                        <div className="flex-1 flex flex-col min-w-0">
+                            <div className="mb-4 pt-1">
+                                <InputField
+                                    ref={searchInputRef}
+                                    icon={Search}
+                                    placeholder={t('pos.receiptHistory.searchPlaceholder')}
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="rounded-2xl"
+                                />
+                            </div>
+                            <div className="flex-1 min-h-0 py-1">
+                                <SimpleNumpad
+                                    value={searchTerm}
+                                    onChange={setSearchTerm}
+                                    onButtonClick={() => searchInputRef.current?.focus()}
+                                    className="h-full"
+                                />
+                            </div>
                         </div>
-                        <div className="flex-1 min-h-0 overflow-y-auto -mx-2 px-2">
+
+                        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
                             {filteredReceipts.length > 0 ? (
-                                <ul className="divide-y divide-gray-200">
-                                    {filteredReceipts.map((r, idx) => (
-                                        <li key={`${r.documentNumber}-${r.date.toISOString()}-${idx}`}>
-                                            <button
-                                                type="button"
-                                                onClick={() => onSelect(r)}
-                                                className="w-full text-left py-4 px-3 hover:bg-gray-50 rounded-xl transition-colors flex items-center justify-between"
-                                                style={{ minHeight: 60 }}
-                                            >
-                                                <div>
-                                                    <div className="font-semibold text-gray-900">{r.documentNumber}</div>
-                                                    <div className="text-sm text-gray-600">
-                                                        {r.date.toLocaleDateString('pt-PT')}{' '}
-                                                        {r.date.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                                <div className="flex-1 overflow-y-auto">
+                                    <ul className="divide-y divide-gray-200">
+                                        {filteredReceipts.map((r, index) => (
+                                            <li key={`${r.documentNumber}-${r.date.toISOString()}-${index}`}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onSelect(r)}
+                                                    className="w-full text-left transition-colors hover:bg-blue-50 rounded-xl"
+                                                    style={{
+                                                        paddingTop: index === 0 ? '2vh' : '1.5vh',
+                                                        paddingBottom: '1vh',
+                                                        paddingLeft: '0.5rem',
+                                                        paddingRight: '0.5rem',
+                                                    }}
+                                                >
+                                                    <div className="flex items-center justify-between px-2">
+                                                        <p
+                                                            className="font-semibold text-gray-900 truncate"
+                                                            style={{ fontSize: '1.7vh', paddingRight: '1vh' }}
+                                                        >
+                                                            {r.documentNumber}
+                                                        </p>
+                                                        <p className="font-semibold text-gray-900 shrink-0" style={{ fontSize: '1.5vh' }}>
+                                                            {formatCurrency(r.totals.total)}
+                                                        </p>
                                                     </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="text-gray-900 font-semibold">{formatCurrency(r.totals.total)}</div>
-                                                    {r.customer?.name && (
-                                                        <div className="text-sm text-gray-500 truncate max-w-[220px]">
-                                                            {r.customer.name}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
+                                                    <div
+                                                        className="flex items-center space-x-3 text-gray-500 px-2"
+                                                        style={{
+                                                            marginTop: index === 0 ? '0.2vh' : '0.8vh',
+                                                            paddingLeft: '1vh',
+                                                        }}
+                                                    >
+                                                        <span className="font-medium truncate" style={{ fontSize: '1.3vh' }}>
+                                                            {r.date.toLocaleDateString('pt-PT')}{' '}
+                                                            {r.date.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                        {r.customer?.name && (
+                                                            <>
+                                                                <span style={{ fontSize: '1.3vh' }}>•</span>
+                                                                <span className="truncate" style={{ fontSize: '1.3vh' }}>
+                                                                    {r.customer.name}
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             ) : (
-                                <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-gray-500">
-                                    <p className="text-lg font-semibold text-gray-700 mb-1">{t('pos.receiptHistory.noMatchesTitle')}</p>
-                                    <p className="text-sm">{t('pos.receiptHistory.noMatchesMessage')}</p>
+                                <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+                                    <FileText className="w-16 h-16 text-gray-300 mb-4" />
+                                    <p className="text-xl font-semibold text-gray-700 mb-2">{t('pos.receiptHistory.noMatchesTitle')}</p>
+                                    <p className="text-gray-500">{t('pos.receiptHistory.noMatchesMessage')}</p>
                                 </div>
                             )}
                         </div>
-                    </>
+                    </div>
                 )}
             </div>
         </BaseDialog>

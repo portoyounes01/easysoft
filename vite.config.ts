@@ -18,7 +18,6 @@ export default defineConfig({
     // Generate source maps for debugging
     sourcemap: process.env.NODE_ENV === 'development',
   },
-  optimizeDeps: {
-    exclude: ['lucide-react'],
-  },
+  // Pre-bundle lucide-react (default). Excluding it served per-icon files like
+  // `icons/fingerprint.js`, which privacy/ad blockers often block (ERR_BLOCKED_BY_CLIENT).
 });

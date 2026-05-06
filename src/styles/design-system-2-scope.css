@@ -1,0 +1,351 @@
+/**
+ * Scoped visual overrides for Design System 2 preview only.
+ * Variables are set inline on `.ds2-visual-scope` (see designSystem2VisualTokens.ts).
+ */
+
+.ds2-visual-scope {
+    --ds2-brand-from: #22c55e;
+    --ds2-brand-to: #15803d;
+    --ds2-brand-solid: #16a34a;
+    --ds2-brand-text-900: #14532d;
+    --ds2-ui-from: #3b82f6;
+    --ds2-ui-to: #2563eb;
+    --ds2-ui-from-hover: #2563eb;
+    --ds2-ui-to-hover: #1d4ed8;
+    --ds2-ui-solid: #2563eb;
+    --ds2-ui-hover-solid: #1d4ed8;
+    --ds2-ui-tint-bg: #eff6ff;
+    --ds2-ui-tint-text: #1e3a8a;
+    --ds2-pair-from: #3b82f6;
+    --ds2-pair-to: #9333ea;
+    --ds2-pair-from-hover: #2563eb;
+    --ds2-pair-to-hover: #7e22ce;
+    --ds2-cash-bg: #f0fdf4;
+    --ds2-cash-border: #22c55e;
+    --ds2-cash-icon: #16a34a;
+    --ds2-focus-ring: #22c55e;
+    --ds2-focus-border: #16a34a;
+    --ds2-confirm-bg: #22c55e;
+    --ds2-confirm-hover: #16a34a;
+    --ds2-radius-sm: 6px;
+    --ds2-radius-md: 10px;
+    --ds2-radius-lg: 8px;
+    --ds2-radius-xl: 12px;
+    --ds2-radius-2xl: 16px;
+    --ds2-radius-toggle: 10px;
+    --ds2-radius-action: 12px;
+}
+
+/* Gradients & brand */
+.ds2-visual-scope .bg-gradient-primary {
+    background-image: linear-gradient(
+        135.7deg,
+        var(--ds2-brand-from) -33%,
+        var(--ds2-brand-to) 100%
+    ) !important;
+}
+
+.ds2-visual-scope .text-primary-600 {
+    color: var(--ds2-brand-solid) !important;
+}
+
+.ds2-visual-scope .text-primary-900 {
+    color: var(--ds2-brand-text-900) !important;
+}
+
+/* Admin / sidebar chrome (blue gradients in components) */
+.ds2-visual-scope .bg-gradient-to-r.from-blue-500.to-blue-600 {
+    background-image: linear-gradient(to right, var(--ds2-ui-from), var(--ds2-ui-to)) !important;
+}
+
+.ds2-visual-scope .bg-gradient-to-r.from-blue-500.to-blue-600:hover {
+    background-image: linear-gradient(
+        to right,
+        var(--ds2-ui-from-hover),
+        var(--ds2-ui-to-hover)
+    ) !important;
+}
+
+.ds2-visual-scope .bg-gradient-to-r.from-blue-600.to-blue-500 {
+    background-image: linear-gradient(to right, var(--ds2-ui-to), var(--ds2-ui-from)) !important;
+}
+
+/* Pairing primary */
+.ds2-visual-scope .bg-gradient-to-r.from-blue-500.to-purple-600 {
+    background-image: linear-gradient(to right, var(--ds2-pair-from), var(--ds2-pair-to)) !important;
+}
+
+.ds2-visual-scope .bg-gradient-to-r.from-blue-500.to-purple-600:hover {
+    background-image: linear-gradient(
+        to right,
+        var(--ds2-pair-from-hover),
+        var(--ds2-pair-to-hover)
+    ) !important;
+}
+
+/* PaymentMethodButton cash */
+.ds2-visual-scope .border-green-500 {
+    border-color: var(--ds2-cash-border) !important;
+}
+
+.ds2-visual-scope .bg-green-50 {
+    background-color: var(--ds2-cash-bg) !important;
+}
+
+.ds2-visual-scope .text-green-600 {
+    color: var(--ds2-cash-icon) !important;
+}
+
+/* Numpad confirm */
+.ds2-visual-scope .bg-green-500 {
+    background-color: var(--ds2-confirm-bg) !important;
+}
+
+.ds2-visual-scope .hover\:bg-green-600:hover {
+    background-color: var(--ds2-confirm-hover) !important;
+}
+
+/* Table edit */
+.ds2-visual-scope .bg-blue-600 {
+    background-color: var(--ds2-ui-solid) !important;
+}
+
+.ds2-visual-scope .hover\:bg-blue-700:hover {
+    background-color: var(--ds2-ui-hover-solid) !important;
+}
+
+/* Secondary / reports chrome: literal blue utilities follow --ds2-ui-* */
+.ds2-visual-scope .text-blue-600 {
+    color: var(--ds2-ui-solid) !important;
+}
+
+.ds2-visual-scope .border-blue-200 {
+    border-color: color-mix(in srgb, var(--ds2-ui-solid) 24%, #ffffff) !important;
+}
+
+.ds2-visual-scope .bg-blue-500 {
+    background-color: var(--ds2-ui-solid) !important;
+}
+
+.ds2-visual-scope .hover\:bg-blue-600:hover {
+    background-color: var(--ds2-ui-hover-solid) !important;
+}
+
+.ds2-visual-scope .rounded-md {
+    border-radius: var(--ds2-radius-md) !important;
+}
+
+.ds2-visual-scope .text-blue-500 {
+    color: var(--ds2-ui-solid) !important;
+}
+
+.ds2-visual-scope .text-blue-700 {
+    color: color-mix(in srgb, var(--ds2-ui-solid) 72%, #1f2937) !important;
+}
+
+.ds2-visual-scope .text-blue-800 {
+    color: var(--ds2-ui-tint-text) !important;
+}
+
+.ds2-visual-scope .bg-blue-100 {
+    background-color: color-mix(in srgb, var(--ds2-ui-tint-bg) 92%, var(--ds2-ui-solid) 8%) !important;
+}
+
+.ds2-visual-scope .bg-indigo-100 {
+    background-color: var(--ds2-ui-tint-bg) !important;
+}
+
+.ds2-visual-scope .text-indigo-600 {
+    color: var(--ds2-ui-solid) !important;
+}
+
+/* InputField default focus */
+.ds2-visual-scope .focus\:border-green-500:focus {
+    border-color: var(--ds2-focus-border) !important;
+}
+
+.ds2-visual-scope .focus\:ring-green-500:focus {
+    --tw-ring-color: var(--ds2-focus-ring);
+}
+
+/* Admin / ProductForm: legacy blue focus → same DS2 focus tokens (single source with green focus) */
+.ds2-visual-scope .focus\:ring-blue-500:focus {
+    --tw-ring-opacity: 1;
+    --tw-ring-color: var(--ds2-focus-ring);
+}
+
+.ds2-visual-scope .border-blue-400 {
+    border-color: var(--ds2-brand-solid) !important;
+}
+
+/* Sheet / modal corners driven by radius preset */
+.ds2-visual-scope .rounded-l-2xl {
+    border-top-left-radius: var(--ds2-radius-2xl) !important;
+    border-bottom-left-radius: var(--ds2-radius-2xl) !important;
+}
+
+.ds2-visual-scope .rounded-t-2xl {
+    border-top-left-radius: var(--ds2-radius-2xl) !important;
+    border-top-right-radius: var(--ds2-radius-2xl) !important;
+}
+
+.ds2-visual-scope .rounded-b-2xl {
+    border-bottom-left-radius: var(--ds2-radius-2xl) !important;
+    border-bottom-right-radius: var(--ds2-radius-2xl) !important;
+}
+
+.ds2-visual-scope .ds2-toggle-on {
+    background-color: var(--ds2-cash-bg);
+    border: 1px solid var(--ds2-focus-border);
+    color: var(--ds2-brand-text-900);
+}
+
+.ds2-visual-scope .ds2-toggle-off {
+    background-color: #f9fafb;
+    border: 1px solid #d1d5db;
+    color: #4b5563;
+}
+
+.ds2-visual-scope .ds2-product-status-on {
+    background-color: var(--ds2-cash-bg);
+    border: 1px solid var(--ds2-focus-border);
+    color: var(--ds2-brand-text-900);
+}
+
+.ds2-visual-scope .ds2-product-status-off {
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+}
+
+/* Solid primary fills */
+.ds2-visual-scope .bg-primary-600 {
+    background-color: var(--ds2-brand-solid) !important;
+}
+
+/* Corner radius scale */
+.ds2-visual-scope .rounded-lg {
+    border-radius: var(--ds2-radius-lg) !important;
+}
+
+.ds2-visual-scope .rounded-xl {
+    border-radius: var(--ds2-radius-xl) !important;
+}
+
+.ds2-visual-scope .rounded-2xl {
+    border-radius: var(--ds2-radius-2xl) !important;
+}
+
+/* Primary modal actions: must follow .rounded-2xl so radius token wins over button base */
+.ds2-visual-scope .ds2-modal-primary-action {
+    border-radius: var(--ds2-radius-xl) !important;
+}
+
+.ds2-visual-scope .rounded-\[10px\] {
+    border-radius: var(--ds2-radius-toggle) !important;
+}
+
+.ds2-visual-scope .rounded-\[12px\] {
+    border-radius: var(--ds2-radius-action) !important;
+}
+
+/* Reports-style tabs (blue border when active) */
+.ds2-visual-scope .border-blue-500 {
+    border-color: var(--ds2-ui-solid) !important;
+}
+
+/* TabButton reports variant: components use literal blue-50 / blue-900 */
+.ds2-visual-scope .bg-blue-50 {
+    background-color: var(--ds2-ui-tint-bg) !important;
+}
+
+.ds2-visual-scope .text-blue-900 {
+    color: var(--ds2-ui-tint-text) !important;
+}
+
+/*
+ * Neutral family: project maps `neutral` → gray in tailwind.config.
+ * Remap common `text-neutral-*` / `bg-neutral-*` utilities inside DS2 preview when user picks Slate / Stone / Zinc.
+ */
+.ds2-visual-scope[data-ds2-neutral='slate'] .text-neutral-500 {
+    color: #64748b !important;
+}
+.ds2-visual-scope[data-ds2-neutral='slate'] .text-neutral-600 {
+    color: #475569 !important;
+}
+.ds2-visual-scope[data-ds2-neutral='slate'] .text-neutral-900 {
+    color: #0f172a !important;
+}
+.ds2-visual-scope[data-ds2-neutral='slate'] .bg-neutral-100 {
+    background-color: #f1f5f9 !important;
+}
+.ds2-visual-scope[data-ds2-neutral='slate'] .bg-neutral-200 {
+    background-color: #e2e8f0 !important;
+}
+
+.ds2-visual-scope[data-ds2-neutral='stone'] .text-neutral-500 {
+    color: #78716c !important;
+}
+.ds2-visual-scope[data-ds2-neutral='stone'] .text-neutral-600 {
+    color: #57534e !important;
+}
+.ds2-visual-scope[data-ds2-neutral='stone'] .text-neutral-900 {
+    color: #1c1917 !important;
+}
+.ds2-visual-scope[data-ds2-neutral='stone'] .bg-neutral-100 {
+    background-color: #f5f5f4 !important;
+}
+.ds2-visual-scope[data-ds2-neutral='stone'] .bg-neutral-200 {
+    background-color: #e7e5e4 !important;
+}
+
+.ds2-visual-scope[data-ds2-neutral='zinc'] .text-neutral-500 {
+    color: #71717a !important;
+}
+.ds2-visual-scope[data-ds2-neutral='zinc'] .text-neutral-600 {
+    color: #52525b !important;
+}
+.ds2-visual-scope[data-ds2-neutral='zinc'] .text-neutral-900 {
+    color: #18181b !important;
+}
+.ds2-visual-scope[data-ds2-neutral='zinc'] .bg-neutral-100 {
+    background-color: #f4f4f5 !important;
+}
+.ds2-visual-scope[data-ds2-neutral='zinc'] .bg-neutral-200 {
+    background-color: #e4e4e7 !important;
+}
+
+/* gray — explicit identity (matches Tailwind gray / config neutral) */
+.ds2-visual-scope[data-ds2-neutral='gray'] .text-neutral-500 {
+    color: #6b7280 !important;
+}
+.ds2-visual-scope[data-ds2-neutral='gray'] .text-neutral-600 {
+    color: #4b5563 !important;
+}
+.ds2-visual-scope[data-ds2-neutral='gray'] .text-neutral-900 {
+    color: #111827 !important;
+}
+.ds2-visual-scope[data-ds2-neutral='gray'] .bg-neutral-100 {
+    background-color: #f3f4f6 !important;
+}
+.ds2-visual-scope[data-ds2-neutral='gray'] .bg-neutral-200 {
+    background-color: #e5e7eb !important;
+}
+
+/* Controls follow radius preset (vars from inline visualStyle on .ds2-visual-scope) */
+.ds2-visual-scope .ds2-control-radius-lg {
+    border-radius: var(--ds2-radius-lg) !important;
+}
+.ds2-visual-scope .ds2-control-radius-md {
+    border-radius: var(--ds2-radius-md) !important;
+}
+
+/* Toolbar row: fixed height so search, outline, and success buttons align */
+.ds2-visual-scope .ds2-toolbar-control-h {
+    box-sizing: border-box;
+    height: 2.5rem !important;
+    min-height: 2.5rem !important;
+    max-height: 2.5rem !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}

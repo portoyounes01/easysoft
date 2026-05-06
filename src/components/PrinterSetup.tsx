@@ -1,6 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Wifi, Printer, Search, CheckCircle, AlertCircle, Loader, Usb, RefreshCw } from 'lucide-react';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
+
+export interface PrinterConnectedDetails {
+    ip?: string;
+    port?: number;
+    serial?: string;
+    uri?: string;
+    brand?: string;
+    model?: string;
+    isThermal?: boolean;
+    confidence?: string;
+}
+
+export interface PrinterConnectedPayload {
+    success?: boolean;
+    message?: string;
+    printerName?: string;
+    details?: PrinterConnectedDetails;
+}
+
+const DS2_PRIMARY_BTN =
+    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+const DS2_SECONDARY_BTN =
+    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
 
 interface NetworkPrinter {
   ip: string;
@@ -23,12 +48,13 @@ interface USBPrinter {
 }
 
 interface PrinterSetupProps {
-  onPrinterConnected: (printerInfo: any) => void;
-  onClose: () => void;
+    onPrinterConnected: (printerInfo: PrinterConnectedPayload) => void;
+    onClose: () => void;
 }
 
 const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose }) => {
-  const { t } = useTranslation();
+    const { t } = useTranslation();
+    const { visualStyle, prefs } = useDesignSystem2Customization();
   const [isScanning, setIsScanning] = useState(false);
   const [discoveredPrinters, setDiscoveredPrinters] = useState<NetworkPrinter[]>([]);
   const [usbPrinters, setUsbPrinters] = useState<USBPrinter[]>([]);
@@ -119,7 +145,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
       if (result?.success) {
         setCurrentStatus('USB printer connected successfully!');
-        onPrinterConnected(result);
+        onPrinterConnected(result as PrinterConnectedPayload);
         setTimeout(() => onClose(), 2000);
       } else {
         setCurrentStatus(`Connection failed: ${result?.error || 'Unknown error'}`);
@@ -145,7 +171,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
       if (result?.success) {
         setCurrentStatus('Connection successful!');
-        onPrinterConnected(result);
+        onPrinterConnected(result as PrinterConnectedPayload);
         setTimeout(() => onClose(), 2000);
       } else {
         setCurrentStatus(`Connection failed: ${result?.error || 'Unknown error'}`);
@@ -176,7 +202,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
       if (result?.success) {
         setCurrentStatus('Connection successful!');
-        onPrinterConnected(result);
+        onPrinterConnected(result as PrinterConnectedPayload);
         setTimeout(() => onClose(), 2000);
       } else {
         setCurrentStatus(`Connection failed: ${result?.error || 'Unknown error'}`);
@@ -253,7 +279,11 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div
+        className="ds2-visual-scope bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+        style={visualStyle}
+        data-ds2-neutral={prefs.neutralFamilyId}
+      >
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
@@ -261,18 +291,21 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               <h2 className="text-xl font-semibold">Thermal Printer Setup</h2>
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+              className="ds2-control-radius-lg flex min-h-touch-sm min-w-touch-sm items-center justify-center text-2xl font-bold text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+              aria-label="Close"
             >
               ×
             </button>
           </div>
 
           {/* Tabs */}
-          <div className="flex space-x-1 mb-6 bg-gray-100 rounded-lg p-1">
+          <div className="ds2-control-radius-lg mb-6 flex space-x-1 bg-gray-100 p-1">
             <button
+              type="button"
               onClick={() => setActiveTab('auto')}
-              className={`flex-1 py-2 px-4 rounded-md transition-colors ${
+              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
                 activeTab === 'auto'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-800'
@@ -284,8 +317,9 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               </div>
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('usb')}
-              className={`flex-1 py-2 px-4 rounded-md transition-colors ${
+              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
                 activeTab === 'usb'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-800'
@@ -297,8 +331,9 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               </div>
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('manual')}
-              className={`flex-1 py-2 px-4 rounded-md transition-colors ${
+              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
                 activeTab === 'manual'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-800'
@@ -310,8 +345,9 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               </div>
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('system')}
-              className={`flex-1 py-2 px-4 rounded-md transition-colors ${
+              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
                 activeTab === 'system'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-800'
@@ -332,9 +368,10 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   Automatically discover thermal printers on your network
                 </p>
                 <button
+                  type="button"
                   onClick={scanForPrinters}
                   disabled={isScanning || isConnecting}
-                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={DS2_PRIMARY_BTN}
                 >
                   {isScanning ? (
                     <Loader className="h-4 w-4 animate-spin" />
@@ -390,9 +427,10 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                           </div>
                         </div>
                         <button
+                          type="button"
                           onClick={() => connectToPrinter(printer)}
                           disabled={isConnecting}
-                          className="ml-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className={`${DS2_PRIMARY_BTN} ml-4 shrink-0`}
                         >
                           {isConnecting ? (
                             <Loader className="h-4 w-4 animate-spin" />
@@ -416,9 +454,10 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   Detect thermal printers connected via USB
                 </p>
                 <button
+                  type="button"
                   onClick={scanForUSBPrinters}
                   disabled={isScanning || isConnecting}
-                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={DS2_PRIMARY_BTN}
                 >
                   {isScanning ? (
                     <Loader className="h-4 w-4 animate-spin" />
@@ -468,9 +507,10 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                           </div>
                         </div>
                         <button
+                          type="button"
                           onClick={() => connectToUSBPrinter(printer)}
                           disabled={isConnecting}
-                          className="ml-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className={`${DS2_PRIMARY_BTN} ml-4 shrink-0`}
                         >
                           {isConnecting ? (
                             <Loader className="h-4 w-4 animate-spin" />
@@ -525,9 +565,10 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   </div>
 
                   <button
+                    type="button"
                     onClick={connectToManualPrinter}
                     disabled={isConnecting || !manualIP.trim()}
-                    className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`${DS2_PRIMARY_BTN} w-full py-3`}
                   >
                     {isConnecting ? (
                       <Loader className="h-4 w-4 animate-spin" />
@@ -556,9 +597,10 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   Printers available to your OS (CUPS/Windows). Select a printer to use or verify connectivity.
                 </p>
                 <button
+                  type="button"
                   onClick={listSystemPrinters}
                   disabled={systemLoading}
-                  className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={DS2_SECONDARY_BTN}
                 >
                   {systemLoading ? (
                     <Loader className="h-4 w-4 animate-spin" />
@@ -605,8 +647,15 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                         </div>
                         <div className="ml-4">
                           <button
-                            onClick={() => onPrinterConnected({ success: true, message: `Selected system printer: ${p.name}`, printerName: p.name })}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            type="button"
+                            onClick={() =>
+                              onPrinterConnected({
+                                success: true,
+                                message: `Selected system printer: ${p.name}`,
+                                printerName: p.name,
+                              })
+                            }
+                            className={DS2_PRIMARY_BTN}
                           >
                             Use This
                           </button>

@@ -267,14 +267,14 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                                 {onDecrementCartLine ? (
                                                     <button
                                                         type="button"
-                                                        className="flex w-full min-h-[60px] items-stretch gap-1 rounded-xl border border-transparent px-1 text-left text-inherit transition-colors duration-200 hover:bg-gray-50 active:bg-gray-100"
+                                                        className="flex w-full min-h-touch items-stretch gap-1 rounded-xl border border-transparent px-1 text-left text-inherit transition-colors duration-200 hover:bg-gray-50 active:bg-gray-100"
                                                         aria-label={`${t('pos.decrementCartLine')}: ${ci.product.name}`}
                                                         onClick={() => onDecrementCartLine(ci.product.id)}
                                                     >
                                                         {lineInner}
                                                     </button>
                                                 ) : (
-                                                    <div className="flex min-h-[60px] items-stretch gap-1 px-1">{lineInner}</div>
+                                                    <div className="flex min-h-touch items-stretch gap-1 px-1">{lineInner}</div>
                                                 )}
                                             </li>
                                         );

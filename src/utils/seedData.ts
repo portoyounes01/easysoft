@@ -4,7 +4,7 @@ import { hashPassword } from './hashUtils';
 import { CategoryService, ProductService } from '../services/productService';
 import { EmployeeService } from '../services/employeeService';
 import { syncManager } from '../services/syncManager';
-import { supabase } from '../lib/supabase';
+import { checkSupabaseConnection, isSupabaseConfigured, supabase } from '../lib/supabase';
 import { localDb } from '../lib/localDatabase';
 import { LocalEmployee, LocalCategory, LocalProduct } from '../types/supabase';
 
@@ -29,6 +29,20 @@ function coerceToUuidOrDeterministic(value: any): string {
   // Convert to UUID format
   const hashStr = Math.abs(hash).toString(16).padStart(8, '0');
   return `${hashStr.substring(0, 8)}-${hashStr.substring(0, 4)}-4${hashStr.substring(1, 4)}-8${hashStr.substring(0, 3)}-${hashStr.substring(0, 12).padEnd(12, '0')}`;
+}
+
+/** Supabase/network failures are often plain objects with `message`, not Error instances. */
+function seedErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const m = (error as { message: unknown }).message;
+    if (typeof m === 'string' && m.length > 0) return m;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
 }
 
 export interface SeedResult {
@@ -69,6 +83,9 @@ export class SeedDataService {
         'cash-drawer-logs.yml'
       ]);
 
+      const supabaseOnline =
+        isSupabaseConfigured() && (await checkSupabaseConnection());
+
       let employeesCount = 0;
       let categoriesCount = 0;
       let productsCount = 0;
@@ -98,14 +115,20 @@ export class SeedDataService {
       if (yamlFiles.employees?.employees) {
         console.log('👥 Seeding employees...');
         const employees = await this.normalizeEmployees(yamlFiles.employees.employees);
-        // Seed locally (for offline-first) and to Supabase (to satisfy FKs)
+        // Seed locally (for offline-first) and to Supabase when reachable (FKs / demo data)
         await this.seedEmployees(employees);
-        await this.seedEmployeesServer(employees);
+        if (supabaseOnline) {
+          await this.seedEmployeesServer(employees);
+        } else {
+          console.warn(
+            '⚠️ Skipping Supabase employee upsert — offline, unreachable, or env not configured. Local employees updated; sync when online.'
+          );
+        }
         employeesCount = employees.length;
       }
 
       // 4. Seed Customers (direct to Supabase)
-      if (yamlFiles.customers?.customers) {
+      if (supabaseOnline && yamlFiles.customers?.customers) {
         console.log('👤 Seeding customers...');
         const customers = this.normalizeCustomers(yamlFiles.customers.customers);
         await this.seedCustomers(customers);
@@ -113,7 +136,7 @@ export class SeedDataService {
       }
 
       // 5. Seed Transactions (direct to Supabase)
-      if (yamlFiles.transactions?.transactions) {
+      if (supabaseOnline && yamlFiles.transactions?.transactions) {
         console.log('💳 Seeding transactions...');
         const rawTxns: any[] = yamlFiles.transactions.transactions;
 
@@ -180,7 +203,7 @@ export class SeedDataService {
       }
 
       // 6. Seed Cashier Tests (direct to Supabase)
-      if (yamlFiles['cashier-tests']?.cashier_tests) {
+      if (supabaseOnline && yamlFiles['cashier-tests']?.cashier_tests) {
         console.log('📝 Seeding cashier tests...');
         const cashierTests = this.normalizeCashierTests(yamlFiles['cashier-tests'].cashier_tests);
         await this.seedCashierTests(cashierTests);
@@ -188,7 +211,7 @@ export class SeedDataService {
       }
 
       // 7. Seed Cash Drawer Logs (direct to Supabase)
-      if (yamlFiles['cash-drawer-logs']?.cash_drawer_logs) {
+      if (supabaseOnline && yamlFiles['cash-drawer-logs']?.cash_drawer_logs) {
         console.log('🗃️ Seeding cash drawer logs...');
         const cashDrawerLogs = this.normalizeCashDrawerLogs(yamlFiles['cash-drawer-logs'].cash_drawer_logs);
         await this.seedCashDrawerLogs(cashDrawerLogs);
@@ -196,11 +219,15 @@ export class SeedDataService {
       }
 
       // 8. Trigger sync to push local changes to Supabase
-      console.log('🔄 Triggering sync to Supabase...');
-      await syncManager.fullSync();
+      if (supabaseOnline) {
+        console.log('🔄 Triggering sync to Supabase...');
+        await syncManager.fullSync();
+      } else {
+        console.warn('⚠️ Skipping full sync — Supabase not reachable.');
+      }
 
       // 9. Seed Transaction Items AFTER products and transactions exist server-side
-      if (yamlFiles['transaction-items']?.transaction_items) {
+      if (supabaseOnline && yamlFiles['transaction-items']?.transaction_items) {
         console.log('🧾 Seeding transaction items...');
         const items = this.normalizeTransactionItems(yamlFiles['transaction-items'].transaction_items);
         await this.seedTransactionItems(items);
@@ -209,9 +236,15 @@ export class SeedDataService {
 
       console.log('✅ Seeding completed successfully!');
 
+      const successMessage = supabaseOnline
+        ? 'YAML seeding completed successfully!'
+        : !isSupabaseConfigured()
+          ? 'YAML seeding completed locally. Supabase env vars are missing (VITE_SUPABASE_URL / VITE_SUPABASE_ANON); cloud seed and sync were skipped.'
+          : 'YAML seeding completed locally. Cannot reach Supabase (network/DNS/offline); skipped cloud upserts and sync. Fix connectivity and run again or wait for background sync.';
+
       return {
         success: true,
-        message: 'YAML seeding completed successfully!',
+        message: successMessage,
         details: {
           employeesCount,
           categoriesCount,
@@ -225,10 +258,10 @@ export class SeedDataService {
       };
 
     } catch (error) {
-      console.error('❌ Seeding failed:', error);
+      console.error('❌ Seeding failed:', seedErrorMessage(error), error);
       return {
         success: false,
-        message: `Seeding failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        message: `Seeding failed: ${seedErrorMessage(error)}`,
         details: {
           employeesCount: 0,
           categoriesCount: 0,

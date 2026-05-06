@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 
+import { mergeFiscalPemFromEnv } from '../utils/fiscalEnvDefaults';
+
 export interface SystemSettings {
     autoLogout: {
         enabled: boolean;
@@ -198,9 +200,12 @@ const settingsReducer = (state: SettingsState, action: SettingsAction): Settings
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
+const cloneDefaultSettings = (): SystemSettings =>
+    JSON.parse(JSON.stringify(defaultSettings)) as SystemSettings;
+
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(settingsReducer, {
-        settings: defaultSettings,
+        settings: mergeFiscalPemFromEnv(cloneDefaultSettings()),
         isLoading: true,
     });
 
@@ -246,8 +251,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     };
 
     const resetToDefaults = () => {
-        dispatch({ type: 'RESET_SETTINGS' });
-        localStorage.setItem('pos_system_settings', JSON.stringify(defaultSettings));
+        const next = mergeFiscalPemFromEnv(cloneDefaultSettings());
+        dispatch({ type: 'LOAD_SETTINGS', payload: next });
+        localStorage.setItem('pos_system_settings', JSON.stringify(next));
     };
 
     useEffect(() => {
@@ -290,13 +296,13 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                             ...(parsedSettings.fiscal || {}),
                         },
                     };
-                    dispatch({ type: 'LOAD_SETTINGS', payload: mergedSettings });
+                    dispatch({ type: 'LOAD_SETTINGS', payload: mergeFiscalPemFromEnv(mergedSettings) });
                 } else {
-                    dispatch({ type: 'LOAD_SETTINGS', payload: defaultSettings });
+                    dispatch({ type: 'LOAD_SETTINGS', payload: mergeFiscalPemFromEnv(cloneDefaultSettings()) });
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
-                dispatch({ type: 'LOAD_SETTINGS', payload: defaultSettings });
+                dispatch({ type: 'LOAD_SETTINGS', payload: mergeFiscalPemFromEnv(cloneDefaultSettings()) });
             }
         };
 

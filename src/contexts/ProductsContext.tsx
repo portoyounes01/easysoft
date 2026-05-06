@@ -11,7 +11,7 @@ import {
     calculatePriceWithTax
 } from '../types/supabase';
 import { categoryService, productService, productSyncService } from '../services/productService';
-import { localDb } from '../lib/localDatabase';
+import { initializeLocalDatabase, localDb } from '../lib/localDatabase';
 
 // =====================================================
 // Types
@@ -21,7 +21,10 @@ interface ProductsState {
     products: LocalProduct[];
     categories: LocalCategory[];
     isLoading: boolean;
+    /** Local catalog read / Dexie failures — blocks POS grid until resolved. */
     error: string | null;
+    /** Background cloud sync failure — banner only; local catalog still usable. */
+    syncError: string | null;
     syncStatus: {
         isOnline: boolean;
         lastSync: Date | null;
@@ -34,6 +37,7 @@ interface ProductsState {
 type ProductsAction =
     | { type: 'SET_LOADING'; payload: boolean }
     | { type: 'SET_ERROR'; payload: string | null }
+    | { type: 'SET_SYNC_ERROR'; payload: string | null }
     | { type: 'SET_PRODUCTS'; payload: LocalProduct[] }
     | { type: 'SET_CATEGORIES'; payload: LocalCategory[] }
     | { type: 'ADD_PRODUCT'; payload: LocalProduct }
@@ -50,6 +54,7 @@ interface ProductsContextType {
     categories: LocalCategory[];
     isLoading: boolean;
     error: string | null;
+    syncError: string | null;
     syncStatus: ProductsState['syncStatus'];
 
     // Product operations
@@ -82,6 +87,7 @@ interface ProductsContextType {
     // Sync operations
     syncData: () => Promise<void>;
     refreshData: () => Promise<void>;
+    clearSyncError: () => void;
 }
 
 // =====================================================
@@ -94,6 +100,8 @@ const productsReducer = (state: ProductsState, action: ProductsAction): Products
             return { ...state, isLoading: action.payload };
         case 'SET_ERROR':
             return { ...state, error: action.payload };
+        case 'SET_SYNC_ERROR':
+            return { ...state, syncError: action.payload };
         case 'SET_PRODUCTS':
             return { ...state, products: action.payload };
         case 'SET_CATEGORIES':
@@ -153,6 +161,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         categories: [],
         isLoading: false,
         error: null,
+        syncError: null,
         syncStatus: {
             isOnline: navigator.onLine,
             lastSync: null,
@@ -164,6 +173,8 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         try {
             dispatch({ type: 'SET_LOADING', payload: true });
             dispatch({ type: 'SET_ERROR', payload: null });
+
+            await initializeLocalDatabase();
 
             // Use direct database queries to avoid service layer issues
             const [products, categories] = await Promise.all([
@@ -183,7 +194,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         } finally {
             dispatch({ type: 'SET_LOADING', payload: false });
         }
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         loadData();
@@ -420,7 +431,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         try {
             dispatch({ type: 'SET_SYNC_STATUS', payload: { isSyncing: true } });
-            dispatch({ type: 'SET_ERROR', payload: null });
+            dispatch({ type: 'SET_SYNC_ERROR', payload: null });
 
             await productSyncService.fullSync();
 
@@ -434,12 +445,18 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                     isSyncing: false
                 }
             });
+            dispatch({ type: 'SET_SYNC_ERROR', payload: null });
         } catch (error) {
             console.error('Sync failed:', error);
-            dispatch({ type: 'SET_ERROR', payload: 'Sync failed' });
+            const message = error instanceof Error ? error.message : 'Sync failed';
+            dispatch({ type: 'SET_SYNC_ERROR', payload: message });
             dispatch({ type: 'SET_SYNC_STATUS', payload: { isSyncing: false } });
         }
     };
+
+    const clearSyncError = useCallback(() => {
+        dispatch({ type: 'SET_SYNC_ERROR', payload: null });
+    }, []);
 
     const refreshData = async (): Promise<void> => {
         await loadData();
@@ -455,6 +472,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         categories: state.categories,
         isLoading: state.isLoading,
         error: state.error,
+        syncError: state.syncError,
         syncStatus: state.syncStatus,
 
         // Product operations
@@ -483,6 +501,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // Sync operations
         syncData,
         refreshData,
+        clearSyncError,
     };
 
     return (

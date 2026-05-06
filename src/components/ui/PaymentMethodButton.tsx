@@ -46,7 +46,7 @@ export const PaymentMethodButton: React.FC<PaymentMethodButtonProps> = ({
             {...props}
         >
             <Icon className={`${getIconColor()} w-5 h-5`} />
-            <span className="text-base font-medium text-grey-50">{label}</span>
+            <span className={`text-base font-medium ${selected ? 'text-green-900' : 'text-gray-900'}`}>{label}</span>
         </button>
     );
 };

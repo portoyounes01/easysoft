@@ -16,18 +16,32 @@ import {
   Zap,
   Printer,
   Tag,
-  ClipboardList
+  ClipboardList,
 } from 'lucide-react';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+import { useDesignSystem2Customization } from '../../contexts/DesignSystem2CustomizationContext';
 import LanguageSwitcher from '../LanguageSwitcher';
+import '../../styles/design-system-2-scope.css';
 
 interface SidebarProps {
   isCollapsed: boolean;
 }
 
+/** Matches `TabButton` `variant="sidebar"` active / idle chrome — remapped inside `.ds2-visual-scope` to DS2 secondary + radius. */
+const sidebarNavClass = (isActive: boolean, isCollapsed: boolean): string => {
+  const base =
+    'flex min-h-touch-sm items-center space-x-3 px-4 py-3 ds2-control-radius-lg transition-all duration-200 group relative';
+  const active =
+    'bg-gradient-to-r from-blue-600 to-blue-500 text-neutral-100 shadow-lg transform scale-105';
+  const idle = 'text-neutral-300 hover:bg-slate-800 hover:text-yellow-400';
+  const collapsed = isCollapsed ? 'justify-center' : '';
+  return `${base} ${isActive ? active : idle} ${collapsed}`.trim();
+};
+
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
   const { employee, signOut, hasPermission } = useSupabaseAuth();
   const { t } = useTranslation();
+  const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const menuItems = useMemo(
@@ -42,7 +56,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
       { path: '/fiscal-audit', icon: ClipboardList, labelKey: 'sidebar.menu.fiscalAudit', permission: 'settings' },
       { path: '/settings', icon: Settings, labelKey: 'sidebar.menu.settings', permission: 'settings' },
       { path: '/printer-test', icon: Printer, labelKey: 'sidebar.menu.printerTest', permission: 'settings' },
-      { path: '/pair-device', icon: Zap, labelKey: 'sidebar.menu.devicePairing', permission: 'settings' },
       { path: '/seed', icon: Database, labelKey: 'sidebar.menu.seedManagement', permission: 'settings' },
       { path: '/cashier-testing', icon: Zap, labelKey: 'sidebar.menu.cashierTesting', permission: 'settings' },
       { path: '/electron-testing', icon: Zap, labelKey: 'sidebar.menu.electronTesting', permission: 'settings' },
@@ -63,19 +76,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
     setShowLogoutConfirm(false);
   };
 
+  const widthClass = isCollapsed ? 'w-20' : layoutClasses.sidebarW;
+
   return (
     <>
-      <div className={`bg-gradient-to-b from-slate-900 to-slate-800 text-white h-screen overflow-y-auto flex flex-col shadow-2xl transition-[width] duration-300 ${isCollapsed ? 'w-20' : 'w-64 md:w-64'
-        }`}>
-        <div className="p-6 border-b border-slate-700">
+      <div
+        className={`ds2-visual-scope flex h-screen flex-col overflow-y-auto bg-gradient-to-b from-slate-900 to-slate-800 text-white shadow-2xl transition-[width] duration-300 ${widthClass}`}
+        style={visualStyle}
+        data-ds2-neutral={prefs.neutralFamilyId}
+      >
+        <div className="border-b border-slate-700 p-6">
           <div className="flex items-center space-x-3">
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-lg flex-shrink-0">
-              <FileText className="w-6 h-6 text-white" />
+            <div className="flex-shrink-0 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 p-2 ds2-control-radius-lg">
+              <FileText className="h-6 w-6 text-white" />
             </div>
             {!isCollapsed && (
               <div>
                 <h1 className="text-xl font-bold">{t('sidebar.brandTitle')}</h1>
-                <p className="text-slate-400 text-sm">{t('sidebar.brandSubtitle')}</p>
+                <p className="text-sm text-slate-400">{t('sidebar.brandSubtitle')}</p>
               </div>
             )}
           </div>
@@ -92,20 +110,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
                 <li key={item.path}>
                   <NavLink
                     to={item.path}
-                    className={({ isActive }) =>
-                      `flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 group relative ${isActive
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg transform scale-105'
-                        : 'text-slate-300 hover:bg-slate-700 hover:text-white hover:transform hover:scale-105'
-                      } ${isCollapsed ? 'justify-center' : ''}`
-                    }
+                    end={item.path === '/'}
+                    className={({ isActive }) => sidebarNavClass(isActive, isCollapsed)}
                     title={isCollapsed ? label : undefined}
                   >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
+                    <Icon className="h-5 w-5 flex-shrink-0" />
                     {!isCollapsed && <span className="font-medium">{label}</span>}
 
-                    {/* Tooltip for collapsed state */}
                     {isCollapsed && (
-                      <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                      <div className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-sm text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                         {label}
                       </div>
                     )}
@@ -116,15 +129,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
           </ul>
         </nav>
 
-        <div className="p-4 border-t border-slate-700">
-          <div className={`flex items-center p-3 bg-slate-800 rounded-lg mb-3 ${isCollapsed ? 'justify-center space-x-0' : 'space-x-3'}`}>
-            <div className="bg-gradient-to-r from-green-500 to-teal-500 p-2 rounded-full flex-shrink-0">
-              <UserCircle className="w-5 h-5 text-white" />
+        <div className="border-t border-slate-700 p-4">
+          <div
+            className={`mb-3 flex items-center rounded-lg bg-slate-800 p-3 ds2-control-radius-lg ${isCollapsed ? 'justify-center space-x-0' : 'space-x-3'}`}
+          >
+            <div className="flex-shrink-0 rounded-full bg-gradient-to-r from-green-500 to-teal-500 p-2">
+              <UserCircle className="h-5 w-5 text-white" />
             </div>
             {!isCollapsed && (
               <div className="flex-1">
-                <p className="font-medium text-sm">{employee?.name}</p>
-                <p className="text-slate-400 text-xs">{employee?.role.toUpperCase()}</p>
+                <p className="text-sm font-medium">{employee?.name}</p>
+                <p className="text-xs text-slate-400">{employee?.role.toUpperCase()}</p>
               </div>
             )}
           </div>
@@ -132,17 +147,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
           <LanguageSwitcher variant="sidebar" collapsed={isCollapsed} />
 
           <button
+            type="button"
             onClick={handleLogout}
-            className={`w-full flex items-center px-4 py-3 min-h-[60px] text-slate-300 hover:bg-red-600 hover:text-white rounded-lg transition-all duration-200 hover:transform hover:scale-105 group relative ${isCollapsed ? 'justify-center space-x-0' : 'space-x-3'
-              }`}
+            className={`group relative flex min-h-touch w-full items-center rounded-lg px-4 py-3 text-slate-300 transition-all duration-200 hover:scale-105 hover:bg-red-600 hover:text-white ds2-control-radius-lg ${isCollapsed ? 'justify-center space-x-0' : 'space-x-3'}`}
             title={isCollapsed ? t('common.logout') : undefined}
           >
-            <LogOut className="w-5 h-5 group-hover:animate-pulse flex-shrink-0" />
+            <LogOut className="h-5 w-5 flex-shrink-0 group-hover:animate-pulse" />
             {!isCollapsed && <span className="font-medium">{t('common.logout')}</span>}
 
-            {/* Tooltip for collapsed state */}
             {isCollapsed && (
-              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+              <div className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-sm text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                 {t('common.logout')}
               </div>
             )}
@@ -150,30 +164,31 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
         </div>
       </div>
 
-      {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-96 max-w-md shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="bg-red-100 p-3 rounded-full inline-block mb-4">
-                <LogOut className="w-8 h-8 text-red-600" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-96 max-w-md rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-6 text-center">
+              <div className="mb-4 inline-block rounded-full bg-red-100 p-3">
+                <LogOut className="h-8 w-8 text-red-600" />
               </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">{t('sidebar.logoutConfirmTitle')}</h3>
+              <h3 className="mb-2 text-xl font-bold text-gray-800">{t('sidebar.logoutConfirmTitle')}</h3>
               <p className="text-gray-600">{t('sidebar.logoutConfirmMessage')}</p>
             </div>
 
             <div className="flex space-x-3">
               <button
+                type="button"
                 onClick={cancelLogout}
-                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold transition-colors"
+                className="min-h-touch-sm flex-1 rounded-lg bg-gray-200 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-300"
               >
                 {t('common.cancel')}
               </button>
               <button
+                type="button"
                 onClick={confirmLogout}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center space-x-2"
+                className="flex min-h-touch-sm flex-1 items-center justify-center space-x-2 rounded-lg bg-red-600 py-3 font-semibold text-white transition-colors hover:bg-red-700"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="h-4 w-4" />
                 <span>{t('common.logout')}</span>
               </button>
             </div>

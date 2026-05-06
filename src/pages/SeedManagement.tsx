@@ -22,6 +22,10 @@ import {
 import { seedDataService, SeedResult } from '../utils/seedData';
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useProducts } from '../contexts/ProductsContext';
+import {
+    useDesignSystem2Customization,
+} from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 interface SeedStatus {
     isRunning: boolean;
@@ -30,8 +34,9 @@ interface SeedStatus {
     details: string[];
 }
 
-const SeedManagement: React.FC = () => {
+const SeedManagementInner: React.FC = () => {
     const { t } = useTranslation();
+    const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
     const { refreshEmployees } = useEmployees();
     const { refreshData: refreshProducts } = useProducts();
     const [seedStatus, setSeedStatus] = useState<SeedStatus>({
@@ -133,8 +138,12 @@ const SeedManagement: React.FC = () => {
     const isFileAvailable = (filename: string) => filesAvailable.available.includes(filename);
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-6xl mx-auto">
+        <div
+            className="ds2-visual-scope min-h-screen bg-gray-50"
+            style={visualStyle}
+            data-ds2-neutral={prefs.neutralFamilyId}
+        >
+            <div className={`mx-auto max-w-6xl space-y-8 py-6 ${layoutClasses.contentInsetX}`}>
                 {/* Header */}
                 <div className="mb-8">
                     <div className="flex items-center space-x-3 mb-4">
@@ -209,12 +218,14 @@ const SeedManagement: React.FC = () => {
                                 </div>
 
                                 <button
+                                    type="button"
                                     onClick={handleRunSeed}
                                     disabled={seedStatus.isRunning}
-                                    className={`w-full flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${seedStatus.isRunning
-                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                                        }`}
+                                    className={`ds2-control-radius-lg flex w-full items-center justify-center space-x-2 px-6 py-3 font-semibold transition-all duration-200 ${
+                                        seedStatus.isRunning
+                                            ? 'cursor-not-allowed bg-gray-300 text-gray-500'
+                                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                                    }`}
                                 >
                                     {seedStatus.isRunning ? (
                                         <>
@@ -387,4 +398,4 @@ const SeedManagement: React.FC = () => {
     );
 };
 
-export default SeedManagement;
+export default SeedManagementInner;

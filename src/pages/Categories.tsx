@@ -6,22 +6,22 @@ import CategoryForm from '../components/CategoryForm';
 import { useTranslation } from 'react-i18next';
 import { DashedCardButton } from '../components/ui/DashedCardButton';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import {
+    useDesignSystem2Customization,
+} from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
-const Categories: React.FC = () => {
-    // 1. Hooks (useState, useEffect, useContext)
-    const {
-        products,
-        categories,
-        isLoading,
-        error,
-        deleteCategory
-    } = useProducts();
+const CategoriesInner: React.FC = () => {
+    const { products, categories, isLoading, error, deleteCategory } = useProducts();
+    const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
     const { t } = useTranslation();
 
     const [showCategoryForm, setShowCategoryForm] = useState(false);
     const [editingCategory, setEditingCategory] = useState<LocalCategory | null>(null);
 
-    // 2. Event handlers
+    const headerPrimaryBtn =
+        'ds2-control-radius-lg ds2-toolbar-control-h !px-4 text-sm font-semibold gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
+
     const handleCreateCategory = () => {
         setEditingCategory(null);
         setShowCategoryForm(true);
@@ -44,7 +44,10 @@ const Categories: React.FC = () => {
 
         if (productsInCategory.length > 0) {
             alert(
-                t('categories.confirm.cannotDeleteWithProducts', { name: categoryName, count: productsInCategory.length })
+                t('categories.confirm.cannotDeleteWithProducts', {
+                    name: categoryName,
+                    count: productsInCategory.length,
+                })
             );
             return;
         }
@@ -59,173 +62,242 @@ const Categories: React.FC = () => {
         }
     };
 
-    // 4. Effects - none
+    const scopeShell = (children: React.ReactNode, extraClass = '') => (
+        <div
+            className={['ds2-visual-scope', extraClass].filter(Boolean).join(' ')}
+            style={visualStyle}
+            data-ds2-neutral={prefs.neutralFamilyId}
+        >
+            {children}
+        </div>
+    );
 
-    // Loading/Error states
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center h-64">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                <span className="ml-2 text-gray-600">{t('common.loading', { defaultValue: 'Loading...' })}</span>
+        return scopeShell(
+            <div className="flex min-h-60 items-center justify-center">
+                <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
+                <span className="ml-3 text-lg text-gray-600">
+                    {t('common.loading', { defaultValue: 'Loading...' })}
+                </span>
             </div>
         );
     }
 
     if (error) {
-        return (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        return scopeShell(
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
                 <div className="flex items-center">
-                    <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
-                    <span className="text-red-700">{error}</span>
+                    <AlertTriangle className="mr-3 h-6 w-6 shrink-0 text-red-500" />
+                    <span className="font-medium text-red-700">{error}</span>
                 </div>
             </div>
         );
     }
 
-    // 5. Render
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-800">{t('categories.title')}</h1>
-                    <p className="text-gray-600 mt-1">{t('categories.subtitle')}</p>
+        <div
+            className="ds2-visual-scope"
+            style={visualStyle}
+            data-ds2-neutral={prefs.neutralFamilyId}
+        >
+            <div className="space-y-6">
+                <div
+                    className={`flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between ${layoutClasses.contentInsetX}`}
+                >
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+                            {t('categories.title')}
+                        </h1>
+                        <p className="mt-1 text-gray-600">{t('categories.subtitle')}</p>
+                    </div>
+                    <AdminActionButton
+                        variant="primary"
+                        label={t('categories.addCategory')}
+                        icon={Plus}
+                        onClick={handleCreateCategory}
+                        className={headerPrimaryBtn}
+                    />
                 </div>
-                <AdminActionButton
-                    variant="primary"
-                    label={t('categories.addCategory')}
-                    icon={Plus}
-                    onClick={handleCreateCategory}
+
+                {/* <div className={layoutClasses.contentInsetX}>
+                            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                                {[
+                                    {
+                                        title: t('categories.stats.totalCategories'),
+                                        value: categories.filter((c) => !c.deleted_at).length.toString(),
+                                        icon: Tag,
+                                        color: 'bg-purple-500',
+                                    },
+                                    {
+                                        title: t('categories.stats.activeCategories'),
+                                        value: categories.filter((c) => c.is_active && !c.deleted_at).length.toString(),
+                                        icon: Tag,
+                                        color: 'bg-green-500',
+                                    },
+                                    {
+                                        title: t('categories.stats.productsWithoutCategory'),
+                                        value: products
+                                            .filter((p) => !p.category_id && p.is_active && !p.deleted_at)
+                                            .length.toString(),
+                                        icon: Package,
+                                        color: 'bg-orange-500',
+                                    },
+                                ].map((stat, idx) => {
+                                    const Icon = stat.icon;
+                                    return (
+                                        <div
+                                            key={idx}
+                                            className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
+                                                    <p className="text-sm text-gray-600">{stat.title}</p>
+                                                </div>
+                                                <div className={`rounded-lg p-3 ${stat.color}`}>
+                                                    <Icon className="h-6 w-6 text-white" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div> */}
+
+                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <div
+                        className={`border-b border-gray-200 py-4 ${layoutClasses.contentInsetX}`}
+                    >
+                        <div className="flex items-center justify-between gap-4">
+                            <h2 className="flex items-center space-x-2 text-xl font-semibold text-gray-800">
+                                <Tag className="h-5 w-5 text-purple-600" />
+                                <span>{t('categories.grid.title')}</span>
+                            </h2>
+                            <span className="shrink-0 text-sm text-gray-500">
+                                {t('categories.grid.total', {
+                                    total: categories.filter((c) => !c.deleted_at).length,
+                                    active: categories.filter((c) => c.is_active && !c.deleted_at).length,
+                                })}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className={`py-4 ${layoutClasses.contentInsetX}`}>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            {categories
+                                .filter((category) => !category.deleted_at)
+                                .sort((a, b) => a.display_order - b.display_order)
+                                .map((category) => {
+                                    const productCount = products.filter(
+                                        (p) => p.category_id === category.id && p.is_active && !p.deleted_at
+                                    ).length;
+
+                                    return (
+                                        <div
+                                            key={category.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    handleEditCategory(category);
+                                                }
+                                            }}
+                                            className={`group relative cursor-pointer rounded-lg border p-4 transition-all hover:shadow-md ${category.is_active
+                                                ? 'border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50'
+                                                : 'border-gray-300 bg-gray-100 opacity-60 hover:opacity-75'
+                                                }`}
+                                            onClick={() => handleEditCategory(category)}
+                                        >
+                                            {!category.is_active && (
+                                                <div className="absolute left-2 top-2 rounded-full bg-gray-500 px-2 py-1 text-xs font-medium text-white">
+                                                    {t('categories.grid.inactive')}
+                                                </div>
+                                            )}
+
+                                            <div
+                                                className={`mb-3 flex h-20 w-full items-center justify-center rounded-lg bg-gradient-to-r ${category.color} ${!category.is_active ? 'opacity-70' : ''}`}
+                                            >
+                                                <div className="text-2xl text-white">
+                                                    {category.icon === 'coffee' && (
+                                                        <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path d="M7 11h1v1H7v-1zm2 0h1v1H9v-1zm-5 0h1v1H4v-1zm11.5-7C16.33 4 17 3.33 17 2.5S16.33 1 15.5 1 14 1.67 14 2.5 14.67 4 15.5 4z" />
+                                                        </svg>
+                                                    )}
+                                                    {category.icon === 'milk' && (
+                                                        <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path d="M7 11h1v1H7v-1zm2 0h1v1H9v-1zm-5 0h1v1H4v-1zm11.5-7C16.33 4 17 3.33 17 2.5S16.33 1 15.5 1 14 1.67 14 2.5 14.67 4 15.5 4z" />
+                                                        </svg>
+                                                    )}
+                                                    {category.icon === 'cake' && (
+                                                        <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path d="M7 11h1v1H7v-1zm2 0h1v1H9v-1zm-5 0h1v1H4v-1zm11.5-7C16.33 4 17 3.33 17 2.5S16.33 1 15.5 1 14 1.67 14 2.5 14.67 4 15.5 4z" />
+                                                        </svg>
+                                                    )}
+                                                    {category.icon === 'candy' && (
+                                                        <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path d="M7 11h1v1H7v-1zm2 0h1v1H9v-1zm-5 0h1v1H4v-1zm11.5-7C16.33 4 17 3.33 17 2.5S16.33 1 15.5 1 14 1.67 14 2.5 14.67 4 15.5 4z" />
+                                                        </svg>
+                                                    )}
+                                                    {!['coffee', 'milk', 'cake', 'candy'].includes(category.icon) && (
+                                                        <Package className="h-8 w-8" />
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <h3
+                                                    className={`truncate font-semibold ${category.is_active ? 'text-gray-800' : 'text-gray-500'}`}
+                                                >
+                                                    {category.name}
+                                                </h3>
+                                                <p
+                                                    className={`line-clamp-2 text-sm ${category.is_active ? 'text-gray-600' : 'text-gray-400'}`}
+                                                >
+                                                    {category.description || t('categories.grid.noDescription')}
+                                                </p>
+                                                <div
+                                                    className={`flex items-center justify-between text-xs ${category.is_active ? 'text-gray-500' : 'text-gray-400'}`}
+                                                >
+                                                    <span>
+                                                        {t('categories.grid.productsCount', { count: productCount })}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteCategory(category.id, category.name);
+                                                        }}
+                                                        className="ds2-control-radius-lg min-h-touch-xs min-w-touch-xs p-2 text-red-600 transition-colors hover:bg-red-50"
+                                                        title={t('categories.grid.deleteCategoryTitle')}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                            <DashedCardButton
+                                icon={Plus}
+                                label={t('categories.addCategoryCard')}
+                                onClick={handleCreateCategory}
+                                className="h-full min-h-35"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <CategoryForm
+                    isOpen={showCategoryForm}
+                    onClose={() => setShowCategoryForm(false)}
+                    category={editingCategory}
+                    onSuccess={handleCategoryFormSuccess}
                 />
             </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[{
-                    title: t('categories.stats.totalCategories'),
-                    value: categories.filter(c => !c.deleted_at).length.toString(),
-                    icon: Tag,
-                    color: 'bg-purple-500'
-                }, {
-                    title: t('categories.stats.activeCategories'),
-                    value: categories.filter(c => c.is_active && !c.deleted_at).length.toString(),
-                    icon: Tag,
-                    color: 'bg-green-500'
-                }, {
-                    title: t('categories.stats.productsWithoutCategory'),
-                    value: products.filter(p => !p.category_id && p.is_active && !p.deleted_at).length.toString(),
-                    icon: Package,
-                    color: 'bg-orange-500'
-                }].map((stat, idx) => {
-                    const Icon = stat.icon;
-                    return (
-                        <div key={idx} className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
-                                    <p className="text-gray-600 text-sm">{stat.title}</p>
-                                </div>
-                                <div className={`p-3 rounded-lg ${stat.color}`}>
-                                    <Icon className="w-6 h-6 text-white" />
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Categories Grid */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-semibold text-gray-800 flex items-center space-x-2">
-                            <Tag className="w-5 h-5 text-purple-600" />
-                            <span>{t('categories.grid.title')}</span>
-                        </h2>
-                        <span className="text-sm text-gray-500">
-                            {t('categories.grid.total', { total: categories.filter(c => !c.deleted_at).length, active: categories.filter(c => c.is_active && !c.deleted_at).length })}
-                        </span>
-                    </div>
-                </div>
-
-                <div className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {categories
-                            .filter(category => !category.deleted_at)
-                            .sort((a, b) => a.display_order - b.display_order)
-                            .map((category) => {
-                                const productCount = products.filter(p =>
-                                    p.category_id === category.id && p.is_active && !p.deleted_at
-                                ).length;
-
-                                return (
-                                    <div
-                                        key={category.id}
-                                        className={`relative group border rounded-lg p-4 hover:shadow-md transition-all cursor-pointer ${category.is_active
-                                            ? 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                                            : 'bg-gray-100 border-gray-300 opacity-60 hover:opacity-75'
-                                            }`}
-                                        onClick={() => handleEditCategory(category)}
-                                    >
-                                        {!category.is_active && (
-                                            <div className="absolute top-2 left-2 px-2 py-1 bg-gray-500 text-white text-xs rounded-full font-medium">
-                                                {t('categories.grid.inactive')}
-                                            </div>
-                                        )}
-
-                                        <div className={`w-full h-20 rounded-lg bg-gradient-to-r ${category.color} flex items-center justify-center mb-3 ${!category.is_active ? 'opacity-70' : ''}`}>
-                                            <div className="text-white text-2xl">
-                                                {category.icon === 'coffee' && <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path d="M7 11h1v1H7v-1zm2 0h1v1H9v-1zm-5 0h1v1H4v-1zm11.5-7C16.33 4 17 3.33 17 2.5S16.33 1 15.5 1 14 1.67 14 2.5 14.67 4 15.5 4z" /></svg>}
-                                                {category.icon === 'milk' && <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path d="M7 11h1v1H7v-1zm2 0h1v1H9v-1zm-5 0h1v1H4v-1zm11.5-7C16.33 4 17 3.33 17 2.5S16.33 1 15.5 1 14 1.67 14 2.5 14.67 4 15.5 4z" /></svg>}
-                                                {category.icon === 'cake' && <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path d="M7 11h1v1H7v-1zm2 0h1v1H9v-1zm-5 0h1v1H4v-1zm11.5-7C16.33 4 17 3.33 17 2.5S16.33 1 15.5 1 14 1.67 14 2.5 14.67 4 15.5 4z" /></svg>}
-                                                {category.icon === 'candy' && <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path d="M7 11h1v1H7v-1zm2 0h1v1H9v-1zm-5 0h1v1H4v-1zm11.5-7C16.33 4 17 3.33 17 2.5S16.33 1 15.5 1 14 1.67 14 2.5 14.67 4 15.5 4z" /></svg>}
-                                                {(!['coffee', 'milk', 'cake', 'candy'].includes(category.icon)) && <Package className="w-8 h-8" />}
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <h3 className={`font-semibold truncate ${category.is_active ? 'text-gray-800' : 'text-gray-500'}`}>{category.name}</h3>
-                                            <p className={`text-sm line-clamp-2 ${category.is_active ? 'text-gray-600' : 'text-gray-400'}`}>{category.description || t('categories.grid.noDescription')}</p>
-                                            <div className={`flex items-center justify-between text-xs ${category.is_active ? 'text-gray-500' : 'text-gray-400'}`}>
-                                                <span>{t('categories.grid.productsCount', { count: productCount })}</span>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleDeleteCategory(category.id, category.name);
-                                                    }}
-                                                    className="min-h-[44px] min-w-[44px] p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                    title={t('categories.grid.deleteCategoryTitle')}
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-
-                        {/* Add Category Card */}
-                        <DashedCardButton
-                            icon={Plus}
-                            label={t('categories.addCategoryCard')}
-                            onClick={handleCreateCategory}
-                            className="h-full min-h-[140px]"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            {/* Category Form Modal */}
-            <CategoryForm
-                isOpen={showCategoryForm}
-                onClose={() => setShowCategoryForm(false)}
-                category={editingCategory}
-                onSuccess={handleCategoryFormSuccess}
-            />
         </div>
     );
 };
 
-export default Categories;
-
-
+export default CategoriesInner;

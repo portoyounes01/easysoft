@@ -135,7 +135,7 @@ const PrinterManager: React.FC = () => {
       case 'error':
         return 'text-red-500';
       default:
-        return 'text-grey-50';
+        return 'text-gray-500';
     }
   };
 

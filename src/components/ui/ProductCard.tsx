@@ -50,7 +50,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             {/* Cart Quantity Badge */}
             {cartQuantity > 0 && (
                 <div
-                    className="absolute bg-gradient-primary text-white rounded-full flex items-center justify-center font-bold z-10"
+                    className="absolute bg-gradient-primary text-neutral-50 rounded-full flex items-center justify-center font-bold z-10"
                     style={{
                         top: `${CARD_WIDTH_VW * 0.08}vw`,
                         right: `${CARD_WIDTH_VW * 0.08}vw`,
@@ -98,7 +98,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 {isOutOfStock && (
                     <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                         <div
-                            className="bg-red-500 text-white rounded-lg font-bold"
+                            className="bg-red-500 text-neutral-50 rounded-lg font-bold"
                             style={{
                                 padding: `${CARD_WIDTH_VW * 0.04}vw ${CARD_WIDTH_VW * 0.08}vw`,
                                 fontSize: `${CARD_WIDTH_VW * 0.09}vw`

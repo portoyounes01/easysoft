@@ -73,8 +73,10 @@ const POS: React.FC = () => {
     getActiveProducts,
     isLoading,
     error,
+    syncError,
     syncData,
-    refreshData
+    refreshData,
+    clearSyncError
   } = useProducts();
 
   // Customer state management
@@ -668,9 +670,38 @@ const POS: React.FC = () => {
               </div>
             )}
 
-            {/* Products Content */}
+            {/* Products Content: local catalog errors block; sync-only issues use banner above */}
             {!isLoading && !error && (
-              <div className="h-full overflow-y-auto" style={{ padding: '1.5vw' }}>
+              <div className="h-full overflow-y-auto flex flex-col" style={{ padding: '1.5vw' }}>
+                {syncError && (
+                  <div
+                    className="mb-4 flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border-2 border-orange-300 bg-orange-50 p-4 shrink-0"
+                    role="status"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-lg font-semibold text-gray-900">{t('pos.syncDegradedTitle')}</p>
+                      <p className="text-base text-gray-700 mt-1">{t('pos.syncDegradedBody')}</p>
+                      <p className="text-sm text-gray-600 mt-2 break-words">{syncError}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-3 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => void handleSyncData()}
+                        className="min-h-touch px-6 rounded-2xl bg-green-500 hover:bg-green-600 text-white font-semibold text-lg transition-colors duration-200"
+                      >
+                        {t('pos.syncDegradedRetry')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => clearSyncError()}
+                        className="min-h-touch px-6 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-lg transition-colors duration-200"
+                      >
+                        {t('pos.syncDegradedDismiss')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="flex-1 min-h-0 overflow-y-auto">
                 {/* Show products for selected category OR all products if no category selected */}
                 {(() => {
                   const productsToShow = selectedCategoryId ? filteredProducts : getActiveProducts();
@@ -719,6 +750,7 @@ const POS: React.FC = () => {
                     </>
                   );
                 })()}
+                </div>
               </div>
             )}
           </div>
@@ -981,13 +1013,13 @@ const POS: React.FC = () => {
               <div className="flex space-x-4">
                 <button
                   onClick={() => setShowLogoutConfirm(false)}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-touch transition-colors"
                 >
                   {t('common.cancel')}
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
+                  className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-4 rounded-2xl min-h-touch transition-colors flex items-center justify-center space-x-2"
                 >
                   <LogOut className="w-5 h-5" />
                   <span>{t('common.logout')}</span>
@@ -1020,13 +1052,13 @@ const POS: React.FC = () => {
               <div className="flex space-x-4">
                 <button
                   onClick={handleAutoLogout}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-[60px] transition-colors"
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-touch transition-colors"
                 >
                   {t('pos.logoutNow')}
                 </button>
                 <button
                   onClick={handleExtendSession}
-                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
+                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-touch transition-colors flex items-center justify-center space-x-2"
                 >
                   <UserCircle className="w-5 h-5" />
                   <span>{t('pos.stayLoggedIn')}</span>

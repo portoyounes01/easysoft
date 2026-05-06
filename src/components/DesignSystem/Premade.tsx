@@ -29,7 +29,7 @@ const Premade: React.FC = () => {
                         <h4 className="font-semibold text-neutral-900 mb-1">Cheeseburger Deluxe</h4>
                         <div className="flex items-center gap-2">
                             <p className="text-sm text-neutral-500">$14.00 x</p>
-                            <span className="bg-valid-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">2</span>
+                            <span className="bg-valid-500 text-neutral-50 text-xs font-bold px-2 py-0.5 rounded-full">2</span>
                         </div>
                     </div>
                 </div>
@@ -109,16 +109,16 @@ const Premade: React.FC = () => {
                 <h3 className="text-lg font-semibold text-neutral-900 mb-8 border-b pb-4">Sign Icon</h3>
                 <div className="flex gap-6">
                     <div className="w-16 h-16 rounded-full bg-valid-500 flex items-center justify-center border-4 border-valid-100">
-                        <Check className="w-8 h-8 text-white" />
+                        <Check className="w-8 h-8 text-neutral-50" />
                     </div>
                     <div className="w-16 h-16 rounded-full bg-warning-500 flex items-center justify-center border-4 border-warning-100">
-                        <span className="text-white text-3xl font-bold">!</span>
+                        <span className="text-neutral-50 text-3xl font-bold">!</span>
                     </div>
                     <div className="w-16 h-16 rounded-full bg-error-500 flex items-center justify-center border-4 border-error-100">
-                        <X className="w-8 h-8 text-white" />
+                        <X className="w-8 h-8 text-neutral-50" />
                     </div>
                     <div className="w-16 h-16 rounded-full bg-info-500 flex items-center justify-center border-4 border-info-100">
-                        <span className="text-white text-3xl font-bold font-serif italic">i</span>
+                        <span className="text-neutral-50 text-3xl font-bold font-serif italic">i</span>
                     </div>
                 </div>
             </section>
@@ -200,7 +200,7 @@ const Premade: React.FC = () => {
                         {/* Error Alert */}
                         <div className="bg-error-50 rounded-lg p-4 flex items-start gap-3">
                             <div className="bg-error-600 rounded-full p-0.5 mt-0.5">
-                                <X className="w-3 h-3 text-white" />
+                                <X className="w-3 h-3 text-neutral-50" />
                             </div>
                             <div className="flex-1">
                                 <h4 className="text-sm font-semibold text-neutral-900">Alert</h4>
@@ -212,7 +212,7 @@ const Premade: React.FC = () => {
                         {/* Warning Alert */}
                         <div className="bg-warning-50 rounded-lg p-4 flex items-start gap-3">
                             <div className="bg-warning-500 rounded-full w-4 h-4 flex items-center justify-center mt-0.5">
-                                <span className="text-white text-xs font-bold">!</span>
+                                <span className="text-neutral-50 text-xs font-bold">!</span>
                             </div>
                             <div className="flex-1">
                                 <h4 className="text-sm font-semibold text-neutral-900">Alert</h4>
@@ -224,7 +224,7 @@ const Premade: React.FC = () => {
                         {/* Success Alert */}
                         <div className="bg-valid-100 rounded-lg p-4 flex items-start gap-3">
                             <div className="bg-valid-500 rounded-full p-0.5 mt-0.5">
-                                <Check className="w-3 h-3 text-white" />
+                                <Check className="w-3 h-3 text-neutral-50" />
                             </div>
                             <div className="flex-1">
                                 <h4 className="text-sm font-semibold text-neutral-900">Alert</h4>
@@ -236,7 +236,7 @@ const Premade: React.FC = () => {
                         {/* Neutral Alert */}
                         <div className="bg-neutral-200 rounded-lg p-4 flex items-start gap-3">
                             <div className="bg-neutral-600 rounded-full w-4 h-4 flex items-center justify-center mt-0.5">
-                                <span className="text-white text-xs font-bold font-serif italic">i</span>
+                                <span className="text-neutral-50 text-xs font-bold font-serif italic">i</span>
                             </div>
                             <div className="flex-1">
                                 <h4 className="text-sm font-semibold text-neutral-900">Alert</h4>
@@ -295,7 +295,7 @@ const Premade: React.FC = () => {
                             <button className="px-4 py-2 bg-white border border-neutral-200 rounded-lg text-sm font-medium text-neutral-700 flex items-center gap-2 hover:bg-neutral-50">
                                 <Plus className="w-4 h-4" /> Button <Plus className="w-4 h-4" />
                             </button>
-                            <button className="px-4 py-2 bg-valid-500 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-valid-600">
+                            <button className="px-4 py-2 bg-valid-500 text-neutral-50 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-valid-600">
                                 <Plus className="w-4 h-4" /> Button <Plus className="w-4 h-4" />
                             </button>
                         </div>
@@ -308,7 +308,7 @@ const Premade: React.FC = () => {
                             <button className="px-6 py-2 bg-white border border-neutral-200 rounded-lg text-sm font-medium text-neutral-700 hover:bg-neutral-50">
                                 Button
                             </button>
-                            <button className="px-6 py-2 bg-valid-500 text-white rounded-lg text-sm font-medium hover:bg-valid-600">
+                            <button className="px-6 py-2 bg-valid-500 text-neutral-50 rounded-lg text-sm font-medium hover:bg-valid-600">
                                 Button 1
                             </button>
                         </div>

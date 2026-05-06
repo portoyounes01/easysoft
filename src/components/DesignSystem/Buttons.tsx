@@ -91,8 +91,7 @@ const Buttons: React.FC = () => {
         <div className="space-y-16">
             {renderButtonSection(
                 'Primary',
-                'bg-primary-600 text-white hover:bg-primary-700 transition-colors'
-            )}
+                'bg-primary-600 text-neutral-50 hover:bg-primary-700 transition-colors')}
 
             {renderButtonSection(
                 'Outline',
@@ -101,24 +100,24 @@ const Buttons: React.FC = () => {
 
             {renderButtonSection(
                 'Gradient',
-                'bg-[linear-gradient(135.7deg,theme(colors.primary.500)_-33%,theme(colors.secondary.700)_100%)] text-white hover:opacity-90 transition-opacity'
+                'bg-[linear-gradient(135.7deg,theme(colors.primary.500)_-33%,theme(colors.secondary.700)_100%)] text-neutral-50 hover:opacity-90 transition-opacity'
             )}
 
             {renderButtonSection(
                 'Danger',
-                'bg-error-600 text-white hover:bg-error-700 transition-colors'
+                'bg-error-600 text-neutral-50 hover:bg-error-700 transition-colors'
             )}
 
             {renderButtonSection(
                 'Ghost',
-                'text-neutral-600 hover:bg-neutral-100 transition-colors'
+                'text-neutral-600 hover:bg-neutral-50 transition-colors'
             )}
 
             {/* Explicit Disabled Section as requested */}
             <section>
                 <h3 className="text-lg font-semibold text-neutral-900 mb-8 border-b pb-4">Disabled</h3>
                 <div className="flex flex-wrap gap-8 items-center">
-                    <button disabled className="px-6 py-3 rounded-[10px] font-medium text-lg flex items-center justify-center gap-2 opacity-50 cursor-not-allowed bg-primary-600 text-white">
+                    <button disabled className="px-6 py-3 rounded-[10px] font-medium text-lg flex items-center justify-center gap-2 opacity-50 cursor-not-allowed bg-primary-600 text-neutral-100">
                         <Plus className="w-5 h-5" />
                         Primary
                         <Plus className="w-5 h-5" />
@@ -128,7 +127,7 @@ const Buttons: React.FC = () => {
                         Outline
                         <Plus className="w-5 h-5" />
                     </button>
-                    <button disabled className="px-6 py-3 rounded-[10px] font-medium text-lg flex items-center justify-center gap-2 opacity-50 cursor-not-allowed bg-error-600 text-white">
+                    <button disabled className="px-6 py-3 rounded-[10px] font-medium text-lg flex items-center justify-center gap-2 opacity-50 cursor-not-allowed bg-error-600 text-neutral-50">
                         <Plus className="w-5 h-5" />
                         Danger
                         <Plus className="w-5 h-5" />

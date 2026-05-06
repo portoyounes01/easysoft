@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, LogIn, User, Settings, Users } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Eye, EyeOff, LogIn, User, Settings, Users, WifiOff, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { useEmployees } from '../../contexts/EmployeesContext';
@@ -36,24 +36,33 @@ const LoginForm: React.FC = () => {
   const { signInWithEmployeeCredentials, isLoading } = useSupabaseAuth();
   const employeesContext = useEmployees();
 
+  const loadErrorIsLocalDb = useMemo(() => {
+    const msg = employeesContext.loadError?.toLowerCase() ?? '';
+    return (
+      msg.includes('database') ||
+      msg.includes('indexeddb') ||
+      msg.includes('backing store') ||
+      msg.includes('dexie') ||
+      msg.includes('object store') ||
+      msg.includes('idbtransaction') ||
+      msg.includes('initialization failed')
+    );
+  }, [employeesContext.loadError]);
+
   // Load employees when component mounts or employees data changes
   useEffect(() => {
-    const loadEmployees = () => {
-      if (employeesContext.employees.length > 0) {
-        // Convert database employees to display format
-        const displayEmployees: EmployeeDisplay[] = employeesContext.employees
-          .filter(emp => emp.is_active && !emp.deleted_at) // Only active, non-deleted employees
-          .map(emp => ({
-            employeeNumber: emp.employee_number,
-            name: emp.name,
-            role: emp.role
-          }));
-
-        setEmployeeList(displayEmployees);
-      }
-    };
-
-    loadEmployees();
+    if (employeesContext.employees.length === 0) {
+      setEmployeeList([]);
+      return;
+    }
+    const displayEmployees: EmployeeDisplay[] = employeesContext.employees
+      .filter(emp => emp.is_active && !emp.deleted_at)
+      .map(emp => ({
+        employeeNumber: emp.employee_number,
+        name: emp.name,
+        role: emp.role
+      }));
+    setEmployeeList(displayEmployees);
   }, [employeesContext.employees]);
 
   // Filter employees based on admin mode
@@ -117,8 +126,9 @@ const LoginForm: React.FC = () => {
     setShowKeyboard(true);
   };
 
-  // Show loading state while employees are being loaded
-  if (employeesContext.isLoading && employeeList.length === 0) {
+  // While loading (initial or retry), always show spinner — if we also required employeeList.length === 0,
+  // a cleared loadError could briefly show the main screen before loadEmployees dispatches.
+  if (employeesContext.isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-slate-900 flex items-center justify-center p-6">
         <div className="text-center">
@@ -130,19 +140,29 @@ const LoginForm: React.FC = () => {
     );
   }
 
-  // Show error state if there's an error loading employees
-  if (employeesContext.error) {
+  // Steady load failure (not currently retrying)
+  if (employeesContext.loadError) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-slate-900 flex items-center justify-center p-6">
-        <div className="text-center">
+        <div className="text-center max-w-2xl px-4">
           <div className="bg-red-500 p-4 rounded-full mb-6 mx-auto w-16 h-16 flex items-center justify-center">
             <span className="text-white text-2xl">!</span>
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">{t('login.loadErrorTitle')}</h1>
-          <p className="text-xl text-blue-100 mb-4">{employeesContext.error}</p>
+          <h1 className="text-4xl font-bold text-white mb-2">
+            {loadErrorIsLocalDb ? t('login.loadErrorLocalDbTitle') : t('login.loadErrorTitle')}
+          </h1>
+          <p className="text-xl text-blue-100 mb-4">
+            {loadErrorIsLocalDb ? t('login.loadErrorLocalDbBody') : employeesContext.loadError}
+          </p>
+          {!loadErrorIsLocalDb && (
+            <p className="text-lg text-blue-200/90 mb-4">{t('login.loadErrorGenericHint')}</p>
+          )}
           <button
-            onClick={() => employeesContext.refreshEmployees()}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold"
+            type="button"
+            onClick={() => {
+              void employeesContext.refreshEmployees();
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold min-h-touch min-w-40 transition-colors duration-200"
           >
             {t('login.retry')}
           </button>
@@ -161,7 +181,7 @@ const LoginForm: React.FC = () => {
           setPassword('');
           setError('');
         }}
-        className={`fixed top-6 right-6 z-10 px-6 py-4 rounded-xl font-semibold text-lg transition-all duration-200 flex items-center space-x-3 shadow-lg min-h-[60px] ${isAdminMode
+        className={`fixed top-6 right-6 z-10 px-6 py-4 rounded-xl font-semibold text-lg transition-all duration-200 flex items-center space-x-3 shadow-lg min-h-touch ${isAdminMode
           ? 'bg-orange-500 hover:bg-orange-600 text-white'
           : 'bg-white hover:bg-gray-50 text-gray-700'
           }`}
@@ -193,6 +213,29 @@ const LoginForm: React.FC = () => {
         </div>
       )}
 
+      {/* Non-blocking: cloud sync failed; local staff list still works */}
+      {employeesContext.syncError && !employeesContext.loadError && (
+        <div
+          className="fixed top-28 left-6 right-6 z-20 md:right-auto md:max-w-xl flex items-start gap-4 rounded-2xl border-2 border-orange-300 bg-orange-50 p-4 shadow-xl"
+          role="status"
+        >
+          <WifiOff className="w-8 h-8 shrink-0 text-orange-600 mt-1" aria-hidden />
+          <div className="flex-1 min-w-0">
+            <p className="text-lg font-semibold text-gray-900">{t('login.syncDegradedTitle')}</p>
+            <p className="text-base text-gray-700 mt-1">{t('login.syncDegradedBody')}</p>
+            <p className="text-sm text-gray-600 mt-2 break-words">{employeesContext.syncError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => employeesContext.clearSyncError()}
+            className="shrink-0 min-h-touch min-w-touch rounded-xl bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center transition-colors duration-200"
+            aria-label={t('login.syncDegradedDismiss')}
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+      )}
+
       <div className="w-full max-w-7xl">
         {!selectedEmployee ? (
           // Employee Selection Screen
@@ -215,7 +258,7 @@ const LoginForm: React.FC = () => {
                 <button
                   key={employee.employeeNumber}
                   onClick={() => handleEmployeeSelect(employee)}
-                  className="bg-white rounded-3xl p-8 shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-300 min-h-[280px] flex flex-col items-center justify-center group"
+                  className="bg-white rounded-3xl p-8 shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-300 min-h-70 flex flex-col items-center justify-center group"
                 >
                   <div className={`bg-gradient-to-r ${getRoleColor(employee.role)} p-6 rounded-3xl mb-6 group-hover:scale-110 transition-transform duration-300`}>
                     <User className="w-16 h-16 text-white" />
@@ -318,7 +361,7 @@ const LoginForm: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleBackToSelection}
-                    className="w-full bg-gray-500 hover:bg-gray-600 text-white py-6 rounded-2xl text-2xl font-semibold transition-all duration-200 min-h-[80px]"
+                    className="w-full bg-gray-500 hover:bg-gray-600 text-white py-6 rounded-2xl text-2xl font-semibold transition-all duration-200 min-h-20"
                     disabled={isLoading}
                   >
                     {t('login.back')}
@@ -327,7 +370,7 @@ const LoginForm: React.FC = () => {
                   <button
                     type="submit"
                     disabled={isLoading || !password}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 min-h-[80px]"
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 min-h-20"
                   >
                     {isLoading ? (
                       <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>

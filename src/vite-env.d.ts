@@ -1,5 +1,14 @@
 /// <reference types="vite/client" />
 
+interface ImportMetaEnv {
+    /** Dev-only PKCS#8/PKCS#1 PEM; inlined at build — never use production AT keys here */
+    readonly VITE_FISCAL_RSA_PRIVATE_KEY_PEM?: string;
+}
+
+interface ImportMeta {
+    readonly env: ImportMetaEnv;
+}
+
 interface ListPrintersResult {
   success: boolean;
   printers: Array<{

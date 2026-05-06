@@ -19,6 +19,9 @@ import {
 import { printerWorkflowService } from '../services/printerWorkflowService';
 import ProductAssignmentManager from './ProductAssignmentManager';
 
+const DS2_WF_PRIMARY =
+    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50';
+
 const PrinterWorkflowManager: React.FC = () => {
   const { t } = useTranslation();
   const [stations, setStations] = useState<PrinterStation[]>([]);
@@ -93,7 +96,7 @@ const PrinterWorkflowManager: React.FC = () => {
 
   const getStationStatus = (station: PrinterStation) => {
     if (!station.isActive) return { status: 'inactive', color: 'text-gray-500', icon: XCircle };
-    if (!station.printerNames || station.printerNames.length === 0) return { status: 'no-printers', color: 'text-grey-50', icon: AlertCircle };
+    if (!station.printerNames || station.printerNames.length === 0) return { status: 'no-printers', color: 'text-amber-600', icon: AlertCircle };
     
     const connectedPrinters = station.printerNames.filter(name =>
       availablePrinters.some(p => p.name === name && p.connected)
@@ -101,7 +104,7 @@ const PrinterWorkflowManager: React.FC = () => {
     
     if (connectedPrinters.length === 0) return { status: 'offline', color: 'text-red-500', icon: XCircle };
     if (connectedPrinters.length === station.printerNames.length) return { status: 'online', color: 'text-green-500', icon: CheckCircle };
-    return { status: 'partial', color: 'text-grey-50', icon: AlertCircle };
+    return { status: 'partial', color: 'text-amber-600', icon: AlertCircle };
   };
 
   return (
@@ -112,8 +115,9 @@ const PrinterWorkflowManager: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">{t('printerWorkflow.workflowTitle')}</h2>
         </div>
         <button
+          type="button"
           onClick={handleCreateStation}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className={DS2_WF_PRIMARY}
         >
           <Plus className="h-4 w-4" />
           {t('printerWorkflow.addStation')}
@@ -142,8 +146,9 @@ const PrinterWorkflowManager: React.FC = () => {
             <Settings className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">{t('printerWorkflow.noStations')}</p>
             <button
+              type="button"
               onClick={handleCreateStation}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className={`${DS2_WF_PRIMARY} mt-4`}
             >
               {t('printerWorkflow.createFirstStation')}
             </button>
@@ -399,20 +404,22 @@ const PrinterWorkflowManager: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex gap-3 mt-6">
+            <div className="mt-6 flex gap-3">
               <button
+                type="button"
                 onClick={() => {
                   setShowModal(false);
                   setSelectedStation(null);
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="ds2-control-radius-lg min-h-touch-sm flex-1 border border-gray-300 px-4 font-semibold text-gray-700 transition-colors hover:bg-gray-50"
               >
                 {t('common.cancel')}
               </button>
               <button
+                type="button"
                 onClick={handleSaveStation}
                 disabled={!selectedStation.name.trim()}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className={`${DS2_WF_PRIMARY} flex-1`}
               >
                 {isEditing ? t('printerWorkflow.updateStation') : t('printerWorkflow.createStationBtn')}
               </button>

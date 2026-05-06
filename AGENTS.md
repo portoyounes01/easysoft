@@ -151,9 +151,9 @@ try {
 ### Tailwind CSS Guidelines
 
 **Touch Screen Optimization (CRITICAL):**
-- Minimum touch targets: `min-h-[60px]`
-- Large action buttons: `min-h-[80px]`
-- Employee cards: `min-h-[280px]`
+- Minimum touch targets: `min-h-touch` (`3.75rem`, ~60px at 16px root); secondary `min-h-touch-sm`; compact `min-h-touch-xs` (~44px)
+- Large action buttons: `min-h-20` (~5rem)
+- Employee cards: `min-h-70` (~17.5rem tall target at default root)
 - Avoid dropdowns and hover-dependent interactions
 
 **Spacing Scale:**
@@ -229,6 +229,7 @@ vi.mock('../src/services/employeeService', () => ({
 **Edge cases**
 
 - **Offline:** New sales are recorded **only** on device until sync; the app does not require the server to finalize fiscal checkout.
+- **Employees & catalog UI:** `EmployeesContext` and `ProductsContext` split **`loadError`** (local IndexedDB / list read failed — can block login or POS catalog until retry) from **`syncError`** (background cloud sync failed — orange banner only; login and local catalog stay usable). Sync callbacks must never set the load channel. Products `loadData` awaits `initializeLocalDatabase()` before Dexie reads to avoid cold-start races.
 - **Multi-till / multi-device:** Each scope keeps its own series/chain as configured; replication uses **stable IDs**, not shared editing of one invoice row.
 - **Long-term evidence:** A **server copy** is valuable only if **immutable** after sync; the **client** can be tampered with in DevTools, so **DB rules** (triggers / strict RLS) and **locked RPCs** matter for the replica.
 

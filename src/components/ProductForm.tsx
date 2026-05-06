@@ -344,7 +344,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
             <div className="fixed inset-0 bg-black bg-opacity-30 z-40" onClick={onClose} />
 
             {/* Side Panel */}
-            <div className="fixed top-0 right-0 h-full w-full max-w-2xl bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col">
+            <div className="fixed top-0 right-0 h-full w-full max-w-2xl bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col rounded-l-2xl overflow-hidden border-l border-gray-200">
                 {/* Header with Toggle */}
                 <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white p-4 flex items-center justify-between flex-shrink-0">
                     <div className="flex items-center space-x-3">
@@ -403,7 +403,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                         value={formData.name}
                                         onChange={(e) => handleFieldChange('name', e.target.value)}
                                         onClick={() => handleTextFieldClick('name')}
-                                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.name ? 'border-red-500' : activeField === 'name' ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 ${errors.name ? 'border-red-500' : activeField === 'name' ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
                                             }`}
                                         placeholder={t('forms.productNamePlaceholder')}
                                     />
@@ -440,7 +440,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                 <select
                                     value={formData.category_id}
                                     onChange={(e) => handleFieldChange('category_id', e.target.value)}
-                                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.category_id ? 'border-red-500' : 'border-gray-300'
+                                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 ${errors.category_id ? 'border-red-500' : 'border-gray-300'
                                         }`}
                                 >
                                     <option value="">{t('products.form.selectCategory')}</option>
@@ -477,7 +477,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                         value={formData.price}
                                         onChange={(e) => handleFieldChange('price', parseFloat(e.target.value) || 0)}
                                         onClick={() => handleNumberFieldClick('price')}
-                                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.price ? 'border-red-500' : activeField === 'price' ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 ${errors.price ? 'border-red-500' : activeField === 'price' ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
                                             }`}
                                         placeholder={t('forms.decimalPlaceholder')}
                                     />
@@ -502,7 +502,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     value={formData.cost}
                                     onChange={(e) => handleFieldChange('cost', parseFloat(e.target.value) || 0)}
                                     onClick={() => handleNumberFieldClick('cost')}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
                                     placeholder={t('forms.decimalPlaceholder')}
                                 />
                             </div>
@@ -515,7 +515,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                 <select
                                     value={formData.iva_rate}
                                     onChange={(e) => handleFieldChange('iva_rate', parseFloat(e.target.value))}
-                                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.iva_rate ? 'border-red-500' : 'border-gray-300'
+                                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 ${errors.iva_rate ? 'border-red-500' : 'border-gray-300'
                                         }`}
                                 >
                                     {IVA_RATES.map(rate => (
@@ -548,8 +548,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     value={formData.stock}
                                     onChange={(e) => handleFieldChange('stock', parseInt(e.target.value) || 0)}
                                     onClick={() => handleNumberFieldClick('stock')}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        placeholder={t('forms.intPlaceholder')}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                    placeholder={t('forms.intPlaceholder')}
                                 />
                             </div>
 
@@ -564,8 +564,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     value={formData.min_stock}
                                     onChange={(e) => handleFieldChange('min_stock', parseInt(e.target.value) || 0)}
                                     onClick={() => handleNumberFieldClick('min_stock')}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        placeholder={t('forms.intPlaceholder')}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                    placeholder={t('forms.intPlaceholder')}
                                 />
                             </div>
 
@@ -577,15 +577,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => handleFieldChange('track_stock', !formData.track_stock)}
-                                    className={`flex items-center space-x-2 px-4 py-3 rounded-lg border transition-colors w-full ${formData.track_stock
-                                        ? 'bg-green-50 border-green-200 text-green-700'
-                                        : 'bg-gray-50 border-gray-300 text-gray-600'
+                                    className={`flex items-center space-x-2 px-4 py-3 min-h-touch rounded-[10px] border transition-colors w-full ${formData.track_stock ? 'ds2-toggle-on' : 'ds2-toggle-off'
                                         }`}
                                 >
                                     {formData.track_stock ? (
-                                        <ToggleRight className="w-6 h-6 text-green-600" />
+                                        <ToggleRight className="w-6 h-6 shrink-0" />
                                     ) : (
-                                        <ToggleLeft className="w-6 h-6 text-gray-400" />
+                                        <ToggleLeft className="w-6 h-6 shrink-0 opacity-90" />
                                     )}
                                     <span>{formData.track_stock ? t('common.enabled') : t('common.disabled')}</span>
                                 </button>
@@ -606,7 +604,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     onChange={(e) => handleFieldChange('description', e.target.value)}
                                     onClick={() => handleTextFieldClick('description')}
                                     rows={3}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
                                     placeholder={t('forms.productDescriptionPlaceholder')}
                                 />
                             </div>
@@ -647,7 +645,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                         value={formData.supplier}
                                         onChange={(e) => handleFieldChange('supplier', e.target.value)}
                                         onClick={() => handleTextFieldClick('supplier')}
-                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
                                         placeholder={t('forms.supplierPlaceholder')}
                                     />
                                 </div>
@@ -665,7 +663,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                         value={formData.location}
                                         onChange={(e) => handleFieldChange('location', e.target.value)}
                                         onClick={() => handleTextFieldClick('location')}
-                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
                                         placeholder={t('forms.storagePlaceholder')}
                                     />
                                 </div>
@@ -679,15 +677,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => handleFieldChange('is_active', !formData.is_active)}
-                                    className={`flex items-center space-x-2 px-4 py-3 rounded-lg border transition-colors w-full ${formData.is_active
-                                        ? 'bg-green-50 border-green-200 text-green-700'
-                                        : 'bg-red-50 border-red-200 text-red-700'
+                                    className={`flex items-center space-x-2 px-4 py-3 min-h-touch rounded-[10px] border transition-colors w-full ${formData.is_active ? 'ds2-product-status-on' : 'ds2-product-status-off'
                                         }`}
                                 >
                                     {formData.is_active ? (
-                                        <ToggleRight className="w-6 h-6 text-green-600" />
+                                        <ToggleRight className="w-6 h-6 shrink-0" />
                                     ) : (
-                                        <ToggleLeft className="w-6 h-6 text-red-600" />
+                                        <ToggleLeft className="w-6 h-6 shrink-0" />
                                     )}
                                     <span>{formData.is_active ? t('common.active') : t('common.inactive')}</span>
                                 </button>
@@ -707,14 +703,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
                         <button
                             type="button"
                             onClick={handleCancel}
-                            className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                            className="flex-1 min-h-touch px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
                         >
                             {t('products.form.cancel')}
                         </button>
                         <button
                             onClick={handleSubmit}
                             disabled={isSubmitting || isLoading}
-                            className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                            className="flex-1 min-h-touch px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white ds2-modal-primary-action hover:from-blue-700 hover:to-blue-600 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                         >
                             {isSubmitting ? (
                                 <>

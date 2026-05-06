@@ -171,17 +171,19 @@ const PrinterManager: React.FC = () => {
               </span>
             )}
             <button
+              type="button"
               onClick={loadPrinters}
               disabled={refreshing}
-              className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
             </button>
             <button
+              type="button"
               onClick={checkPrinterStatus}
               disabled={checkingStatus}
-              className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
+              className="ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Zap className={`h-4 w-4 ${checkingStatus ? 'animate-pulse' : ''}`} />
               <span>Check Status</span>
@@ -211,17 +213,19 @@ const PrinterManager: React.FC = () => {
             </span>
           )}
           <button
+            type="button"
             onClick={loadPrinters}
             disabled={refreshing}
-            className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
           <button
+            type="button"
             onClick={checkPrinterStatus}
             disabled={checkingStatus}
-            className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
+            className="ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Zap className={`h-4 w-4 ${checkingStatus ? 'animate-pulse' : ''}`} />
             <span>Check Status</span>

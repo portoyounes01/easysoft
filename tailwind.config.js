@@ -5,6 +5,18 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      /** Rem-based touch targets (scales with root font size; ~px at 16px root). */
+      minHeight: {
+        touch: '3.75rem',
+        'touch-sm': '3.25rem',
+        'touch-xs': '2.75rem',
+      },
+      minWidth: {
+        touch: '3.75rem',
+        'touch-sm': '3.25rem',
+        'touch-xs': '2.75rem',
+        popover: '17.5rem',
+      },
       colors: {
         primary: colors.green,
         secondary: colors.purple,

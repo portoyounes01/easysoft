@@ -17,6 +17,17 @@ import {
   Usb,
   Laptop
 } from 'lucide-react';
+import {
+    useDesignSystem2Customization,
+} from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
+
+const DS2_PRIMARY_ROW =
+    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50';
+const DS2_DANGER_ROW =
+    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-red-500 hover:bg-red-600 shadow-sm transition-all duration-200';
+const DS2_TEST_TILE =
+    'ds2-control-radius-lg min-h-touch-sm flex w-full items-center gap-3 border-2 border-transparent bg-gradient-to-r from-blue-500 to-blue-600 p-4 text-left font-semibold text-white shadow-sm transition-all hover:from-blue-600 hover:to-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
 
 interface HardwareMode {
   type: 'electron' | 'web';
@@ -25,9 +36,9 @@ interface HardwareMode {
   status: string;
 }
 
-const ElectronCashierTesting: React.FC = () => {
+const ElectronCashierTestingInner: React.FC = () => {
   const { connectToAnyDevice, sendToPrinter, disconnectPrinter, isConnected, isSupported } = useWebSerialPrinter();
-  
+  const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
   // State management
   const [isLoading, setIsLoading] = useState(false);
   const [hardwareMode, setHardwareMode] = useState<HardwareMode>({
@@ -262,28 +273,23 @@ Web Hardware Status:
       <div className="flex gap-3 flex-wrap">
         {!hardwareMode.initialized ? (
           <button
+            type="button"
             onClick={connectHardware}
             disabled={isLoading || !hardwareMode.available}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center gap-2"
+            className={DS2_PRIMARY_ROW}
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             {isLoading ? 'Connecting...' : 'Connect Hardware'}
           </button>
         ) : (
           <>
-            <button
-              onClick={getHardwareStatus}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
-            >
+            <button type="button" onClick={getHardwareStatus} className={DS2_PRIMARY_ROW}>
               <CheckCircle className="h-4 w-4" />
               Hardware Status
             </button>
-            
+
             {hardwareMode.type === 'web' && (
-              <button
-                onClick={disconnectHardware}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
+              <button type="button" onClick={disconnectHardware} className={DS2_DANGER_ROW}>
                 Disconnect
               </button>
             )}
@@ -302,26 +308,28 @@ Web Hardware Status:
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <button
+          type="button"
           onClick={testPrinter}
           disabled={!hardwareMode.initialized || isLoading}
-          className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center gap-3"
+          className={DS2_TEST_TILE}
         >
-          <Printer className="h-5 w-5 text-gray-600" />
+          <Printer className="h-5 w-5 shrink-0 text-white" />
           <div className="text-left">
             <div className="font-medium">Test Printer</div>
-            <div className="text-sm text-gray-600">Print test receipt</div>
+            <div className="text-sm font-normal opacity-90">Print test receipt</div>
           </div>
         </button>
 
         <button
+          type="button"
           onClick={testCashDrawer}
           disabled={!hardwareMode.initialized || isLoading}
-          className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center gap-3"
+          className={DS2_TEST_TILE}
         >
-          <DollarSign className="h-5 w-5 text-gray-600" />
+          <DollarSign className="h-5 w-5 shrink-0 text-white" />
           <div className="text-left">
             <div className="font-medium">Test Cash Drawer</div>
-            <div className="text-sm text-gray-600">Open cash drawer</div>
+            <div className="text-sm font-normal opacity-90">Open cash drawer</div>
           </div>
         </button>
       </div>
@@ -368,10 +376,15 @@ Web Hardware Status:
   );
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div
+      className="ds2-visual-scope min-h-screen bg-gray-50"
+      style={visualStyle}
+      data-ds2-neutral={prefs.neutralFamilyId}
+    >
+      <div className={`mx-auto max-w-4xl py-6 ${layoutClasses.contentInsetX}`}>
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Hardware Testing</h1>
-        <p className="text-gray-600 mt-2">
+        <p className="mt-2 text-gray-600">
           Test thermal printer and cash drawer functionality in both web and Electron environments
         </p>
       </div>
@@ -379,8 +392,9 @@ Web Hardware Status:
       {renderConnectionControls()}
       {renderQuickTests()}
       {renderSettings()}
+      </div>
     </div>
   );
 };
 
-export default ElectronCashierTesting;
+export default ElectronCashierTestingInner;

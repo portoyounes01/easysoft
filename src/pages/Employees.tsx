@@ -29,16 +29,24 @@ import DatabaseReset from '../components/DatabaseReset';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import {
+    useDesignSystem2Customization,
+} from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
-const Employees: React.FC = () => {
+const EmployeesInner: React.FC = () => {
     const {
         employees,
         isLoading,
-        error,
+        loadError,
+        syncError,
+        operationError,
         refreshEmployees,
         createEmployee,
         updateEmployee,
-        deleteEmployee
+        deleteEmployee,
+        clearSyncError,
+        clearOperationError
     } = useEmployees();
 
     const { employee: currentUser } = useSupabaseAuth();
@@ -56,6 +64,22 @@ const Employees: React.FC = () => {
     const roles = ['all', 'admin', 'manager', 'cashier'];
     const { t } = useTranslation();
     const { language } = useLanguage();
+    const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+
+    const toolbarBtn =
+        'ds2-control-radius-lg ds2-toolbar-control-h !px-3 text-sm font-medium gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
+    const headerPrimaryBtn =
+        'ds2-control-radius-lg ds2-toolbar-control-h !px-4 text-sm font-semibold gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
+
+    const scopeShell = (children: React.ReactNode, extraClass = '') => (
+        <div
+            className={['ds2-visual-scope', extraClass].filter(Boolean).join(' ')}
+            style={visualStyle}
+            data-ds2-neutral={prefs.neutralFamilyId}
+        >
+            {children}
+        </div>
+    );
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -71,17 +95,18 @@ const Employees: React.FC = () => {
         };
     }, []);
 
-    // Check for database errors
+    // IndexedDB / schema hints: check both list load and mutation errors
+    const dbErrorHint = loadError || operationError;
     useEffect(() => {
-        if (error && (
-            error.includes('object store') ||
-            error.includes('NotFoundError') ||
-            error.includes('IDBTransaction') ||
-            error.includes('database object could not be found')
+        if (dbErrorHint && (
+            dbErrorHint.includes('object store') ||
+            dbErrorHint.includes('NotFoundError') ||
+            dbErrorHint.includes('IDBTransaction') ||
+            dbErrorHint.includes('database object could not be found')
         )) {
             setShowDatabaseReset(true);
         }
-    }, [error]);
+    }, [dbErrorHint]);
 
     // Form state
     const [formData, setFormData] = useState<EmployeeFormData>({
@@ -446,11 +471,11 @@ const Employees: React.FC = () => {
 
     // Show database reset if there's a schema error
     if (showDatabaseReset) {
-        return (
-            <div className="space-y-6">
+        return scopeShell(
+            <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
                 <div>
                     <h1 className="text-3xl font-bold text-gray-800">{t('employees.header.title')}</h1>
-                    <p className="text-gray-600 mt-1">{t('employees.errors.dbResetNeeded')}</p>
+                    <p className="mt-1 text-gray-600">{t('employees.errors.dbResetNeeded')}</p>
                 </div>
                 <DatabaseReset onComplete={() => window.location.reload()} />
             </div>
@@ -458,22 +483,29 @@ const Employees: React.FC = () => {
     }
 
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center h-full p-12">
-                <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        return scopeShell(
+            <div className="flex min-h-60 items-center justify-center p-12">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
             </div>
         );
     }
 
-    if (error) {
-        return (
-            <div className="flex flex-col items-center justify-center h-full p-12 space-y-4">
-                <p className="text-red-600 font-semibold">{error}</p>
+    if (loadError) {
+        return scopeShell(
+            <div className={`flex h-full flex-col items-center justify-center space-y-4 p-12 ${layoutClasses.contentInsetX}`}>
+                <p className="font-semibold text-red-600">{loadError}</p>
                 <div className="flex space-x-3">
-                    <button onClick={refreshEmployees} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">{t('employees.errors.retry')}</button>
                     <button
+                        type="button"
+                        onClick={refreshEmployees}
+                        className="ds2-control-radius-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                    >
+                        {t('employees.errors.retry')}
+                    </button>
+                    <button
+                        type="button"
                         onClick={() => setShowDatabaseReset(true)}
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+                        className="ds2-control-radius-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
                     >
                         {t('employees.errors.resetDb')}
                     </button>
@@ -483,7 +515,40 @@ const Employees: React.FC = () => {
     }
 
     return (
-        <div className="space-y-6">
+        <div
+            className="ds2-visual-scope"
+            style={visualStyle}
+            data-ds2-neutral={prefs.neutralFamilyId}
+        >
+            <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
+            {syncError && (
+                <div className="flex flex-col sm:flex-row sm:items-start gap-4 rounded-2xl border-2 border-orange-300 bg-orange-50 p-4">
+                    <div className="flex-1 min-w-0">
+                        <p className="text-lg font-semibold text-gray-900">{t('login.syncDegradedTitle')}</p>
+                        <p className="text-base text-gray-700 mt-1">{t('login.syncDegradedBody')}</p>
+                        <p className="text-sm text-gray-600 mt-2 break-words">{syncError}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => clearSyncError()}
+                        className="min-h-touch shrink-0 px-6 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold transition-colors duration-200"
+                    >
+                        {t('login.syncDegradedDismiss')}
+                    </button>
+                </div>
+            )}
+            {operationError && (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border-2 border-red-200 bg-red-50 p-4">
+                    <p className="text-red-700 font-medium flex-1">{operationError}</p>
+                    <button
+                        type="button"
+                        onClick={() => clearOperationError()}
+                        className="min-h-touch px-6 rounded-xl bg-gray-500 hover:bg-gray-600 text-white font-semibold transition-colors duration-200"
+                    >
+                        {t('pos.syncDegradedDismiss')}
+                    </button>
+                </div>
+            )}
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -495,6 +560,7 @@ const Employees: React.FC = () => {
                     label={t('employees.header.addEmployee')}
                     icon={Plus}
                     onClick={handleAddEmployee}
+                    className={headerPrimaryBtn}
                 />
             </div>
 
@@ -509,14 +575,14 @@ const Employees: React.FC = () => {
                                 placeholder={t('employees.header.searchPlaceholder')}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
+                                className="ds2-control-radius-lg ds2-toolbar-control-h box-border w-64 border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
                         <select
                             value={selectedRole}
                             onChange={(e) => setSelectedRole(e.target.value)}
-                            className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="ds2-control-radius-lg ds2-toolbar-control-h box-border border border-gray-200 bg-gray-50 px-4 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                             {roles.map(role => (
                                 <option key={role} value={role}>
@@ -531,7 +597,7 @@ const Employees: React.FC = () => {
                             variant="ghost"
                             label={t('employees.header.filters')}
                             icon={Filter}
-                            className="bg-gray-100 hover:bg-gray-200"
+                            className={`${toolbarBtn} bg-gray-100 hover:bg-gray-200`}
                         />
                     </div>
                 </div>
@@ -1008,7 +1074,8 @@ const Employees: React.FC = () => {
                 </>
             )}
         </div>
+        </div>
     );
 };
 
-export default Employees;
+export default EmployeesInner;

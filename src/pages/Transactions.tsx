@@ -27,6 +27,10 @@ import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import ReceiptDialog from '../components/ReceiptDialog';
 import type { ReceiptProps } from '../components/ThermalReceipt';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import {
+    useDesignSystem2Customization,
+} from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 import { customerLocalService, initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import { generateQRCodeImage } from '../utils/qrCode';
 import type { FiscalTransactionMetadata } from '../fiscal/types';
@@ -143,11 +147,18 @@ async function buildTransactionViewModel(dbTransaction: Record<string, unknown>)
     };
 }
 
-const Transactions: React.FC = () => {
+const TransactionsInner: React.FC = () => {
     const { t } = useTranslation();
     const { language } = useLanguage();
     const { settings } = useSettings();
     const { employee } = useSupabaseAuth();
+    const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+
+    const toolbarBtn =
+        'ds2-control-radius-lg ds2-toolbar-control-h !px-3 text-sm font-medium gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
+    const headerPrimaryBtn =
+        'ds2-control-radius-lg ds2-toolbar-control-h !px-4 text-sm font-semibold gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
+
     const [showReceiptPreview, setShowReceiptPreview] = useState(false);
     const [receiptPreviewData, setReceiptPreviewData] = useState<ReceiptProps | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -546,18 +557,24 @@ const Transactions: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div
+            className="ds2-visual-scope"
+            style={visualStyle}
+            data-ds2-neutral={prefs.neutralFamilyId}
+        >
+            <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">{t('transactions.header.title')}</h1>
                     <p className="text-gray-600 mt-1">{t('transactions.header.subtitle')}</p>
                 </div>
-                <div className="mt-4 sm:mt-0 flex items-center space-x-3">
+                <div className="mt-4 flex items-center space-x-3 sm:mt-0">
                     <AdminActionButton
                         variant="primary"
                         label={t('transactions.header.export')}
                         icon={Download}
+                        className={headerPrimaryBtn}
                     />
                 </div>
             </div>
@@ -651,7 +668,7 @@ const Transactions: React.FC = () => {
                                 placeholder={t('transactions.filters.searchPlaceholder')}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="ds2-control-radius-lg ds2-toolbar-control-h box-border w-full max-w-md border border-gray-300 pl-10 pr-4 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         <AdminActionButton
@@ -660,9 +677,8 @@ const Transactions: React.FC = () => {
                             icon={Filter}
                             showChevron={true}
                             onClick={() => setShowFilters(!showFilters)}
-                        >
-                            {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </AdminActionButton>
+                            className={toolbarBtn}
+                        />
                         <AdminActionButton
                             variant="outline"
                             label="Refresh"
@@ -670,6 +686,7 @@ const Transactions: React.FC = () => {
                             onClick={() => void loadTransactions()}
                             disabled={loading}
                             title={t('transactions.refreshTooltip')}
+                            className={toolbarBtn}
                         />
                     </div>
                 </div>
@@ -683,7 +700,7 @@ const Transactions: React.FC = () => {
                                     type="date"
                                     value={selectedDate}
                                     onChange={(e) => setSelectedDate(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="ds2-control-radius-lg box-border w-full border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                             <div>
@@ -691,7 +708,7 @@ const Transactions: React.FC = () => {
                                 <select
                                     value={selectedStatus}
                                     onChange={(e) => setSelectedStatus(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="ds2-control-radius-lg box-border w-full border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                     <option value="all">{t('transactions.filters.allStatus')}</option>
                                     <option value="completed">{t('transactions.filters.completed')}</option>
@@ -703,7 +720,7 @@ const Transactions: React.FC = () => {
                                 <select
                                     value={selectedPaymentMethod}
                                     onChange={(e) => setSelectedPaymentMethod(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="ds2-control-radius-lg box-border w-full border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                     <option value="all">{t('transactions.filters.allMethods')}</option>
                                     <option value="cash">{t('transactions.filters.cash')}</option>
@@ -858,7 +875,7 @@ const Transactions: React.FC = () => {
                                                         type="button"
                                                         onClick={() => void handleSegundaVia(transaction.id)}
                                                         disabled={creditNoteBusyId !== null || reciboBusyId !== null}
-                                                        className="inline-flex items-center justify-center gap-2 min-h-[60px] px-6 rounded-2xl font-semibold text-xl text-white bg-blue-500 hover:bg-blue-600 transition-colors duration-200 disabled:opacity-50"
+                                                        className="inline-flex items-center justify-center gap-2 min-h-touch px-6 rounded-2xl font-semibold text-xl text-white bg-blue-500 hover:bg-blue-600 transition-colors duration-200 disabled:opacity-50"
                                                     >
                                                         <Printer className="w-6 h-6 shrink-0" />
                                                         Segunda via
@@ -869,7 +886,7 @@ const Transactions: React.FC = () => {
                                                         type="button"
                                                         onClick={() => void handleIssueRecibo(transaction)}
                                                         disabled={creditNoteBusyId !== null || reciboBusyId !== null}
-                                                        className="inline-flex items-center justify-center gap-2 min-h-[60px] px-6 rounded-2xl font-semibold text-xl text-white bg-emerald-500 hover:bg-emerald-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        className="inline-flex items-center justify-center gap-2 min-h-touch px-6 rounded-2xl font-semibold text-xl text-white bg-emerald-500 hover:bg-emerald-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
                                                         <Receipt className="w-6 h-6 shrink-0" />
                                                         {reciboBusyId === transaction.id
@@ -882,7 +899,7 @@ const Transactions: React.FC = () => {
                                                         type="button"
                                                         onClick={() => void handleIssueCreditNote(transaction)}
                                                         disabled={creditNoteBusyId !== null || reciboBusyId !== null}
-                                                        className="inline-flex items-center justify-center gap-2 min-h-[60px] px-6 rounded-2xl font-semibold text-xl text-white bg-orange-500 hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        className="inline-flex items-center justify-center gap-2 min-h-touch px-6 rounded-2xl font-semibold text-xl text-white bg-orange-500 hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
                                                         <FileMinus className="w-6 h-6 shrink-0" />
                                                         {creditNoteBusyId === transaction.id
@@ -912,8 +929,9 @@ const Transactions: React.FC = () => {
                     receipt={receiptPreviewData}
                 />
             )}
+            </div>
         </div>
     );
 };
 
-export default Transactions;
+export default TransactionsInner;

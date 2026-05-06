@@ -73,19 +73,29 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnostics> => 
                     diagnostics.errors.push('Database schema mismatch detected');
                     diagnostics.recommendations.push('Database reset is required to fix schema issues');
                 }
+                if (
+                    dbError.message.toLowerCase().includes('backing store') ||
+                    dbError.message.toLowerCase().includes('indexeddb.open')
+                ) {
+                    diagnostics.recommendations.push(
+                        'Clear site data for this origin (Settings → Privacy → site data) or try another browser profile; backing-store errors are usually disk/profile corruption.'
+                    );
+                }
             }
         }
 
-        // 5. Check for specific table issues
-        try {
-            await Promise.all([
-                localDb.employees?.limit(1).toArray(),
-                localDb.categories?.limit(1).toArray(),
-                localDb.products?.limit(1).toArray(),
-            ]);
-        } catch (tableError) {
-            diagnostics.errors.push(`Table access error: ${tableError}`);
-            diagnostics.recommendations.push('Table structure may be corrupted');
+        // 5. Check for specific table issues (only if open succeeded — otherwise reads spam DatabaseClosedError)
+        if (diagnostics.isDatabaseOpen) {
+            try {
+                await Promise.all([
+                    localDb.employees?.limit(1).toArray(),
+                    localDb.categories?.limit(1).toArray(),
+                    localDb.products?.limit(1).toArray(),
+                ]);
+            } catch (tableError) {
+                diagnostics.errors.push(`Table access error: ${tableError}`);
+                diagnostics.recommendations.push('Table structure may be corrupted');
+            }
         }
 
     } catch (error) {

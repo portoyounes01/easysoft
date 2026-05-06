@@ -15,6 +15,10 @@ import {
   Usb,
   Send
 } from 'lucide-react';
+import {
+    useDesignSystem2Customization,
+} from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 interface TestResult {
   testName: string;
@@ -35,9 +39,24 @@ interface TestSuite {
   timestamp: string;
 }
 
-const CashierTesting: React.FC = () => {
+const DS2_PRIMARY_FULL =
+  'ds2-control-radius-lg min-h-touch-sm flex w-full transform items-center justify-center gap-2 p-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-200 hover:scale-105 hover:from-blue-600 hover:to-blue-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 disabled:transform-none';
+const DS2_PRIMARY_ROW =
+  'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200';
+const DS2_GRAY_ROW =
+  'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-gray-600 hover:bg-gray-700 shadow-sm transition-all duration-200';
+const DS2_DANGER_ROW =
+  'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-red-500 hover:bg-red-600 shadow-sm transition-all duration-200';
+const DS2_COMPACT_GRAY =
+  'ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-1 px-3 text-sm font-semibold text-white bg-gray-600 hover:bg-gray-700 shadow-sm transition-all duration-200';
+const DS2_COMPACT_PRIMARY =
+  'ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-1 px-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200';
+
+const CashierTestingInner: React.FC = () => {
   const { employee } = useSupabaseAuth();
-  const { connectPrinter, connectToAnyDevice, sendToPrinter, disconnectPrinter, isConnected, isSupported } = useWebSerialPrinter();
+  const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+  const { connectPrinter, connectToAnyDevice, sendToPrinter, disconnectPrinter, isConnected, isSupported } =
+    useWebSerialPrinter();
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [lastTestResult, setLastTestResult] = useState<TestSuite | null>(null);
@@ -197,46 +216,44 @@ const CashierTesting: React.FC = () => {
       label: 'Cash Drawer Test',
       icon: DollarSign,
       description: 'Test cash drawer opening mechanism',
-      color: 'bg-green-500 hover:bg-green-600'
     },
     {
       id: 'printer-test',
       label: 'Printer Test',
       icon: Printer,
       description: 'Test thermal printer functionality',
-      color: 'bg-blue-500 hover:bg-blue-600'
     },
     {
       id: 'full-sequence',
       label: 'Full Sequence',
       icon: Zap,
       description: 'Complete transaction: print + open drawer',
-      color: 'bg-purple-500 hover:bg-purple-600'
     },
     {
       id: 'hardware-check',
       label: 'Hardware Check',
       icon: Monitor,
       description: 'Physical hardware inspection checklist',
-      color: 'bg-orange-500 hover:bg-orange-600'
     },
     {
       id: 'all-tests',
       label: 'All Tests',
       icon: CheckCircle,
       description: 'Run complete test suite',
-      color: 'bg-red-500 hover:bg-red-600'
-    }
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div
+      className="ds2-visual-scope min-h-screen bg-gray-50"
+      style={visualStyle}
+      data-ds2-neutral={prefs.neutralFamilyId}
+    >
+      <div className={`mx-auto max-w-6xl py-6 ${layoutClasses.contentInsetX}`}>
+        <div className="mb-6 rounded-lg bg-white p-6 shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+              <h1 className="mb-2 text-3xl font-bold text-gray-800">
                 Cashier Hardware Testing
               </h1>
               <p className="text-gray-600">
@@ -245,18 +262,19 @@ const CashierTesting: React.FC = () => {
             </div>
             <div className="flex items-center space-x-4">
               <button
+                type="button"
                 onClick={fetchTestLogs}
                 disabled={isLoadingLogs}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`${DS2_GRAY_ROW} px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50`}
               >
-                <RefreshCw className={`w-4 h-4 ${isLoadingLogs ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 ${isLoadingLogs ? 'animate-spin' : ''}`} />
                 <span>{isLoadingLogs ? 'Loading...' : 'Refresh'}</span>
               </button>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Test Controls */}
           <div className="lg:col-span-2">
             {/* Hardware Connection Panel */}
@@ -277,23 +295,26 @@ const CashierTesting: React.FC = () => {
                     {!isConnected ? (
                       <>
                         <button
+                          type="button"
                           onClick={() => connectPrinter()}
-                          className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                          className={DS2_PRIMARY_ROW}
                         >
-                          <Usb className="w-4 h-4" />
+                          <Usb className="h-4 w-4" />
                           <span>Connect Printer</span>
                         </button>
                         <button
+                          type="button"
                           onClick={() => connectToAnyDevice()}
-                          className="flex items-center space-x-2 px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                          className={`${DS2_GRAY_ROW} px-3 text-sm`}
                         >
                           <span>Show All Devices</span>
                         </button>
                       </>
                     ) : (
                       <button
+                        type="button"
                         onClick={disconnectPrinter}
-                        className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                        className={DS2_DANGER_ROW}
                       >
                         <span>Disconnect</span>
                       </button>
@@ -379,9 +400,10 @@ const CashierTesting: React.FC = () => {
                   return (
                     <button
                       key={test.id}
+                      type="button"
                       onClick={() => runTest(test.id)}
                       disabled={isLoading}
-                      className={`${test.color} text-white p-4 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none`}
+                      className={DS2_PRIMARY_FULL}
                     >
                       <div className="flex items-center justify-center mb-2">
                         <Icon className="w-8 h-8" />
@@ -417,16 +439,18 @@ const CashierTesting: React.FC = () => {
                           {test.commands && (
                             <>
                               <button
+                                type="button"
                                 onClick={() => downloadCommands(test.commands!, test.testName)}
-                                className="flex items-center space-x-1 px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600 transition-colors"
+                                className={DS2_COMPACT_GRAY}
                               >
-                                <Download className="w-4 h-4" />
+                                <Download className="h-4 w-4" />
                                 <span>Download</span>
                               </button>
                               {isConnected && (
                                 <button
+                                  type="button"
                                   onClick={() => sendToPrinter(test.commands!)}
-                                  className="flex items-center space-x-1 px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors"
+                                  className={DS2_COMPACT_PRIMARY}
                                 >
                                   <Send className="w-4 h-4" />
                                   <span>Send to Hardware</span>
@@ -542,9 +566,9 @@ const CashierTesting: React.FC = () => {
 
         {/* Loading Overlay */}
         {isLoading && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 flex items-center space-x-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="ds2-control-radius-lg flex items-center space-x-4 rounded-lg bg-white p-6">
+              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500"></div>
               <span className="text-lg">Running test...</span>
             </div>
           </div>
@@ -554,4 +578,4 @@ const CashierTesting: React.FC = () => {
   );
 };
 
-export default CashierTesting;
+export default CashierTestingInner;

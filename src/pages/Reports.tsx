@@ -8,17 +8,7 @@ import {
     Calendar,
     Download,
     Filter,
-    Search,
-    ChevronDown,
-    ChevronUp,
-    Eye,
-    FileSpreadsheet,
-    Clock,
-    Percent,
     ShoppingCart,
-    ArrowUpRight,
-    ArrowDownRight,
-    Minus,
     AlertCircle,
     CheckCircle,
     Loader2
@@ -37,6 +27,10 @@ import {
 } from '../types/supabase';
 import { TabButton } from '../components/ui/TabButton';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import {
+    useDesignSystem2Customization,
+} from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 // Note: Mock data has been replaced with real database integration
 // The transaction data now comes from the reportingService
@@ -46,9 +40,10 @@ interface DateRange {
     end: string;
 }
 
-const Reports: React.FC = () => {
+const ReportsInner: React.FC = () => {
     const { t } = useTranslation();
     const { language } = useLanguage();
+    const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
     const { employees } = useEmployees();
     const { products, categories } = useProducts();
 
@@ -69,6 +64,21 @@ const Reports: React.FC = () => {
         overviewMetrics: OverviewMetrics;
     } | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    const toolbarBtn =
+        'ds2-control-radius-lg ds2-toolbar-control-h !px-3 text-sm font-medium gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
+    const headerPrimaryBtn =
+        'ds2-control-radius-lg ds2-toolbar-control-h !px-4 text-sm font-semibold gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
+
+    const scopeShell = (children: React.ReactNode, extraClass = '') => (
+        <div
+            className={['ds2-visual-scope', extraClass].filter(Boolean).join(' ')}
+            style={visualStyle}
+            data-ds2-neutral={prefs.neutralFamilyId}
+        >
+            {children}
+        </div>
+    );
 
     // Load report data when filters change
     useEffect(() => {
@@ -166,17 +176,17 @@ const Reports: React.FC = () => {
 
     // Show loading state
     if (isLoading) {
-        return (
-            <div className="space-y-6">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+        return scopeShell(
+            <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
+                <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">{t('reports.header.title')}</h1>
-                        <p className="text-gray-600 mt-1">{t('reports.header.subtitle')}</p>
+                        <p className="mt-1 text-gray-600">{t('reports.header.subtitle')}</p>
                     </div>
                 </div>
-                <div className="flex items-center justify-center h-64">
+                <div className="flex h-64 items-center justify-center">
                     <div className="flex items-center space-x-2">
-                        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                        <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
                         <span className="text-gray-600">{t('reports.loading.loadingData')}</span>
                     </div>
                 </div>
@@ -186,23 +196,24 @@ const Reports: React.FC = () => {
 
     // Show error state
     if (error) {
-        return (
-            <div className="space-y-6">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+        return scopeShell(
+            <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
+                <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">{t('reports.header.title')}</h1>
-                        <p className="text-gray-600 mt-1">{t('reports.header.subtitle')}</p>
+                        <p className="mt-1 text-gray-600">{t('reports.header.subtitle')}</p>
                     </div>
                 </div>
-                <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+                <div className="rounded-lg border border-red-200 bg-red-50 p-6">
                     <div className="flex items-center space-x-2">
-                        <AlertCircle className="w-5 h-5 text-red-500" />
-                        <h3 className="text-red-800 font-medium">{t('reports.error.title')}</h3>
+                        <AlertCircle className="h-5 w-5 text-red-500" />
+                        <h3 className="font-medium text-red-800">{t('reports.error.title')}</h3>
                     </div>
-                    <p className="text-red-700 mt-2">{error}</p>
+                    <p className="mt-2 text-red-700">{error}</p>
                     <button
+                        type="button"
                         onClick={() => window.location.reload()}
-                        className="mt-4 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                        className="ds2-control-radius-lg mt-4 bg-red-500 px-4 py-2 font-medium text-white transition-colors hover:bg-red-600"
                     >
                         {t('reports.error.retry')}
                     </button>
@@ -212,7 +223,12 @@ const Reports: React.FC = () => {
     }
 
     return (
-        <div className="space-y-6">
+        <div
+            className="ds2-visual-scope"
+            style={visualStyle}
+            data-ds2-neutral={prefs.neutralFamilyId}
+        >
+            <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
             {/* Header */}
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
                 <div>
@@ -226,9 +242,8 @@ const Reports: React.FC = () => {
                         icon={Filter}
                         showChevron={true}
                         onClick={() => setShowFilters(!showFilters)}
-                    >
-                        {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </AdminActionButton>
+                        className={toolbarBtn}
+                    />
                     <AdminActionButton
                         variant="primary"
                         label={isExporting ? t('reports.header.exporting') : t('reports.header.exportExcel')}
@@ -236,6 +251,7 @@ const Reports: React.FC = () => {
                         onClick={handleExportExcel}
                         disabled={isExporting}
                         isLoading={isExporting}
+                        className={headerPrimaryBtn}
                     />
                 </div>
             </div>
@@ -250,7 +266,7 @@ const Reports: React.FC = () => {
                                 type="date"
                                 value={filters.dateRange.start}
                                 onChange={(e) => handleFilterChange('dateRange', { ...filters.dateRange, start: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="ds2-control-radius-lg box-border w-full border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         <div>
@@ -259,7 +275,7 @@ const Reports: React.FC = () => {
                                 type="date"
                                 value={filters.dateRange.end}
                                 onChange={(e) => handleFilterChange('dateRange', { ...filters.dateRange, end: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="ds2-control-radius-lg box-border w-full border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         <div>
@@ -267,7 +283,7 @@ const Reports: React.FC = () => {
                             <select
                                 value={filters.employeeId || ''}
                                 onChange={(e) => handleFilterChange('employeeId', e.target.value || undefined)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="ds2-control-radius-lg box-border w-full border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="">{t('reports.filters.allEmployees')}</option>
                                 {employees.filter(emp => emp.is_active && !emp.deleted_at).map(employee => (
@@ -282,7 +298,7 @@ const Reports: React.FC = () => {
                             <select
                                 value={filters.paymentMethod || ''}
                                 onChange={(e) => handleFilterChange('paymentMethod', e.target.value || undefined)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="ds2-control-radius-lg box-border w-full border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="">{t('reports.filters.allPaymentMethods')}</option>
                                 <option value="cash">{t('reports.filters.cash')}</option>
@@ -602,8 +618,9 @@ const Reports: React.FC = () => {
                     </div>
                 )}
             </div>
+            </div>
         </div>
     );
 };
 
-export default Reports;
+export default ReportsInner;

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useSettings } from '../../contexts/SettingsContext';
+import { DesignSystem2CustomizationProvider } from '../../contexts/DesignSystem2CustomizationContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -60,6 +61,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   return (
+    <DesignSystem2CustomizationProvider>
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Backdrop for mobile sidebar */}
       {isMobile && isMobileSidebarOpen && (
@@ -92,7 +94,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           )}
           {import.meta.env.DEV && (
             <div className="mb-4 rounded-2xl border border-violet-300 bg-violet-50 px-4 py-2 text-violet-900 text-center text-base">
-              Debug build — fiscal HashControl e ferramentas extra podem estar visíveis.
+              Debug build – HashControl fiscal e definições extra são visíveis.
             </div>
           )}
           {settings.receipt.seriesDiscontinued && (
@@ -109,6 +111,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </main>
       </div>
     </div>
+    </DesignSystem2CustomizationProvider>
   );
 };
 

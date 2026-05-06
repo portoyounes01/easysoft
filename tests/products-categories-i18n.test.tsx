@@ -35,7 +35,7 @@ describe('Products and Categories i18n', () => {
 
     test('Products page shows translated headers in EN', async () => {
         await renderWithProviders(<Products />, 'en');
-        expect(await screen.findByText(/^Products$/)).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Product');
         expect(screen.getByPlaceholderText('Search product name...')).toBeInTheDocument();
         expect(screen.getAllByText('Sort').length).toBeGreaterThanOrEqual(1);
         expect(screen.getAllByText('Filter').length).toBeGreaterThanOrEqual(1);
@@ -43,7 +43,7 @@ describe('Products and Categories i18n', () => {
 
     test('Products page shows translated headers in PT', async () => {
         await renderWithProviders(<Products />, 'pt');
-        expect(await screen.findByText(/^Produtos$/)).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Produto');
         expect(screen.getByPlaceholderText('Pesquisar nome do produto...')).toBeInTheDocument();
         expect(screen.getAllByText('Ordenar').length).toBeGreaterThanOrEqual(1);
         expect(screen.getAllByText('Filtrar').length).toBeGreaterThanOrEqual(1);

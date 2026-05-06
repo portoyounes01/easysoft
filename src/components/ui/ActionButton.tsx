@@ -14,8 +14,8 @@ export const ActionButton: React.FC<ActionButtonProps> = ({
     const baseStyles = "w-full rounded-[12px] font-medium transition-all duration-200 py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center";
 
     const variants = {
-        primary: "bg-gradient-primary text-white font-normal hover:opacity-90 transition-opacity",
-        secondary: "bg-gray-200 hover:bg-gray-300",
+        primary: "bg-gradient-primary text-neutral-50 font-medium hover:opacity-90 transition-opacity",
+        secondary: "bg-gray-200 hover:bg-gray-300 text-gray-900 font-medium",
         outline: "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50 shadow-sm font-semibold rounded-2xl transition-all duration-200",
     };
 

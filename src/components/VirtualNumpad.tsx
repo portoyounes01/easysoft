@@ -67,7 +67,7 @@ const VirtualNumpad: React.FC<VirtualNumpadProps> = ({
                 {/* Display */}
                 <div className="mb-6">
                     <div className="bg-gray-100 rounded-2xl p-6 text-center">
-                        <div className="text-4xl font-bold text-gray-800 min-h-[60px] flex items-center justify-center">
+                        <div className="text-4xl font-bold text-gray-800 min-h-touch flex items-center justify-center">
                             {formatDisplayValue()}
                         </div>
                     </div>
@@ -106,7 +106,7 @@ const VirtualNumpad: React.FC<VirtualNumpadProps> = ({
                 <div className="flex space-x-4">
                     <button
                         onClick={onClose}
-                        className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-4 rounded-2xl min-h-[60px] transition-colors flex items-center justify-center space-x-2"
+                        className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-4 rounded-2xl min-h-touch transition-colors flex items-center justify-center space-x-2"
                     >
                         <X className="w-5 h-5" />
                         <span>{t('virtualNumpad.cancel')}</span>

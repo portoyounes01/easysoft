@@ -96,9 +96,9 @@ const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
     const keyButtonClass = `${baseButtonClass} bg-white hover:bg-gray-50 text-gray-900 border-r border-b border-gray-300`;
     const actionButtonClass = `${baseButtonClass} bg-gray-100 hover:bg-gray-200 text-gray-700 border-r border-b border-gray-300`;
     const capsButtonClass = (active: boolean) =>
-        `${baseButtonClass} ${active ? 'bg-primary-500 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} border-r border-b border-gray-300`;
+        `${baseButtonClass} ${active ? 'bg-primary-500 text-neutral-50' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} border-r border-b border-gray-300`;
     const specialToggleClass = (active: boolean) =>
-        `${baseButtonClass} ${active ? 'bg-primary-500 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} border-r border-b border-gray-300`;
+        `${baseButtonClass} ${active ? 'bg-primary-500 text-neutral-50' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'} border-r border-b border-gray-300`;
 
     // Determine what to show based on what's allowed
     const showNumbers = allowNumbers;

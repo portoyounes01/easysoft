@@ -88,9 +88,11 @@ font-normal    /* Body text */
 
 ### **Minimum Touch Targets**
 ```css
-min-h-[60px]   /* Minimum button height */
-min-h-[80px]   /* Large action buttons */
-min-h-[280px]  /* Employee selection cards */
+min-h-touch    /* ~60px at 16px root; rem-based (`3.75rem`) — primary POS target */
+min-h-touch-sm /* ~52px — menus / secondary rows */
+min-h-touch-xs /* ~44px — minimum comfortable tap band */
+min-h-20       /* Large action buttons (~5rem / ~80px at 16px root) */
+min-h-70       /* Tall selection surfaces (~17.5rem / ~280px at 16px root), e.g. employee cards */
 
 /* Touch padding */
 p-4            /* Standard button padding */
@@ -130,7 +132,7 @@ gap-12  /* 48px - Section spacing */
 
 #### **Primary Action Button**
 ```tsx
-<button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 min-h-[80px]">
+<button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-3 min-h-20">
   <Icon className="w-8 h-8" />
   <span>Action Text</span>
 </button>
@@ -138,14 +140,14 @@ gap-12  /* 48px - Section spacing */
 
 #### **Secondary Action Button**
 ```tsx
-<button className="w-full bg-gray-500 hover:bg-gray-600 text-white py-6 rounded-2xl text-2xl font-semibold transition-all duration-200 min-h-[80px]">
+<button className="w-full bg-gray-500 hover:bg-gray-600 text-white py-6 rounded-2xl text-2xl font-semibold transition-all duration-200 min-h-20">
   Secondary Action
 </button>
 ```
 
 #### **Keyboard Key Button**
 ```tsx
-<button className="bg-white hover:bg-gray-100 active:bg-gray-200 border border-gray-300 rounded-xl p-4 text-xl font-semibold transition-all duration-150 min-h-[60px] flex items-center justify-center shadow-sm hover:shadow-md text-gray-800">
+<button className="bg-white hover:bg-gray-100 active:bg-gray-200 border border-gray-300 rounded-xl p-4 text-xl font-semibold transition-all duration-150 min-h-touch flex items-center justify-center shadow-sm hover:shadow-md text-gray-800">
   {key}
 </button>
 ```

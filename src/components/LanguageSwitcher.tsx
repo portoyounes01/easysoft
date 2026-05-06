@@ -30,7 +30,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
             <button
                 type="button"
                 onClick={toggleLanguage}
-                className={`w-full flex items-center px-4 py-3 min-h-[60px] text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg transition-all duration-200 hover:transform hover:scale-105 group relative mb-3 border border-slate-600/40 hover:border-slate-500 ${collapsed ? 'justify-center space-x-0' : 'space-x-3'
+                className={`w-full flex items-center px-4 py-3 min-h-touch text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg transition-all duration-200 hover:transform hover:scale-105 group relative mb-3 border border-slate-600/40 hover:border-slate-500 ${collapsed ? 'justify-center space-x-0' : 'space-x-3'
                     } ${className || ''}`}
                 title={collapsed ? `${label} (${language.toUpperCase()})` : undefined}
                 aria-label={`${label}: ${language === 'en' ? 'English' : 'Português'}`}
@@ -57,7 +57,7 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
         <button
             type="button"
             onClick={toggleLanguage}
-            className={`bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded-lg text-xs font-semibold transition-colors min-h-[44px] min-w-[44px] ${className || ''}`}
+            className={`bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded-lg text-xs font-semibold transition-colors min-h-touch-xs min-w-touch-xs ${className || ''}`}
         >
             {language.toUpperCase()}
         </button>

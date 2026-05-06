@@ -1,3 +1,60 @@
+## Layout — global Design System 2 provider + app sidebar (2026-05-06)
+
+- **`Layout.tsx`:** Wraps the authenticated shell (`Sidebar` + main) in **`DesignSystem2CustomizationProvider`** so prefs (primary/secondary, radius, sidebar width, density, etc.) are **one shared source** with `/design-system-2` and all DS2-scoped pages.
+- **`Sidebar.tsx`:** Root is **`.ds2-visual-scope`** with **`visualStyle`** + **`data-ds2-neutral`**; imports **`design-system-2-scope.css`**. Expanded width uses **`layoutClasses.sidebarW`** (`sm`/`md`/`lg` → `w-64`/`w-72`/`w-80`); collapsed stays **`w-20`**. Active **`NavLink`** uses the same chrome as **`TabButton` `variant="sidebar"`** (`bg-gradient-to-r from-blue-600 to-blue-500` + `text-neutral-100` + `ds2-control-radius-lg` + `min-h-touch-sm`) so **secondary** tokens and **radius preset** apply. Home route uses **`end`** for exact `/` matching.
+- **Pages:** Removed per-route **`DesignSystem2CustomizationProvider`** wrappers from **`Products`**, **`Categories`**, **`Employees`**, **`Reports`**, **`Transactions`**, **`SeedManagement`**, **`CashierTesting`**, **`ElectronCashierTesting`**, **`PrinterTestPage`**, **`DesignSystem2`** — they default-export their `*Inner` component and consume context from **Layout**.
+
+## Printer test + cashier testing — DS2 chrome (2026-05-06)
+
+- **`design-system-2-scope.css`:** `rounded-md`, `text-blue-500` / `700` / `800`, `bg-blue-100`, `bg-indigo-100`, `text-indigo-600` map to `--ds2-ui-*` / tint tokens so Reports KPIs and scoped blues follow **secondary** prefs.
+- **`PrinterTestPage.tsx`:** Exports `PrinterTestPageInner`; uses **`Layout`** provider; `.ds2-visual-scope` + `visualStyle` + `data-ds2-neutral` + `layoutClasses.contentInsetX`; tab + action rows use `min-h-touch-sm`, `ds2-control-radius-lg/md`, and **gradient primary** / gray secondary; test print uses same primary chrome as setup (not fixed green).
+- **`PrinterSetup.tsx`:** exports `PrinterConnectedPayload` / details; modal root is `.ds2-visual-scope` with tokens; tabs + actions use `DS2_PRIMARY_BTN` / `DS2_SECONDARY_BTN` + touch height; `useDesignSystem2Customization` (requires provider from printer test page).
+- **`PrinterManager.tsx`:** Refresh + Check Status use gradient primary + DS2 radius + `min-h-touch-sm` (Check Status no longer fixed green).
+- **`CashierTesting.tsx`:** Shared DS2 button class constants; hardware row + hardware test grid + result actions use gradient / gray / danger with `ds2-control-radius-lg` + `min-h-touch-sm`.
+- **`ElectronCashierTesting.tsx`:** Same primary/gradient + danger pattern for connection controls; quick test tiles use gradient DS2 primary chrome.
+- **`Products.tsx`:** Add Product already `AdminActionButton` **`variant="primary"`** (secondary / UI gradient under DS2 scope — not `success`).
+
+## Fiscal PEM default from `.env` (2026-05-06)
+
+- **`VITE_FISCAL_RSA_PRIVATE_KEY_PEM`:** Optional dev default for Settings → Fiscal AT → PEM; merged when stored `fiscal.privateKeyPem` is empty (`src/utils/fiscalEnvDefaults.ts`, `SettingsContext` load / initial state / reset). Documented in `.env.example`. Dev-only: Vite inlines `VITE_*` into the client bundle.
+- **Local `.env`:** Generated PKCS#8 RSA via `openssl` + Node append (gitignored); rotate or remove for anything beyond local signing smoke tests.
+- **Tests:** `tests/fiscal-env-defaults.test.ts`.
+
+## Categories page — DS2 parity (2026-05-06)
+
+- **`Categories.tsx`:** Exports `CategoriesInner`; uses **`Layout`** provider; `design-system-2-scope.css`; `.ds2-visual-scope` + `visualStyle` + `data-ds2-neutral` on main content and loading/error shells. `layoutClasses.contentInsetX` on header row, stats grid wrapper, grid card header, and grid body. **Add Category** uses same toolbar-style classes as Products (`ds2-control-radius-lg` + `ds2-toolbar-control-h`). Stat cards and main list card use `rounded-xl` / `rounded-lg` / `shadow-sm` + border (radius follows DS2 scope tokens). Category delete control uses `ds2-control-radius-lg`. `DashedCardButton` stays `rounded-lg` (scoped). Minor a11y: category tiles `role="button"` + Enter/Space to open edit.
+
+## Admin pages — DS2 scope (2026-05-06)
+
+- **`Employees.tsx`**, **`Reports.tsx`**, **`Transactions.tsx`**, **`SeedManagement.tsx`**, **`CashierTesting.tsx`**, **`ElectronCashierTesting.tsx`:** Each exports `*Inner` and relies on **`Layout`**’s **`DesignSystem2CustomizationProvider`**; imports `design-system-2-scope.css`; root shell `.ds2-visual-scope` with `visualStyle` + `data-ds2-neutral`; `layoutClasses.contentInsetX` on main content columns (or full-width inner wrapper). Toolbar-style actions use `ds2-control-radius-lg` + `ds2-toolbar-control-h` + shared `toolbarBtn` / `headerPrimaryBtn` where `AdminActionButton` is used. Form controls (search, selects, dates, seed run button) use `ds2-control-radius-lg` / `box-border` where applicable. **Employees** loading / DB reset / `loadError` use `scopeShell`. **Reports** loading and error use `scopeShell`; removed invalid `AdminActionButton` children on filter (chevron via `showChevron` only). **Transactions** filter row matches Products toolbar pattern; removed invalid chevron children on filter button.
+
+## Products UI — reference layout (2026-05-06)
+
+- **DS2 toolbar + table gutter (2026-05-06):** `layoutClasses.contentInsetX` (density: compact `px-4` / normal `px-6` / spacious `px-10`) on toolbar, table `overflow-x-auto` wrapper, and pagination footer. Shared `ds2-control-radius-lg` / `ds2-control-radius-md` + `ds2-toolbar-control-h` in `design-system-2-scope.css` so search, Sort/Filter/Add, and filter select use `--ds2-radius-*` from prefs; row height locked to `2.5rem` for alignment.
+- **`Products.tsx`:** Single white card (`rounded-xl`), `h1` + compact toolbar (`h-10`, `rounded-lg`); **Add Product** uses `AdminActionButton` **`variant="primary"`** (DS2 secondary / UI gradient in scope); removed stat cards; table header `bg-gray-50` + column `border-r`; rows match mock (SKU-style ID, thumb + 2-line description, plain category, stock `—` when not tracked, single-line price, pill statuses); footer **Rows per page** + pagination (green active page).
+- **`AdminActionButton`:** `success` variant remains for other green actions; Products Add uses **`primary`** for DS2 secondary chrome.
+- **`i18n`:** `products.pageTitle`, `products.table.productNameColumn`, pagination strings EN/PT.
+- **`tests/products-categories-i18n.test.tsx`:** Assert `h1` via `getByRole('heading', { level: 1 })`.
+
+## Touch sizing — rem tokens (2026-05-06)
+
+- **`tailwind.config.js`:** `extend.minHeight` / `minWidth` — `touch` (3.75rem), `touch-sm` (3.25rem), `touch-xs` (2.75rem), `popover` (17.5rem).
+- **Replaced** arbitrary `min-h-[60px]` etc. across `src/**/*.tsx` with `min-h-touch` / `min-h-touch-sm` / `min-h-touch-xs`, `min-w-touch-sm`, `min-w-popover`, `min-h-60` (15rem loading block), `min-w-40` (10rem).
+- **Docs:** `STYLE_GUIDE.md`, `AGENTS.md`, `.cursor/rules/style-guide-compliance.mdc`, `DEVELOPMENT_GUIDE.md` examples aligned.
+
+## Products + DS2 polish (2026-05-05)
+
+- **Toolbar radius:** `AdminActionButton` base uses `rounded-2xl`; `Products.tsx` `toolbarButtonClass` no longer fights with redundant `!rounded-2xl`.
+- **View product modal:** Outer shell `flex flex-col overflow-hidden` + scrollable body; footer `shrink-0`; Edit uses `ds2-modal-primary-action` so `--ds2-radius-xl` wins after `.rounded-2xl` in `design-system-2-scope.css`.
+- **ProductForm:** Panel `rounded-l-2xl overflow-hidden`; inputs use `focus:ring-green-500` / `focus:border-green-500` (same tokens as scope); toggles use `ds2-toggle-on` / `ds2-toggle-off` / `ds2-product-status-on` / `ds2-product-status-off` + `rounded-[10px]`; footer Save uses `ds2-modal-primary-action`.
+
+## Design System 2 — secondary hue on chrome (2026-05-05)
+
+- **Issue:** With secondary set to **green**, admin/tab chrome stayed **blue** because `PALETTE.green` still defined `--ds2-ui-*` as blue, and `TabButton` “reports” used literal `bg-blue-50` / `text-blue-900` outside token overrides.
+- **Changes:** `designSystem2VisualTokens.ts` — green row `--ds2-ui-*` now green; added `--ds2-ui-tint-bg` / `--ds2-ui-tint-text` to every palette row and `SECONDARY_KEYS`. `design-system-2-scope.css` — map `bg-blue-50` / `text-blue-900` to those vars inside preview. `DesignSystem2.tsx` — sidebar wrapped in `ds2-visual-scope` + `visualStyle` so nav tabs follow the same tokens.
+- **Follow-up:** `PALETTE.blue` `--ds2-ui-*` gradient restored to blue-500→blue-600 (`#3b82f6`→`#2563eb`, hovers `#2563eb`→`#1d4ed8`) — matches the older “green primary + blue chrome” look when Secondary is Blue.
+- **Products DS2 swap:** `/products` uses **`Layout`** provider + `.ds2-visual-scope` (prefs from localStorage via shared context), toolbar uses `AdminActionButton`, i18n for sort + table count (`products.header.nameAsc`/`nameDesc`, `products.table.productCount_*`); `design-system-2-scope.css` imported on route. Premade reference: `ProductsPageReference2.tsx`.
+
 ## Seeding Functionality (2025-09-08)
 
 - Introduced a new YAML-driven seeding workflow under `seed/` keeping existing `/setup` intact.
@@ -44,6 +101,13 @@
     - Supports password strategy via `PROVISION_PASSWORD_SOURCE` and `DEFAULT_SUPABASE_PASSWORD`
   - `SUPABASE_AUTH_SETUP.md` updated with dual .env locations and password provisioning options
 # Currently In Progress 🚧
+
+## Offline-first error UX (2026-05-04)
+
+- Implemented plan: split `loadError` / `syncError` / `operationError` in `EmployeesContext`; `syncError` + `clearSyncError` in `ProductsContext`; `await initializeLocalDatabase()` before Dexie reads in `loadData`.
+- UI: `LoginForm` blocks only on `loadError`; orange sync strip with dismiss. `POS` full-screen only on catalog `error`; sync degraded banner with retry/dismiss. `Employees` admin: `loadError` full-screen; `syncError` / `operationError` as banners.
+- i18n EN/PT (`login.syncDegraded*`, `pos.syncDegraded*`); `AGENTS.md` edge-case bullet; `tests/employees-offline-errors.test.tsx`.
+- `tsc --noEmit` clean; Vitest `auth.test` + `employees-offline-errors.test` pass.
 
 ## ⚡️ CRITICAL SECURITY FIXES (IMMEDIATE PRIORITY) ⚡️
 - **Status**: 🚧 ACTIVE (2024-12-19)

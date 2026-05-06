@@ -22,6 +22,7 @@ import ElectronCashierTesting from './pages/ElectronCashierTesting';
 import PrinterTestPage from './pages/PrinterTestPage';
 import DevicePairing from './pages/DevicePairing';
 import DesignSystem from './pages/DesignSystem';
+import DesignSystem2 from './pages/DesignSystem2';
 import FiscalAudit from './pages/FiscalAudit';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -268,6 +269,14 @@ const AppContent: React.FC = () => {
                     element={
                       <ProtectedRoute>
                         <DesignSystem />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/design-system-2"
+                    element={
+                      <ProtectedRoute>
+                        <DesignSystem2 />
                       </ProtectedRoute>
                     }
                   />

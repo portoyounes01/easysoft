@@ -1,217 +1,263 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Printer, Wifi, Search, Settings } from 'lucide-react';
-import PrinterSetup from '../components/PrinterSetup';
+import PrinterSetup, { type PrinterConnectedPayload } from '../components/PrinterSetup';
 import PrinterManager from '../components/PrinterManager';
 import PrinterWorkflowManager from '../components/PrinterWorkflowManager';
+import {
+    useDesignSystem2Customization,
+} from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
-const PrinterTestPage: React.FC = () => {
-  const { t } = useTranslation();
-  const [showPrinterSetup, setShowPrinterSetup] = useState(false);
-  const [printerInfo, setPrinterInfo] = useState<any>(null);
-  const [hardwareStatus, setHardwareStatus] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'setup' | 'workflow'>('setup');
+interface HardwareStatusPayload {
+    status?: {
+        initialized?: boolean;
+        discoveryMode?: string;
+        printer?: { connected?: boolean; type?: string; name?: string };
+        network?: { ip?: string; port?: number; brand?: string; confidence?: string };
+    };
+}
 
-  const handlePrinterConnected = (info: any) => {
-    setPrinterInfo(info);
-    setShowPrinterSetup(false);
-    checkHardwareStatus();
-  };
+const DS2_PRIMARY_ACTION =
+    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-5 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+const DS2_SECONDARY_ACTION =
+    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-5 font-semibold text-white bg-gray-600 hover:bg-gray-700 shadow-sm transition-all duration-200';
 
-  const checkHardwareStatus = async () => {
-    try {
-      const status = await window.electronAPI?.hardware.getHardwareStatus();
-      setHardwareStatus(status);
-    } catch (error) {
-      console.error('Failed to get hardware status:', error);
-    }
-  };
+const PrinterTestPageInner: React.FC = () => {
+    const { t } = useTranslation();
+    const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+    const [showPrinterSetup, setShowPrinterSetup] = useState(false);
+    const [printerInfo, setPrinterInfo] = useState<PrinterConnectedPayload | null>(null);
+    const [hardwareStatus, setHardwareStatus] = useState<HardwareStatusPayload | null>(null);
+    const [activeTab, setActiveTab] = useState<'setup' | 'workflow'>('setup');
 
-  const testPrint = async () => {
-    try {
-      const result = await window.electronAPI?.hardware.testPrinter();
-      alert(
-        result?.success
-          ? t('printerTest.alertTestOk')
-          : t('printerTest.alertTestFail', { error: result?.error ?? t('common.unknown') })
-      );
-    } catch (error) {
-      alert(t('printerTest.alertTestCommFail'));
-    }
-  };
+    const handlePrinterConnected = (info: PrinterConnectedPayload) => {
+        setPrinterInfo(info);
+        setShowPrinterSetup(false);
+        void checkHardwareStatus();
+    };
 
-  React.useEffect(() => {
-    checkHardwareStatus();
-  }, []);
+    const checkHardwareStatus = async () => {
+        try {
+            const status = await window.electronAPI?.hardware.getHardwareStatus();
+            setHardwareStatus((status ?? null) as HardwareStatusPayload | null);
+        } catch (error) {
+            console.error('Failed to get hardware status:', error);
+        }
+    };
 
-  return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex items-center space-x-3 mb-6">
-            <Printer className="h-8 w-8 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900">{t('printerTest.title')}</h1>
-          </div>
+    const testPrint = async () => {
+        try {
+            const result = await window.electronAPI?.hardware.testPrinter();
+            alert(
+                result?.success
+                    ? t('printerTest.alertTestOk')
+                    : t('printerTest.alertTestFail', { error: result?.error ?? t('common.unknown') })
+            );
+        } catch {
+            alert(t('printerTest.alertTestCommFail'));
+        }
+    };
 
-          {/* Tab Navigation */}
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-            <button
-              onClick={() => setActiveTab('setup')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'setup'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Printer className="h-4 w-4" />
-              {t('printerTest.tabSetup')}
-            </button>
-            <button
-              onClick={() => setActiveTab('workflow')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'workflow'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Settings className="h-4 w-4" />
-              {t('printerTest.tabWorkflow')}
-            </button>
-          </div>
-        </div>
+    React.useEffect(() => {
+        void checkHardwareStatus();
+    }, []);
 
-        {/* Tab Content */}
-        {activeTab === 'setup' && (
-          <>
-            {/* Printer Manager Section */}
-            <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-              <PrinterManager />
-            </div>
+    const tabBtn = (tab: 'setup' | 'workflow') =>
+        `flex min-h-touch-sm flex-1 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium transition-colors ds2-control-radius-md ${
+            activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+        }`;
 
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <div className="flex items-center space-x-3 mb-6">
-                <Printer className="h-6 w-6 text-blue-600" />
-                <h2 className="text-xl font-bold text-gray-900">{t('printerTest.testingTitle')}</h2>
-              </div>
+    const hs = hardwareStatus;
 
-              {/* Current Status */}
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                <h3 className="text-lg font-semibold mb-3">{t('printerTest.hardwareStatus')}</h3>
-                {hardwareStatus ? (
-                  <div className="space-y-2">
-                    <p><strong>{t('printerTest.initialized')}</strong> {hardwareStatus.status?.initialized ? `✅ ${t('common.yes')}` : `❌ ${t('common.no')}`}</p>
-                    <p><strong>{t('printerTest.discoveryMode')}</strong> {hardwareStatus.status?.discoveryMode || t('common.unknown')}</p>
-                    <p><strong>{t('printerTest.printerConnected')}</strong> {hardwareStatus.status?.printer?.connected ? `✅ ${t('common.yes')}` : `❌ ${t('common.no')}`}</p>
-                    <p><strong>{t('printerTest.printerType')}</strong> {hardwareStatus.status?.printer?.type || t('common.unknown')}</p>
-                    <p><strong>{t('printerTest.printerName')}</strong> {hardwareStatus.status?.printer?.name || t('common.unknown')}</p>
-                    {hardwareStatus.status?.network && (
-                      <div className="mt-2 p-2 bg-blue-50 rounded">
-                        <p><strong>{t('printerTest.networkDetails')}</strong></p>
-                        <p>{t('printerTest.ipPort', { ip: hardwareStatus.status.network.ip, port: hardwareStatus.status.network.port })}</p>
-                        {hardwareStatus.status.network.brand && (
-                          <p>{t('printerTest.brandLine', { brand: hardwareStatus.status.network.brand })}</p>
-                        )}
-                        <p>{t('printerTest.confidenceLine', { confidence: hardwareStatus.status.network.confidence })}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-gray-500">{t('printerTest.loadingStatus')}</p>
-                )}
-              </div>
-
-              {/* Connection Info */}
-              {printerInfo && (
-                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <h3 className="text-lg font-semibold text-green-800 mb-2">{t('printerTest.recentlyConnected')}</h3>
-                  <p className="text-green-700">{printerInfo.message}</p>
-                  {printerInfo.details && (
-                    <div className="mt-2 text-sm text-green-600">
-                      {/* Network printer details */}
-                      {printerInfo.details.ip && printerInfo.details.port && (
-                        <p>{t('printerTest.ipPort', { ip: printerInfo.details.ip, port: printerInfo.details.port })}</p>
-                      )}
-                      {/* USB printer details */}
-                      {printerInfo.details.serial && (
-                        <p>{t('printerTest.serialLine', { serial: printerInfo.details.serial })}</p>
-                      )}
-                      {printerInfo.details.uri && (
-                        <p>{t('printerTest.uriLine', { uri: printerInfo.details.uri })}</p>
-                      )}
-                      {/* Common details */}
-                      {printerInfo.details.brand && <p>{t('printerTest.brandLine', { brand: printerInfo.details.brand })}</p>}
-                      {printerInfo.details.model && <p>{t('printerTest.modelLine', { model: printerInfo.details.model })}</p>}
-                      {printerInfo.details.isThermal !== undefined && (
-                        <p>{t('printerTest.thermalType', {
-                          type: printerInfo.details.isThermal ? t('printerTest.thermalPrinter') : t('printerTest.standardPrinter'),
-                        })}</p>
-                      )}
-                      {printerInfo.details.confidence && <p>{t('printerTest.confidenceLine', { confidence: printerInfo.details.confidence })}</p>}
+    return (
+        <div
+            className="ds2-visual-scope min-h-screen bg-gray-100 p-8"
+            style={visualStyle}
+            data-ds2-neutral={prefs.neutralFamilyId}
+        >
+            <div className={`mx-auto max-w-6xl ${layoutClasses.contentInsetX}`}>
+                <div className="mb-6 rounded-lg bg-white p-6 shadow-lg">
+                    <div className="mb-6 flex items-center space-x-3">
+                        <Printer className="h-8 w-8 text-blue-600" />
+                        <h1 className="text-2xl font-bold text-gray-900">{t('printerTest.title')}</h1>
                     </div>
-                  )}
+
+                    <div className="ds2-control-radius-lg flex space-x-1 bg-gray-100 p-1">
+                        <button type="button" onClick={() => setActiveTab('setup')} className={tabBtn('setup')}>
+                            <Printer className="h-4 w-4" />
+                            {t('printerTest.tabSetup')}
+                        </button>
+                        <button type="button" onClick={() => setActiveTab('workflow')} className={tabBtn('workflow')}>
+                            <Settings className="h-4 w-4" />
+                            {t('printerTest.tabWorkflow')}
+                        </button>
+                    </div>
                 </div>
-              )}
 
-              {/* Action Buttons */}
-              <div className="flex flex-wrap gap-4">
-                <button
-                  onClick={() => setShowPrinterSetup(true)}
-                  className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Search className="h-5 w-5" />
-                  <span>{t('printerTest.setupThermal')}</span>
-                </button>
+                {activeTab === 'setup' && (
+                    <>
+                        <div className="mb-6">
+                            <PrinterManager />
+                        </div>
 
-                <button
-                  onClick={checkHardwareStatus}
-                  className="flex items-center space-x-2 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                >
-                  <Wifi className="h-5 w-5" />
-                  <span>{t('printerTest.refreshStatus')}</span>
-                </button>
+                        <div className="rounded-lg bg-white p-6 shadow-lg">
+                            <div className="mb-6 flex items-center space-x-3">
+                                <Printer className="h-6 w-6 text-blue-600" />
+                                <h2 className="text-xl font-bold text-gray-900">{t('printerTest.testingTitle')}</h2>
+                            </div>
 
-                <button
-                  onClick={testPrint}
-                  disabled={!hardwareStatus?.status?.printer?.connected}
-                  className="flex items-center space-x-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Printer className="h-5 w-5" />
-                  <span>{t('printerTest.testPrint')}</span>
-                </button>
-              </div>
+                            <div className="mb-6 rounded-lg bg-gray-50 p-4">
+                                <h3 className="mb-3 text-lg font-semibold">{t('printerTest.hardwareStatus')}</h3>
+                                {hs ? (
+                                    <div className="space-y-2">
+                                        <p>
+                                            <strong>{t('printerTest.initialized')}</strong>{' '}
+                                            {hs.status?.initialized ? `✅ ${t('common.yes')}` : `❌ ${t('common.no')}`}
+                                        </p>
+                                        <p>
+                                            <strong>{t('printerTest.discoveryMode')}</strong>{' '}
+                                            {hs.status?.discoveryMode || t('common.unknown')}
+                                        </p>
+                                        <p>
+                                            <strong>{t('printerTest.printerConnected')}</strong>{' '}
+                                            {hs.status?.printer?.connected ? `✅ ${t('common.yes')}` : `❌ ${t('common.no')}`}
+                                        </p>
+                                        <p>
+                                            <strong>{t('printerTest.printerType')}</strong>{' '}
+                                            {hs.status?.printer?.type || t('common.unknown')}
+                                        </p>
+                                        <p>
+                                            <strong>{t('printerTest.printerName')}</strong>{' '}
+                                            {hs.status?.printer?.name || t('common.unknown')}
+                                        </p>
+                                        {hs.status?.network && (
+                                            <div className="mt-2 rounded bg-blue-50 p-2">
+                                                <p>
+                                                    <strong>{t('printerTest.networkDetails')}</strong>
+                                                </p>
+                                                <p>
+                                                    {t('printerTest.ipPort', {
+                                                        ip: hs.status.network.ip,
+                                                        port: hs.status.network.port,
+                                                    })}
+                                                </p>
+                                                {hs.status.network.brand && (
+                                                    <p>{t('printerTest.brandLine', { brand: hs.status.network.brand })}</p>
+                                                )}
+                                                <p>
+                                                    {t('printerTest.confidenceLine', {
+                                                        confidence: hs.status.network.confidence,
+                                                    })}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-gray-500">{t('printerTest.loadingStatus')}</p>
+                                )}
+                            </div>
 
-              {/* Instructions */}
-              <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-                <h3 className="font-semibold text-blue-800 mb-2">{t('printerTest.instructionsTitle')}</h3>
-                <ol className="list-decimal list-inside space-y-1 text-blue-700 text-sm">
-                  <li>{t('printerTest.instruction1')}</li>
-                  <li>{t('printerTest.instruction2')}</li>
-                  <li>{t('printerTest.instruction3')}</li>
-                  <li>{t('printerTest.instruction4')}</li>
-                  <li>{t('printerTest.instruction5')}</li>
-                </ol>
-              </div>
+                            {printerInfo && (
+                                <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
+                                    <h3 className="mb-2 text-lg font-semibold text-green-800">
+                                        {t('printerTest.recentlyConnected')}
+                                    </h3>
+                                    <p className="text-green-700">{printerInfo.message}</p>
+                                    {printerInfo.details && (
+                                        <div className="mt-2 text-sm text-green-600">
+                                            {printerInfo.details.ip != null && printerInfo.details.port != null && (
+                                                <p>
+                                                    {t('printerTest.ipPort', {
+                                                        ip: printerInfo.details.ip,
+                                                        port: printerInfo.details.port,
+                                                    })}
+                                                </p>
+                                            )}
+                                            {printerInfo.details.serial && (
+                                                <p>{t('printerTest.serialLine', { serial: printerInfo.details.serial })}</p>
+                                            )}
+                                            {printerInfo.details.uri && (
+                                                <p>{t('printerTest.uriLine', { uri: printerInfo.details.uri })}</p>
+                                            )}
+                                            {printerInfo.details.brand && (
+                                                <p>{t('printerTest.brandLine', { brand: printerInfo.details.brand })}</p>
+                                            )}
+                                            {printerInfo.details.model && (
+                                                <p>{t('printerTest.modelLine', { model: printerInfo.details.model })}</p>
+                                            )}
+                                            {printerInfo.details.isThermal !== undefined && (
+                                                <p>
+                                                    {t('printerTest.thermalType', {
+                                                        type: printerInfo.details.isThermal
+                                                            ? t('printerTest.thermalPrinter')
+                                                            : t('printerTest.standardPrinter'),
+                                                    })}
+                                                </p>
+                                            )}
+                                            {printerInfo.details.confidence && (
+                                                <p>
+                                                    {t('printerTest.confidenceLine', {
+                                                        confidence: printerInfo.details.confidence,
+                                                    })}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex flex-wrap gap-4">
+                                <button type="button" onClick={() => setShowPrinterSetup(true)} className={DS2_PRIMARY_ACTION}>
+                                    <Search className="h-5 w-5" />
+                                    <span>{t('printerTest.setupThermal')}</span>
+                                </button>
+
+                                <button type="button" onClick={() => void checkHardwareStatus()} className={DS2_SECONDARY_ACTION}>
+                                    <Wifi className="h-5 w-5" />
+                                    <span>{t('printerTest.refreshStatus')}</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => void testPrint()}
+                                    disabled={!hs?.status?.printer?.connected}
+                                    className={DS2_PRIMARY_ACTION}
+                                >
+                                    <Printer className="h-5 w-5" />
+                                    <span>{t('printerTest.testPrint')}</span>
+                                </button>
+                            </div>
+
+                            <div className="mt-8 rounded-lg bg-blue-50 p-4">
+                                <h3 className="mb-2 font-semibold text-blue-800">{t('printerTest.instructionsTitle')}</h3>
+                                <ol className="list-inside list-decimal space-y-1 text-sm text-blue-700">
+                                    <li>{t('printerTest.instruction1')}</li>
+                                    <li>{t('printerTest.instruction2')}</li>
+                                    <li>{t('printerTest.instruction3')}</li>
+                                    <li>{t('printerTest.instruction4')}</li>
+                                    <li>{t('printerTest.instruction5')}</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {activeTab === 'workflow' && (
+                    <div className="rounded-lg bg-white p-6 shadow-lg">
+                        <PrinterWorkflowManager />
+                    </div>
+                )}
             </div>
-          </>
-        )}
 
-        {activeTab === 'workflow' && (
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <PrinterWorkflowManager />
-          </div>
-        )}
-      </div>
-
-      {/* Printer Setup Modal */}
-      {showPrinterSetup && (
-        <PrinterSetup
-          onPrinterConnected={handlePrinterConnected}
-          onClose={() => setShowPrinterSetup(false)}
-        />
-      )}
-    </div>
-  );
+            {showPrinterSetup && (
+                <PrinterSetup
+                    onPrinterConnected={handlePrinterConnected}
+                    onClose={() => setShowPrinterSetup(false)}
+                />
+            )}
+        </div>
+    );
 };
 
-export default PrinterTestPage;
+export default PrinterTestPageInner;

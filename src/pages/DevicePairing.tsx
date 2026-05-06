@@ -42,7 +42,7 @@ const DevicePairing: React.FC<DevicePairingProps> = () => {
                                 type="text"
                                 value={organizationCode}
                                 onChange={(e) => setOrganizationCode(e.target.value)}
-                                className="w-full min-h-[60px] text-xl border border-gray-300 rounded-2xl px-4 focus:outline-none focus:ring-4 focus:ring-blue-200"
+                                className="w-full min-h-touch text-xl border border-gray-300 rounded-2xl px-4 focus:outline-none focus:ring-4 focus:ring-blue-200"
                                 placeholder={t('devicePairing.placeholderOrg')}
                             />
                         </div>
@@ -55,7 +55,7 @@ const DevicePairing: React.FC<DevicePairingProps> = () => {
                                 type="text"
                                 value={locationCode}
                                 onChange={(e) => setLocationCode(e.target.value)}
-                                className="w-full min-h-[60px] text-xl border border-gray-300 rounded-2xl px-4 focus:outline-none focus:ring-4 focus:ring-purple-200"
+                                className="w-full min-h-touch text-xl border border-gray-300 rounded-2xl px-4 focus:outline-none focus:ring-4 focus:ring-purple-200"
                                 placeholder={t('devicePairing.placeholderLocation')}
                             />
                         </div>
@@ -69,7 +69,7 @@ const DevicePairing: React.FC<DevicePairingProps> = () => {
                             type="text"
                             value={deviceName}
                             onChange={(e) => setDeviceName(e.target.value)}
-                            className="w-full min-h-[60px] text-xl border border-gray-300 rounded-2xl px-4 focus:outline-none focus:ring-4 focus:ring-emerald-200"
+                            className="w-full min-h-touch text-xl border border-gray-300 rounded-2xl px-4 focus:outline-none focus:ring-4 focus:ring-emerald-200"
                             placeholder={t('devicePairing.placeholderDeviceName')}
                         />
                     </div>
