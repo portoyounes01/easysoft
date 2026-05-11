@@ -1,16 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import {
-    X,
-    Save,
     AlertCircle,
     Package,
-    DollarSign,
     Hash,
     Building,
     MapPin,
     ToggleLeft,
-    ToggleRight,
-    Loader2
+    ToggleRight
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useProducts } from '../contexts/ProductsContext';
@@ -24,6 +20,9 @@ import VirtualNumpad from './VirtualNumpad';
 import ImageUploader from './ImageUploader';
 import { supabase } from '../lib/supabase';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
+import { useSettings } from '../contexts/SettingsContext';
+import { BaseDialog } from './ui/BaseDialog';
+import { ActionButton } from './ui/ActionButton';
 
 interface ProductFormProps {
     isOpen: boolean;
@@ -83,6 +82,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
     const [pendingUploadPaths, setPendingUploadPaths] = useState<string[]>([]);
     const [pendingDeletes, setPendingDeletes] = useState<string[]>([]);
     const { employee, credentialHash } = useSupabaseAuth();
+    const { settings } = useSettings();
+    const currencySymbol = settings.pos.currencySymbol;
 
     // Populate form when editing
     useEffect(() => {
@@ -157,8 +158,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
     };
 
     // Handle form submission
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+        e?.preventDefault();
 
         if (!validateForm()) return;
 
@@ -252,7 +253,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     void resp;
                 }));
             }
-        } catch (_) {
+        } catch {
             // ignore cleanup errors
         } finally {
             onClose();
@@ -260,7 +261,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     };
 
     // Handle field changes
-    const handleFieldChange = (field: keyof ProductFormData, value: any) => {
+    const handleFieldChange = (field: keyof ProductFormData, value: ProductFormData[keyof ProductFormData]) => {
         setFormData(prev => ({
             ...prev,
             [field]: value
@@ -301,10 +302,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
     };
 
     // Get active categories for dropdown
-    const activeCategories = categories.filter(cat => cat.is_active && !cat.deleted_at);
+    const activeCategories = useMemo(
+        () => categories.filter(cat => cat.is_active && !cat.deleted_at),
+        [categories]
+    );
 
     // Auto-generate SKU based on category and product name
-    const generateSKU = (categoryId: string, productName: string): string => {
+    const generateSKU = useCallback((categoryId: string, productName: string): string => {
         // Find category name
         const category = activeCategories.find(cat => cat.id === categoryId);
         const categoryAbbr = category ? category.name.substring(0, 3).toUpperCase() : 'GEN';
@@ -326,7 +330,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         const incrementalNumber = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
 
         return `${categoryAbbr}-${productAbbr}-${incrementalNumber}`;
-    };
+    }, [activeCategories]);
 
     // Auto-update SKU when category or name changes
     useEffect(() => {
@@ -334,56 +338,67 @@ const ProductForm: React.FC<ProductFormProps> = ({
             const newSKU = generateSKU(formData.category_id, formData.name);
             setFormData(prev => ({ ...prev, sku: newSKU }));
         }
-    }, [formData.category_id, formData.name]);
+    }, [formData.category_id, formData.name, generateSKU]);
 
     if (!isOpen) return null;
 
     return (
-        <>
-            {/* Backdrop - only covers part of screen */}
-            <div className="fixed inset-0 bg-black bg-opacity-30 z-40" onClick={onClose} />
-
-            {/* Side Panel */}
-            <div className="fixed top-0 right-0 h-full w-full max-w-2xl bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col rounded-l-2xl overflow-hidden border-l border-gray-200">
-                {/* Header with Toggle */}
-                <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white p-4 flex items-center justify-between flex-shrink-0">
-                    <div className="flex items-center space-x-3">
-                        <Package className="w-6 h-6" />
-                        <h2 className="text-lg font-bold">
-                            {product ? t('products.form.editTitle') : t('products.form.createTitle')}
-                        </h2>
+        <BaseDialog
+            open={isOpen}
+            onClose={handleCancel}
+            title={product ? t('products.form.editTitle') : t('products.form.createTitle')}
+            width="55vw"
+            height="85vh"
+            footer={
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div className="text-xs text-gray-600">
+                            {t('products.form.requiredFieldsNote')}
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowKeyboard(!showKeyboard)}
+                                className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${showKeyboard ? 'bg-gray-300 text-gray-900' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                title={t('forms.toggleKeyboard')}
+                            >
+                                {t('forms.keyboard')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowNumpad(!showNumpad)}
+                                className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${showNumpad ? 'bg-gray-300 text-gray-900' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                                title={t('forms.toggleNumpad')}
+                            >
+                                {t('forms.numpad')}
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                        {/* Keyboard Toggle Button */}
-                        <button
-                            onClick={() => setShowKeyboard(!showKeyboard)}
-                            className={`p-2 rounded-lg transition-colors ${showKeyboard ? 'bg-white bg-opacity-20' : 'hover:bg-white hover:bg-opacity-20'
-                                }`}
-                            title={t('forms.toggleKeyboard')}
-                        >
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm5.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L10.586 10 8.293 7.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                        </button>
-                        {/* Numpad Toggle Button */}
-                        <button
-                            onClick={() => setShowNumpad(!showNumpad)}
-                            className={`p-2 rounded-lg transition-colors ${showNumpad ? 'bg-white bg-opacity-20' : 'hover:bg-white hover:bg-opacity-20'
-                                }`}
-                            title={t('forms.toggleNumpad')}
-                        >
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M3 3a1 1 0 000 2h11a1 1 0 100-2H3zM3 7a1 1 0 000 2h7a1 1 0 100-2H3zM3 11a1 1 0 100 2h4a1 1 0 100-2H3zM13 16a1 1 0 102 0v-5.586l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 101.414 1.414L13 10.414V16z" clipRule="evenodd" />
-                            </svg>
-                        </button>
-                        <button
-                            onClick={onClose}
-                            className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
-                            title={t('forms.closePanel')}
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
+                    <div className="flex space-x-4">
+                        <ActionButton
+                            type="button"
+                            onClick={handleCancel}
+                            label={t('products.form.cancel')}
+                            variant="secondary"
+                            className="flex-1"
+                            style={{ height: '5vh', fontSize: '1.6vh' }}
+                        />
+                        <ActionButton
+                            type="button"
+                            onClick={handleSubmit}
+                            disabled={isSubmitting || isLoading}
+                            label={isSubmitting ? t('common.saving') : product ? t('products.form.update') : t('products.form.create')}
+                            className="flex-1"
+                            style={{ height: '5vh', fontSize: '1.6vh' }}
+                        />
                     </div>
+                </div>
+            }
+        >
+            <div className="flex h-full flex-col">
+                <div className="flex items-center gap-3 px-6 pt-5 text-gray-700">
+                    <Package className="h-5 w-5 text-gray-500" />
+                    <span className="text-sm font-medium">{product ? product.name : t('products.pageTitle')}</span>
                 </div>
 
                 {/* Form - Scrollable Content */}
@@ -469,7 +484,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     {t('products.form.priceInclVat')}
                                 </label>
                                 <div className="relative">
-                                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">
+                                        {currencySymbol}
+                                    </span>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -493,7 +510,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             {/* Cost */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    {t('products.form.costEuro')}
+                                    {t('products.form.cost')} ({currencySymbol})
                                 </label>
                                 <input
                                     type="number"
@@ -556,7 +573,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             {/* Min Stock */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Minimum Stock
+                                    {t('products.form.minimumStock')}
                                 </label>
                                 <input
                                     type="number"
@@ -692,44 +709,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     </form>
                 </div>
 
-                {/* Footer - Fixed at bottom */}
-                <div className="bg-gray-50 px-4 py-3 border-t flex-shrink-0">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="text-xs text-gray-600">
-                            {t('products.form.requiredFieldsNote')}
-                        </div>
-                    </div>
-                    <div className="flex space-x-3">
-                        <button
-                            type="button"
-                            onClick={handleCancel}
-                            className="flex-1 min-h-touch px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium"
-                        >
-                            {t('products.form.cancel')}
-                        </button>
-                        <button
-                            onClick={handleSubmit}
-                            disabled={isSubmitting || isLoading}
-                            className="flex-1 min-h-touch px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white ds2-modal-primary-action hover:from-blue-700 hover:to-blue-600 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>{t('common.saving')}</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Save className="w-4 h-4" />
-                                    <span>{product ? t('products.form.update') : t('products.form.create')}</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </div>
-
                 {/* Virtual Keyboard */}
                 {showKeyboard && (
-                    <div className="fixed top-0 h-full w-96 bg-white shadow-2xl z-45 border-r border-gray-200" style={{ right: '42rem' }}>
+                    <div className="border-t border-gray-200 bg-white">
                         <VirtualKeyboard
                             isOpen={showKeyboard}
                             onClose={() => setShowKeyboard(false)}
@@ -742,7 +724,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
                 {/* Virtual Numpad */}
                 {showNumpad && (
-                    <div className="fixed top-0 h-full w-80 bg-white shadow-2xl z-45 border-r border-gray-200" style={{ right: '42rem' }}>
+                    <div className="border-t border-gray-200 bg-white">
                         <VirtualNumpad
                             isOpen={showNumpad}
                             onClose={() => setShowNumpad(false)}
@@ -754,7 +736,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                     </div>
                 )}
             </div>
-        </>
+        </BaseDialog>
     );
 };
 

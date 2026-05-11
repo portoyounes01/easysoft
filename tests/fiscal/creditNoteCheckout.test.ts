@@ -4,6 +4,7 @@ import { initializeLocalDatabase, localDb, transactionLocalService } from '../..
 import type { FiscalCheckoutAtomicPayload } from '../../src/fiscal/types';
 import { WebCryptoRsaSha1Signer } from '../../src/fiscal/signing';
 import type { SystemSettings } from '../../src/contexts/SettingsContext';
+import { defaultSeriesProfiles } from '../../src/fiscal/receiptSeriesProfile';
 import { runFiscalCreditNoteForTransaction } from '../../src/fiscal/creditNoteCheckout';
 
 function makeTestSettings(privateKeyPem: string): SystemSettings {
@@ -30,16 +31,22 @@ function makeTestSettings(privateKeyPem: string): SystemSettings {
             softwareCertNumber: '999',
         },
         receipt: {
-            series: 'S1',
-            seriesPrefix: 'A',
-            numericWidth: 4,
-            resetPolicy: 'yearly' as const,
-            lastSeriesKey: '',
-            currentNumber: 0,
-            defaultDocumentType: 'FATURA_SIMPLIFICADA' as const,
+            defaultDocumentType: 'FATURA_SIMPLIFICADA',
             counterLabel: 'B1',
-            atValidationCode: 'ATNC01',
-            seriesDiscontinued: false,
+            seriesProfiles: (() => {
+                const p = defaultSeriesProfiles();
+                p.FS.series = 'S1';
+                p.FS.seriesPrefix = 'A';
+                p.FS.numericWidth = 4;
+                p.FS.resetPolicy = 'yearly';
+                p.FS.lastSeriesKey = '';
+                p.FS.currentNumber = 0;
+                p.FS.atValidationCode = 'ATNC01';
+                p.FS.seriesDiscontinued = false;
+                p.FT = { ...p.FS };
+                p.NC = { ...p.FS };
+                return p;
+            })(),
         },
         fiscal: { hashControlVersion: '1', trainingMode: true, privateKeyPem },
     } as unknown as SystemSettings;
@@ -49,6 +56,7 @@ function buildSalePayload(settings: SystemSettings, signer: WebCryptoRsaSha1Sign
     const d = '2026-06-20';
     return {
         settings,
+        receiptProfile: settings.receipt.seriesProfiles.FS,
         certificationMode: 'training',
         transactionDate: d,
         transactionTime: '12:00:00',

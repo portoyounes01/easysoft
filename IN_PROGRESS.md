@@ -1,3 +1,25 @@
+## Settings — system admin gates + séries FS / FT / NC (2026-05-11)
+
+- **Empresa:** `Número de Certificação` e certificação de software (AT) só com `isSystemAdministrator` (nº de funcionário em `VITE_SYSTEM_ADMIN_EMPLOYEE_NUMBERS`, defeito `ADMIN001`).
+- **Fiscal AT:** HashControl, rotação de chave, PEM e campo dev só para administrador de sistema; modo formação + export SAF-T mantidos para quem tem permissão `settings`.
+- **Numeração:** `receipt.seriesProfiles` (`FS`, `FT`, `NC`) com migração a partir de `pos_system_settings` antigo; checkout usa perfil da venda; NC/recibo usam prefixo/largura extraídos do documento original.
+- **UI numeração (follow-up):** Um selector FS/FT/NC mostra um único formulário por tipo; FS/FT atualizam `defaultDocumentType`. Campos **início/fim de vigência** (`seriesStartDate` / `seriesEndDate`) por série; `resetPolicy` e data antiga do código AT removidos da UI; migração de `atValidationCodeIssuedAt` → `seriesStartDate`. Validação de emissão e banners POS/Layout usam a janela de datas.
+
+## POS Default Landing + Admin Dialog Refresh (2026-05-11)
+
+- **Status:** ACTIVE
+- **Scope:** Make `/pos` the post-login landing page, comment dashboard navigation entries out, align product/category/employee edit dialogs with the POS `BaseDialog` modal chrome, and localize category dialog text in Portuguese.
+- **Progress:** Updated route redirect logic, sidebar/POS nav dashboard entries, product/category form modal shells, product form currency symbol binding from settings, and category form i18n keys. **CustomerDialog (fatura NIF):** prefill NIF from search when adding; new-client tab: phone removed, save enabled on valid NIF only; optional address fields; duplicate NIF blocked (UI + `CustomerLocalService.createCustomer`).
+- **Validation:** Pending lint/type check after dialog refactor.
+
+## Settings — Design System 2 scope (2026-05-06)
+
+- **`Settings.tsx`:** **`useDesignSystem2Customization`** + **`design-system-2-scope.css`**. Loading and main shells use **`.ds2-visual-scope`** with **`visualStyle`** + **`data-ds2-neutral`**. Content uses **`layoutClasses.contentInsetX`** (density-aligned horizontal padding). Left tab rail width uses **`layoutClasses.sidebarW`** (same sm/md/lg as app sidebar). **Save** / **Reset** header actions use **`ds2-control-radius-lg`** + **`min-h-touch-sm`**; tab **`rounded-xl`** and main card **`rounded-xl`** stay scoped so **radius preset** applies. Blues / toggles / gradients follow **secondary** + scope mappings like other admin pages.
+
+## POS — Design System 2 scope (2026-05-06)
+
+- **`POS.tsx`:** Wrapped in **`DesignSystem2CustomizationProvider`** (route is outside **`Layout`**, so POS brings its own provider). **`POSInner`** root is **`.ds2-visual-scope`** with **`visualStyle`** + **`data-ds2-neutral`**; imports **`design-system-2-scope.css`**. Existing Tailwind (`from-blue-600 to-blue-500`, `bg-green-500`, **`rounded-lg` / `rounded-2xl`**, pairing gradient, etc.) is remapped by scope to **primary / secondary / radius** prefs — default palette matches prior look. **`PaymentDialog`**, **`DiscountDialog`**, **`CustomerDialog`**, **`ReceiptDialog`**, **`ReceiptHistorySelector`**, and modals stay as children of that root, so **fixed overlays still inherit** `--ds2-*` variables. POS flyout nav width uses **`layoutClasses.sidebarW`** (same **sm / md / lg** as app sidebar + Design System 2 page).
+
 ## Layout — global Design System 2 provider + app sidebar (2026-05-06)
 
 - **`Layout.tsx`:** Wraps the authenticated shell (`Sidebar` + main) in **`DesignSystem2CustomizationProvider`** so prefs (primary/secondary, radius, sidebar width, density, etc.) are **one shared source** with `/design-system-2` and all DS2-scoped pages.

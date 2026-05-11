@@ -3,6 +3,7 @@ import { customerLocalService, transactionLocalService } from '../lib/localDatab
 import { CONSUMER_FINAL_CUSTOMER_TAX_ID } from './spec';
 import { createSignerFromSettings, type FiscalSigner } from './signing';
 import type { FiscalCheckoutAtomicPayload, FiscalCheckoutResult } from './types';
+import { parseInvoicePrefixWidthFromSaftNo, assertIssueDateInSeriesWindow } from './receiptSeriesProfile';
 
 function formatSystemEntryDate(d: Date): string {
     const y = d.getFullYear();
@@ -66,6 +67,11 @@ export async function runFiscalCreditNoteForTransaction(params: {
 
     const certificationMode = settings.fiscal.trainingMode ? 'training' : 'production';
 
+    if (settings.receipt.seriesProfiles.NC.seriesDiscontinued) {
+        throw new Error('A série NC está descontinuada e não pode emitir novas notas de crédito.');
+    }
+    assertIssueDateInSeriesWindow(transactionDate, settings.receipt.seriesProfiles.NC);
+
     const customerTaxIdForRow = origFiscal.customer_tax_id ?? CONSUMER_FINAL_CUSTOMER_TAX_ID;
     const customerTaxNumberForQr = normalizeTaxIdForQr(origFiscal.customer_tax_id);
 
@@ -123,8 +129,24 @@ export async function runFiscalCreditNoteForTransaction(params: {
         }
     }
 
+    const parsed = parseInvoicePrefixWidthFromSaftNo(origFiscal.invoice_no);
+    if (!parsed) {
+        throw new Error(
+            'Formato de número de documento original inválido — não foi possível determinar a série.'
+        );
+    }
+    const baseKey = origFiscal.invoice_type === 'FT' ? 'FT' : 'FS';
+    const baseProfile = settings.receipt.seriesProfiles[baseKey];
+    const receiptProfile = {
+        ...baseProfile,
+        seriesPrefix: parsed.prefix,
+        numericWidth: parsed.width,
+        atValidationCode: origFiscal.at_validation_code,
+    };
+
     const atomicPayload: FiscalCheckoutAtomicPayload = {
         settings,
+        receiptProfile,
         certificationMode,
         transactionDate,
         transactionTime,

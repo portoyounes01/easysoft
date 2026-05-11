@@ -1,11 +1,11 @@
-import type { SystemSettings } from '../contexts/SettingsContext';
+import type { ReceiptSeriesProfile } from './receiptSeriesProfile';
 
-export function computeSeriesKey(settings: SystemSettings['receipt'], now: Date): string {
+export function computeSeriesKey(profile: ReceiptSeriesProfile, now: Date): string {
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
-    return settings.resetPolicy === 'monthly'
-        ? `${settings.seriesPrefix}-${y}${m}`
-        : `${settings.seriesPrefix}-${y}`;
+    return profile.resetPolicy === 'monthly'
+        ? `${profile.seriesPrefix}-${y}${m}`
+        : `${profile.seriesPrefix}-${y}`;
 }
 
 export function computeNextSequential(
@@ -18,8 +18,8 @@ export function computeNextSequential(
     return settingsCurrentNumber + 1;
 }
 
-export function formatSequential(settings: SystemSettings['receipt'], sequential: number): string {
-    return String(sequential).padStart(settings.numericWidth, '0');
+export function formatSequential(profile: ReceiptSeriesProfile, sequential: number): string {
+    return String(sequential).padStart(profile.numericWidth, '0');
 }
 
 export function buildInvoiceNo(

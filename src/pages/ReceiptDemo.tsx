@@ -8,6 +8,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { transactionLocalService } from '../lib/localDatabase';
 import { generateQRCodeImage } from '../utils/qrCode';
 import type { FiscalTransactionMetadata } from '../fiscal/types';
+import { receiptProfileForDefaultDocumentType } from '../fiscal/receiptSeriesProfile';
 
 const ReceiptDemoPage: React.FC = () => {
   const location = useLocation();
@@ -65,7 +66,7 @@ const ReceiptDemoPage: React.FC = () => {
           counter: settings.receipt.counterLabel,
           verificationCode:
             fm?.atcudBody ||
-            `${settings.receipt.atValidationCode}-${String(trx.receipt_number || trx.transaction_number).split('-').pop()}`,
+            `${receiptProfileForDefaultDocumentType(settings.receipt).atValidationCode}-${String(trx.receipt_number || trx.transaction_number).split('-').pop()}`,
           hashFourChars: fm?.hashFourChars,
           documentHash: fm?.hashBase64,
           qrCodeData: fm?.qrPayload,

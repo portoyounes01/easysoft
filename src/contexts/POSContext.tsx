@@ -215,12 +215,18 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           globalDiscount,
         });
 
-        fiscalContext.updateSettings({
-          receipt: {
-            lastSeriesKey: fiscalRes.seriesKey,
-            currentNumber: fiscalRes.sequentialNumber,
-          },
-        });
+        if (fiscalRes.invoiceTypeSaft === 'FS' || fiscalRes.invoiceTypeSaft === 'FT') {
+          fiscalContext.updateSettings({
+            receipt: {
+              seriesProfiles: {
+                [fiscalRes.invoiceTypeSaft]: {
+                  lastSeriesKey: fiscalRes.seriesKey,
+                  currentNumber: fiscalRes.sequentialNumber,
+                },
+              },
+            },
+          });
+        }
 
         const loaded = await transactionLocalService.getTransactionById(fiscalRes.transactionId);
         if (loaded?.items?.length) {

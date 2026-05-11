@@ -683,6 +683,12 @@ export class CustomerLocalService {
 
     // Create new customer
     async createCustomer(customerData: Omit<LocalCustomer, 'id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'>): Promise<string> {
+        const taxRaw = customerData.tax_number;
+        const normalizedNew =
+            taxRaw == null || String(taxRaw).trim() === ''
+                ? ''
+                : String(taxRaw).replace(/\s/g, '').toUpperCase();
+
         const id = generateUUID();
         const customer: LocalCustomer = {
             ...customerData,
@@ -699,6 +705,18 @@ export class CustomerLocalService {
         };
 
         await localDb.transaction('rw', [localDb.customers], async () => {
+            if (normalizedNew) {
+                const existing = await localDb.customers
+                    .filter(
+                        (c) =>
+                            c.deleted_at == null &&
+                            (c.tax_number ?? '').replace(/\s/g, '').toUpperCase() === normalizedNew
+                    )
+                    .first();
+                if (existing) {
+                    throw new Error('DUPLICATE_TAX_NUMBER');
+                }
+            }
             await localDb.customers.add(customer);
         });
         await this.queueOperation('CREATE', id, customer);
@@ -1143,13 +1161,12 @@ export class TransactionLocalService {
      * then insert fiscal + transaction + items + audit in one rw transaction with chain-tip verification and retry if the chain advanced.
      */
     async createFiscalCheckoutAtomic(payload: FiscalCheckoutAtomicPayload): Promise<FiscalCheckoutResult> {
-        const { settings, chainScope, atCode, seriesKey, payment, customerCountryForQr } = payload;
-        const receipt = settings.receipt;
+        const { settings, chainScope, atCode, seriesKey, payment, customerCountryForQr, receiptProfile } = payload;
         const company = settings.company;
         const hashControl = settings.fiscal.hashControlVersion || '1';
         const qrCountry =
             (customerCountryForQr || 'PT').trim().slice(0, 2).toUpperCase() || 'PT';
-        const prefix = (settings.receipt.seriesPrefix || '').trim();
+        const prefix = (receiptProfile.seriesPrefix || '').trim();
         if (!prefix) {
             throw new Error('Prefixo da série em falta (Definições > Recibo).');
         }
@@ -1179,14 +1196,14 @@ export class TransactionLocalService {
             const lastDoc = tip.lastDoc;
             const previousHash = lastDoc?.hash_base64 ?? '';
             const lastSeq = lastDoc?.sequential_number;
-            const nextSequential = computeNextSequential(lastSeq, receipt.currentNumber);
+            const nextSequential = computeNextSequential(lastSeq, receiptProfile.currentNumber);
             const invoiceNo = buildInvoiceNo(
                 payload.invoiceTypeSaft,
                 prefix,
                 nextSequential,
-                receipt.numericWidth
+                receiptProfile.numericWidth
             );
-            const paddedSeq = formatSequential(receipt, nextSequential);
+            const paddedSeq = formatSequential(receiptProfile, nextSequential);
             const atcudBody = `${atCode}-${paddedSeq}`;
 
             const plaintext = buildHashPlaintext({
@@ -1306,7 +1323,7 @@ export class TransactionLocalService {
                     if (prevNow !== previousHash || seqNow !== lastSeq) {
                         throw new Error('FISCAL_CHAIN_ADVANCED');
                     }
-                    const nextCheck = computeNextSequential(lastDocNow?.sequential_number, receipt.currentNumber);
+                    const nextCheck = computeNextSequential(lastDocNow?.sequential_number, receiptProfile.currentNumber);
                     if (nextCheck !== nextSequential) {
                         throw new Error('FISCAL_CHAIN_ADVANCED');
                     }

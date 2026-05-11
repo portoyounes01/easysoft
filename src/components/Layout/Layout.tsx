@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useSettings } from '../../contexts/SettingsContext';
 import { DesignSystem2CustomizationProvider } from '../../contexts/DesignSystem2CustomizationContext';
+import { receiptProfileForDefaultDocumentType, isIssueDateOutsideSeriesWindow } from '../../fiscal/receiptSeriesProfile';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -10,15 +12,13 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { settings } = useSettings();
+  const { t } = useTranslation();
 
-  const validationCodeStale = useMemo(() => {
-    const raw = settings.receipt.atValidationCodeIssuedAt?.trim();
-    if (!raw) return false;
-    const t = new Date(raw).getTime();
-    if (Number.isNaN(t)) return false;
-    const days = (Date.now() - t) / (86400 * 1000);
-    return days > 1000;
-  }, [settings.receipt.atValidationCodeIssuedAt]);
+  const seriesOutsideValidity = useMemo(() => {
+    const prof = receiptProfileForDefaultDocumentType(settings.receipt);
+    const today = new Date().toISOString().split('T')[0];
+    return isIssueDateOutsideSeriesWindow(today, prof) !== null;
+  }, [settings.receipt]);
 
   // Load sidebar state from localStorage, default to expanded on desktop
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -97,14 +97,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               Debug build – HashControl fiscal e definições extra são visíveis.
             </div>
           )}
-          {settings.receipt.seriesDiscontinued && (
+          {receiptProfileForDefaultDocumentType(settings.receipt).seriesDiscontinued && (
             <div className="mb-4 rounded-2xl border-2 border-orange-400 bg-orange-50 px-4 py-3 text-orange-950 text-center font-semibold text-lg">
               Série fiscal marcada como descontinuada — confirme a série junto da AT antes de continuar a faturar.
             </div>
           )}
-          {validationCodeStale && (
+          {seriesOutsideValidity && (
             <div className="mb-4 rounded-2xl border-2 border-red-300 bg-red-50 px-4 py-3 text-red-900 text-center font-semibold text-lg">
-              Código de validação AT com mais de ~3 anos — verifique renovação no Portal das Finanças.
+              {t('settings.company.seriesOutsideValidityBanner')}
             </div>
           )}
           {children}

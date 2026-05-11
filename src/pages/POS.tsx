@@ -13,19 +13,14 @@ import {
   LogOut,
   UserCircle,
   Search,
-  Phone,
-  Mail,
   Users,
-  Save,
-  CreditCard as TaxIcon,
-  Check,
   AlertCircle,
   Clock,
   Loader2,
   Package,
   RefreshCw,
   Menu,
-  LayoutDashboard,
+  // LayoutDashboard,
   BarChart3,
   Settings,
   FileText
@@ -43,6 +38,7 @@ import { useTranslation } from 'react-i18next';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
 import { customerLocalService, initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
+import { receiptProfileForDefaultDocumentType, isIssueDateOutsideSeriesWindow } from '../fiscal/receiptSeriesProfile';
 import { saftTypeToReceiptDocumentType } from '../fiscal/saleDocumentType';
 import { ReceiptProps } from '../components/ThermalReceipt';
 import ReceiptHistorySelector from '../components/ReceiptHistorySelector';
@@ -51,6 +47,11 @@ import PaymentDialog from '../components/PaymentDialog';
 import ReceiptDialog from '../components/ReceiptDialog';
 import { CategoryFilterButton } from '../components/ui/CategoryFilterButton';
 import { ProductCard } from '../components/ui/ProductCard';
+import {
+  DesignSystem2CustomizationProvider,
+  useDesignSystem2Customization,
+} from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 // Icon mapping for categories
 const iconMap = {
@@ -62,8 +63,9 @@ const iconMap = {
 };
 
 
-const POS: React.FC = () => {
+const POSInner: React.FC = () => {
   const { t } = useTranslation();
+  const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
   const { cart, addToCart, clearCart, updateQuantity, selectedCustomer, selectCustomer, processTransaction } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
   const { settings, updateSettings } = useSettings();
@@ -92,14 +94,11 @@ const POS: React.FC = () => {
   const [nextReceiptAfterClose, setNextReceiptAfterClose] = useState<ReceiptProps | null>(null);
   const [lastFiscalInvoiceNo, setLastFiscalInvoiceNo] = useState<string | null>(null);
 
-  const atValidationWarn = useMemo(() => {
-    const raw = settings.receipt.atValidationCodeIssuedAt?.trim();
-    if (!raw) return false;
-    const t = new Date(raw).getTime();
-    if (Number.isNaN(t)) return false;
-    const days = (Date.now() - t) / (86400 * 1000);
-    return days > 1000;
-  }, [settings.receipt.atValidationCodeIssuedAt]);
+  const seriesValidityOutOfWindow = useMemo(() => {
+    const prof = receiptProfileForDefaultDocumentType(settings.receipt);
+    const today = new Date().toISOString().split('T')[0];
+    return isIssueDateOutsideSeriesWindow(today, prof) !== null;
+  }, [settings.receipt]);
 
   // Stock validation helper function
   const canAddToCart = (product: LocalProduct, requestedQuantity = 1): boolean => {
@@ -171,8 +170,9 @@ const POS: React.FC = () => {
       try {
         await initializeLocalDatabase();
         const now = new Date();
-        const sk = computeSeriesKey(settings.receipt, now);
-        const at = settings.receipt.atValidationCode.trim();
+        const prof = receiptProfileForDefaultDocumentType(settings.receipt);
+        const sk = computeSeriesKey(prof, now);
+        const at = prof.atValidationCode.trim();
         if (!at) {
           if (!cancelled) setLastFiscalInvoiceNo(null);
           return;
@@ -187,12 +187,7 @@ const POS: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [
-    settings.receipt.atValidationCode,
-    settings.receipt.seriesPrefix,
-    settings.receipt.resetPolicy,
-    settings.receipt.numericWidth,
-  ]);
+  }, [settings.receipt]);
 
   // Activity tracking for auto-logout
   useEffect(() => {
@@ -355,11 +350,6 @@ const POS: React.FC = () => {
     }
   };
 
-  const renderCategoryIcon = (iconName: string) => {
-    const IconComponent = iconMap[iconName as keyof typeof iconMap] || Grid;
-    return <IconComponent className="w-4 h-4" />;
-  };
-
   const handleCustomerSelect = (customer: LocalCustomer) => {
     selectCustomer(customer);
     setShowCustomerModal(false);
@@ -454,7 +444,11 @@ const POS: React.FC = () => {
   }, [refreshData]);
 
   return (
-    <div className="h-screen flex bg-neutral-50">
+    <div
+      className="ds2-visual-scope flex h-screen min-h-0 w-full bg-neutral-50"
+      style={visualStyle}
+      data-ds2-neutral={prefs.neutralFamilyId}
+    >
       {/* Main Content Area - takes most space */}
       <div className="flex-1 flex flex-col">
         {settings.fiscal.trainingMode && (
@@ -462,14 +456,14 @@ const POS: React.FC = () => {
             MODO DE FORMAÇÃO — documentos sem valor fiscal
           </div>
         )}
-        {settings.receipt.seriesDiscontinued && (
+        {receiptProfileForDefaultDocumentType(settings.receipt).seriesDiscontinued && (
           <div className="flex-none bg-amber-100 text-amber-950 text-center text-lg font-semibold py-2 px-4 border-b border-amber-300">
             Série fiscal descontinuada — confirme junto da AT antes de faturar.
           </div>
         )}
-        {atValidationWarn && (
+        {seriesValidityOutOfWindow && (
           <div className="flex-none bg-red-100 text-red-900 text-center text-lg font-semibold py-2 px-4 border-b border-red-200">
-            Código de validação AT antigo — verifique renovação no Portal das Finanças.
+            {t('settings.company.seriesOutsideValidityBanner')}
           </div>
         )}
         {/* Top Header - only over left sidebar + center, not cart */}
@@ -512,7 +506,9 @@ const POS: React.FC = () => {
             />
 
             {/* Navigation Sidebar */}
-            <div className="fixed top-0 left-0 h-full w-80 bg-gradient-to-b from-slate-900 to-slate-800 text-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col">
+            <div
+              className={`fixed top-0 left-0 z-50 flex h-full ${layoutClasses.sidebarW} flex-col bg-gradient-to-b from-slate-900 to-slate-800 text-white shadow-2xl transition-transform duration-300 ease-in-out`}
+            >
               <div className="p-6 border-b border-slate-700">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
@@ -536,7 +532,7 @@ const POS: React.FC = () => {
               <nav className="flex-1 p-4">
                 <ul className="space-y-2">
                   {[
-                    { path: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard' },
+                    // { path: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard' },
                     { path: '/pos', icon: ShoppingCart, label: 'Point of Sale', permission: 'sales' },
                     { path: '/products', icon: Package, label: 'Products', permission: 'inventory' },
                     { path: '/employees', icon: Users, label: 'Employees', permission: 'employees' },
@@ -821,6 +817,9 @@ const POS: React.FC = () => {
             }
             setShowCustomerModal(false);
           } catch (error) {
+            if (error instanceof Error && error.message === 'DUPLICATE_TAX_NUMBER') {
+              throw error;
+            }
             console.error('Failed to create customer:', error);
           }
         }}
@@ -1100,5 +1099,11 @@ const POS: React.FC = () => {
     </div>
   );
 };
+
+const POS: React.FC = () => (
+  <DesignSystem2CustomizationProvider>
+    <POSInner />
+  </DesignSystem2CustomizationProvider>
+);
 
 export default POS;

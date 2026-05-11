@@ -5,6 +5,7 @@ import { transactionLocalService } from '../lib/localDatabase';
 import { mapDefaultDocumentTypeToSaft, CONSUMER_FINAL_CUSTOMER_TAX_ID } from './spec';
 import { resolveDefaultDocumentTypeForSale } from './saleDocumentType';
 import { createSignerFromSettings, type FiscalSigner } from './signing';
+import { receiptProfileForSale, assertIssueDateInSeriesWindow } from './receiptSeriesProfile';
 import { buildChainScope, computeSeriesKey } from './seriesUtils';
 import type { CertificationMode, FiscalCheckoutAtomicPayload, FiscalCheckoutResult } from './types';
 
@@ -103,14 +104,8 @@ export async function runFiscalCheckout(params: {
 }): Promise<FiscalCheckoutResult> {
     const { settings, cart, selectedCustomer, payment, globalDiscount } = params;
 
-    if (settings.receipt.seriesDiscontinued) {
-        throw new Error('Esta série documental está descontinuada e não pode emitir novos documentos.');
-    }
-
     assertDiscountGuards(cart, globalDiscount);
     assertNoNegativeSaleLineTotals(cart);
-
-    const certificationMode: CertificationMode = settings.fiscal.trainingMode ? 'training' : 'production';
 
     const now = new Date();
     const transactionDate = now.toISOString().split('T')[0];
@@ -149,19 +144,29 @@ export async function runFiscalCheckout(params: {
 
     const totalDiscountAmount = originalSubtotal - finalSubtotal;
 
-    const seriesKey = computeSeriesKey(settings.receipt, now);
-    const atCode = settings.receipt.atValidationCode.trim();
-    if (!atCode) {
-        throw new Error('Código de validação AT da série em falta (Definições > Recibo).');
-    }
-
-    const chainScope = buildChainScope(atCode, seriesKey);
-
     const resolvedDocumentType = resolveDefaultDocumentTypeForSale(
         settings.receipt.defaultDocumentType,
         selectedCustomer
     );
     const invoiceTypeSaft = mapDefaultDocumentTypeToSaft(resolvedDocumentType);
+    const receiptProfile = receiptProfileForSale(settings.receipt, invoiceTypeSaft);
+
+    if (receiptProfile.seriesDiscontinued) {
+        throw new Error('Esta série documental está descontinuada e não pode emitir novos documentos.');
+    }
+
+    assertIssueDateInSeriesWindow(transactionDate, receiptProfile);
+
+    const certificationMode: CertificationMode = settings.fiscal.trainingMode ? 'training' : 'production';
+
+    const seriesKey = computeSeriesKey(receiptProfile, now);
+    const atCode = receiptProfile.atValidationCode.trim();
+    if (!atCode) {
+        throw new Error('Código de validação AT da série em falta (Definições > Numeração por tipo de documento).');
+    }
+
+    const chainScope = buildChainScope(atCode, seriesKey);
+
     const grossTotal = Number(total.toFixed(2));
     const taxTotal = Number(totalTax.toFixed(2));
     const netRounded = Number((grossTotal - taxTotal).toFixed(2));
@@ -233,6 +238,7 @@ export async function runFiscalCheckout(params: {
 
     const atomicPayload: FiscalCheckoutAtomicPayload = {
         settings,
+        receiptProfile,
         certificationMode,
         transactionDate,
         transactionTime,

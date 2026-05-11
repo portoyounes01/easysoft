@@ -8,15 +8,12 @@ import {
     Shield,
     Clock,
     MoreVertical,
-    X,
-    Save,
     AlertCircle,
     Eye,
     EyeOff,
     Calendar,
     Phone,
     KeyRound,
-    Loader2,
     UserCheck,
     UserX,
     Copy,
@@ -29,6 +26,8 @@ import DatabaseReset from '../components/DatabaseReset';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { ActionButton } from '../components/ui/ActionButton';
+import { BaseDialog } from '../components/ui/BaseDialog';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -180,7 +179,7 @@ const EmployeesInner: React.FC = () => {
     };
 
     // Handle form field changes
-    const handleFormChange = (field: keyof EmployeeFormData, value: any) => {
+    const handleFormChange = (field: keyof EmployeeFormData, value: EmployeeFormData[keyof EmployeeFormData]) => {
         setFormData(prev => {
             const newData = {
                 ...prev,
@@ -189,19 +188,20 @@ const EmployeesInner: React.FC = () => {
 
             // Handle role changes - manage phone visibility and access levels
             if (field === 'role') {
-                if (value === 'cashier') {
+                const roleValue = value as EmployeeRole;
+                if (roleValue === 'cashier') {
                     // Clear phone for cashiers
                     newData.phone = undefined;
                     // Set default access levels for cashiers
                     newData.access_levels = ['sales'];
-                } else if (value === 'manager') {
+                } else if (roleValue === 'manager') {
                     // Initialize phone for managers
                     if (prev.role === 'cashier') {
                         newData.phone = '';
                     }
                     // Set default access levels for managers
                     newData.access_levels = ['sales', 'inventory', 'reports', 'dashboard', 'employees', 'settings', 'transactions'];
-                } else if (value === 'admin') {
+                } else if (roleValue === 'admin') {
                     // Initialize phone for admins
                     if (prev.role === 'cashier') {
                         newData.phone = '';
@@ -350,7 +350,8 @@ const EmployeesInner: React.FC = () => {
                 }
                 if (!formData.pin?.trim()) {
                     // Don't include PIN in update if empty
-                    const { pin, ...dataWithoutPin } = updateData;
+                    const dataWithoutPin = { ...updateData };
+                    delete dataWithoutPin.pin;
                     await updateEmployee(editingEmployee.id, dataWithoutPin as Partial<EmployeeFormData>);
                 } else {
                     await updateEmployee(editingEmployee.id, updateData);
@@ -778,38 +779,42 @@ const EmployeesInner: React.FC = () => {
 
             {/* Employee Form Modal */}
             {showEmployeeForm && (
-                <>
-                    {/* Backdrop */}
-                    <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={handleCloseForm} />
+                <BaseDialog
+                    open={showEmployeeForm}
+                    onClose={handleCloseForm}
+                    title={editingEmployee ? t('employees.actions.editTitle') : t('employees.actions.addTitle')}
+                    width="55vw"
+                    height="85vh"
+                    footer={
+                        <div className="flex space-x-4">
+                            <ActionButton
+                                type="button"
+                                onClick={handleCloseForm}
+                                label={t('employees.form.cancel')}
+                                variant="secondary"
+                                className="flex-1"
+                                style={{ height: '5vh', fontSize: '1.6vh' }}
+                            />
+                            <ActionButton
+                                type="submit"
+                                form="employee-form"
+                                disabled={isSubmitting}
+                                label={isSubmitting ? t('employees.form.saving') : editingEmployee ? t('employees.form.update') : t('employees.form.create')}
+                                className="flex-1"
+                                style={{ height: '5vh', fontSize: '1.6vh' }}
+                            />
+                        </div>
+                    }
+                >
+                    <div className="flex h-full flex-col">
+                        {formData.employee_number && (
+                            <div className="px-6 pt-5 text-sm font-medium text-gray-600">
+                                {t('employees.form.employeeNumber')} {formData.employee_number}
+                            </div>
+                        )}
 
-                    {/* Modal */}
-                    <div className="fixed inset-0 z-50 overflow-y-auto">
-                        <div className="flex items-center justify-center min-h-full px-4 py-8">
-                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                                {/* Header */}
-                                <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white p-6 rounded-t-2xl">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h2 className="text-xl font-bold">
-                                                {editingEmployee ? t('employees.actions.editTitle') : t('employees.actions.addTitle')}
-                                            </h2>
-                                            {formData.employee_number && (
-                                                <p className="text-blue-100 text-sm mt-1">
-                                                    {t('employees.form.employeeNumber')} {formData.employee_number}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <button
-                                            onClick={handleCloseForm}
-                                            className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
-                                        >
-                                            <X className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Form */}
-                                <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                        {/* Form */}
+                        <form id="employee-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
                                     {/* Basic Information */}
                                     <div>
                                         <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.basicInfo')}</h3>
@@ -998,38 +1003,9 @@ const EmployeesInner: React.FC = () => {
                                         </label>
                                     </div>
 
-                                    {/* Form Actions */}
-                                    <div className="flex space-x-4 pt-6 border-t border-gray-200">
-                                        <button
-                                            type="button"
-                                            onClick={handleCloseForm}
-                                            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                                        >
-                                            {t('employees.form.cancel')}
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={isSubmitting}
-                                            className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                                        >
-                                            {isSubmitting ? (
-                                                <>
-                                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                                    <span>{t('employees.form.saving')}</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Save className="w-4 h-4" />
-                                                    <span>{editingEmployee ? t('employees.form.update') : t('employees.form.create')}</span>
-                                                </>
-                                            )}
-                                        </button>
-                                    </div>
                                 </form>
-                            </div>
-                        </div>
                     </div>
-                </>
+                </BaseDialog>
             )}
 
             {/* Delete Confirmation Modal */}

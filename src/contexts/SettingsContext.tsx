@@ -1,6 +1,112 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 
 import { mergeFiscalPemFromEnv } from '../utils/fiscalEnvDefaults';
+import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
+import { defaultSeriesProfiles, normalizeStoredSeriesProfile } from '../fiscal/receiptSeriesProfile';
+
+function mergeSeriesProfilesDeep(
+    base: Record<FiscalSeriesDocKey, ReceiptSeriesProfile>,
+    patch?: Partial<Record<FiscalSeriesDocKey, Partial<ReceiptSeriesProfile>>>
+): Record<FiscalSeriesDocKey, ReceiptSeriesProfile> {
+    if (!patch) return base;
+    const keys: FiscalSeriesDocKey[] = ['FS', 'FT', 'NC'];
+    const out: Record<FiscalSeriesDocKey, ReceiptSeriesProfile> = { ...base };
+    for (const k of keys) {
+        const p = patch[k];
+        if (p) {
+            out[k] = { ...base[k], ...p };
+        }
+    }
+    return out;
+}
+
+function mergeReceiptBranch(
+    prev: SystemSettings['receipt'],
+    patch?: DeepPartial<SystemSettings['receipt']>
+): SystemSettings['receipt'] {
+    if (!patch) return prev;
+    return {
+        ...prev,
+        ...patch,
+        seriesProfiles: mergeSeriesProfilesDeep(prev.seriesProfiles, patch.seriesProfiles),
+    };
+}
+
+function migrateStoredReceipt(raw: unknown, defaults: SystemSettings['receipt']): SystemSettings['receipt'] {
+    if (!raw || typeof raw !== 'object') return defaults;
+
+    const r = raw as Record<string, unknown>;
+    if (r.seriesProfiles && typeof r.seriesProfiles === 'object') {
+        const sp = r.seriesProfiles as Partial<Record<FiscalSeriesDocKey, Partial<ReceiptSeriesProfile>>>;
+        return {
+            defaultDocumentType:
+                r.defaultDocumentType === 'FATURA' || r.defaultDocumentType === 'FATURA_SIMPLIFICADA'
+                    ? r.defaultDocumentType
+                    : defaults.defaultDocumentType,
+            counterLabel: typeof r.counterLabel === 'string' ? r.counterLabel : defaults.counterLabel,
+            printDuplicateOnIssue:
+                typeof r.printDuplicateOnIssue === 'boolean'
+                    ? r.printDuplicateOnIssue
+                    : defaults.printDuplicateOnIssue,
+            seriesProfiles: {
+                FS: normalizeStoredSeriesProfile(
+                    { ...defaults.seriesProfiles.FS, ...sp.FS } as Parameters<typeof normalizeStoredSeriesProfile>[0],
+                    defaults.seriesProfiles.FS
+                ),
+                FT: normalizeStoredSeriesProfile(
+                    { ...defaults.seriesProfiles.FT, ...sp.FT } as Parameters<typeof normalizeStoredSeriesProfile>[0],
+                    defaults.seriesProfiles.FT
+                ),
+                NC: normalizeStoredSeriesProfile(
+                    { ...defaults.seriesProfiles.NC, ...sp.NC } as Parameters<typeof normalizeStoredSeriesProfile>[0],
+                    defaults.seriesProfiles.NC
+                ),
+            },
+        };
+    }
+
+    const slice = normalizeStoredSeriesProfile(
+        {
+            series: String(r.series ?? defaults.seriesProfiles.FS.series),
+            seriesDescription:
+                typeof r.seriesDescription === 'string'
+                    ? r.seriesDescription
+                    : defaults.seriesProfiles.FS.seriesDescription,
+            seriesPrefix: String(r.seriesPrefix ?? defaults.seriesProfiles.FS.seriesPrefix),
+            numericWidth:
+                typeof r.numericWidth === 'number' && Number.isFinite(r.numericWidth)
+                    ? r.numericWidth
+                    : defaults.seriesProfiles.FS.numericWidth,
+            resetPolicy:
+                r.resetPolicy === 'yearly' || r.resetPolicy === 'monthly'
+                    ? r.resetPolicy
+                    : defaults.seriesProfiles.FS.resetPolicy,
+            lastSeriesKey: String(r.lastSeriesKey ?? ''),
+            currentNumber:
+                typeof r.currentNumber === 'number' && Number.isFinite(r.currentNumber)
+                    ? r.currentNumber
+                    : defaults.seriesProfiles.FS.currentNumber,
+            atValidationCode: String(r.atValidationCode ?? defaults.seriesProfiles.FS.atValidationCode),
+            atValidationCodeIssuedAt:
+                typeof r.atValidationCodeIssuedAt === 'string' ? r.atValidationCodeIssuedAt : undefined,
+            seriesDiscontinued: Boolean(r.seriesDiscontinued),
+        },
+        defaults.seriesProfiles.FS
+    );
+    const dup = { ...slice };
+    return {
+        defaultDocumentType:
+            r.defaultDocumentType === 'FATURA' || r.defaultDocumentType === 'FATURA_SIMPLIFICADA'
+                ? r.defaultDocumentType
+                : defaults.defaultDocumentType,
+        counterLabel: typeof r.counterLabel === 'string' ? r.counterLabel : defaults.counterLabel,
+        printDuplicateOnIssue:
+            typeof r.printDuplicateOnIssue === 'boolean'
+                ? r.printDuplicateOnIssue
+                : defaults.printDuplicateOnIssue,
+        seriesProfiles: { FS: { ...dup }, FT: { ...dup }, NC: { ...dup } },
+    };
+}
 
 export interface SystemSettings {
     autoLogout: {
@@ -37,21 +143,13 @@ export interface SystemSettings {
         softwareCertNumber?: string; // AT software certification number
     };
     receipt: {
-        series: string; // e.g., 'FAT2026' - series name for AT registration
-        /** Shown on thermal header / SAFT human-readable series title. */
-        seriesDescription?: string;
-        seriesPrefix: string; // e.g., 'ABC' (legacy, for numbering)
-        numericWidth: number; // e.g., 4 → 1000 minimum
-        resetPolicy: 'monthly' | 'yearly';
-        lastSeriesKey: string; // e.g., 'ABC-202508'
-        currentNumber: number; // last allocated; starts at 999 so first becomes 1000
         defaultDocumentType: 'FATURA' | 'FATURA_SIMPLIFICADA';
-        counterLabel: string; // e.g., 'BALCÃO 1'
-        atValidationCode: string; // e.g., 'AT56789X1' - from AT portal registration
-        /** ISO date when validation code was issued (optional; expiry warnings). */
-        atValidationCodeIssuedAt?: string;
-        seriesDiscontinued?: boolean;
-        /** After checkout, show Duplicado receipt immediately after Original. */
+        counterLabel: string;
+        /**
+         * FS = fatura simplificada, FT = fatura, NC = série de notas de crédito (registo AT).
+         * A emissão de NC sobre uma venda continua a usar a cadeia/hash do documento original.
+         */
+        seriesProfiles: Record<FiscalSeriesDocKey, ReceiptSeriesProfile>;
         printDuplicateOnIssue?: boolean;
     };
     /** Portugal AT: signing, training mode, key version (HashControl). */
@@ -112,17 +210,10 @@ const defaultSettings: SystemSettings = {
         softwareCertNumber: 'PTR-A-001', // Placeholder - AT software certification
     },
     receipt: {
-        series: 'FAT2026', // Series name for AT registration
-        seriesDescription: '',
-        seriesPrefix: '',
-        numericWidth: 4,
-        resetPolicy: 'monthly',
-        lastSeriesKey: '',
-        currentNumber: 999, // start so that first allocation becomes 1000
         defaultDocumentType: 'FATURA_SIMPLIFICADA',
         counterLabel: 'BALCÃO 1',
-        atValidationCode: 'AT0000001', // Placeholder - replace with real code from AT portal
-        seriesDiscontinued: false,
+        /** Fatura simplificada, fatura completa, e série NC (registo AT); emissão de NC continua a cadeia do documento original. */
+        seriesProfiles: defaultSeriesProfiles(),
         printDuplicateOnIssue: true,
     },
     fiscal: {
@@ -173,10 +264,7 @@ const settingsReducer = (state: SettingsState, action: SettingsAction): Settings
                         ...state.settings.company,
                         ...(action.payload.company || {}),
                     },
-                    receipt: {
-                        ...state.settings.receipt,
-                        ...(action.payload.receipt || {}),
-                    },
+                    receipt: mergeReceiptBranch(state.settings.receipt, action.payload.receipt),
                     fiscal: {
                         ...state.settings.fiscal,
                         ...(action.payload.fiscal || {}),
@@ -237,10 +325,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 ...state.settings.company,
                 ...(newSettings.company || {}),
             },
-            receipt: {
-                ...state.settings.receipt,
-                ...(newSettings.receipt || {}),
-            },
+            receipt: mergeReceiptBranch(state.settings.receipt, newSettings.receipt),
             fiscal: {
                 ...state.settings.fiscal,
                 ...(newSettings.fiscal || {}),
@@ -287,10 +372,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                             ...defaultSettings.company,
                             ...(parsedSettings.company || {}),
                         },
-                        receipt: {
-                            ...defaultSettings.receipt,
-                            ...(parsedSettings.receipt || {}),
-                        },
+                        receipt: migrateStoredReceipt(parsedSettings.receipt, defaultSettings.receipt),
                         fiscal: {
                             ...defaultSettings.fiscal,
                             ...(parsedSettings.fiscal || {}),

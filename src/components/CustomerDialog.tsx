@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Plus, Users, Check, AlertCircle, Phone, CreditCard as TaxIcon } from 'lucide-react';
+import { Search, Plus, Users, Check, AlertCircle, CreditCard as TaxIcon } from 'lucide-react';
 import { BaseDialog } from './ui/BaseDialog';
 import { ActionButton } from './ui/ActionButton';
 import { TabToggle } from './ui/TabToggle';
@@ -26,7 +26,6 @@ type ViewMode = 'list' | 'add';
 
 interface NewCustomerForm {
     name: string;
-    phone: string;
     taxId: string;
     address: string;
     city: string;
@@ -36,13 +35,20 @@ interface NewCustomerForm {
 
 const initialFormState: NewCustomerForm = {
     name: '',
-    phone: '',
     taxId: '',
     address: '',
     city: '',
     postalCode: '',
     country: 'PT'
 };
+
+function normalizeTaxIdInput(raw: string): string {
+    return raw.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
+}
+
+function normalizeStoredTaxNumber(tax: string | null | undefined): string {
+    return (tax ?? '').replace(/\s/g, '').toUpperCase();
+}
 
 /** Portugal postal: digits only in UI, formatted as 1234-567 */
 function formatPtPostalInput(raw: string): string {
@@ -68,11 +74,21 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     // Virtual Keyboard State
     const [activeField, setActiveField] = useState<string>('');
     const searchInputRef = useRef<HTMLInputElement>(null);
-    const [keyboardConfig, setKeyboardConfig] = useState({
+    const [keyboardConfig, setKeyboardConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        field: string;
+        onConfirm: (value: string) => void;
+        maxLength: number;
+        allowNumbers: boolean;
+        allowLetters: boolean;
+    }>({
         isOpen: false,
         title: '',
         field: '',
-        onConfirm: (_value: string) => { },
+        onConfirm: () => {
+            /* initial noop; overridden by handleTextFieldClick */
+        },
         maxLength: 50,
         allowNumbers: true,
         allowLetters: true
@@ -149,7 +165,18 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         }
 
         const nifRegex = /^[A-Z0-9]{9}$/;
-        if (!nifRegex.test(newCustomerForm.taxId.trim())) {
+        const taxNormalized = newCustomerForm.taxId.trim().toUpperCase();
+        if (!nifRegex.test(taxNormalized)) {
+            return;
+        }
+
+        const duplicate = customers.some(
+            (c) =>
+                c.deleted_at == null &&
+                normalizeStoredTaxNumber(c.tax_number) === taxNormalized
+        );
+        if (duplicate) {
+            setFormError(t('pos.customerForm.duplicateTaxNumber'));
             return;
         }
 
@@ -162,12 +189,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 ? 'PT'
                 : rawCountry.slice(0, 2).toUpperCase();
 
-        if (!addr || !city || !postal) {
-            setFormError(t('pos.customerForm.fillAllAddressFields'));
-            return;
-        }
-
-        if (countryIso === 'PT' && !/^\d{4}-\d{3}$/.test(postal)) {
+        if (countryIso === 'PT' && postal.length > 0 && !/^\d{4}-\d{3}$/.test(postal)) {
             setFormError(t('pos.customerForm.invalidPostalPt'));
             return;
         }
@@ -176,14 +198,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             LocalCustomer,
             'id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'
         > = {
-            name: newCustomerForm.name.trim() || `Cliente ${newCustomerForm.taxId.trim()}`,
-            tax_number: newCustomerForm.taxId.trim(),
+            name: newCustomerForm.name.trim() || `Cliente ${taxNormalized}`,
+            tax_number: taxNormalized,
             country: countryIso,
             email: null,
-            phone: newCustomerForm.phone.trim() || null,
-            address: addr,
-            city,
-            postal_code: postal,
+            phone: null,
+            address: addr.length > 0 ? addr : null,
+            city: city.length > 0 ? city : null,
+            postal_code: postal.length > 0 ? postal : null,
             total_spent: 0,
             transaction_count: 0,
             loyalty_points: 0,
@@ -192,26 +214,18 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             deleted_at: null,
         };
 
-        await onRegisterCustomer(customerData);
-        setView('list');
+        try {
+            await onRegisterCustomer(customerData);
+            handleViewChange('list');
+        } catch (err) {
+            const message = err instanceof Error ? err.message : '';
+            if (message === 'DUPLICATE_TAX_NUMBER') {
+                setFormError(t('pos.customerForm.duplicateTaxNumber'));
+            }
+        }
     };
 
-    const newCustomerFormValid =
-        getNifValidationState(newCustomerForm.taxId) === 'valid' &&
-        newCustomerForm.address.trim().length > 0 &&
-        newCustomerForm.city.trim().length > 0 &&
-        newCustomerForm.postalCode.trim().length > 0 &&
-        (() => {
-            const rawCountry = newCustomerForm.country.trim();
-            const countryIso =
-                rawCountry.length === 0 || rawCountry.toLowerCase() === 'portugal'
-                    ? 'PT'
-                    : rawCountry.slice(0, 2).toUpperCase();
-            if (countryIso === 'PT') {
-                return /^\d{4}-\d{3}$/.test(newCustomerForm.postalCode.trim());
-            }
-            return true;
-        })();
+    const newCustomerFormValid = getNifValidationState(newCustomerForm.taxId) === 'valid';
 
     return (
         <BaseDialog
@@ -245,7 +259,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 ) : view === 'add' ? (
                     <div className="flex space-x-4">
                         <ActionButton
-                            onClick={() => setView('list')}
+                            onClick={() => handleViewChange('list')}
                             label={t('common.cancel') || 'Cancel'}
                             variant="secondary"
                             className="flex-1"
@@ -347,7 +361,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                     </p>
                                     {searchTerm.trim().length > 0 && (
                                         <ActionButton
-                                            onClick={() => setView('add')}
+                                            onClick={() => {
+                                                const fromSearch = normalizeTaxIdInput(searchTerm);
+                                                setNewCustomerForm({ ...initialFormState, taxId: fromSearch });
+                                                setFormError(null);
+                                                handleViewChange('add');
+                                            }}
                                             label={t('pos.addNewCustomer')}
                                         />
                                     )}
@@ -393,17 +412,6 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                     />
                                 </div>
                             </div>
-
-                            <InputField
-                                label="Phone"
-                                icon={Phone}
-                                type="tel"
-                                value={newCustomerForm.phone}
-                                onChange={(e) => handleFormChange('phone', e.target.value)}
-                                onClick={() => handleTextFieldClick('phone', true, true, 20)}
-                                className={activeField === 'phone' ? 'bg-blue-50 border-blue-500' : ''}
-                                placeholder={t('forms.phonePlaceholder')}
-                            />
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="md:col-span-2">

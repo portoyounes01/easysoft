@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
     Settings as SettingsIcon,
     Clock,
@@ -22,13 +22,18 @@ import { initializeLocalDatabase, transactionLocalService } from '../lib/localDa
 import { buildSaftAuditFileXml } from '../fiscal/saft/exportSaft';
 import { nextHashControlVersion } from '../fiscal/hashControl';
 import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
+import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
+import { isSystemAdministrator } from '../utils/systemAdmin';
 import { generateUUID } from '../utils/uuid';
 // import PrinterSetup from '../components/PrinterSetup';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 const Settings: React.FC = () => {
     const { settings, updateSettings, resetToDefaults, isLoading } = useSettings();
     const { employee } = useSupabaseAuth();
     const { t } = useTranslation();
+    const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
     const [activeTab, setActiveTab] = useState('security');
     const [pendingChanges, setPendingChanges] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -37,9 +42,35 @@ const Settings: React.FC = () => {
     const [saftBusy, setSaftBusy] = useState(false);
     const [saftMessage, setSaftMessage] = useState<string | null>(null);
     const [fiscalElectronMsg, setFiscalElectronMsg] = useState<string | null>(null);
-    const [lastFiscalInvoiceNo, setLastFiscalInvoiceNo] = useState<string | null>(null);
+    const [chainTips, setChainTips] = useState<Record<FiscalSeriesDocKey, string | null>>({
+        FS: null,
+        FT: null,
+        NC: null,
+    });
     const [keyRotationBusy, setKeyRotationBusy] = useState(false);
     const [keyRotationMessage, setKeyRotationMessage] = useState<string | null>(null);
+    const [seriesEditorKey, setSeriesEditorKey] = useState<FiscalSeriesDocKey>('FS');
+    const prevDefaultDocType = useRef(settings.receipt.defaultDocumentType);
+    const didInitSeriesEditor = useRef(false);
+
+    useEffect(() => {
+        const d = settings.receipt.defaultDocumentType;
+        if (!didInitSeriesEditor.current) {
+            didInitSeriesEditor.current = true;
+            setSeriesEditorKey(d === 'FATURA' ? 'FT' : 'FS');
+            prevDefaultDocType.current = d;
+            return;
+        }
+        if (prevDefaultDocType.current !== d) {
+            prevDefaultDocType.current = d;
+            setSeriesEditorKey(d === 'FATURA' ? 'FT' : 'FS');
+        }
+    }, [settings.receipt.defaultDocumentType]);
+
+    const seriesProfilesFingerprint = useMemo(
+        () => JSON.stringify(settings.receipt.seriesProfiles),
+        [settings.receipt.seriesProfiles]
+    );
 
     useEffect(() => {
         let cancelled = false;
@@ -47,28 +78,26 @@ const Settings: React.FC = () => {
             try {
                 await initializeLocalDatabase();
                 const now = new Date();
-                const sk = computeSeriesKey(settings.receipt, now);
-                const at = settings.receipt.atValidationCode.trim();
-                if (!at) {
-                    if (!cancelled) setLastFiscalInvoiceNo(null);
-                    return;
+                const next: Record<FiscalSeriesDocKey, string | null> = { FS: null, FT: null, NC: null };
+                const keys: FiscalSeriesDocKey[] = ['FS', 'FT', 'NC'];
+                for (const k of keys) {
+                    const prof = settings.receipt.seriesProfiles[k];
+                    const at = prof.atValidationCode.trim();
+                    if (!at) continue;
+                    const sk = computeSeriesKey(prof, now);
+                    const cs = buildChainScope(at, sk);
+                    const last = await transactionLocalService.getLastFiscalDocumentInChain(cs);
+                    next[k] = last?.invoice_no ?? null;
                 }
-                const cs = buildChainScope(at, sk);
-                const last = await transactionLocalService.getLastFiscalDocumentInChain(cs);
-                if (!cancelled) setLastFiscalInvoiceNo(last?.invoice_no ?? null);
+                if (!cancelled) setChainTips(next);
             } catch {
-                if (!cancelled) setLastFiscalInvoiceNo(null);
+                if (!cancelled) setChainTips({ FS: null, FT: null, NC: null });
             }
         })();
         return () => {
             cancelled = true;
         };
-    }, [
-        settings.receipt.atValidationCode,
-        settings.receipt.seriesPrefix,
-        settings.receipt.resetPolicy,
-        settings.receipt.numericWidth,
-    ]);
+    }, [seriesProfilesFingerprint]);
 
     // const [showPrinterSetup, setShowPrinterSetup] = useState(false);
     // const [printerStatus, setPrinterStatus] = useState<any>(null);
@@ -109,13 +138,27 @@ const Settings: React.FC = () => {
         [t]
     );
 
-    const handleSettingsChange = (category: string, field: string, value: any) => {
-        updateSettings({ [category]: { [field]: value } } as any);
+    const handleSettingsChange = (category: string, field: string, value: unknown) => {
+        updateSettings({ [category]: { [field]: value } } as Parameters<typeof updateSettings>[0]);
         setPendingChanges(true);
     };
 
+    const handleReceiptProfileChange = useCallback(
+        (key: FiscalSeriesDocKey, field: keyof ReceiptSeriesProfile, value: string | number | boolean | undefined) => {
+            updateSettings({
+                receipt: {
+                    seriesProfiles: {
+                        [key]: { [field]: value },
+                    },
+                },
+            } as Parameters<typeof updateSettings>[0]);
+            setPendingChanges(true);
+        },
+        [updateSettings]
+    );
+
     const handleRegisterKeyRotation = async () => {
-        if (employee?.role !== 'admin') {
+        if (!employee || !isSystemAdministrator(employee)) {
             return;
         }
         if (
@@ -256,9 +299,13 @@ const Settings: React.FC = () => {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-64">
+            <div
+                className="ds2-visual-scope flex min-h-64 w-full items-center justify-center"
+                style={visualStyle}
+                data-ds2-neutral={prefs.neutralFamilyId}
+            >
                 <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
                     <p className="text-gray-600">{t('settings.loading')}</p>
                 </div>
             </div>
@@ -266,7 +313,12 @@ const Settings: React.FC = () => {
     }
 
     return (
-        <div className="space-y-6">
+        <div
+            className="ds2-visual-scope min-h-0 w-full pb-6"
+            style={visualStyle}
+            data-ds2-neutral={prefs.neutralFamilyId}
+        >
+        <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -283,17 +335,19 @@ const Settings: React.FC = () => {
                     )}
 
                     <button
+                        type="button"
                         onClick={handleReset}
-                        className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold transition-all flex items-center space-x-2"
+                        className="ds2-control-radius-lg flex min-h-touch-sm items-center space-x-2 rounded-lg bg-gray-500 px-4 py-2 font-semibold text-white transition-all hover:bg-gray-600"
                     >
                         <RotateCcw className="w-4 h-4" />
                         <span>{t('settings.header.resetToDefaults')}</span>
                     </button>
 
                     <button
+                        type="button"
                         onClick={handleSave}
                         disabled={!pendingChanges || saveStatus === 'saving'}
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 text-white px-6 py-2 rounded-lg font-semibold transition-all flex items-center space-x-2"
+                        className="ds2-control-radius-lg flex min-h-touch-sm items-center space-x-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-2 font-semibold text-white transition-all hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500"
                     >
                         {saveStatus === 'saving' ? (
                             <>
@@ -317,16 +371,17 @@ const Settings: React.FC = () => {
 
             <div className="flex space-x-6">
                 {/* Sidebar Navigation */}
-                <div className="w-80 space-y-2">
+                <div className={`${layoutClasses.sidebarW} shrink-0 space-y-2`}>
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         return (
                             <button
+                                type="button"
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`w-full text-left p-4 rounded-xl transition-all duration-200 ${activeTab === tab.id
-                                    ? 'bg-blue-50 border-2 border-blue-200 text-blue-800'
-                                    : 'bg-white hover:bg-gray-50 border-2 border-gray-200 text-gray-700'
+                                className={`w-full rounded-xl p-4 text-left transition-all duration-200 ${activeTab === tab.id
+                                    ? 'border-2 border-blue-200 bg-blue-50 text-blue-800'
+                                    : 'border-2 border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                                     }`}
                             >
                                 <div className="flex items-center justify-between">
@@ -346,7 +401,7 @@ const Settings: React.FC = () => {
                 </div>
 
                 {/* Settings Content */}
-                <div className="flex-1 bg-white rounded-xl shadow-lg p-8">
+                <div className="flex-1 rounded-xl bg-white p-8 shadow-lg">
                     {/* Security & Auto-Logout Tab */}
                     {activeTab === 'security' && (
                         <div className="space-y-6">
@@ -746,6 +801,8 @@ const Settings: React.FC = () => {
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
                                             />
                                         </div>
+                                        {isSystemAdministrator(employee) ? (
+                                            <>
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.certificationNumber')}</label>
                                             <input
@@ -766,80 +823,19 @@ const Settings: React.FC = () => {
                                             />
                                             <p className="text-xs text-gray-500 mt-1">{t('settings.company.softwareCertHelp')}</p>
                                         </div>
+                                            </>
+                                        ) : (
+                                            <p className="text-sm text-gray-600 bg-white border border-slate-200 rounded-xl px-4 py-3">
+                                                {t('settings.systemAdminOnlyCert')}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
                                 <div className="p-6 bg-blue-50 rounded-xl border border-blue-200">
                                     <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('settings.company.receiptNumbering')}</h3>
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesForAT')}</label>
-                                            <input
-                                                type="text"
-                                                value={settings.receipt.series}
-                                                onChange={(e) => handleSettingsChange('receipt', 'series', e.target.value)}
-                                                placeholder={t('settings.company.seriesForATPlaceholder')}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            />
-                                            <p className="text-xs text-gray-500 mt-1">{t('settings.company.seriesForATHelp')}</p>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesDescription')}</label>
-                                            <input
-                                                type="text"
-                                                value={settings.receipt.seriesDescription ?? ''}
-                                                onChange={(e) => handleSettingsChange('receipt', 'seriesDescription', e.target.value)}
-                                                placeholder={t('settings.company.seriesDescriptionPlaceholder')}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            />
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesPrefix')}</label>
-                                                <input
-                                                    type="text"
-                                                    value={settings.receipt.seriesPrefix}
-                                                    onChange={(e) => handleSettingsChange('receipt', 'seriesPrefix', e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                />
-                                                <p className="text-xs text-amber-700 mt-1">{t('settings.company.seriesPrefixHelp')}</p>
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.numericWidth')}</label>
-                                                <input
-                                                    type="number"
-                                                    min={1}
-                                                    value={settings.receipt.numericWidth}
-                                                    onChange={(e) => handleSettingsChange('receipt', 'numericWidth', parseInt(e.target.value))}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.resetPolicy')}</label>
-                                                <select
-                                                    value={settings.receipt.resetPolicy}
-                                                    onChange={(e) => handleSettingsChange('receipt', 'resetPolicy', e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                >
-                                                    <option value="monthly">{t('settings.company.monthly')}</option>
-                                                    <option value="yearly">{t('settings.company.yearly')}</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.defaultDocumentType')}</label>
-                                                <select
-                                                    value={settings.receipt.defaultDocumentType}
-                                                    onChange={(e) => handleSettingsChange('receipt', 'defaultDocumentType', e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                >
-                                                    <option value="FATURA_SIMPLIFICADA">{t('settings.company.docTypeSimplified')}</option>
-                                                    <option value="FATURA">{t('settings.company.docTypeInvoice')}</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <p className="text-sm text-gray-600 mb-4">{t('settings.company.seriesPerDocTypeIntro')}</p>
+                                        <div className="space-y-6">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.counterLabel')}</label>
                                                 <input
@@ -849,35 +845,6 @@ const Settings: React.FC = () => {
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                                 />
                                             </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.atValidationCode')}</label>
-                                                <input
-                                                    type="text"
-                                                    value={settings.receipt.atValidationCode}
-                                                    onChange={(e) => handleSettingsChange('receipt', 'atValidationCode', e.target.value)}
-                                                    placeholder={t('settings.company.atValidationPlaceholder')}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                                />
-                                                <p className="text-xs text-gray-500 mt-1">{t('settings.company.atValidationHelp')}</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 min-h-touch">
-                                            <div>
-                                                <h4 className="font-medium text-gray-800">{t('settings.company.seriesDiscontinuedTitle')}</h4>
-                                                <p className="text-sm text-gray-600">{t('settings.company.seriesDiscontinuedDesc')}</p>
-                                            </div>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    className="sr-only peer"
-                                                    checked={Boolean(settings.receipt.seriesDiscontinued)}
-                                                    onChange={(e) => handleSettingsChange('receipt', 'seriesDiscontinued', e.target.checked)}
-                                                />
-                                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                            </label>
-                                        </div>
-
                                         <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 min-h-touch">
                                             <div>
                                                 <h4 className="font-medium text-gray-800">{t('settings.company.printDuplicateTitle')}</h4>
@@ -894,20 +861,187 @@ const Settings: React.FC = () => {
                                             </label>
                                         </div>
 
-                                        {/* Current Series Preview */}
-                                        <div className="p-4 bg-white rounded-lg border border-gray-200">
-                                            <h4 className="font-medium text-gray-800 mb-2">{t('settings.company.seriesStatus')}</h4>
-                                            <p className="text-sm text-gray-600">{t('settings.company.lastSeriesKey')} <strong>{settings.receipt.lastSeriesKey || '—'}</strong></p>
-                                            <p className="text-sm text-gray-600">{t('settings.company.currentNumber')} <strong>{settings.receipt.currentNumber}</strong></p>
-                                            <p className="text-sm text-gray-600">{t('settings.company.lastDocInChain')} <strong>{lastFiscalInvoiceNo ?? '—'}</strong></p>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.configureSeriesDocType')}</label>
+                                            <select
+                                                value={seriesEditorKey}
+                                                onChange={(e) => {
+                                                    const v = e.target.value as FiscalSeriesDocKey;
+                                                    setSeriesEditorKey(v);
+                                                    if (v === 'FS') {
+                                                        handleSettingsChange('receipt', 'defaultDocumentType', 'FATURA_SIMPLIFICADA');
+                                                    } else if (v === 'FT') {
+                                                        handleSettingsChange('receipt', 'defaultDocumentType', 'FATURA');
+                                                    }
+                                                }}
+                                                className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                                            >
+                                                <option value="FS">{t('settings.company.seriesHeading.FS')}</option>
+                                                <option value="FT">{t('settings.company.seriesHeading.FT')}</option>
+                                                <option value="NC">{t('settings.company.seriesHeading.NC')}</option>
+                                            </select>
+                                            {seriesEditorKey === 'NC' ? (
+                                                <p className="text-sm text-gray-600 mt-2">{t('settings.company.ncSeriesEditorHint')}</p>
+                                            ) : (
+                                                <p className="text-sm text-gray-600 mt-2">
+                                                    {t('settings.company.defaultCheckoutDoc')}{' '}
+                                                    <strong>
+                                                        {settings.receipt.defaultDocumentType === 'FATURA'
+                                                            ? t('settings.company.docTypeInvoice')
+                                                            : t('settings.company.docTypeSimplified')}
+                                                    </strong>
+                                                </p>
+                                            )}
                                         </div>
+
+                                        {(() => {
+                                            const docKey = seriesEditorKey;
+                                            const prof = settings.receipt.seriesProfiles[docKey];
+                                            return (
+                                                <div className="p-4 bg-white rounded-xl border border-blue-100 space-y-4">
+                                                    <h4 className="font-semibold text-xl text-gray-800">
+                                                        {t(`settings.company.seriesHeading.${docKey}`)}
+                                                    </h4>
+                                                    {docKey === 'NC' && (
+                                                        <p className="text-sm text-gray-600">{t('settings.company.ncSeriesNote')}</p>
+                                                    )}
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesForAT')}</label>
+                                                        <input
+                                                            type="text"
+                                                            value={prof.series}
+                                                            onChange={(e) => handleReceiptProfileChange(docKey, 'series', e.target.value)}
+                                                            placeholder={t('settings.company.seriesForATPlaceholder')}
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                                                        />
+                                                        <p className="text-xs text-gray-500 mt-1">{t('settings.company.seriesForATHelp')}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesDescription')}</label>
+                                                        <input
+                                                            type="text"
+                                                            value={prof.seriesDescription ?? ''}
+                                                            onChange={(e) => handleReceiptProfileChange(docKey, 'seriesDescription', e.target.value)}
+                                                            placeholder={t('settings.company.seriesDescriptionPlaceholder')}
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                                                        />
+                                                    </div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesPrefix')}</label>
+                                                            <input
+                                                                type="text"
+                                                                value={prof.seriesPrefix}
+                                                                onChange={(e) => handleReceiptProfileChange(docKey, 'seriesPrefix', e.target.value)}
+                                                                className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                                                            />
+                                                            <p className="text-xs text-amber-700 mt-1">{t('settings.company.seriesPrefixHelp')}</p>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.numericWidth')}</label>
+                                                            <input
+                                                                type="number"
+                                                                min={1}
+                                                                value={prof.numericWidth}
+                                                                onChange={(e) =>
+                                                                    handleReceiptProfileChange(
+                                                                        docKey,
+                                                                        'numericWidth',
+                                                                        parseInt(e.target.value, 10)
+                                                                    )
+                                                                }
+                                                                className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesStartDate')}</label>
+                                                            <input
+                                                                type="date"
+                                                                value={prof.seriesStartDate?.trim() || ''}
+                                                                onChange={(e) =>
+                                                                    handleReceiptProfileChange(
+                                                                        docKey,
+                                                                        'seriesStartDate',
+                                                                        e.target.value || undefined
+                                                                    )
+                                                                }
+                                                                className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesEndDate')}</label>
+                                                            <input
+                                                                type="date"
+                                                                value={prof.seriesEndDate?.trim() || ''}
+                                                                onChange={(e) =>
+                                                                    handleReceiptProfileChange(
+                                                                        docKey,
+                                                                        'seriesEndDate',
+                                                                        e.target.value || undefined
+                                                                    )
+                                                                }
+                                                                className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 -mt-2">{t('settings.company.seriesDateHelp')}</p>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.atValidationCode')}</label>
+                                                        <input
+                                                            type="text"
+                                                            value={prof.atValidationCode}
+                                                            onChange={(e) =>
+                                                                handleReceiptProfileChange(docKey, 'atValidationCode', e.target.value)
+                                                            }
+                                                            placeholder={t('settings.company.atValidationPlaceholder')}
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                                                        />
+                                                        <p className="text-xs text-gray-500 mt-1">{t('settings.company.atValidationHelp')}</p>
+                                                    </div>
+                                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-gray-200 min-h-touch">
+                                                        <div>
+                                                            <h4 className="font-medium text-gray-800">{t('settings.company.seriesDiscontinuedTitle')}</h4>
+                                                            <p className="text-sm text-gray-600">{t('settings.company.seriesDiscontinuedDesc')}</p>
+                                                        </div>
+                                                        <label className="relative inline-flex items-center cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="sr-only peer"
+                                                                checked={Boolean(prof.seriesDiscontinued)}
+                                                                onChange={(e) =>
+                                                                    handleReceiptProfileChange(docKey, 'seriesDiscontinued', e.target.checked)
+                                                                }
+                                                            />
+                                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                        </label>
+                                                    </div>
+                                                    <div className="p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+                                                        <h4 className="font-medium text-gray-800 mb-2">{t('settings.company.seriesStatus')}</h4>
+                                                        <p className="text-sm text-gray-600">
+                                                            {t('settings.company.lastSeriesKey')}{' '}
+                                                            <strong>{prof.lastSeriesKey || '—'}</strong>
+                                                        </p>
+                                                        <p className="text-sm text-gray-600">
+                                                            {t('settings.company.currentNumber')}{' '}
+                                                            <strong>{prof.currentNumber}</strong>
+                                                        </p>
+                                                        <p className="text-sm text-gray-600">
+                                                            {t('settings.company.lastDocInChain')}{' '}
+                                                            <strong>{chainTips[docKey] ?? '—'}</strong>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
 
                                 <div className="p-6 bg-emerald-50 rounded-xl border border-emerald-200 md:col-span-2">
                                     <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('settings.fiscalAT.sectionTitle')}</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="p-4 bg-white rounded-lg border border-gray-200 space-y-3 md:col-span-2">
+                                    {isSystemAdministrator(employee) ? (
+                                        <div className="p-4 bg-white rounded-lg border border-gray-200 space-y-3 mb-6">
                                             <div className="flex items-start gap-3">
                                                 <Key className="w-6 h-6 text-emerald-700 shrink-0 mt-1" aria-hidden />
                                                 <div>
@@ -923,40 +1057,39 @@ const Settings: React.FC = () => {
                                                     </p>
                                                 </div>
                                             </div>
-                                            {employee?.role === 'admin' && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void handleRegisterKeyRotation()}
-                                                    disabled={keyRotationBusy}
-                                                    className="inline-flex items-center justify-center gap-2 min-h-touch px-6 rounded-2xl font-semibold text-xl text-white bg-orange-500 hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    {keyRotationBusy
-                                                        ? t('settings.fiscalAT.keyRotationBusy')
-                                                        : t('settings.fiscalAT.keyRotationButton')}
-                                                </button>
-                                            )}
-                                            {employee?.role !== 'admin' && (
-                                                <p className="text-sm text-gray-500">
-                                                    {t('settings.fiscalAT.keyRotationAdminOnly')}
-                                                </p>
-                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleRegisterKeyRotation()}
+                                                disabled={keyRotationBusy}
+                                                className="inline-flex items-center justify-center gap-2 min-h-touch px-6 rounded-2xl font-semibold text-xl text-white bg-orange-500 hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {keyRotationBusy
+                                                    ? t('settings.fiscalAT.keyRotationBusy')
+                                                    : t('settings.fiscalAT.keyRotationButton')}
+                                            </button>
                                             {keyRotationMessage && (
                                                 <p className="text-sm text-gray-800 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
                                                     {keyRotationMessage}
                                                 </p>
                                             )}
                                         </div>
-                                        <div className="space-y-4">
-                                            {import.meta.env.DEV && (
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.fiscalAT.hashDevLabel')}</label>
-                                                <input
-                                                    type="text"
-                                                    value={settings.fiscal.hashControlVersion}
-                                                    onChange={(e) => handleSettingsChange('fiscal', 'hashControlVersion', e.target.value)}
-                                                    className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-xl"
-                                                />
-                                            </div>
+                                    ) : (
+                                        <p className="text-sm text-gray-600 bg-white border border-emerald-200 rounded-xl px-4 py-3 mb-6">
+                                            {t('settings.fiscalAT.sysAdminOnlySection')}
+                                        </p>
+                                    )}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-4 md:col-span-2">
+                                            {import.meta.env.DEV && isSystemAdministrator(employee) && (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.fiscalAT.hashDevLabel')}</label>
+                                                    <input
+                                                        type="text"
+                                                        value={settings.fiscal.hashControlVersion}
+                                                        onChange={(e) => handleSettingsChange('fiscal', 'hashControlVersion', e.target.value)}
+                                                        className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-xl"
+                                                    />
+                                                </div>
                                             )}
                                             <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 min-h-touch">
                                                 <div>
@@ -974,30 +1107,32 @@ const Settings: React.FC = () => {
                                                 </label>
                                             </div>
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                {t('settings.fiscalAT.pemLabel')}
-                                            </label>
-                                            <textarea
-                                                value={settings.fiscal.privateKeyPem || ''}
-                                                onChange={(e) => handleSettingsChange('fiscal', 'privateKeyPem', e.target.value)}
-                                                placeholder={t('settings.fiscalAT.pemPlaceholder')}
-                                                rows={6}
-                                                className="w-full font-mono text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                            />
-                                            {typeof window !== 'undefined' && window.electronAPI?.fiscal && (
-                                                <button
-                                                    type="button"
-                                                    onClick={handleStoreFiscalPemInElectron}
-                                                    className="mt-3 w-full md:w-auto min-h-touch px-6 rounded-2xl font-semibold text-xl text-white bg-green-500 hover:bg-green-600 transition-colors duration-200"
-                                                >
-                                                    {t('settings.fiscalAT.electronStoreButton')}
-                                                </button>
-                                            )}
-                                            {fiscalElectronMsg && (
-                                                <p className="mt-2 text-sm text-gray-700">{fiscalElectronMsg}</p>
-                                            )}
-                                        </div>
+                                        {isSystemAdministrator(employee) && (
+                                            <div className="md:col-span-2">
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    {t('settings.fiscalAT.pemLabel')}
+                                                </label>
+                                                <textarea
+                                                    value={settings.fiscal.privateKeyPem || ''}
+                                                    onChange={(e) => handleSettingsChange('fiscal', 'privateKeyPem', e.target.value)}
+                                                    placeholder={t('settings.fiscalAT.pemPlaceholder')}
+                                                    rows={6}
+                                                    className="w-full font-mono text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                                />
+                                                {typeof window !== 'undefined' && window.electronAPI?.fiscal && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleStoreFiscalPemInElectron}
+                                                        className="mt-3 w-full md:w-auto min-h-touch px-6 rounded-2xl font-semibold text-xl text-white bg-green-500 hover:bg-green-600 transition-colors duration-200"
+                                                    >
+                                                        {t('settings.fiscalAT.electronStoreButton')}
+                                                    </button>
+                                                )}
+                                                {fiscalElectronMsg && (
+                                                    <p className="mt-2 text-sm text-gray-700">{fiscalElectronMsg}</p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="mt-8 pt-6 border-t border-emerald-200">
@@ -1044,6 +1179,7 @@ const Settings: React.FC = () => {
                     )}
                 </div>
             </div>
+        </div>
         </div>
     );
 };

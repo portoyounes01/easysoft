@@ -97,9 +97,13 @@ export type FiscalCheckoutItemBase = Omit<
     'id' | 'transaction_id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'
 >;
 
+import type { ReceiptSeriesProfile } from './receiptSeriesProfile';
+
 /** Input to atomic fiscal persistence (sequential + hash + insert in one IndexedDB transaction). */
 export interface FiscalCheckoutAtomicPayload {
     settings: SystemSettings;
+    /** Série efectiva para prefixo, largura e número corrente (pode ser derivada do documento original em NC). */
+    receiptProfile: ReceiptSeriesProfile;
     certificationMode: CertificationMode;
     transactionDate: string;
     transactionTime: string;

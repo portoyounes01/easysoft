@@ -136,7 +136,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({ open, total, cashReceived
                             <span className="text-gray-900 font-semibold" style={{ fontSize: '2vh' }}>€{(cashReceived || 0).toFixed(2)}</span>
                         </div>
                         <div className="flex items-center justify-between" style={{ marginTop: '1.2vh' }}>
-                            <span className="text-gray-600" style={{ fontSize: '1.6vh' }}>Balance</span>
+                            <span className="text-gray-600" style={{ fontSize: '1.6vh' }}>{t('pos.changeDue')}</span>
                             <span className={`font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`} style={{ fontSize: '2vh' }}>
                                 {balance >= 0 ? `€${balance.toFixed(2)}` : `-€${Math.abs(balance).toFixed(2)}`}
                             </span>

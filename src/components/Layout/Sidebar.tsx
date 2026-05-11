@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  LayoutDashboard,
+  // LayoutDashboard,
   ShoppingCart,
   Package,
   Users,
@@ -46,7 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
 
   const menuItems = useMemo(
     () => [
-      { path: '/', icon: LayoutDashboard, labelKey: 'sidebar.menu.dashboard', permission: 'dashboard' },
+      // { path: '/', icon: LayoutDashboard, labelKey: 'sidebar.menu.dashboard', permission: 'dashboard' },
       { path: '/pos', icon: ShoppingCart, labelKey: 'sidebar.menu.pos', permission: 'sales' },
       { path: '/products', icon: Package, labelKey: 'sidebar.menu.products', permission: 'inventory' },
       { path: '/categories', icon: Tag, labelKey: 'sidebar.menu.categories', permission: 'inventory' },

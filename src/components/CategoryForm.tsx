@@ -1,14 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
-    X,
-    Save,
     AlertCircle,
     Tag,
-    Palette,
     Hash,
     ToggleLeft,
     ToggleRight,
-    Loader2,
     Coffee,
     Milk,
     Cake,
@@ -27,6 +23,8 @@ import {
     LocalCategory
 } from '../types/supabase';
 import VirtualKeyboard from './VirtualKeyboard';
+import { BaseDialog } from './ui/BaseDialog';
+import { ActionButton } from './ui/ActionButton';
 
 interface CategoryFormProps {
     isOpen: boolean;
@@ -43,30 +41,30 @@ interface FormErrors {
 
 // Available icons for categories
 const AVAILABLE_ICONS = [
-    { name: 'coffee', icon: Coffee, label: 'Coffee' },
-    { name: 'milk', icon: Milk, label: 'Dairy' },
-    { name: 'cake', icon: Cake, label: 'Bakery' },
-    { name: 'candy', icon: Candy, label: 'Confectionery' },
-    { name: 'package', icon: Package, label: 'General' },
-    { name: 'utensils', icon: Utensils, label: 'Food' },
-    { name: 'shirt', icon: Shirt, label: 'Clothing' },
-    { name: 'book', icon: Book, label: 'Books' },
-    { name: 'gift', icon: Gift, label: 'Gifts' },
-    { name: 'heart', icon: Heart, label: 'Health' }
+    { name: 'coffee', icon: Coffee, labelKey: 'categories.form.icons.coffee' },
+    { name: 'milk', icon: Milk, labelKey: 'categories.form.icons.milk' },
+    { name: 'cake', icon: Cake, labelKey: 'categories.form.icons.cake' },
+    { name: 'candy', icon: Candy, labelKey: 'categories.form.icons.candy' },
+    { name: 'package', icon: Package, labelKey: 'categories.form.icons.package' },
+    { name: 'utensils', icon: Utensils, labelKey: 'categories.form.icons.utensils' },
+    { name: 'shirt', icon: Shirt, labelKey: 'categories.form.icons.shirt' },
+    { name: 'book', icon: Book, labelKey: 'categories.form.icons.book' },
+    { name: 'gift', icon: Gift, labelKey: 'categories.form.icons.gift' },
+    { name: 'heart', icon: Heart, labelKey: 'categories.form.icons.heart' }
 ];
 
 // Available color gradients
 const AVAILABLE_COLORS = [
-    { value: 'from-amber-500 to-orange-600', label: 'Orange', preview: 'bg-gradient-to-r from-amber-500 to-orange-600' },
-    { value: 'from-blue-500 to-cyan-600', label: 'Blue', preview: 'bg-gradient-to-r from-blue-500 to-cyan-600' },
-    { value: 'from-yellow-500 to-amber-600', label: 'Yellow', preview: 'bg-gradient-to-r from-yellow-500 to-amber-600' },
-    { value: 'from-pink-500 to-rose-600', label: 'Pink', preview: 'bg-gradient-to-r from-pink-500 to-rose-600' },
-    { value: 'from-green-500 to-emerald-600', label: 'Green', preview: 'bg-gradient-to-r from-green-500 to-emerald-600' },
-    { value: 'from-purple-500 to-violet-600', label: 'Purple', preview: 'bg-gradient-to-r from-purple-500 to-violet-600' },
-    { value: 'from-red-500 to-pink-600', label: 'Red', preview: 'bg-gradient-to-r from-red-500 to-pink-600' },
-    { value: 'from-indigo-500 to-blue-600', label: 'Indigo', preview: 'bg-gradient-to-r from-indigo-500 to-blue-600' },
-    { value: 'from-teal-500 to-cyan-600', label: 'Teal', preview: 'bg-gradient-to-r from-teal-500 to-cyan-600' },
-    { value: 'from-gray-500 to-gray-600', label: 'Gray', preview: 'bg-gradient-to-r from-gray-500 to-gray-600' }
+    { value: 'from-amber-500 to-orange-600', labelKey: 'categories.form.colors.orange', preview: 'bg-gradient-to-r from-amber-500 to-orange-600' },
+    { value: 'from-blue-500 to-cyan-600', labelKey: 'categories.form.colors.blue', preview: 'bg-gradient-to-r from-blue-500 to-cyan-600' },
+    { value: 'from-yellow-500 to-amber-600', labelKey: 'categories.form.colors.yellow', preview: 'bg-gradient-to-r from-yellow-500 to-amber-600' },
+    { value: 'from-pink-500 to-rose-600', labelKey: 'categories.form.colors.pink', preview: 'bg-gradient-to-r from-pink-500 to-rose-600' },
+    { value: 'from-green-500 to-emerald-600', labelKey: 'categories.form.colors.green', preview: 'bg-gradient-to-r from-green-500 to-emerald-600' },
+    { value: 'from-purple-500 to-violet-600', labelKey: 'categories.form.colors.purple', preview: 'bg-gradient-to-r from-purple-500 to-violet-600' },
+    { value: 'from-red-500 to-pink-600', labelKey: 'categories.form.colors.red', preview: 'bg-gradient-to-r from-red-500 to-pink-600' },
+    { value: 'from-indigo-500 to-blue-600', labelKey: 'categories.form.colors.indigo', preview: 'bg-gradient-to-r from-indigo-500 to-blue-600' },
+    { value: 'from-teal-500 to-cyan-600', labelKey: 'categories.form.colors.teal', preview: 'bg-gradient-to-r from-teal-500 to-cyan-600' },
+    { value: 'from-gray-500 to-gray-600', labelKey: 'categories.form.colors.gray', preview: 'bg-gradient-to-r from-gray-500 to-gray-600' }
 ];
 
 const CategoryForm: React.FC<CategoryFormProps> = ({
@@ -99,10 +97,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     const [activeField, setActiveField] = useState<string>('');
 
     // Get next display order for new categories
-    const getNextDisplayOrder = (): number => {
+    const getNextDisplayOrder = useCallback((): number => {
         if (categories.length === 0) return 1;
         return Math.max(...categories.map(cat => cat.display_order)) + 1;
-    };
+    }, [categories]);
 
     // Populate form when editing
     useEffect(() => {
@@ -127,14 +125,14 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             });
         }
         setErrors({});
-    }, [category, isOpen, categories]);
+    }, [category, isOpen, categories, getNextDisplayOrder]);
 
     // Validation
     const validateForm = (): boolean => {
         const newErrors: FormErrors = {};
 
         if (!formData.name.trim()) {
-            newErrors.name = 'Category name is required';
+            newErrors.name = t('categories.form.errors.nameRequired');
         }
 
         // Check for duplicate names (excluding current category when editing)
@@ -144,15 +142,15 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
             !cat.deleted_at
         );
         if (duplicateName) {
-            newErrors.name = 'Category name already exists';
+            newErrors.name = t('categories.form.errors.nameExists');
         }
 
         if (!formData.color) {
-            newErrors.color = 'Color is required';
+            newErrors.color = t('categories.form.errors.colorRequired');
         }
 
         if (!formData.icon) {
-            newErrors.icon = 'Icon is required';
+            newErrors.icon = t('categories.form.errors.iconRequired');
         }
 
         setErrors(newErrors);
@@ -160,8 +158,8 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     };
 
     // Handle form submission
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+        e?.preventDefault();
 
         if (!validateForm()) return;
 
@@ -186,7 +184,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     };
 
     // Handle field changes
-    const handleFieldChange = (field: keyof CategoryFormData, value: any) => {
+    const handleFieldChange = (field: keyof CategoryFormData, value: CategoryFormData[keyof CategoryFormData]) => {
         setFormData(prev => ({
             ...prev,
             [field]: value
@@ -221,40 +219,52 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     if (!isOpen) return null;
 
     return (
-        <>
-            {/* Backdrop */}
-            <div className="fixed inset-0 bg-black bg-opacity-30 z-40" onClick={onClose} />
-
-            {/* Side Panel */}
-            <div className="fixed top-0 right-0 h-full w-full max-w-2xl bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white p-4 flex items-center justify-between flex-shrink-0">
-                    <div className="flex items-center space-x-3">
-                        <Tag className="w-6 h-6" />
-                        <h2 className="text-lg font-bold">
-                            {category ? 'Edit Category' : 'Create New Category'}
-                        </h2>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                        {/* Keyboard Toggle Button */}
+        <BaseDialog
+            open={isOpen}
+            onClose={onClose}
+            title={category ? t('categories.form.editTitle') : t('categories.form.createTitle')}
+            width="50vw"
+            height="82vh"
+            footer={
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div className="text-xs text-gray-600">
+                            {t('categories.form.requiredFieldsNote')}
+                        </div>
                         <button
+                            type="button"
                             onClick={() => setShowKeyboard(!showKeyboard)}
-                            className={`p-2 rounded-lg transition-colors ${showKeyboard ? 'bg-white bg-opacity-20' : 'hover:bg-white hover:bg-opacity-20'
-                                }`}
+                            className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${showKeyboard ? 'bg-gray-300 text-gray-900' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
                             title={t('forms.toggleKeyboard')}
                         >
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm5.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L10.586 10 8.293 7.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                        </button>
-                        <button
-                            onClick={onClose}
-                            className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
-                            title={t('forms.closePanel')}
-                        >
-                            <X className="w-5 h-5" />
+                            {t('forms.keyboard')}
                         </button>
                     </div>
+                    <div className="flex space-x-4">
+                        <ActionButton
+                            type="button"
+                            onClick={onClose}
+                            label={t('categories.form.cancel')}
+                            variant="secondary"
+                            className="flex-1"
+                            style={{ height: '5vh', fontSize: '1.6vh' }}
+                        />
+                        <ActionButton
+                            type="button"
+                            onClick={handleSubmit}
+                            disabled={isSubmitting || isLoading}
+                            label={isSubmitting ? t('categories.form.saving') : category ? t('categories.form.update') : t('categories.form.create')}
+                            className="flex-1"
+                            style={{ height: '5vh', fontSize: '1.6vh' }}
+                        />
+                    </div>
+                </div>
+            }
+        >
+            <div className="flex h-full flex-col">
+                <div className="flex items-center gap-3 px-6 pt-5 text-gray-700">
+                    <Tag className="h-5 w-5 text-gray-500" />
+                    <span className="text-sm font-medium">{formData.name || t('categories.addCategory')}</span>
                 </div>
 
                 {/* Form - Scrollable Content */}
@@ -266,7 +276,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                             {/* Category Name */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Category Name *
+                                    {t('categories.form.nameLabel')}
                                 </label>
                                 <div className="relative">
                                     <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -291,7 +301,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                             {/* Description */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Description
+                                    {t('categories.form.description')}
                                 </label>
                                 <textarea
                                     value={formData.description}
@@ -312,7 +322,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                             {/* Color Selection */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Color Gradient *
+                                    {t('categories.form.colorGradient')}
                                 </label>
                                 <div className="grid grid-cols-2 gap-2">
                                     {AVAILABLE_COLORS.map((colorOption) => (
@@ -326,7 +336,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                                 }`}
                                         >
                                             <div className={`w-full h-6 rounded ${colorOption.preview} mb-2`}></div>
-                                            <span className="text-xs font-medium text-gray-700">{colorOption.label}</span>
+                                            <span className="text-xs font-medium text-gray-700">{t(colorOption.labelKey)}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -341,7 +351,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                             {/* Icon Selection */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Category Icon *
+                                    {t('categories.form.categoryIcon')}
                                 </label>
                                 <div className="grid grid-cols-5 gap-2">
                                     {AVAILABLE_ICONS.map((iconOption) => {
@@ -355,10 +365,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                                         ? 'border-blue-500 bg-blue-50 text-blue-600'
                                                         : 'border-gray-300 hover:border-gray-400 text-gray-600'
                                                     }`}
-                                                title={iconOption.label}
+                                                title={t(iconOption.labelKey)}
                                             >
                                                 <IconComponent className="w-6 h-6" />
-                                                <span className="text-xs font-medium">{iconOption.label}</span>
+                                                <span className="text-xs font-medium">{t(iconOption.labelKey)}</span>
                                             </button>
                                         );
                                     })}
@@ -374,13 +384,13 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                             {/* Preview */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Preview
+                                    {t('categories.form.preview')}
                                 </label>
                                 <div className={`w-full p-4 rounded-lg bg-gradient-to-r ${formData.color} text-white flex items-center space-x-3`}>
                                     {React.createElement(getSelectedIcon(), { className: "w-8 h-8" })}
                                     <div>
-                                        <h4 className="font-semibold text-lg">{formData.name || 'Category Name'}</h4>
-                                        <p className="text-sm opacity-90">{formData.description || 'Category description'}</p>
+                                        <h4 className="font-semibold text-lg">{formData.name || t('categories.form.previewName')}</h4>
+                                        <p className="text-sm opacity-90">{formData.description || t('categories.form.previewDescription')}</p>
                                     </div>
                                 </div>
                             </div>
@@ -388,12 +398,12 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                         {/* Settings */}
                         <div className="space-y-4">
-                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">Settings</h3>
+                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('categories.form.settingsHeading')}</h3>
 
                             {/* Display Order */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Display Order
+                                    {t('categories.form.displayOrder')}
                                 </label>
                                 <div className="relative">
                                     <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -407,14 +417,14 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                     />
                                 </div>
                                 <p className="mt-1 text-xs text-gray-500">
-                                    Lower numbers appear first in category lists
+                                    {t('categories.form.displayOrderHint')}
                                 </p>
                             </div>
 
                             {/* Active Status */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Category Status
+                                    {t('categories.form.statusLabel')}
                                 </label>
                                 <button
                                     type="button"
@@ -429,51 +439,16 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                     ) : (
                                         <ToggleLeft className="w-6 h-6 text-red-600" />
                                     )}
-                                    <span>{formData.is_active ? 'Active' : 'Inactive'}</span>
+                                    <span>{formData.is_active ? t('common.active') : t('common.inactive')}</span>
                                 </button>
                             </div>
                         </div>
                     </form>
                 </div>
 
-                {/* Footer */}
-                <div className="bg-gray-50 px-4 py-3 border-t flex-shrink-0">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="text-xs text-gray-600">
-                            * Required fields
-                        </div>
-                    </div>
-                    <div className="flex space-x-3">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleSubmit}
-                            disabled={isSubmitting || isLoading}
-                            className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>{t('categories.form.saving')}</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Save className="w-4 h-4" />
-                                    <span>{category ? 'Update' : 'Create'}</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </div>
-
                 {/* Virtual Keyboard */}
                 {showKeyboard && (
-                    <div className="fixed top-0 h-full w-96 bg-white shadow-2xl z-45 border-r border-gray-200" style={{ right: '42rem' }}>
+                    <div className="border-t border-gray-200 bg-white">
                         <VirtualKeyboard
                             isOpen={showKeyboard}
                             onClose={() => setShowKeyboard(false)}
@@ -484,7 +459,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                     </div>
                 )}
             </div>
-        </>
+        </BaseDialog>
     );
 };
 

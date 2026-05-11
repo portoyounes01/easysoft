@@ -86,9 +86,9 @@ const PermissionRoute: React.FC<{
 const getRoleBasedRedirect = (role: string): string => {
   switch (role) {
     case 'admin':
-      return '/'; // Dashboard - full overview for admins
+      return '/pos'; // POS is the main post-login workspace
     case 'manager':
-      return '/reports'; // Business intelligence for managers
+      return '/pos'; // POS is the main post-login workspace
     case 'cashier':
       return '/pos'; // Point of sale for cashiers
     default:
