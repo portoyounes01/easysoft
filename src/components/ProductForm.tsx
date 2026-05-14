@@ -21,6 +21,7 @@ import ImageUploader from './ImageUploader';
 import { supabase } from '../lib/supabase';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { DEFAULT_GENERAL_CATEGORY_ID } from '../services/productService';
 import { BaseDialog } from './ui/BaseDialog';
 import { ActionButton } from './ui/ActionButton';
 
@@ -43,6 +44,8 @@ interface FormErrors {
     image_url?: string;
 }
 
+type ProductFormState = Omit<ProductFormData, 'track_stock'>;
+
 const ProductForm: React.FC<ProductFormProps> = ({
     isOpen,
     onClose,
@@ -57,7 +60,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         isLoading
     } = useProducts();
 
-    const [formData, setFormData] = useState<ProductFormData>({
+    const [formData, setFormData] = useState<ProductFormState>({
         name: '',
         description: '',
         sku: '',
@@ -67,7 +70,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
         iva_rate: 0.23, // Default to 23% (standard rate)
         stock: 0,
         min_stock: 0,
-        track_stock: true,
         image_url: '',
         supplier: '',
         location: '',
@@ -85,8 +87,21 @@ const ProductForm: React.FC<ProductFormProps> = ({
     const { settings } = useSettings();
     const currencySymbol = settings.pos.currencySymbol;
 
-    // Populate form when editing
+    const activeCategories = useMemo(
+        () => categories.filter(cat => cat.is_active && !cat.deleted_at),
+        [categories]
+    );
+
+    const defaultCategoryIdForNewProduct = useMemo(() => {
+        const preferred = activeCategories.find((c) => c.id === DEFAULT_GENERAL_CATEGORY_ID);
+        return preferred?.id ?? activeCategories[0]?.id ?? '';
+    }, [activeCategories]);
+
+    // Populate form when dialog opens or edited product changes
     useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
         if (product) {
             setFormData({
                 name: product.name,
@@ -98,14 +113,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 iva_rate: product.iva_rate,
                 stock: product.stock,
                 min_stock: product.min_stock,
-                track_stock: product.track_stock,
                 image_url: product.image_url || '',
                 supplier: product.supplier || '',
                 location: product.location || '',
                 is_active: product.is_active
             });
         } else {
-            // Reset form for new product
             setFormData({
                 name: '',
                 description: '',
@@ -116,7 +129,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 iva_rate: 0.23,
                 stock: 0,
                 min_stock: 0,
-                track_stock: true,
                 image_url: '',
                 supplier: '',
                 location: '',
@@ -125,6 +137,19 @@ const ProductForm: React.FC<ProductFormProps> = ({
         }
         setErrors({});
     }, [product, isOpen]);
+
+    // When creating a product, fill default category once it exists (e.g. after async catalog load)
+    useEffect(() => {
+        if (!isOpen || product) {
+            return;
+        }
+        setFormData((prev) => {
+            if (prev.category_id || !defaultCategoryIdForNewProduct) {
+                return prev;
+            }
+            return { ...prev, category_id: defaultCategoryIdForNewProduct };
+        });
+    }, [isOpen, product, defaultCategoryIdForNewProduct]);
 
     // Validation
     const validateForm = (): boolean => {
@@ -165,10 +190,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
         setIsSubmitting(true);
         try {
-            // Add barcode field for service layer compatibility
-            const productDataWithBarcode = {
+            const productFormPayload: ProductFormData = {
                 ...formData,
-                barcode: product?.barcode || null // Preserve existing barcode when editing, null for new products
+                track_stock: settings.pos.trackInventory
+            };
+            const productDataWithBarcode = {
+                ...productFormPayload,
+                barcode: product?.barcode || null
             };
 
             if (product) {
@@ -195,8 +223,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 }
             } else {
                 // Create new product
-                console.log('ProductForm: Creating product with category_id:', productDataWithBarcode.category_id);
-                await createProduct(productDataWithBarcode);
+                console.log('ProductForm: Creating product with category_id:', productFormPayload.category_id);
+                await createProduct(productFormPayload);
                 // Process pending deletes after successful create
                 if (pendingDeletes.length > 0) {
                     const { data: { session } } = await supabase.auth.getSession();
@@ -261,7 +289,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     };
 
     // Handle field changes
-    const handleFieldChange = (field: keyof ProductFormData, value: ProductFormData[keyof ProductFormData]) => {
+    const handleFieldChange = (field: keyof ProductFormState, value: ProductFormState[keyof ProductFormState]) => {
         setFormData(prev => ({
             ...prev,
             [field]: value
@@ -292,20 +320,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
     // Handle virtual keyboard input
     const handleKeyboardInput = (value: string) => {
-        handleFieldChange(activeField as keyof ProductFormData, value);
+        handleFieldChange(activeField as keyof ProductFormState, value);
     };
 
     // Handle virtual numpad input
     const handleNumpadInput = (value: string) => {
         const numValue = parseFloat(value) || 0;
-        handleFieldChange(activeField as keyof ProductFormData, numValue);
+        handleFieldChange(activeField as keyof ProductFormState, numValue);
     };
-
-    // Get active categories for dropdown
-    const activeCategories = useMemo(
-        () => categories.filter(cat => cat.is_active && !cat.deleted_at),
-        [categories]
-    );
 
     // Auto-generate SKU based on category and product name
     const generateSKU = useCallback((categoryId: string, productName: string): string => {
@@ -585,26 +607,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     placeholder={t('forms.intPlaceholder')}
                                 />
                             </div>
-
-                            {/* Track Stock Toggle */}
-                            <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    {t('products.form.trackInventory')}
-                                </label>
-                                <button
-                                    type="button"
-                                    onClick={() => handleFieldChange('track_stock', !formData.track_stock)}
-                                    className={`flex items-center space-x-2 px-4 py-3 min-h-touch rounded-[10px] border transition-colors w-full ${formData.track_stock ? 'ds2-toggle-on' : 'ds2-toggle-off'
-                                        }`}
-                                >
-                                    {formData.track_stock ? (
-                                        <ToggleRight className="w-6 h-6 shrink-0" />
-                                    ) : (
-                                        <ToggleLeft className="w-6 h-6 shrink-0 opacity-90" />
-                                    )}
-                                    <span>{formData.track_stock ? t('common.enabled') : t('common.disabled')}</span>
-                                </button>
-                            </div>
                         </div>
 
                         {/* Additional Information */}
@@ -716,7 +718,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             isOpen={showKeyboard}
                             onClose={() => setShowKeyboard(false)}
                             onConfirm={handleKeyboardInput}
-                            initialValue={formData[activeField as keyof ProductFormData]?.toString() || ''}
+                            initialValue={formData[activeField as keyof ProductFormState]?.toString() || ''}
                             title={t('forms.enterField', { field: activeField.replace('_', ' ') })}
                         />
                     </div>
@@ -730,7 +732,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             onClose={() => setShowNumpad(false)}
                             onConfirm={handleNumpadInput}
                             title={t('forms.enterField', { field: activeField.replace('_', ' ') })}
-                            initialValue={formData[activeField as keyof ProductFormData]?.toString() || '0'}
+                            initialValue={formData[activeField as keyof ProductFormState]?.toString() || '0'}
                             allowDecimal={activeField === 'price' || activeField === 'cost' || activeField === 'iva_rate'}
                         />
                     </div>

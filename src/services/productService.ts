@@ -1,6 +1,7 @@
 import { supabase, connectionStatus } from '../lib/supabase';
 import { localDb } from '../lib/localDatabase';
 import { generateUUID } from '../utils/uuid';
+import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage';
 import {
     ProductRow,
     CategoryRow,
@@ -12,6 +13,9 @@ import {
     calculateTaxAmount,
     calculatePriceWithTax
 } from '../types/supabase';
+
+/** Stable UUID for the fallback category when the local catalog has none (server-safe). */
+export const DEFAULT_GENERAL_CATEGORY_ID = '00000001-0001-4001-8001-000000000001';
 
 // =====================================================
 // CATEGORY SERVICE
@@ -51,6 +55,55 @@ export class CategoryService {
         });
 
         return id;
+    }
+
+    /**
+     * When there are no active (non-deleted) categories, inserts or restores "Geral" so products can be added without a manual setup step.
+     */
+    async ensureDefaultGeneralCategory(): Promise<void> {
+        const anyActive = await localDb.categories.filter((c) => c.deleted_at === null).first();
+        if (anyActive) {
+            return;
+        }
+
+        const now = new Date();
+        const existing = await localDb.categories.get(DEFAULT_GENERAL_CATEGORY_ID);
+
+        if (existing) {
+            const updatePayload: Partial<LocalCategory> = {
+                deleted_at: null,
+                is_active: true,
+                updated_at: now,
+                needs_push: true,
+            };
+            await localDb.transaction('rw', [localDb.categories, localDb.categorySyncQueue], async () => {
+                await localDb.categories.update(DEFAULT_GENERAL_CATEGORY_ID, updatePayload);
+                await this.queueCategoryOperation('UPDATE', DEFAULT_GENERAL_CATEGORY_ID, updatePayload);
+            });
+            return;
+        }
+
+        const category: LocalCategory = {
+            id: DEFAULT_GENERAL_CATEGORY_ID,
+            name: 'Geral',
+            description: null,
+            color: 'from-gray-500 to-slate-600',
+            icon: 'folder',
+            display_order: 0,
+            is_active: true,
+            created_at: now,
+            updated_at: now,
+            last_synced_at: null,
+            deleted_at: null,
+            needs_push: true,
+            is_conflicted: false,
+        };
+
+        await localDb.transaction('rw', [localDb.categories, localDb.categorySyncQueue], async () => {
+            // Use put (upsert) so concurrent loadData / Strict Mode races cannot throw ConstraintError on duplicate PK.
+            await localDb.categories.put(category);
+            await this.queueCategoryOperation('CREATE', DEFAULT_GENERAL_CATEGORY_ID, category);
+        });
     }
 
     // Update category
@@ -180,6 +233,7 @@ export class ProductService {
             .filter(prod =>
                 prod.deleted_at === null &&
                 prod.is_active &&
+                readPosTrackInventoryFromStorage() &&
                 prod.track_stock &&
                 prod.stock <= prod.min_stock
             )
@@ -269,7 +323,7 @@ export class ProductService {
     // Update product stock (for POS transactions)
     async updateProductStock(id: string, quantityChange: number): Promise<void> {
         const product = await this.getProductById(id);
-        if (!product || !product.track_stock) return;
+        if (!product || !readPosTrackInventoryFromStorage() || !product.track_stock) return;
 
         const newStock = Math.max(0, product.stock + quantityChange);
         await this.updateProduct(id, { stock: newStock });

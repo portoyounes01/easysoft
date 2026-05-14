@@ -1,8 +1,14 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-    /** Dev-only PKCS#8/PKCS#1 PEM; inlined at build — never use production AT keys here */
+    /** PKCS#8/PKCS#1 PEM when Electron secure key is not used; inlined at build — avoid real secrets in client bundles */
     readonly VITE_FISCAL_RSA_PRIVATE_KEY_PEM?: string;
+    /** AT product certification phrase (e.g. n/AT) — not stored in app settings */
+    readonly VITE_FISCAL_CERTIFICATION_NUMBER?: string;
+    /** AT software certification number — not stored in app settings */
+    readonly VITE_FISCAL_SOFTWARE_CERT_NUMBER?: string;
+    /** HashControl version for new fiscal documents — not stored in app settings */
+    readonly VITE_FISCAL_HASH_CONTROL_VERSION?: string;
     /** Comma-separated employee_number values treated as system administrator (Definições sensíveis). Default: ADMIN001 */
     readonly VITE_SYSTEM_ADMIN_EMPLOYEE_NUMBERS?: string;
 }

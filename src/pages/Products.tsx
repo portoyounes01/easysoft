@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useProducts } from '../contexts/ProductsContext';
 import { LocalProduct, calculateStockStatus } from '../types/supabase';
+import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage';
 import ProductForm from '../components/ProductForm';
 import { useTranslation } from 'react-i18next';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
@@ -23,6 +24,7 @@ import '../styles/design-system-2-scope.css';
 
 const ProductsInner: React.FC = () => {
   const { products, categories, isLoading, error, searchProducts, deleteProduct } = useProducts();
+  const catalogTracksInventory = readPosTrackInventoryFromStorage();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
 
   const { t } = useTranslation();
@@ -425,7 +427,7 @@ const ProductsInner: React.FC = () => {
                     {categoryIdToName.get(product.category_id || '') || t('products.table.noCategory')}
                   </td>
                   <td className="border-r border-gray-100 px-4 py-4 text-gray-900">
-                    {product.track_stock ? (
+                    {catalogTracksInventory && product.track_stock ? (
                       <span className="font-medium tabular-nums">{product.stock}</span>
                     ) : (
                       <span className="text-gray-400">—</span>
@@ -770,10 +772,10 @@ const ProductsInner: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-neutral-50 rounded-xl p-4">
                       <span className="block text-sm font-medium text-gray-500 mb-1">
-                        {t('products.viewModal.trackStock')}
+                        {t('settings.pos.trackInventory')}
                       </span>
                       <p className="text-gray-900 font-semibold">
-                        {viewingProduct.track_stock ? t('products.viewModal.yes') : t('products.viewModal.no')}
+                        {catalogTracksInventory ? t('products.viewModal.yes') : t('products.viewModal.no')}
                       </p>
                     </div>
                     <div className="bg-neutral-50 rounded-xl p-4">

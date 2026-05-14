@@ -40,7 +40,7 @@ describe('OrderSummaryPanel', () => {
         expect(onClearAll).toHaveBeenCalled();
     });
 
-    test('tapping cart line calls onDecrementCartLine with product id', () => {
+    test('cart qty minus calls onDecrementCartLine with product id', () => {
         const onDecrement = vi.fn();
         render(
             <OrderSummaryPanel
@@ -51,10 +51,27 @@ describe('OrderSummaryPanel', () => {
             />
         );
 
-        const lineButtons = screen.getAllByRole('button', { name: /pos\.decrementCartLine/i });
-        expect(lineButtons.length).toBe(2);
-        fireEvent.click(lineButtons[0]);
+        const minusButtons = screen.getAllByRole('button', { name: /pos\.cartQtyDecrease/i });
+        expect(minusButtons.length).toBe(2);
+        fireEvent.click(minusButtons[0]);
         expect(onDecrement).toHaveBeenCalledWith('1');
+    });
+
+    test('cart qty plus calls onIncrementCartLine with product id', () => {
+        const onIncrement = vi.fn();
+        render(
+            <OrderSummaryPanel
+                items={items}
+                onClearAll={() => { }}
+                onCustomer={() => { }}
+                onIncrementCartLine={onIncrement}
+            />
+        );
+
+        const plusButtons = screen.getAllByRole('button', { name: /pos\.cartQtyIncrease/i });
+        expect(plusButtons.length).toBe(2);
+        fireEvent.click(plusButtons[1]);
+        expect(onIncrement).toHaveBeenCalledWith('2');
     });
 });
 

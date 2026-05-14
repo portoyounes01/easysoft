@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildSaftAuditFileXml, xmlEscape } from '../../src/fiscal/saft/exportSaft';
 import type { SystemSettings } from '../../src/contexts/SettingsContext';
+import { defaultSeriesProfiles } from '../../src/fiscal/receiptSeriesProfile';
 import type { LocalFiscalDocument, LocalTransaction, LocalTransactionItem } from '../../src/types/supabase';
 
 const minimalSettings = {
@@ -8,6 +9,7 @@ const minimalSettings = {
     pos: {
         currencySymbol: '€',
         taxRate: 0.23,
+        trackInventory: true,
         allowNegativeStock: false,
         autoClearCart: { enabled: false, timeoutMinutes: 0 },
     },
@@ -26,16 +28,24 @@ const minimalSettings = {
         softwareCertNumber: '999',
     },
     receipt: {
-        series: 'S1',
-        seriesPrefix: 'A',
-        numericWidth: 4,
-        resetPolicy: 'yearly' as const,
-        lastSeriesKey: '',
-        currentNumber: 1,
         defaultDocumentType: 'FATURA_SIMPLIFICADA' as const,
         counterLabel: 'B1',
-        atValidationCode: 'ATCODE1',
-        seriesDiscontinued: false,
+        seriesProfiles: (() => {
+            const p = defaultSeriesProfiles();
+            const slice = {
+                series: 'A',
+                numericWidth: 4,
+                resetPolicy: 'yearly' as const,
+                lastSeriesKey: '',
+                currentNumber: 1,
+                atValidationCode: 'ATCODE1',
+                seriesDiscontinued: false,
+            };
+            p.FS = { ...p.FS, ...slice };
+            p.FT = { ...p.FT, ...slice };
+            p.NC = { ...p.NC, ...slice };
+            return p;
+        })(),
     },
     fiscal: { hashControlVersion: '1', trainingMode: false },
 } as unknown as SystemSettings;
@@ -152,7 +162,7 @@ describe('SAF-T export', () => {
         expect(xml.trim().endsWith('</AuditFile>')).toBe(true);
     });
 
-    it('emits RG under Payments, not SalesInvoices', async () => {
+    it('emits RE under Payments, not SalesInvoices', async () => {
         const rgFiscal: LocalFiscalDocument = {
             id: 'fid-rg',
             transaction_id: 'tid-rg',
@@ -160,8 +170,8 @@ describe('SAF-T export', () => {
             series_key: 'k',
             at_validation_code: 'ATCODE1',
             sequential_number: 2,
-            invoice_no: 'RG A/0002',
-            invoice_type: 'RG',
+            invoice_no: 'RE A/0002',
+            invoice_type: 'RE',
             settled_invoice_no: 'FS A/0001',
             settled_invoice_date: '2026-04-10',
             invoice_date: '2026-04-11',
@@ -211,7 +221,7 @@ describe('SAF-T export', () => {
 
         const txRg: LocalTransaction & { items: LocalTransactionItem[] } = {
             id: 'tid-rg',
-            transaction_number: 'RG A/0002',
+            transaction_number: 'RE A/0002',
             employee_id: 'e1',
             employee_name: 'Emp',
             customer_id: null,
@@ -227,7 +237,7 @@ describe('SAF-T export', () => {
             change_given: 0,
             status: 'completed',
             notes: 'Recibo referente FS A/0001',
-            receipt_number: 'RG A/0002',
+            receipt_number: 'RE A/0002',
             fiscal_document_id: 'fid-rg',
             fiscal_metadata_json: '{}',
             created_at: new Date(),
@@ -249,7 +259,7 @@ describe('SAF-T export', () => {
         });
 
         expect(xml).toContain('<Payments>');
-        expect(xml).toContain('<PaymentType>RG</PaymentType>');
+        expect(xml).toContain('<PaymentType>RE</PaymentType>');
         expect(xml).toContain('<OriginatingON>FS A/0001</OriginatingON>');
         expect(xml).toContain('<SalesInvoices>');
         expect(xml).toMatch(/<SalesInvoices>[\s\S]*?<NumberOfEntries>0<\/NumberOfEntries>/);

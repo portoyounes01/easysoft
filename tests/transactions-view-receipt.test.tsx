@@ -50,10 +50,6 @@ vi.mock('../src/fiscal/creditNoteCheckout', () => ({
     runFiscalCreditNoteForTransaction: vi.fn(),
 }));
 
-vi.mock('../src/fiscal/reciboCheckout', () => ({
-    runFiscalReciboForTransaction: vi.fn(),
-}));
-
 import { transactionLocalService } from '../src/lib/localDatabase';
 
 // Mock transactionService

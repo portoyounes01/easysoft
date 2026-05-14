@@ -1,4 +1,5 @@
 import type { SystemSettings } from '../contexts/SettingsContext';
+import { getFiscalRsaPrivateKeyPemFromEnv } from '../utils/fiscalEnvDefaults';
 import { HASH_FIELD_SEPARATOR, formatGrossTotalForHash } from './spec';
 import {
     derContainsEcPrivateOid,
@@ -188,10 +189,10 @@ export async function createSignerFromSettings(settings: SystemSettings): Promis
         }
     }
 
-    const pem = settings.fiscal?.privateKeyPem?.trim();
+    const pem = getFiscalRsaPrivateKeyPemFromEnv()?.trim() || settings.fiscal?.privateKeyPem?.trim();
     if (!pem) {
         throw new Error(
-            'Chave privada fiscal em falta: configure "Chave privada (PEM PKCS#8)" nas Definições ou guarde a chave no armazenamento seguro (Electron).'
+            'Chave privada fiscal em falta: defina VITE_FISCAL_RSA_PRIVATE_KEY_PEM no ambiente ou guarde a chave no armazenamento seguro (Electron).'
         );
     }
     return WebCryptoRsaSha1Signer.fromPkcs8Pem(pem);

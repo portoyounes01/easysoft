@@ -4,6 +4,7 @@ import { runFiscalCheckout } from '../../src/fiscal/checkoutOrchestrator';
 import { WebCryptoRsaSha1Signer } from '../../src/fiscal/signing';
 import type { SystemSettings } from '../../src/contexts/SettingsContext';
 import type { LocalProduct } from '../../src/types/supabase';
+import { defaultSeriesProfiles } from '../../src/fiscal/receiptSeriesProfile';
 
 function makeSettings(privateKeyPem: string): SystemSettings {
     return {
@@ -11,6 +12,7 @@ function makeSettings(privateKeyPem: string): SystemSettings {
         pos: {
             currencySymbol: '€',
             taxRate: 0.23,
+            trackInventory: true,
             allowNegativeStock: false,
             autoClearCart: { enabled: false, timeoutMinutes: 0 },
         },
@@ -24,17 +26,24 @@ function makeSettings(privateKeyPem: string): SystemSettings {
             softwareCertNumber: '1',
         },
         receipt: {
-            series: 'S',
-            seriesDescription: '',
-            seriesPrefix: 'T',
-            numericWidth: 4,
-            resetPolicy: 'monthly',
-            lastSeriesKey: '',
-            currentNumber: 999,
             defaultDocumentType: 'FATURA_SIMPLIFICADA',
             counterLabel: 'B1',
-            atValidationCode: 'ATCODE1',
-            seriesDiscontinued: false,
+            seriesProfiles: (() => {
+                const p = defaultSeriesProfiles();
+                const slice = {
+                    series: 'T',
+                    numericWidth: 4,
+                    resetPolicy: 'monthly' as const,
+                    lastSeriesKey: '',
+                    currentNumber: 999,
+                    atValidationCode: 'ATCODE1',
+                    seriesDiscontinued: false,
+                };
+                p.FS = { ...p.FS, ...slice };
+                p.FT = { ...p.FT, ...slice };
+                p.NC = { ...p.NC, ...slice };
+                return p;
+            })(),
         },
         fiscal: { hashControlVersion: '1', trainingMode: true, privateKeyPem },
     } as SystemSettings;

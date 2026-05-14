@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 
-import { mergeFiscalPemFromEnv } from '../utils/fiscalEnvDefaults';
+import { applyFiscalSecretsFromEnv, settingsWithoutPersistedFiscalSecrets } from '../utils/fiscalEnvDefaults';
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { defaultSeriesProfiles, normalizeStoredSeriesProfile } from '../fiscal/receiptSeriesProfile';
 
@@ -24,10 +24,11 @@ function mergeReceiptBranch(
     prev: SystemSettings['receipt'],
     patch?: DeepPartial<SystemSettings['receipt']>
 ): SystemSettings['receipt'] {
-    if (!patch) return prev;
+    if (!patch) return { ...prev, printDuplicateOnIssue: false };
     return {
         ...prev,
         ...patch,
+        printDuplicateOnIssue: false,
         seriesProfiles: mergeSeriesProfilesDeep(prev.seriesProfiles, patch.seriesProfiles),
     };
 }
@@ -44,10 +45,7 @@ function migrateStoredReceipt(raw: unknown, defaults: SystemSettings['receipt'])
                     ? r.defaultDocumentType
                     : defaults.defaultDocumentType,
             counterLabel: typeof r.counterLabel === 'string' ? r.counterLabel : defaults.counterLabel,
-            printDuplicateOnIssue:
-                typeof r.printDuplicateOnIssue === 'boolean'
-                    ? r.printDuplicateOnIssue
-                    : defaults.printDuplicateOnIssue,
+            printDuplicateOnIssue: false,
             seriesProfiles: {
                 FS: normalizeStoredSeriesProfile(
                     { ...defaults.seriesProfiles.FS, ...sp.FS } as Parameters<typeof normalizeStoredSeriesProfile>[0],
@@ -72,7 +70,6 @@ function migrateStoredReceipt(raw: unknown, defaults: SystemSettings['receipt'])
                 typeof r.seriesDescription === 'string'
                     ? r.seriesDescription
                     : defaults.seriesProfiles.FS.seriesDescription,
-            seriesPrefix: String(r.seriesPrefix ?? defaults.seriesProfiles.FS.seriesPrefix),
             numericWidth:
                 typeof r.numericWidth === 'number' && Number.isFinite(r.numericWidth)
                     ? r.numericWidth
@@ -90,6 +87,7 @@ function migrateStoredReceipt(raw: unknown, defaults: SystemSettings['receipt'])
             atValidationCodeIssuedAt:
                 typeof r.atValidationCodeIssuedAt === 'string' ? r.atValidationCodeIssuedAt : undefined,
             seriesDiscontinued: Boolean(r.seriesDiscontinued),
+            ...(typeof r.seriesPrefix === 'string' ? { seriesPrefix: r.seriesPrefix } : {}),
         },
         defaults.seriesProfiles.FS
     );
@@ -100,10 +98,7 @@ function migrateStoredReceipt(raw: unknown, defaults: SystemSettings['receipt'])
                 ? r.defaultDocumentType
                 : defaults.defaultDocumentType,
         counterLabel: typeof r.counterLabel === 'string' ? r.counterLabel : defaults.counterLabel,
-        printDuplicateOnIssue:
-            typeof r.printDuplicateOnIssue === 'boolean'
-                ? r.printDuplicateOnIssue
-                : defaults.printDuplicateOnIssue,
+        printDuplicateOnIssue: false,
         seriesProfiles: { FS: { ...dup }, FT: { ...dup }, NC: { ...dup } },
     };
 }
@@ -118,6 +113,8 @@ export interface SystemSettings {
     pos: {
         currencySymbol: string;
         taxRate: number;
+        /** When false, sales do not change stock levels and POS does not enforce stock limits. */
+        trackInventory: boolean;
         allowNegativeStock: boolean;
         autoClearCart: {
             enabled: boolean;
@@ -165,6 +162,20 @@ export type DeepPartial<T> = {
     [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
 };
 
+/** Strip AT secrets from partial updates — values come only from env via applyFiscalSecretsFromEnv on load. */
+function sanitizeSettingsUpdatePatch(patch: DeepPartial<SystemSettings>): DeepPartial<SystemSettings> {
+    const next: DeepPartial<SystemSettings> = { ...patch };
+    if (patch.company) {
+        const { certificationNumber: _cn, softwareCertNumber: _sn, ...companyRest } = patch.company;
+        next.company = companyRest as DeepPartial<SystemSettings['company']>;
+    }
+    if (patch.fiscal) {
+        const { privateKeyPem: _pem, hashControlVersion: _hc, ...fiscalRest } = patch.fiscal;
+        next.fiscal = fiscalRest as DeepPartial<SystemSettings['fiscal']>;
+    }
+    return next;
+}
+
 interface SettingsState {
     settings: SystemSettings;
     isLoading: boolean;
@@ -185,6 +196,7 @@ const defaultSettings: SystemSettings = {
     pos: {
         currencySymbol: '€',
         taxRate: 0.23,
+        trackInventory: true,
         allowNegativeStock: false,
         autoClearCart: {
             enabled: false,
@@ -197,24 +209,22 @@ const defaultSettings: SystemSettings = {
         compactMode: false,
     },
     company: {
-        name: 'Your Company Lda',
-        address: 'Your Address, 123',
+        name: 'Nome da Empresa',
+        address: 'Morada',
         postalCode: '1000-001',
         city: 'Lisboa',
         taxNumber: '000000000',
         phone: '',
         email: '',
-        slogan: 'Your slogan here',
-        softwareInfo: 'Software ZSRest - www.zsrest.com',
-        certificationNumber: '196/AT',
-        softwareCertNumber: 'PTR-A-001', // Placeholder - AT software certification
+        slogan: 'Slogan',
+        softwareInfo: '',
     },
     receipt: {
         defaultDocumentType: 'FATURA_SIMPLIFICADA',
         counterLabel: 'BALCÃO 1',
         /** Fatura simplificada, fatura completa, e série NC (registo AT); emissão de NC continua a cadeia do documento original. */
         seriesProfiles: defaultSeriesProfiles(),
-        printDuplicateOnIssue: true,
+        printDuplicateOnIssue: false,
     },
     fiscal: {
         hashControlVersion: '1',
@@ -293,52 +303,56 @@ const cloneDefaultSettings = (): SystemSettings =>
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(settingsReducer, {
-        settings: mergeFiscalPemFromEnv(cloneDefaultSettings()),
+        settings: applyFiscalSecretsFromEnv(settingsWithoutPersistedFiscalSecrets(cloneDefaultSettings())),
         isLoading: true,
     });
 
     const updateSettings = (newSettings: DeepPartial<SystemSettings>) => {
-        dispatch({ type: 'UPDATE_SETTINGS', payload: newSettings });
+        const patch = sanitizeSettingsUpdatePatch(newSettings);
+        dispatch({ type: 'UPDATE_SETTINGS', payload: patch });
 
         // Save to localStorage
         const updatedSettings = {
             ...state.settings,
-            ...newSettings,
+            ...patch,
             // Deep merge for nested objects
             autoLogout: {
                 ...state.settings.autoLogout,
-                ...(newSettings.autoLogout || {}),
+                ...(patch.autoLogout || {}),
             },
             pos: {
                 ...state.settings.pos,
-                ...(newSettings.pos || {}),
+                ...(patch.pos || {}),
                 autoClearCart: {
                     ...state.settings.pos.autoClearCart,
-                    ...(newSettings.pos?.autoClearCart || {}),
+                    ...(patch.pos?.autoClearCart || {}),
                 },
             },
             display: {
                 ...state.settings.display,
-                ...(newSettings.display || {}),
+                ...(patch.display || {}),
             },
             company: {
                 ...state.settings.company,
-                ...(newSettings.company || {}),
+                ...(patch.company || {}),
             },
-            receipt: mergeReceiptBranch(state.settings.receipt, newSettings.receipt),
+            receipt: mergeReceiptBranch(state.settings.receipt, patch.receipt),
             fiscal: {
                 ...state.settings.fiscal,
-                ...(newSettings.fiscal || {}),
+                ...(patch.fiscal || {}),
             },
         };
 
-        localStorage.setItem('pos_system_settings', JSON.stringify(updatedSettings));
+        localStorage.setItem(
+            'pos_system_settings',
+            JSON.stringify(settingsWithoutPersistedFiscalSecrets(updatedSettings))
+        );
     };
 
     const resetToDefaults = () => {
-        const next = mergeFiscalPemFromEnv(cloneDefaultSettings());
+        const next = applyFiscalSecretsFromEnv(settingsWithoutPersistedFiscalSecrets(cloneDefaultSettings()));
         dispatch({ type: 'LOAD_SETTINGS', payload: next });
-        localStorage.setItem('pos_system_settings', JSON.stringify(next));
+        localStorage.setItem('pos_system_settings', JSON.stringify(settingsWithoutPersistedFiscalSecrets(next)));
     };
 
     useEffect(() => {
@@ -378,13 +392,22 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                             ...(parsedSettings.fiscal || {}),
                         },
                     };
-                    dispatch({ type: 'LOAD_SETTINGS', payload: mergeFiscalPemFromEnv(mergedSettings) });
+                    dispatch({
+                        type: 'LOAD_SETTINGS',
+                        payload: applyFiscalSecretsFromEnv(settingsWithoutPersistedFiscalSecrets(mergedSettings)),
+                    });
                 } else {
-                    dispatch({ type: 'LOAD_SETTINGS', payload: mergeFiscalPemFromEnv(cloneDefaultSettings()) });
+                    dispatch({
+                        type: 'LOAD_SETTINGS',
+                        payload: applyFiscalSecretsFromEnv(settingsWithoutPersistedFiscalSecrets(cloneDefaultSettings())),
+                    });
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
-                dispatch({ type: 'LOAD_SETTINGS', payload: mergeFiscalPemFromEnv(cloneDefaultSettings()) });
+                dispatch({
+                    type: 'LOAD_SETTINGS',
+                    payload: applyFiscalSecretsFromEnv(settingsWithoutPersistedFiscalSecrets(cloneDefaultSettings())),
+                });
             }
         };
 

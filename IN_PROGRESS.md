@@ -1,3 +1,56 @@
+## Track inventory — global POS setting (2026-05-14)
+
+- **`SettingsContext` / Definições → POS:** novo **`pos.trackInventory`** (predefinição `true`); persistido em **`localStorage`** com o resto das definições.
+- **`ProductForm`:** removido o toggle por produto; ao gravar, **`track_stock`** vem de **`settings.pos.trackInventory`**.
+- **Comportamento:** `readPosTrackInventoryFromStorage()` + **`product.track_stock`** em stock no checkout, low-stock e `calculateStockStatus`; **`POS.tsx`** ignora limites de stock quando o catálogo não controla inventário ou o produto tem **`track_stock`** falso.
+- **`src/utils/posSettingsStorage.ts`**, **`Products.tsx`** (lista e modal leem o storage porque **`ProductsProvider`** está acima de **`SettingsProvider`**).
+- **Testes fiscais:** objetos **`SystemSettings`** com **`trackInventory: true`**.
+
+## Settings — fiscal env info panels + duplicado na emissão (2026-05-14)
+
+- Removidos os avisos na página Definições sobre certificação AT / chave RSA / HashControl (variáveis `VITE_*`); essa informação mantém-se apenas em `.env.example` / documentação de deploy.
+- Removido o toggle «Imprimir duplicado na emissão»; **`printDuplicateOnIssue`** fica sempre **`false`** (merge + migração + defeito). No POS já não se agenda segundo recibo «Duplicado» após pagamento (continua disponível a 2.ª via pelo histórico).
+
+## Transactions expanded row — i18n + DS2 actions (2026-05-06)
+
+- **`src/pages/Transactions.tsx`:** Second-copy control uses **`t('transactions.receipt.secondCopy')`** (replaces hardcoded Portuguese). All four actions (**view receipt**, second copy, **NC**, **download**) use **`AdminActionButton`** with shared **`rowActionBtn`** (`ds2-control-radius-lg`, **`min-h-touch`**, touch-sized icons). NC keeps **orange/amber** functional gradient via class override; **`isLoading`** on issue. **Download** implements **`handleDownloadTransaction`** (JSON export + anchor download); previously had no **`onClick`**.
+
+## Settings séries — nome = segmento antes de `/`; número atual editável (2026-05-14)
+
+- **Removido** `seriesPrefix` do modelo; o texto antes de `/` no recibo é **`series`** (nome da série) em cada perfil **FS / FT / NC**. Migração legada em `normalizeStoredSeriesProfile` / `SettingsContext`.
+- **Definições → séries:** **`currentNumber`** editável (rótulo `currentSequentialNumber` / ajuda i18n). Defeito **`currentNumber: 0`** → primeira emissão na cadeia usa sequencial **1** (antes 999 → primeira **1000**).
+- **Testes fiscais** atualizados: `seriesProfiles` + `series` em `checkoutNegativeGuards`, `atomicSequential`, `creditNoteCheckout`, `saftExport`; expectativa SAF-T **`<PaymentType>RE</PaymentType>`** quando o documento persistido é `invoice_type: 'RE'` (export usa o tipo tal como gravado).
+
+## Transactions — no payment receipt RG/RE issuance (2026-05-14)
+
+- **Removed** “recibo de pagamento” / RG issuance from **`Transactions.tsx`** (button, handler, `canIssueRecibo`, `runFiscalReciboForTransaction` import).
+- **Credit note (NC)** eligibility restricted to fiscal types **FT** and **FS** only (dropped FR from that gate).
+- **Deleted** **`src/fiscal/reciboCheckout.ts`** (unused entry point). **`hasReciboForOriginalTransaction`** kept for NC guards / legacy rows.
+- **i18n:** removed `transactions.recibo.*` and `transactions.list.issueRecibo` (EN/PT).
+
+## Fiscal AT secrets via env only (2026-05-14)
+
+- **Removed from Settings UI:** certification number, software certification number (AT), HashControl display/editing, PEM textarea, key rotation control, Electron “paste PEM then store” flow.
+- **`src/utils/fiscalEnvDefaults.ts`:** `applyFiscalSecretsFromEnv`, `settingsWithoutPersistedFiscalSecrets`; env vars `VITE_FISCAL_CERTIFICATION_NUMBER`, `VITE_FISCAL_SOFTWARE_CERT_NUMBER`, `VITE_FISCAL_HASH_CONTROL_VERSION`, existing `VITE_FISCAL_RSA_PRIVATE_KEY_PEM`.
+- **`SettingsContext`:** strips secrets before `localStorage`; sanitizes update patches so secrets cannot be set via `updateSettings`; load path applies env overlay.
+- **`createSignerFromSettings`:** error text points to env PEM; Electron secure key still preferred when present.
+- **`.env.example`**, **`vite-env.d.ts`**, **`tests/fiscal-env-defaults.test.ts`**, **`Layout.tsx`** dev banner removed; **i18n** notices on Company & Fiscal tab.
+
+## Customers admin page — list / edit / soft-delete (2026-05-12)
+
+- **`src/pages/Customers.tsx`:** DS2-scoped table + toolbar (search, sort, status filter, pagination) aligned with **`Products.tsx`**; row actions View / Edit / Delete ( **`customerLocalService.deleteCustomer`** ); **`initializeLocalDatabase`** before **`getAllCustomers`**.
+- **`src/components/CustomerForm.tsx`:** Create/update via **`customerLocalService`**, NIF + PT postal validation consistent with **`CustomerDialog`**; duplicate NIF blocked.
+- **Routing / nav:** **`App.tsx`** `/customers` under **`inventory`** permission; **`Sidebar`** link **`sidebar.menu.customers`** ( **`Contact`** icon).
+- **i18n:** **`customers.*`** strings (EN + PT).
+- **Tests:** **`tests/customersPage.test.tsx`**.
+
+## Produtos — categoria "Geral" por defeito (2026-05-11)
+
+- **`CategoryService.ensureDefaultGeneralCategory`:** se não existir nenhuma categoria (não apagada), cria ou reativa **"Geral"** com id UUID fixo (`DEFAULT_GENERAL_CATEGORY_ID`) para sync Supabase. Inserção usa **`put`** em vez de **`add`** para evitar `ConstraintError` em chamadas paralelas (ex.: Strict Mode / duplo mount).
+- **`POS.tsx`:** `handleDecrementCartLine` ligado ao **`OrderSummaryPanel`** via **`updateQuantity`** (remove linha quando qty passa a 0).
+- **`ProductsContext.loadData`:** chama ensure antes de ler o catálogo.
+- **`ProductForm`:** pré-seleciona essa categoria (ou a primeira ativa) ao criar produto, sem reescrever o formulário quando o catálogo carrega tarde.
+
 ## Settings — system admin gates + séries FS / FT / NC (2026-05-11)
 
 - **Empresa:** `Número de Certificação` e certificação de software (AT) só com `isSystemAdministrator` (nº de funcionário em `VITE_SYSTEM_ADMIN_EMPLOYEE_NUMBERS`, defeito `ADMIN001`).

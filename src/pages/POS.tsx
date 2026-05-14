@@ -102,6 +102,9 @@ const POSInner: React.FC = () => {
 
   // Stock validation helper function
   const canAddToCart = (product: LocalProduct, requestedQuantity = 1): boolean => {
+    if (!settings.pos.trackInventory || !product.track_stock) {
+      return true;
+    }
     // If negative stock is allowed, always allow
     if (settings.pos.allowNegativeStock) {
       return true;
@@ -124,6 +127,22 @@ const POSInner: React.FC = () => {
       addToCart(product, quantity);
     }
   };
+
+  const handleIncrementCartLine = useCallback(
+    (productId: string) => {
+      const line = cart.find(item => item.product.id === productId);
+      if (!line) return;
+      if (!settings.pos.trackInventory || !line.product.track_stock) {
+        addToCart(line.product, 1);
+        return;
+      }
+      if (!settings.pos.allowNegativeStock && line.quantity >= line.product.stock) {
+        return;
+      }
+      addToCart(line.product, 1);
+    },
+    [cart, addToCart, settings.pos.allowNegativeStock, settings.pos.trackInventory]
+  );
 
   const handleDecrementCartLine = useCallback(
     (productId: string) => {
@@ -755,9 +774,18 @@ const POSInner: React.FC = () => {
 
       {/* Right Order Summary Panel (DEBUG 30/40/30) */}
       <OrderSummaryPanel
-        items={cart.map(item => ({ product: item.product, quantity: item.quantity }))}
+        items={cart.map(item => ({
+          product: item.product,
+          quantity: item.quantity,
+          canIncrement:
+            !settings.pos.trackInventory ||
+            !item.product.track_stock ||
+            settings.pos.allowNegativeStock ||
+            item.quantity < item.product.stock,
+        }))}
         onClearAll={handleClearAll}
         onDecrementCartLine={handleDecrementCartLine}
+        onIncrementCartLine={handleIncrementCartLine}
         customerSummary={
           selectedCustomer
             ? { name: selectedCustomer.name, taxNumber: selectedCustomer.tax_number }
@@ -946,11 +974,7 @@ const POSInner: React.FC = () => {
               setReceiptPreviewData(receiptData);
               setLastCompletedReceipt(receiptData);
               setRecentReceipts((prev) => [receiptData, ...prev].slice(0, 20));
-              setNextReceiptAfterClose(
-                settings.receipt.printDuplicateOnIssue !== false
-                  ? { ...receiptData, documentLabel: 'Duplicado' }
-                  : null
-              );
+              setNextReceiptAfterClose(null);
               if (fiscal?.invoiceNo) {
                 setLastFiscalInvoiceNo(fiscal.invoiceNo);
               }

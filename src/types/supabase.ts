@@ -2,6 +2,7 @@
 // Generated types for the employees table and related functionality
 
 import type { FiscalDocumentRow } from '../fiscal/types';
+import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage';
 
 export interface Database {
     public: {
@@ -568,7 +569,7 @@ export type IVARate = typeof IVA_RATES[number]['value'];
 
 // Stock status calculation helper
 export const calculateStockStatus = (product: Pick<ProductRow, 'stock' | 'min_stock' | 'track_stock'>): 'in_stock' | 'low_stock' | 'out_of_stock' => {
-    if (!product.track_stock) return 'in_stock';
+    if (!readPosTrackInventoryFromStorage() || !product.track_stock) return 'in_stock';
     if (product.stock === 0) return 'out_of_stock';
     if (product.stock <= product.min_stock) return 'low_stock';
     return 'in_stock';

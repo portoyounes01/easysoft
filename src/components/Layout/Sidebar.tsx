@@ -17,6 +17,7 @@ import {
   Printer,
   Tag,
   ClipboardList,
+  Contact,
 } from 'lucide-react';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { useDesignSystem2Customization } from '../../contexts/DesignSystem2CustomizationContext';
@@ -50,6 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
       { path: '/pos', icon: ShoppingCart, labelKey: 'sidebar.menu.pos', permission: 'sales' },
       { path: '/products', icon: Package, labelKey: 'sidebar.menu.products', permission: 'inventory' },
       { path: '/categories', icon: Tag, labelKey: 'sidebar.menu.categories', permission: 'inventory' },
+      { path: '/customers', icon: Contact, labelKey: 'sidebar.menu.customers', permission: 'inventory' },
       { path: '/employees', icon: Users, labelKey: 'sidebar.menu.employees', permission: 'employees' },
       { path: '/reports', icon: BarChart3, labelKey: 'sidebar.menu.reports', permission: 'reports' },
       { path: '/transactions', icon: CreditCard, labelKey: 'sidebar.menu.transactions', permission: 'transactions' },

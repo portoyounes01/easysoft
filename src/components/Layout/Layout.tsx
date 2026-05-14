@@ -92,11 +92,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               FORMAÇÃO — documentos sem valor fiscal. Base de dados local de treino.
             </div>
           )}
-          {import.meta.env.DEV && (
-            <div className="mb-4 rounded-2xl border border-violet-300 bg-violet-50 px-4 py-2 text-violet-900 text-center text-base">
-              Debug build – HashControl fiscal e definições extra são visíveis.
-            </div>
-          )}
           {receiptProfileForDefaultDocumentType(settings.receipt).seriesDiscontinued && (
             <div className="mb-4 rounded-2xl border-2 border-orange-400 bg-orange-50 px-4 py-3 text-orange-950 text-center font-semibold text-lg">
               Série fiscal marcada como descontinuada — confirme a série junto da AT antes de continuar a faturar.

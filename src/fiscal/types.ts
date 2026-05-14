@@ -14,7 +14,7 @@ export interface FiscalDocumentRow {
     series_key: string;
     at_validation_code: string;
     sequential_number: number;
-    /** SAFT InvoiceNo e.g. FS ABC/1000 — or RG/RC payment ref under table 4.4 */
+    /** SAFT InvoiceNo e.g. FS ABC/0001 — or RG/RC payment ref under table 4.4 */
     invoice_no: string;
     invoice_type: SaftFiscalDocumentType;
     /** For RG/RC: settled sales document no (e.g. FT …) */

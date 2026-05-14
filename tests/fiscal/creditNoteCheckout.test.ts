@@ -13,6 +13,7 @@ function makeTestSettings(privateKeyPem: string): SystemSettings {
         pos: {
             currencySymbol: '€',
             taxRate: 0.23,
+            trackInventory: true,
             allowNegativeStock: false,
             autoClearCart: { enabled: false, timeoutMinutes: 0 },
         },
@@ -35,8 +36,7 @@ function makeTestSettings(privateKeyPem: string): SystemSettings {
             counterLabel: 'B1',
             seriesProfiles: (() => {
                 const p = defaultSeriesProfiles();
-                p.FS.series = 'S1';
-                p.FS.seriesPrefix = 'A';
+                p.FS.series = 'A';
                 p.FS.numericWidth = 4;
                 p.FS.resetPolicy = 'yearly';
                 p.FS.lastSeriesKey = '';

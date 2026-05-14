@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import { Users, Table, TicketPercent, Save } from 'lucide-react';
+import { Users, Table, TicketPercent, Save, Minus, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LocalProduct } from '../types/supabase';
 import { POSActionButton } from './ui/POSActionButton';
@@ -11,6 +11,8 @@ import { ActionButton } from './ui/ActionButton';
 export interface OrderSummaryItem {
     product: LocalProduct;
     quantity: number;
+    /** When false, + is disabled (e.g. stock max reached). Defaults to true if omitted. */
+    canIncrement?: boolean;
 }
 
 export interface OrderSummaryPanelProps {
@@ -36,8 +38,10 @@ export interface OrderSummaryPanelProps {
     };
     /** Last issued invoice no in current AT chain (local Dexie). */
     fiscalChainHint?: string;
-    /** Tap cart line: subtract 1 unit; removes line when quantity was 1. */
+    /** Tap − to subtract 1 unit; removes line when quantity was 1. */
     onDecrementCartLine?: (productId: string) => void;
+    /** Tap + to add 1 unit (stock limits enforced in parent). */
+    onIncrementCartLine?: (productId: string) => void;
     /** Selected invoice customer for display (name + NIF). */
     customerSummary?: { name: string; taxNumber?: string | null };
 }
@@ -58,6 +62,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     discountInfo,
     fiscalChainHint,
     onDecrementCartLine,
+    onIncrementCartLine,
     customerSummary
 }) => {
     // 1. Hooks
@@ -244,38 +249,65 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                 <ul className="divide-y divide-gray-100">
                                     {items.map((ci, index) => {
                                         const linePadding = { paddingTop: index === 0 ? '2vh' : '1.5vh', paddingBottom: '1vh' } as const;
-                                        const lineInner = (
+                                        const showStepper = Boolean(onDecrementCartLine || onIncrementCartLine);
+                                        const canInc = ci.canIncrement !== false;
+                                        const lineDetails = (
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <p
                                                         className="font-semibold text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap"
-                                                        style={{ fontSize: '1.7vh', maxWidth: '14vw' }}
+                                                        style={{ fontSize: '1.7vh', maxWidth: showStepper ? '11vw' : '14vw' }}
                                                         title={ci.product.name}
                                                     >
                                                         {ci.product.name}
                                                     </p>
                                                     <p className="font-semibold text-gray-900 whitespace-nowrap shrink-0" style={{ fontSize: '1.5vh' }}>{formatCurrency(ci.product.price * ci.quantity)}</p>
                                                 </div>
-                                                <div className="flex items-center space-x-3 text-gray-500" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
-                                                    <span className="font-medium" style={{ fontSize: '1.3vh' }}>x{ci.quantity}</span>
+                                                <div className="text-gray-500" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '0.5vh' }}>
                                                     <span style={{ fontSize: '1.3vh' }}>{formatCurrency(ci.product.price)}</span>
                                                 </div>
                                             </div>
                                         );
                                         return (
                                             <li key={ci.product.id} style={linePadding}>
-                                                {onDecrementCartLine ? (
-                                                    <button
-                                                        type="button"
-                                                        className="flex w-full min-h-touch items-stretch gap-1 rounded-xl border border-transparent px-1 text-left text-inherit transition-colors duration-200 hover:bg-gray-50 active:bg-gray-100"
-                                                        aria-label={`${t('pos.decrementCartLine')}: ${ci.product.name}`}
-                                                        onClick={() => onDecrementCartLine(ci.product.id)}
-                                                    >
-                                                        {lineInner}
-                                                    </button>
-                                                ) : (
-                                                    <div className="flex min-h-touch items-stretch gap-1 px-1">{lineInner}</div>
-                                                )}
+                                                <div className="flex w-full items-center gap-2 rounded-xl px-1 py-1">
+                                                    {lineDetails}
+                                                    {showStepper ? (
+                                                        <div
+                                                            className="flex shrink-0 items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            {onDecrementCartLine ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-gray-300 bg-white text-gray-800 shadow-sm transition-all duration-150 hover:bg-gray-50 active:scale-95"
+                                                                    aria-label={`${t('pos.cartQtyDecrease')}, ${ci.product.name}`}
+                                                                    onClick={() => onDecrementCartLine(ci.product.id)}
+                                                                >
+                                                                    <Minus className="h-5 w-5" strokeWidth={2.5} aria-hidden />
+                                                                </button>
+                                                            ) : null}
+                                                            <span
+                                                                className="min-w-[2.25rem] text-center font-bold tabular-nums text-gray-900"
+                                                                style={{ fontSize: '1.65vh' }}
+                                                                aria-live="polite"
+                                                            >
+                                                                {ci.quantity}
+                                                            </span>
+                                                            {onIncrementCartLine ? (
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={!canInc}
+                                                                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-gray-300 bg-white text-gray-800 shadow-sm transition-all duration-150 hover:bg-gray-50 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+                                                                    aria-label={`${t('pos.cartQtyIncrease')}, ${ci.product.name}`}
+                                                                    onClick={() => onIncrementCartLine(ci.product.id)}
+                                                                >
+                                                                    <Plus className="h-5 w-5" strokeWidth={2.5} aria-hidden />
+                                                                </button>
+                                                            ) : null}
+                                                        </div>
+                                                    ) : null}
+                                                </div>
                                             </li>
                                         );
                                     })}

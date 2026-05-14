@@ -2,9 +2,9 @@
 export type FiscalSeriesDocKey = 'FS' | 'FT' | 'NC';
 
 export interface ReceiptSeriesProfile {
+    /** AT series id — also the segment before "/" on the invoice (e.g. FS FAT2026/0001). Do not use "/". */
     series: string;
     seriesDescription?: string;
-    seriesPrefix: string;
     numericWidth: number;
     /** Interno: chave de série por mês/ano (não exposto nas Definições). */
     resetPolicy: 'monthly' | 'yearly';
@@ -27,11 +27,11 @@ export function defaultReceiptSeriesProfile(partial?: Partial<ReceiptSeriesProfi
     const base: ReceiptSeriesProfile = {
         series: 'FAT2026',
         seriesDescription: '',
-        seriesPrefix: '',
         numericWidth: 4,
         resetPolicy: 'yearly',
         lastSeriesKey: '',
-        currentNumber: 999,
+        /** Baseline when no docs exist on chain: next sequential = currentNumber + 1 (0 → first doc …/0001). */
+        currentNumber: 0,
         atValidationCode: 'AT0000001',
         seriesDiscontinued: false,
     };
@@ -96,14 +96,21 @@ export function assertIssueDateInSeriesWindow(
 }
 
 /** Migrate legacy `atValidationCodeIssuedAt` into `seriesStartDate` when needed. */
-export type LegacyReceiptSeriesProfile = ReceiptSeriesProfile & { atValidationCodeIssuedAt?: string };
+export type LegacyReceiptSeriesProfile = ReceiptSeriesProfile & {
+    atValidationCodeIssuedAt?: string;
+    /** Removed — migrated into `series` when present */
+    seriesPrefix?: string;
+};
 
 export function normalizeStoredSeriesProfile(
     profile: LegacyReceiptSeriesProfile,
     defaults: ReceiptSeriesProfile
 ): ReceiptSeriesProfile {
-    const { atValidationCodeIssuedAt: legacyIssued, ...rest } = profile;
+    const { atValidationCodeIssuedAt: legacyIssued, seriesPrefix: legacyPrefix, ...rest } = profile;
     const merged = { ...defaults, ...rest };
+    const legacyP = typeof legacyPrefix === 'string' ? legacyPrefix.trim() : '';
+    const seriesTrim = (merged.series ?? '').trim();
+    merged.series = seriesTrim || legacyP || defaults.series;
     const startRaw = merged.seriesStartDate?.trim();
     const legacyStart = typeof legacyIssued === 'string' ? legacyIssued.trim() : '';
     const seriesStartDate = startRaw || legacyStart || undefined;

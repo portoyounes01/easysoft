@@ -1,5 +1,6 @@
 import Dexie, { Table } from 'dexie';
 import { generateUUID } from '../utils/uuid';
+import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage';
 import {
     LocalEmployee,
     LocalCategory,
@@ -20,7 +21,7 @@ import {
 import type { FiscalCheckoutAtomicPayload, FiscalCheckoutResult, FiscalTransactionMetadata } from '../fiscal/types';
 import { buildHashPlaintext, extractQrHashFourChars } from '../fiscal/signing';
 import { buildAtQrPayloadString } from '../fiscal/qrPayload';
-import { buildInvoiceNo, computeNextSequential, formatSequential } from '../fiscal/seriesUtils';
+import { assertInvoiceSeriesSegment, buildInvoiceNo, computeNextSequential, formatSequential, invoiceSeriesSegment } from '../fiscal/seriesUtils';
 const DEXIE_NAME_PRODUCTION = 'POSDatabase';
 const DEXIE_NAME_TRAINING = 'restaurante_pos_training';
 
@@ -1166,10 +1167,8 @@ export class TransactionLocalService {
         const hashControl = settings.fiscal.hashControlVersion || '1';
         const qrCountry =
             (customerCountryForQr || 'PT').trim().slice(0, 2).toUpperCase() || 'PT';
-        const prefix = (receiptProfile.seriesPrefix || '').trim();
-        if (!prefix) {
-            throw new Error('Prefixo da série em falta (Definições > Recibo).');
-        }
+        const segment = invoiceSeriesSegment(receiptProfile);
+        assertInvoiceSeriesSegment(segment);
         const maxAttempts = 8;
 
         const rwStores = [
@@ -1199,7 +1198,7 @@ export class TransactionLocalService {
             const nextSequential = computeNextSequential(lastSeq, receiptProfile.currentNumber);
             const invoiceNo = buildInvoiceNo(
                 payload.invoiceTypeSaft,
-                prefix,
+                segment,
                 nextSequential,
                 receiptProfile.numericWidth
             );
@@ -1576,7 +1575,7 @@ export class TransactionLocalService {
         await localDb.transaction('rw', [localDb.products], async () => {
             for (const item of transactionItems) {
                 const product = await localDb.products.get(item.product_id);
-                if (product && product.track_stock) {
+                if (product && readPosTrackInventoryFromStorage() && product.track_stock) {
                     const newStock = Math.max(0, product.stock - item.quantity);
                     await localDb.products.update(item.product_id, {
                         stock: newStock,

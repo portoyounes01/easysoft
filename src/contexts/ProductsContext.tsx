@@ -12,6 +12,7 @@ import {
 } from '../types/supabase';
 import { categoryService, productService, productSyncService } from '../services/productService';
 import { initializeLocalDatabase, localDb } from '../lib/localDatabase';
+import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage';
 
 // =====================================================
 // Types
@@ -175,6 +176,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             dispatch({ type: 'SET_ERROR', payload: null });
 
             await initializeLocalDatabase();
+            await categoryService.ensureDefaultGeneralCategory();
 
             // Use direct database queries to avoid service layer issues
             const [products, categories] = await Promise.all([
@@ -234,7 +236,6 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 category_name: null, // Will be populated by the service
                 display_order: 0,
                 deleted_at: null,
-                track_stock: true,
             };
 
             console.log('ProductsContext: Creating product with category_id:', productData.category_id);
@@ -312,7 +313,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
             // Update local state
             const product = getProductById(id);
-            if (product && product.track_stock) {
+            if (product && readPosTrackInventoryFromStorage() && product.track_stock) {
                 const newStock = Math.max(0, product.stock + quantityChange);
                 dispatch({ type: 'UPDATE_PRODUCT', payload: { id, updates: { stock: newStock } } });
             }
@@ -405,7 +406,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const getLowStockProducts = (): LocalProduct[] => {
         return state.products.filter(product => {
-            if (!product.is_active || product.deleted_at || !product.track_stock) return false;
+            if (!product.is_active || product.deleted_at || !readPosTrackInventoryFromStorage() || !product.track_stock) return false;
             return product.stock <= product.min_stock;
         });
     };

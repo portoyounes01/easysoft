@@ -139,7 +139,7 @@ export async function runFiscalCreditNoteForTransaction(params: {
     const baseProfile = settings.receipt.seriesProfiles[baseKey];
     const receiptProfile = {
         ...baseProfile,
-        seriesPrefix: parsed.prefix,
+        series: parsed.prefix,
         numericWidth: parsed.width,
         atValidationCode: origFiscal.at_validation_code,
     };
