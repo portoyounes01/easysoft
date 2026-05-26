@@ -1,0 +1,11 @@
+notes:
+
+- NC needs to have its own chain number, and use the serie number defined for it in the settings.
+- NC shouldnt have negative amount 
+- get rid of fatura simplificada (use FT always, 999999..90 as nif if customer doesnt provide it)
+- BUG: once a serie is marked discontinued, it should NEVER be used (saved in a DB or sth), or for now, just remove the toggle, use the field to just put a new serie
+- cada documento gravado fica associado a sourceID/utilizador (the user who emitted the document) e isso aparece no SAF-T (Verify from saft file)
+- comment out the tables buttons (or anything that's not used/implemented yet)
+- activate secunda via button (see if we need to list all invoices, or ust redirect to transactions page). actually just comment it out too 
+- in settings, add receipt language, independent of the app language
+- remove the line licensd to (the one that says "Licensed to:")

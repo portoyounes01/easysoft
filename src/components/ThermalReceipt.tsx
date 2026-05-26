@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect, useMemo } from 'react';
 import { generateQRCodeImage } from '../utils/qrCode';
+import { useSettings } from '../contexts/SettingsContext';
+import { getReceiptT } from '../utils/receiptLanguage';
 
 interface ReceiptItem {
   id: string;
@@ -66,9 +67,23 @@ export interface ReceiptProps {
   certificationNumber?: string;
   originalInvoice?: string; // For credit notes
   creditReason?: string; // For credit notes
-  documentLabel?: string; // e.g., 'Original' (default) or 'Segunda via'
+  documentLabel?: string; // e.g. Original (first issue) or 2.ª via (reprint) — use i18n keys thermalReceipt.original / secondCopy
   /** Cashier / operator name for AT evidence */
   emitterName?: string;
+  /** Overrides settings receipt language when set (e.g. receipt demo). */
+  receiptLanguage?: 'en' | 'pt';
+}
+
+/** Shown on receipt when `certificationNumber` is unset (AT placeholder until assigned). */
+export const RECEIPT_CERTIFICATION_PLACEHOLDER = 'xxxx';
+
+export function certificationNumberForReceiptDisplay(cert?: string): string {
+  const trimmed = cert?.trim();
+  if (!trimmed) {
+    return RECEIPT_CERTIFICATION_PLACEHOLDER;
+  }
+  const withoutSuffix = trimmed.replace(/\s*\/AT\s*$/i, '').trim();
+  return withoutSuffix || RECEIPT_CERTIFICATION_PLACEHOLDER;
 }
 
 const ThermalReceipt: React.FC<ReceiptProps> = ({
@@ -93,9 +108,13 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   originalInvoice,
   creditReason,
   documentLabel,
-  emitterName
+  emitterName,
+  receiptLanguage: receiptLanguageProp,
 }) => {
-  const { t } = useTranslation();
+  const { settings } = useSettings();
+  const receiptLang = receiptLanguageProp ?? settings.receipt.receiptLanguage;
+  const t = useMemo(() => getReceiptT(receiptLang), [receiptLang]);
+  const dateLocale = receiptLang === 'pt' ? 'pt-PT' : 'en-GB';
   const [qrCodeImage, setQrCodeImage] = useState<string>('');
   const isCashPayment = ['Numerário', 'Cash', 'Dinheiro'].includes(payment.method);
 
@@ -112,7 +131,11 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   }, [qrCodeData, qrCodeImageProp]);
 
   const formatDate = (date: Date): string => {
-    return date.toLocaleDateString('pt-PT') + ' ' + date.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    return (
+      date.toLocaleDateString(dateLocale) +
+      ' ' +
+      date.toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })
+    );
   };
 
   const formatCurrency = (amount: number): string => {
@@ -541,7 +564,6 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
             <div className="qr-placeholder">{t('thermalReceipt.qrPlaceholder')}</div>
           )}
         </div>
-        {hashFourChars ? <div className="center small-text bold">Q: {hashFourChars}</div> : null}
         {documentHash && !hashFourChars ? (
           <div className="center small-text" style={{ fontSize: '8px', wordBreak: 'break-all' }}>
             {t('thermalReceipt.hashLabel')} {documentHash.substring(0, 24)}…
@@ -581,19 +603,12 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       <div className="separator"></div>
 
-      {/* Legal Info */}
-      {certificationNumber && (
-        <div className="center small-text">
-          {t('thermalReceipt.certifiedLine', {
-            num: certificationNumber.replace(/\s*\/AT\s*$/i, '').trim(),
-          })}
-        </div>
-      )}
-
-      <div style={{ margin: '10px 0' }}></div>
-
+      {/* Legal — 4 hash chars (pos. 1,11,21,31), dash, then certification phrase (LogicPOS layout) */}
       <div className="center small-text">
-        {t('thermalReceipt.licensedTo')} {company.name}
+        {t('thermalReceipt.certifiedLine', {
+          hashPrefix: hashFourChars?.trim() ? `${hashFourChars.trim()}-` : '',
+          num: certificationNumberForReceiptDisplay(certificationNumber),
+        })}
       </div>
 
       {/* Extra space for cutting */}

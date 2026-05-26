@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     Settings as SettingsIcon,
     Clock,
@@ -15,21 +16,32 @@ import {
     FileDown,
 } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useTranslation } from 'react-i18next';
+import { cloneSettingsSnapshot, logCommittedSettingsChanges } from '../fiscal/fiscalAuditLog';
+import type { SystemSettings } from '../contexts/SettingsContext';
 import { initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import { buildSaftAuditFileXml } from '../fiscal/saft/exportSaft';
 import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { generateUUID } from '../utils/uuid';
-// import PrinterSetup from '../components/PrinterSetup';
+import { IVA_RATES } from '../types/supabase';
+import type { ReceiptLanguage } from '../utils/receiptLanguage';
+import { PrinterSettingsPanel, type HardwareSettingsTool } from './PrinterTestPage';
+import { SeedManagementPanel } from './SeedManagement';
+import { CashierTestingPanel } from './CashierTesting';
+import { ElectronTestingPanel } from './ElectronCashierTesting';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 
 const Settings: React.FC = () => {
     const { settings, updateSettings, resetToDefaults, isLoading } = useSettings();
+    const { employee } = useSupabaseAuth();
     const { t } = useTranslation();
+    const [searchParams] = useSearchParams();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
     const [activeTab, setActiveTab] = useState('security');
+    const [hardwareTool, setHardwareTool] = useState<HardwareSettingsTool>('printer');
     const [pendingChanges, setPendingChanges] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [saftStart, setSaftStart] = useState(() => new Date().toISOString().slice(0, 10));
@@ -41,23 +53,8 @@ const Settings: React.FC = () => {
         FT: null,
         NC: null,
     });
-    const [seriesEditorKey, setSeriesEditorKey] = useState<FiscalSeriesDocKey>('FS');
-    const prevDefaultDocType = useRef(settings.receipt.defaultDocumentType);
-    const didInitSeriesEditor = useRef(false);
-
-    useEffect(() => {
-        const d = settings.receipt.defaultDocumentType;
-        if (!didInitSeriesEditor.current) {
-            didInitSeriesEditor.current = true;
-            setSeriesEditorKey(d === 'FATURA' ? 'FT' : 'FS');
-            prevDefaultDocType.current = d;
-            return;
-        }
-        if (prevDefaultDocType.current !== d) {
-            prevDefaultDocType.current = d;
-            setSeriesEditorKey(d === 'FATURA' ? 'FT' : 'FS');
-        }
-    }, [settings.receipt.defaultDocumentType]);
+    const [seriesEditorKey, setSeriesEditorKey] = useState<FiscalSeriesDocKey>('FT');
+    const savedSettingsBaselineRef = useRef<SystemSettings | null>(null);
 
     const seriesProfilesFingerprint = useMemo(
         () => JSON.stringify(settings.receipt.seriesProfiles),
@@ -71,7 +68,7 @@ const Settings: React.FC = () => {
                 await initializeLocalDatabase();
                 const now = new Date();
                 const next: Record<FiscalSeriesDocKey, string | null> = { FS: null, FT: null, NC: null };
-                const keys: FiscalSeriesDocKey[] = ['FS', 'FT', 'NC'];
+                const keys: FiscalSeriesDocKey[] = ['FT', 'NC'];
                 for (const k of keys) {
                     const prof = settings.receipt.seriesProfiles[k];
                     const at = prof.atValidationCode.trim();
@@ -130,6 +127,27 @@ const Settings: React.FC = () => {
         [t]
     );
 
+    useEffect(() => {
+        if (!isLoading && savedSettingsBaselineRef.current === null) {
+            savedSettingsBaselineRef.current = cloneSettingsSnapshot(settings);
+        }
+    }, [isLoading, settings]);
+
+    useEffect(() => {
+        const hw = searchParams.get('hw');
+        if (hw === 'printer' || hw === 'seed' || hw === 'cashier' || hw === 'electron') {
+            setActiveTab('hardware');
+            setHardwareTool(hw);
+        }
+    }, [searchParams]);
+
+    const hardwareToolBtn = (tool: HardwareSettingsTool) =>
+        `min-h-touch-sm flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors duration-200 ${
+            hardwareTool === tool
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+        }`;
+
     const handleSettingsChange = (category: string, field: string, value: unknown) => {
         updateSettings({ [category]: { [field]: value } } as Parameters<typeof updateSettings>[0]);
         setPendingChanges(true);
@@ -168,10 +186,16 @@ const Settings: React.FC = () => {
 
     const handleSave = async () => {
         setSaveStatus('saving');
-        // Simulate save operation
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setSaveStatus('saved');
-        setPendingChanges(false);
+        try {
+            const baseline = savedSettingsBaselineRef.current ?? cloneSettingsSnapshot(settings);
+            await logCommittedSettingsChanges(baseline, settings, employee?.id);
+            savedSettingsBaselineRef.current = cloneSettingsSnapshot(settings);
+            setSaveStatus('saved');
+            setPendingChanges(false);
+        } catch (e) {
+            console.error('Failed to save settings audit log:', e);
+            setSaveStatus('error');
+        }
 
         setTimeout(() => {
             setSaveStatus('idle');
@@ -181,6 +205,7 @@ const Settings: React.FC = () => {
     const handleReset = () => {
         if (confirm(t('settings.confirm.resetAll'))) {
             resetToDefaults();
+            savedSettingsBaselineRef.current = null;
             setPendingChanges(false);
             setSaveStatus('idle');
         }
@@ -471,20 +496,24 @@ const Settings: React.FC = () => {
 
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.pos.defaultTaxRate')}</label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="1"
-                                                step="0.01"
+                                            <select
                                                 value={settings.pos.taxRate}
                                                 onChange={(e) => handleSettingsChange('pos', 'taxRate', parseFloat(e.target.value))}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                            />
-                                            <p className="text-sm text-gray-500 mt-1">{t('settings.pos.taxRateSuffix', { percent: (settings.pos.taxRate * 100).toFixed(1) })}</p>
+                                            >
+                                                {IVA_RATES.map(rate => (
+                                                    <option key={rate.value} value={rate.value}>
+                                                        {rate.label}
+                                                    </option>
+                                                ))}
+                                            </select>
                                         </div>
                                     </div>
                                 </div>
 
+                                {/*
+                                  AGENTS: Do not delete this commented block — stock/inventory settings UI preserved for re-enable.
+                                  Remove only if explicitly requested by a human.
                                 <div className="p-6 bg-orange-50 rounded-xl border border-orange-200">
                                     <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('settings.pos.inventorySettings')}</h3>
 
@@ -520,6 +549,7 @@ const Settings: React.FC = () => {
                                         </label>
                                     </div>
                                 </div>
+                                */}
 
                                 {/* Auto-Clear Cart Settings */}
                                 <div className="p-6 bg-yellow-50 rounded-xl border border-yellow-200 md:col-span-2">
@@ -654,6 +684,39 @@ const Settings: React.FC = () => {
                         </div>
                     )}
 
+                    {/* Hardware & tools */}
+                    {activeTab === 'hardware' && (
+                        <div className="space-y-6">
+                            <div className="flex items-center space-x-3 mb-2">
+                                <Printer className="w-6 h-6 text-blue-600" />
+                                <h2 className="text-2xl font-bold text-gray-800">{t('settings.tabs.hardware.label')}</h2>
+                            </div>
+                            <p className="text-gray-600 mb-4">{t('settings.tabs.hardware.description')}</p>
+
+                            <div className="flex flex-wrap gap-2 p-2 bg-gray-100 rounded-xl">
+                                <button type="button" className={hardwareToolBtn('printer')} onClick={() => setHardwareTool('printer')}>
+                                    {t('settings.tabs.hardwareTools.printer')}
+                                </button>
+                                <button type="button" className={hardwareToolBtn('seed')} onClick={() => setHardwareTool('seed')}>
+                                    {t('settings.tabs.hardwareTools.seed')}
+                                </button>
+                                <button type="button" className={hardwareToolBtn('cashier')} onClick={() => setHardwareTool('cashier')}>
+                                    {t('settings.tabs.hardwareTools.cashier')}
+                                </button>
+                                <button type="button" className={hardwareToolBtn('electron')} onClick={() => setHardwareTool('electron')}>
+                                    {t('settings.tabs.hardwareTools.electron')}
+                                </button>
+                            </div>
+
+                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                                {hardwareTool === 'printer' && <PrinterSettingsPanel embedded />}
+                                {hardwareTool === 'seed' && <SeedManagementPanel embedded />}
+                                {hardwareTool === 'cashier' && <CashierTestingPanel embedded />}
+                                {hardwareTool === 'electron' && <ElectronTestingPanel embedded />}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Company & Fiscal Tab */}
                     {activeTab === 'company' && (
                         <div className="space-y-6">
@@ -760,6 +823,20 @@ const Settings: React.FC = () => {
                                     <p className="text-sm text-gray-600 mb-4">{t('settings.company.seriesPerDocTypeIntro')}</p>
                                         <div className="space-y-6">
                                             <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.receiptLanguage')}</label>
+                                                <p className="text-sm text-gray-600 mb-2">{t('settings.company.receiptLanguageDesc')}</p>
+                                                <select
+                                                    value={settings.receipt.receiptLanguage}
+                                                    onChange={(e) =>
+                                                        handleSettingsChange('receipt', 'receiptLanguage', e.target.value as ReceiptLanguage)
+                                                    }
+                                                    className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                                                >
+                                                    <option value="pt">{t('settings.company.receiptLanguagePt')}</option>
+                                                    <option value="en">{t('settings.company.receiptLanguageEn')}</option>
+                                                </select>
+                                            </div>
+                                            <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.counterLabel')}</label>
                                                 <input
                                                     type="text"
@@ -773,17 +850,10 @@ const Settings: React.FC = () => {
                                             <select
                                                 value={seriesEditorKey}
                                                 onChange={(e) => {
-                                                    const v = e.target.value as FiscalSeriesDocKey;
-                                                    setSeriesEditorKey(v);
-                                                    if (v === 'FS') {
-                                                        handleSettingsChange('receipt', 'defaultDocumentType', 'FATURA_SIMPLIFICADA');
-                                                    } else if (v === 'FT') {
-                                                        handleSettingsChange('receipt', 'defaultDocumentType', 'FATURA');
-                                                    }
+                                                    setSeriesEditorKey(e.target.value as FiscalSeriesDocKey);
                                                 }}
                                                 className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
                                             >
-                                                <option value="FS">{t('settings.company.seriesHeading.FS')}</option>
                                                 <option value="FT">{t('settings.company.seriesHeading.FT')}</option>
                                                 <option value="NC">{t('settings.company.seriesHeading.NC')}</option>
                                             </select>
@@ -792,11 +862,7 @@ const Settings: React.FC = () => {
                                             ) : (
                                                 <p className="text-sm text-gray-600 mt-2">
                                                     {t('settings.company.defaultCheckoutDoc')}{' '}
-                                                    <strong>
-                                                        {settings.receipt.defaultDocumentType === 'FATURA'
-                                                            ? t('settings.company.docTypeInvoice')
-                                                            : t('settings.company.docTypeSimplified')}
-                                                    </strong>
+                                                    <strong>{t('settings.company.docTypeInvoice')}</strong>
                                                 </p>
                                             )}
                                         </div>
@@ -809,9 +875,6 @@ const Settings: React.FC = () => {
                                                     <h4 className="font-semibold text-xl text-gray-800">
                                                         {t(`settings.company.seriesHeading.${docKey}`)}
                                                     </h4>
-                                                    {docKey === 'NC' && (
-                                                        <p className="text-sm text-gray-600">{t('settings.company.ncSeriesNote')}</p>
-                                                    )}
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.company.seriesForAT')}</label>
                                                         <input
@@ -917,23 +980,6 @@ const Settings: React.FC = () => {
                                                             className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
                                                         />
                                                         <p className="text-xs text-gray-500 mt-1">{t('settings.company.atValidationHelp')}</p>
-                                                    </div>
-                                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-gray-200 min-h-touch">
-                                                        <div>
-                                                            <h4 className="font-medium text-gray-800">{t('settings.company.seriesDiscontinuedTitle')}</h4>
-                                                            <p className="text-sm text-gray-600">{t('settings.company.seriesDiscontinuedDesc')}</p>
-                                                        </div>
-                                                        <label className="relative inline-flex items-center cursor-pointer">
-                                                            <input
-                                                                type="checkbox"
-                                                                className="sr-only peer"
-                                                                checked={Boolean(prof.seriesDiscontinued)}
-                                                                onChange={(e) =>
-                                                                    handleReceiptProfileChange(docKey, 'seriesDiscontinued', e.target.checked)
-                                                                }
-                                                            />
-                                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                                        </label>
                                                     </div>
                                                     <div className="p-4 bg-blue-50/50 rounded-lg border border-blue-100">
                                                         <h4 className="font-medium text-gray-800 mb-2">{t('settings.company.seriesStatus')}</h4>

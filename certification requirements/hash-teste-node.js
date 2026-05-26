@@ -34,7 +34,8 @@ function gerarHashDocumento({
     hash,
     hashControl,
     stringParaAssinar,
-    hashImpresso: `${hash[0]}-${hash[10]}-${hash[20]}-${hash[30]}`
+    // Receipt footer: 4 chars concatenated, then "-" before "Processado…" (LogicPOS layout)
+    hashImpresso: `${hash[0]}${hash[10]}${hash[20]}${hash[30]}`
   };
 }
 

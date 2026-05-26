@@ -31,7 +31,7 @@ function makeTestSettings(privateKeyPem: string): SystemSettings {
             softwareCertNumber: '999',
         },
         receipt: {
-            defaultDocumentType: 'FATURA_SIMPLIFICADA',
+            defaultDocumentType: 'FATURA',
             counterLabel: 'B1',
             seriesProfiles: (() => {
                 const p = defaultSeriesProfiles();
@@ -55,7 +55,7 @@ function buildSalePayload(settings: SystemSettings, signer: WebCryptoRsaSha1Sign
     const d = '2026-06-15';
     return {
         settings,
-        receiptProfile: settings.receipt.seriesProfiles.FS,
+        receiptProfile: settings.receipt.seriesProfiles.FT,
         certificationMode: 'training',
         transactionDate: d,
         transactionTime: '10:00:00',
@@ -63,7 +63,7 @@ function buildSalePayload(settings: SystemSettings, signer: WebCryptoRsaSha1Sign
         seriesKey: 'A-2026',
         chainScope: 'ATSEQ1::A-2026',
         atCode: 'ATSEQ1',
-        invoiceTypeSaft: 'FS',
+        invoiceTypeSaft: 'FT',
         grossTotal: 1,
         netRounded: 0.81,
         taxTotal: 0.19,
@@ -137,6 +137,18 @@ describe('createFiscalCheckoutAtomic concurrency', () => {
         });
         settings = makeTestSettings(privateKey);
         signer = await WebCryptoRsaSha1Signer.fromPkcs8Pem(privateKey);
+    });
+
+    it('persists source_id from employee_number on the fiscal document', async () => {
+        const payload = buildSalePayload(settings, signer);
+        payload.payment = {
+            ...payload.payment,
+            employeeId: 'uuid-employee-1',
+            employeeNumber: 'CASHIER007',
+        };
+        const result = await transactionLocalService.createFiscalCheckoutAtomic(payload);
+        const fiscal = await localDb.fiscalDocuments.get(result.fiscalId);
+        expect(fiscal?.source_id).toBe('CASHIER007');
     });
 
     it('assigns distinct sequential_number for parallel checkouts on the same chain', async () => {

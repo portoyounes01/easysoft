@@ -23,7 +23,14 @@ const DS2_PRIMARY_ACTION =
 const DS2_SECONDARY_ACTION =
     'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-5 font-semibold text-white bg-gray-600 hover:bg-gray-700 shadow-sm transition-all duration-200';
 
-const PrinterTestPageInner: React.FC = () => {
+export type HardwareSettingsTool = 'printer' | 'seed' | 'cashier' | 'electron';
+
+export interface PrinterSettingsPanelProps {
+    /** When true, omit full-page chrome (used inside Settings). */
+    embedded?: boolean;
+}
+
+export const PrinterSettingsPanel: React.FC<PrinterSettingsPanelProps> = ({ embedded = false }) => {
     const { t } = useTranslation();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
     const [showPrinterSetup, setShowPrinterSetup] = useState(false);
@@ -70,18 +77,20 @@ const PrinterTestPageInner: React.FC = () => {
 
     const hs = hardwareStatus;
 
+    const outerClass = embedded
+        ? 'ds2-visual-scope'
+        : 'ds2-visual-scope min-h-screen bg-gray-100 p-8';
+
     return (
-        <div
-            className="ds2-visual-scope min-h-screen bg-gray-100 p-8"
-            style={visualStyle}
-            data-ds2-neutral={prefs.neutralFamilyId}
-        >
-            <div className={`mx-auto max-w-6xl ${layoutClasses.contentInsetX}`}>
-                <div className="mb-6 rounded-lg bg-white p-6 shadow-lg">
-                    <div className="mb-6 flex items-center space-x-3">
-                        <Printer className="h-8 w-8 text-blue-600" />
-                        <h1 className="text-2xl font-bold text-gray-900">{t('printerTest.title')}</h1>
-                    </div>
+        <div className={outerClass} style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
+            <div className={embedded ? 'max-w-6xl' : `mx-auto max-w-6xl ${layoutClasses.contentInsetX}`}>
+                <div className={`${embedded ? 'mb-4' : 'mb-6'} rounded-lg bg-white p-6 shadow-lg`}>
+                    {!embedded && (
+                        <div className="mb-6 flex items-center space-x-3">
+                            <Printer className="h-8 w-8 text-blue-600" />
+                            <h1 className="text-2xl font-bold text-gray-900">{t('printerTest.title')}</h1>
+                        </div>
+                    )}
 
                     <div className="ds2-control-radius-lg flex space-x-1 bg-gray-100 p-1">
                         <button type="button" onClick={() => setActiveTab('setup')} className={tabBtn('setup')}>
@@ -260,4 +269,6 @@ const PrinterTestPageInner: React.FC = () => {
     );
 };
 
-export default PrinterTestPageInner;
+const PrinterTestPage: React.FC = () => <PrinterSettingsPanel embedded={false} />;
+
+export default PrinterTestPage;

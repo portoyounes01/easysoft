@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useProducts } from '../contexts/ProductsContext';
 import { LocalProduct, calculateStockStatus } from '../types/supabase';
-import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage';
+// import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage'; // AGENTS: do not delete — used with stock UI when re-enabled
 import ProductForm from '../components/ProductForm';
 import { useTranslation } from 'react-i18next';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
@@ -24,7 +24,8 @@ import '../styles/design-system-2-scope.css';
 
 const ProductsInner: React.FC = () => {
   const { products, categories, isLoading, error, searchProducts, deleteProduct } = useProducts();
-  const catalogTracksInventory = readPosTrackInventoryFromStorage();
+  // AGENTS: Do not delete — stock catalog flag preserved for re-enable with stock table column.
+  // const catalogTracksInventory = readPosTrackInventoryFromStorage();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
 
   const { t } = useTranslation();
@@ -156,6 +157,7 @@ const ProductsInner: React.FC = () => {
     })),
   ];
 
+  /* AGENTS: Do not delete — stock status badge helper preserved for view-modal stock section when re-enabled.
   const getStatusBadge = (product: LocalProduct) => {
     const stockStatus = calculateStockStatus(product);
 
@@ -183,6 +185,7 @@ const ProductsInner: React.FC = () => {
       </span>
     );
   };
+  */
 
   const handleDeleteProduct = async (productId: string) => {
     if (window.confirm(t('products.confirm.deleteProductMessage'))) {
@@ -375,9 +378,12 @@ const ProductsInner: React.FC = () => {
                 <th className="border-r border-gray-200 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                   {t('products.table.category')}
                 </th>
+                {/*
+                  AGENTS: Do not delete — stock table column preserved for re-enable. Remove only if explicitly requested by a human.
                 <th className="border-r border-gray-200 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                   {t('products.table.stock')}
                 </th>
+                */}
                 <th className="border-r border-gray-200 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                   {t('products.table.price')}
                 </th>
@@ -426,6 +432,8 @@ const ProductsInner: React.FC = () => {
                   <td className="border-r border-gray-100 px-4 py-4 text-gray-700">
                     {categoryIdToName.get(product.category_id || '') || t('products.table.noCategory')}
                   </td>
+                  {/*
+                    AGENTS: Do not delete — stock table cell preserved for re-enable. Remove only if explicitly requested by a human.
                   <td className="border-r border-gray-100 px-4 py-4 text-gray-900">
                     {catalogTracksInventory && product.track_stock ? (
                       <span className="font-medium tabular-nums">{product.stock}</span>
@@ -433,6 +441,7 @@ const ProductsInner: React.FC = () => {
                       <span className="text-gray-400">—</span>
                     )}
                   </td>
+                  */}
                   <td className="border-r border-gray-100 px-4 py-4 font-semibold tabular-nums text-gray-900">
                     €{product.price.toFixed(2)}
                   </td>
@@ -714,6 +723,8 @@ const ProductsInner: React.FC = () => {
                   </div>
                 </div>
 
+                {/*
+                  AGENTS: Do not delete — stock info view-modal section preserved for re-enable. Remove only if explicitly requested by a human.
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 mb-4">{t('products.viewModal.stockInfo')}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -764,12 +775,15 @@ const ProductsInner: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                */}
 
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 mb-4">
                     {t('products.viewModal.additionalInfo')}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/*
+                      AGENTS: Do not delete — track-inventory view field preserved for re-enable. Remove only if explicitly requested by a human.
                     <div className="bg-neutral-50 rounded-xl p-4">
                       <span className="block text-sm font-medium text-gray-500 mb-1">
                         {t('settings.pos.trackInventory')}
@@ -778,6 +792,7 @@ const ProductsInner: React.FC = () => {
                         {catalogTracksInventory ? t('products.viewModal.yes') : t('products.viewModal.no')}
                       </p>
                     </div>
+                    */}
                     <div className="bg-neutral-50 rounded-xl p-4">
                       <span className="block text-sm font-medium text-gray-500 mb-1">
                         {t('products.viewModal.displayOrder')}

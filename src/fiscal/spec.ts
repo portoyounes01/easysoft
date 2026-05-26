@@ -52,3 +52,6 @@ export const DEFAULT_INVOICE_STATUS = 'N';
 
 /** Consumer final NIF placeholder used in SAFT for unidentified B2C. */
 export const CONSUMER_FINAL_CUSTOMER_TAX_ID = '999999990';
+
+/** SAFT sales type for POS checkout (fatura completa only; FS deprecated for new sales). */
+export const SALE_INVOICE_TYPE_SAFT = 'FT' as const;

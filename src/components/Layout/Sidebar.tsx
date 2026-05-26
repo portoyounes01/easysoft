@@ -12,9 +12,6 @@ import {
   CreditCard,
   UserCircle,
   LogOut,
-  Database,
-  Zap,
-  Printer,
   Tag,
   ClipboardList,
   Contact,
@@ -26,6 +23,8 @@ import '../../styles/design-system-2-scope.css';
 
 interface SidebarProps {
   isCollapsed: boolean;
+  /** Called after a nav link is chosen (e.g. close POS overlay drawer) */
+  onNavigate?: () => void;
 }
 
 /** Matches `TabButton` `variant="sidebar"` active / idle chrome — remapped inside `.ds2-visual-scope` to DS2 secondary + radius. */
@@ -39,7 +38,7 @@ const sidebarNavClass = (isActive: boolean, isCollapsed: boolean): string => {
   return `${base} ${isActive ? active : idle} ${collapsed}`.trim();
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
   const { employee, signOut, hasPermission } = useSupabaseAuth();
   const { t } = useTranslation();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
@@ -57,10 +56,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
       { path: '/transactions', icon: CreditCard, labelKey: 'sidebar.menu.transactions', permission: 'transactions' },
       { path: '/fiscal-audit', icon: ClipboardList, labelKey: 'sidebar.menu.fiscalAudit', permission: 'settings' },
       { path: '/settings', icon: Settings, labelKey: 'sidebar.menu.settings', permission: 'settings' },
-      { path: '/printer-test', icon: Printer, labelKey: 'sidebar.menu.printerTest', permission: 'settings' },
-      { path: '/seed', icon: Database, labelKey: 'sidebar.menu.seedManagement', permission: 'settings' },
-      { path: '/cashier-testing', icon: Zap, labelKey: 'sidebar.menu.cashierTesting', permission: 'settings' },
-      { path: '/electron-testing', icon: Zap, labelKey: 'sidebar.menu.electronTesting', permission: 'settings' },
     ],
     []
   );
@@ -115,6 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed }) => {
                     end={item.path === '/'}
                     className={({ isActive }) => sidebarNavClass(isActive, isCollapsed)}
                     title={isCollapsed ? label : undefined}
+                    onClick={() => onNavigate?.()}
                   >
                     <Icon className="h-5 w-5 flex-shrink-0" />
                     {!isCollapsed && <span className="font-medium">{label}</span>}

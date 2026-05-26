@@ -1046,25 +1046,24 @@ export class TransactionLocalService {
         return Boolean(matches);
     }
 
-    /** True if a credit note (NC) was already issued for this original sale (notes link). */
+    /** True if a credit note (NC) was already issued for this original sale (settled invoice ref). */
     async hasCreditNoteForOriginalTransaction(originalTransactionId: string): Promise<boolean> {
         const origTx = await this.getTransactionById(originalTransactionId);
         if (!origTx?.fiscal_document_id) return false;
         const origFiscal = await this.getFiscalDocumentById(origTx.fiscal_document_id);
         if (!origFiscal) return false;
-        const expectedNote = `NC referente ${origFiscal.invoice_no}`;
-        const chain = origFiscal.chain_scope;
-        const ncs = await localDb.fiscalDocuments
-            .where('chain_scope')
-            .equals(chain)
-            .filter(d => d.invoice_type === 'NC')
-            .toArray();
-        for (const nc of ncs) {
-            if (!nc.transaction_id) continue;
-            const t = await localDb.transactions.get(nc.transaction_id);
-            if (t?.notes?.trim() === expectedNote) return true;
-        }
-        return false;
+        const settledNo = origFiscal.invoice_no;
+        const settledDate = origFiscal.invoice_date;
+        const match = await localDb.fiscalDocuments
+            .filter(
+                d =>
+                    d.invoice_type === 'NC' &&
+                    d.settled_invoice_no === settledNo &&
+                    (d.settled_invoice_date ?? '') === settledDate &&
+                    !d.cancelled_at
+            )
+            .first();
+        return Boolean(match);
     }
 
     /** Recent fiscal audit events (newest first). */

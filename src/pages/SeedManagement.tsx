@@ -34,7 +34,11 @@ interface SeedStatus {
     details: string[];
 }
 
-const SeedManagementInner: React.FC = () => {
+export interface SeedManagementPanelProps {
+    embedded?: boolean;
+}
+
+export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedded = false }) => {
     const { t } = useTranslation();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
     const { refreshEmployees } = useEmployees();
@@ -139,23 +143,24 @@ const SeedManagementInner: React.FC = () => {
 
     return (
         <div
-            className="ds2-visual-scope min-h-screen bg-gray-50"
+            className={embedded ? 'ds2-visual-scope' : 'ds2-visual-scope min-h-screen bg-gray-50'}
             style={visualStyle}
             data-ds2-neutral={prefs.neutralFamilyId}
         >
-            <div className={`mx-auto max-w-6xl space-y-8 py-6 ${layoutClasses.contentInsetX}`}>
-                {/* Header */}
-                <div className="mb-8">
-                    <div className="flex items-center space-x-3 mb-4">
-                        <div className="p-2 bg-blue-100 rounded-lg">
-                            <Database className="w-6 h-6 text-blue-600" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900">{t('seedManagement.title')}</h1>
-                            <p className="text-gray-600">{t('seedManagement.subtitle')}</p>
+            <div className={embedded ? 'max-w-6xl space-y-6' : `mx-auto max-w-6xl space-y-8 py-6 ${layoutClasses.contentInsetX}`}>
+                {!embedded && (
+                    <div className="mb-8">
+                        <div className="flex items-center space-x-3 mb-4">
+                            <div className="p-2 bg-blue-100 rounded-lg">
+                                <Database className="w-6 h-6 text-blue-600" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-bold text-gray-900">{t('seedManagement.title')}</h1>
+                                <p className="text-gray-600">{t('seedManagement.subtitle')}</p>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Main Controls */}
@@ -398,4 +403,6 @@ const SeedManagementInner: React.FC = () => {
     );
 };
 
-export default SeedManagementInner;
+const SeedManagement: React.FC = () => <SeedManagementPanel embedded={false} />;
+
+export default SeedManagement;

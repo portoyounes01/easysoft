@@ -1,8 +1,7 @@
 import type { LocalCustomer } from '../types/supabase';
 
 /**
- * Full identification for issuing FT (fatura) instead of FS: name, NIF, and full address
- * (street, postal code, city) as required for invoicing a identified customer.
+ * @deprecated FS removed for new sales; kept for tests referencing legacy identification rules.
  */
 export function hasCompleteFaturaCustomerData(
     customer: LocalCustomer | null | undefined
@@ -16,23 +15,18 @@ export function hasCompleteFaturaCustomerData(
     return Boolean(name && nif && address && postal && city);
 }
 
-/**
- * When the customer is fully identified, always issue FT; otherwise use the default in settings.
- */
+/** All new POS sales issue FT (fatura). Consumer-final defaults apply when customer is incomplete. */
 export function resolveDefaultDocumentTypeForSale(
-    settingsDefault: 'FATURA' | 'FATURA_SIMPLIFICADA',
-    customer: LocalCustomer | null | undefined
-): 'FATURA' | 'FATURA_SIMPLIFICADA' {
-    if (hasCompleteFaturaCustomerData(customer)) {
-        return 'FATURA';
-    }
-    return settingsDefault;
+    _settingsDefault?: 'FATURA' | 'FATURA_SIMPLIFICADA',
+    _customer?: LocalCustomer | null | undefined
+): 'FATURA' {
+    return 'FATURA';
 }
 
 export function saftTypeToReceiptDocumentType(
     t: string
 ): 'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO' {
     if (t === 'NC') return 'NOTA_CREDITO';
-    if (t === 'FT') return 'FATURA';
-    return 'FATURA_SIMPLIFICADA';
+    if (t === 'FS') return 'FATURA';
+    return 'FATURA';
 }

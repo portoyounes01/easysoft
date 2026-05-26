@@ -2,8 +2,8 @@ import type { SystemSettings } from '../contexts/SettingsContext';
 import type { LocalCustomer, LocalProduct } from '../types/supabase';
 import { calculateTaxAmount, calculatePriceWithoutTax } from '../types/supabase';
 import { transactionLocalService } from '../lib/localDatabase';
-import { mapDefaultDocumentTypeToSaft, CONSUMER_FINAL_CUSTOMER_TAX_ID } from './spec';
-import { resolveDefaultDocumentTypeForSale } from './saleDocumentType';
+import { SALE_INVOICE_TYPE_SAFT } from './spec';
+import { buildFiscalCustomerFields } from './fiscalCustomer';
 import { createSignerFromSettings, type FiscalSigner } from './signing';
 import { receiptProfileForSale, assertIssueDateInSeriesWindow } from './receiptSeriesProfile';
 import { buildChainScope, computeSeriesKey } from './seriesUtils';
@@ -86,11 +86,6 @@ function formatSystemEntryDate(d: Date): string {
     return `${y}-${mo}-${da}T${h}:${mi}:${s}`;
 }
 
-function normalizeTaxId(raw: string | null | undefined): string | null {
-    if (raw == null || !String(raw).trim()) return null;
-    return String(raw).replace(/\s/g, '');
-}
-
 /**
  * Full fiscal checkout: guards, AT hash chain, Dexie persistence (transaction + fiscal + audit).
  */
@@ -144,16 +139,9 @@ export async function runFiscalCheckout(params: {
 
     const totalDiscountAmount = originalSubtotal - finalSubtotal;
 
-    const resolvedDocumentType = resolveDefaultDocumentTypeForSale(
-        settings.receipt.defaultDocumentType,
-        selectedCustomer
-    );
-    const invoiceTypeSaft = mapDefaultDocumentTypeToSaft(resolvedDocumentType);
+    const invoiceTypeSaft = SALE_INVOICE_TYPE_SAFT;
     const receiptProfile = receiptProfileForSale(settings.receipt, invoiceTypeSaft);
-
-    if (receiptProfile.seriesDiscontinued) {
-        throw new Error('Esta série documental está descontinuada e não pode emitir novos documentos.');
-    }
+    const fiscalCustomer = buildFiscalCustomerFields(selectedCustomer);
 
     assertIssueDateInSeriesWindow(transactionDate, receiptProfile);
 
@@ -171,10 +159,6 @@ export async function runFiscalCheckout(params: {
     const taxTotal = Number(totalTax.toFixed(2));
     const netRounded = Number((grossTotal - taxTotal).toFixed(2));
     const systemEntryDate = formatSystemEntryDate(now);
-
-    const customerNif = normalizeTaxId(selectedCustomer?.tax_number);
-    const customerTaxIdForRow =
-        customerNif ?? CONSUMER_FINAL_CUSTOMER_TAX_ID;
 
     const signer = params.signer ?? (await createSignerFromSettings(settings));
 
@@ -208,7 +192,7 @@ export async function runFiscalCheckout(params: {
         employee_id: payment.employeeId,
         employee_name: payment.employeeName,
         customer_id: selectedCustomer?.id || null,
-        customer_name: selectedCustomer?.name || null,
+        customer_name: fiscalCustomer.transactionName,
         transaction_date: transactionDate,
         transaction_time: transactionTime,
         subtotal: originalSubtotal,
@@ -234,8 +218,6 @@ export async function runFiscalCheckout(params: {
         deleted_at: null,
     };
 
-    const countryForQr = (selectedCustomer?.country || 'PT').trim().slice(0, 2).toUpperCase() || 'PT';
-
     const atomicPayload: FiscalCheckoutAtomicPayload = {
         settings,
         receiptProfile,
@@ -256,9 +238,9 @@ export async function runFiscalCheckout(params: {
         changeGiven,
         transactionBase,
         transactionItems,
-        customerTaxId: customerTaxIdForRow,
-        customerTaxNumberForQr: customerNif,
-        customerCountryForQr: countryForQr,
+        customerTaxId: fiscalCustomer.taxIdForFiscalRow,
+        customerTaxNumberForQr: fiscalCustomer.taxNumberForQr,
+        customerCountryForQr: fiscalCustomer.country,
         payment,
         signer,
     };

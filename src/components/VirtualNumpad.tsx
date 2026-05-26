@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { moneyInputHasDecimalSeparator } from '../utils/moneyInput';
 import { useTranslation } from 'react-i18next';
 import { Delete, Check, X } from 'lucide-react';
 import { NumpadButton } from './ui/NumpadButton';
@@ -30,15 +31,36 @@ const VirtualNumpad: React.FC<VirtualNumpadProps> = ({
 }) => {
     const { t } = useTranslation();
     const placeholder = placeholderProp ?? t('forms.decimalPlaceholder');
+    const decimalSeparator = placeholder.includes(',') ? ',' : '.';
     const [value, setValue] = useState(initialValue);
+
+    useEffect(() => {
+        if (isOpen) {
+            setValue(initialValue);
+        }
+    }, [isOpen, initialValue]);
 
     const handleNumberClick = (num: string) => {
         if (value.length >= maxLength) return;
 
-        // Prevent multiple decimal points
-        if (num === '.' && (!allowDecimal || value.includes('.'))) return;
+        const isDecimalSep = num === '.' || num === ',';
+        if (isDecimalSep) {
+            if (!allowDecimal || moneyInputHasDecimalSeparator(value)) return;
+            const sep = decimalSeparator;
+            if (value === '' || value === '0') {
+                setValue(`0${sep}`);
+                return;
+            }
+            setValue((prev) => prev + sep);
+            return;
+        }
 
-        setValue(prev => prev + num);
+        if (value === '0') {
+            setValue(num);
+            return;
+        }
+
+        setValue((prev) => prev + num);
     };
 
     const handleDelete = () => {
@@ -92,7 +114,7 @@ const VirtualNumpad: React.FC<VirtualNumpadProps> = ({
 
                     {/* Row 4 */}
                     {allowDecimal ? (
-                        <NumpadButton label="." onClick={() => handleNumberClick('.')} />
+                        <NumpadButton label={decimalSeparator} onClick={() => handleNumberClick(decimalSeparator)} />
                     ) : (
                         <div></div>
                     )}

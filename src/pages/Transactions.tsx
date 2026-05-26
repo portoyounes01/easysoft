@@ -33,10 +33,12 @@ import {
 import '../styles/design-system-2-scope.css';
 import { customerLocalService, initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import { generateQRCodeImage } from '../utils/qrCode';
+import { getReceiptT } from '../utils/receiptLanguage';
 import type { FiscalTransactionMetadata } from '../fiscal/types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { runFiscalCreditNoteForTransaction } from '../fiscal/creditNoteCheckout';
 import { parseCreditNoteNotesFields } from '../fiscal/creditNoteNotes';
+import { buildReceiptCustomerProps } from '../fiscal/fiscalCustomer';
 import { saftTypeToReceiptDocumentType } from '../fiscal/saleDocumentType';
 
 interface Transaction {
@@ -377,13 +379,9 @@ const TransactionsInner: React.FC = () => {
         const customerRow = header.customer_id
             ? await customerLocalService.getCustomerById(header.customer_id)
             : undefined;
-        const customerTax = customerRow?.tax_number?.trim() || undefined;
-
         const documentType: ReceiptProps['documentType'] = fiscal?.invoice_type
             ? saftTypeToReceiptDocumentType(fiscal.invoice_type)
-            : settings.receipt.defaultDocumentType === 'FATURA'
-                ? 'FATURA'
-                : 'FATURA_SIMPLIFICADA';
+            : 'FATURA';
 
         const creditNoteDisplay =
             documentType === 'NOTA_CREDITO'
@@ -415,25 +413,11 @@ const TransactionsInner: React.FC = () => {
                 phone: settings.company.phone || undefined,
                 email: settings.company.email || undefined,
             },
-            customer: header.customer_id
-                ? (() => {
-                    const morada = [
-                        customerRow?.address?.trim(),
-                        [customerRow?.postal_code?.trim(), customerRow?.city?.trim()]
-                            .filter(Boolean)
-                            .join(' '),
-                    ]
-                        .filter(Boolean)
-                        .join(', ');
-                    return {
-                        name: (customerRow?.name || header.customer_name || undefined) as
-                            | string
-                            | undefined,
-                        taxNumber: customerTax,
-                        address: morada || undefined,
-                    };
-                })()
-                : undefined,
+            customer: buildReceiptCustomerProps(
+                customerRow ?? null,
+                header.customer_name,
+                fiscal?.customer_tax_id
+            ),
             items: rawItems.map((it: { id: string; product_name: string; quantity: number; unit_price: number; iva_rate?: number; line_total: number }) => ({
                 id: it.id,
                 description: it.product_name,
@@ -495,7 +479,10 @@ const TransactionsInner: React.FC = () => {
             return;
         }
         try {
-            const receipt = await buildReceiptPropsForTransaction(id, t('transactions.receipt.secondCopy'));
+            const receipt = await buildReceiptPropsForTransaction(
+                id,
+                getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.secondCopy')
+            );
             if (!receipt) return;
             await transactionLocalService.appendFiscalAuditEvent({
                 event_type: 'REPRINT_REQUESTED',
@@ -858,7 +845,7 @@ const TransactionsInner: React.FC = () => {
                                                         <AdminActionButton
                                                             type="button"
                                                             variant="primary"
-                                                            label={t('transactions.receipt.secondCopy')}
+                                                            label={t('thermalReceipt.secondCopy')}
                                                             icon={Printer}
                                                             onClick={() => void handleSegundaVia(transaction.id)}
                                                             disabled={creditNoteBusyId !== null}

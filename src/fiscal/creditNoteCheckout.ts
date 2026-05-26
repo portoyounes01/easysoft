@@ -3,7 +3,8 @@ import { customerLocalService, transactionLocalService } from '../lib/localDatab
 import { CONSUMER_FINAL_CUSTOMER_TAX_ID } from './spec';
 import { createSignerFromSettings, type FiscalSigner } from './signing';
 import type { FiscalCheckoutAtomicPayload, FiscalCheckoutResult } from './types';
-import { parseInvoicePrefixWidthFromSaftNo, assertIssueDateInSeriesWindow } from './receiptSeriesProfile';
+import { assertIssueDateInSeriesWindow } from './receiptSeriesProfile';
+import { buildChainScope, computeSeriesKey } from './seriesUtils';
 
 function formatSystemEntryDate(d: Date): string {
     const y = d.getFullYear();
@@ -23,7 +24,7 @@ function normalizeTaxIdForQr(raw: string | null | undefined): string | null {
 }
 
 /**
- * Emit a fiscal credit note (SAFT NC) that mirrors an original fiscal sale, continuing the same hash chain.
+ * Emit a fiscal credit note (SAFT NC) that mirrors an original fiscal sale on the NC série / hash chain from settings.
  */
 export async function runFiscalCreditNoteForTransaction(params: {
     settings: SystemSettings;
@@ -57,20 +58,27 @@ export async function runFiscalCreditNoteForTransaction(params: {
     const transactionTime = now.toTimeString().split(' ')[0];
     const systemEntryDate = formatSystemEntryDate(now);
 
-    const grossTotal = -Math.abs(origFiscal.gross_total);
-    const taxTotal = -Math.abs(origFiscal.tax_total);
-    const netRounded = -Math.abs(origFiscal.net_total);
+    /** NC amounts are positive; InvoiceType NC + SAFT CreditAmount convey the credit. */
+    const grossTotal = Math.abs(origFiscal.gross_total);
+    const taxTotal = Math.abs(origFiscal.tax_total);
+    const netRounded = Math.abs(origFiscal.net_total);
     const total = grossTotal;
-    const originalSubtotal = -Math.abs(origTx.subtotal);
+    const originalSubtotal = Math.abs(origTx.subtotal);
     const totalDiscountAmount = Math.abs(origTx.discount);
-    const discountNeg = origTx.discount ? -Math.abs(origTx.discount) : 0;
+    const discountAmount = origTx.discount ? Math.abs(origTx.discount) : 0;
 
     const certificationMode = settings.fiscal.trainingMode ? 'training' : 'production';
 
-    if (settings.receipt.seriesProfiles.NC.seriesDiscontinued) {
-        throw new Error('A série NC está descontinuada e não pode emitir novas notas de crédito.');
+    const receiptProfile = settings.receipt.seriesProfiles.NC;
+
+    assertIssueDateInSeriesWindow(transactionDate, receiptProfile);
+
+    const seriesKey = computeSeriesKey(receiptProfile, now);
+    const atCode = receiptProfile.atValidationCode.trim();
+    if (!atCode) {
+        throw new Error('Código de validação AT da série NC em falta (Definições > Numeração > NC).');
     }
-    assertIssueDateInSeriesWindow(transactionDate, settings.receipt.seriesProfiles.NC);
+    const chainScope = buildChainScope(atCode, seriesKey);
 
     const customerTaxIdForRow = origFiscal.customer_tax_id ?? CONSUMER_FINAL_CUSTOMER_TAX_ID;
     const customerTaxNumberForQr = normalizeTaxIdForQr(origFiscal.customer_tax_id);
@@ -85,10 +93,10 @@ export async function runFiscalCreditNoteForTransaction(params: {
         unit_price: item.unit_price,
         unit_cost: item.unit_cost,
         iva_rate: item.iva_rate,
-        line_total: -Math.abs(item.line_total),
-        tax_amount: -Math.abs(item.tax_amount),
-        profit_amount: -Math.abs(item.profit_amount),
-        discount_amount: item.discount_amount ? -Math.abs(item.discount_amount) : 0,
+        line_total: Math.abs(item.line_total),
+        tax_amount: Math.abs(item.tax_amount),
+        profit_amount: Math.abs(item.profit_amount),
+        discount_amount: item.discount_amount ? Math.abs(item.discount_amount) : 0,
         discount_percentage: item.discount_percentage,
         deleted_at: null,
     }));
@@ -101,7 +109,7 @@ export async function runFiscalCreditNoteForTransaction(params: {
         transaction_date: transactionDate,
         transaction_time: transactionTime,
         subtotal: originalSubtotal,
-        discount: discountNeg,
+        discount: discountAmount,
         discount_type: origTx.discount_type ?? 'none',
         discount_percentage: origTx.discount_percentage ?? 0,
         tax: taxTotal,
@@ -129,21 +137,6 @@ export async function runFiscalCreditNoteForTransaction(params: {
         }
     }
 
-    const parsed = parseInvoicePrefixWidthFromSaftNo(origFiscal.invoice_no);
-    if (!parsed) {
-        throw new Error(
-            'Formato de número de documento original inválido — não foi possível determinar a série.'
-        );
-    }
-    const baseKey = origFiscal.invoice_type === 'FT' ? 'FT' : 'FS';
-    const baseProfile = settings.receipt.seriesProfiles[baseKey];
-    const receiptProfile = {
-        ...baseProfile,
-        series: parsed.prefix,
-        numericWidth: parsed.width,
-        atValidationCode: origFiscal.at_validation_code,
-    };
-
     const atomicPayload: FiscalCheckoutAtomicPayload = {
         settings,
         receiptProfile,
@@ -151,9 +144,9 @@ export async function runFiscalCreditNoteForTransaction(params: {
         transactionDate,
         transactionTime,
         systemEntryDate,
-        seriesKey: origFiscal.series_key,
-        chainScope: origFiscal.chain_scope,
-        atCode: origFiscal.at_validation_code,
+        seriesKey,
+        chainScope,
+        atCode,
         invoiceTypeSaft: 'NC',
         grossTotal,
         netRounded,

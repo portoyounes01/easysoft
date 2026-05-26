@@ -32,11 +32,11 @@ export function buildHashPlaintext(input: HashPlaintextInput): string {
 
 /**
  * Four characters from Base64 hash at positions 1, 11, 21, 31 (1-based) = indices 0,10,20,30.
+ * Concatenated with no separator (receipt: `{chars}-Processado…`; QR field `Q:` uses same value).
  */
 export function extractQrHashFourChars(hashBase64: string): string {
     const indices = [0, 10, 20, 30];
-    const parts = indices.map(i => hashBase64.charAt(i) || '');
-    return parts.join('-');
+    return indices.map(i => hashBase64.charAt(i) || '').join('');
 }
 
 export interface FiscalSignResult {

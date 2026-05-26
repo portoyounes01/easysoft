@@ -3,7 +3,16 @@ import React from 'react';
 import { describe, test, expect, beforeEach } from 'vitest';
 import '@testing-library/jest-dom';
 import ThermalReceipt, { ReceiptProps } from '../src/components/ThermalReceipt';
+import { SettingsProvider } from '../src/contexts/SettingsContext';
 import i18n from '../src/i18n';
+
+function renderReceipt(props: Partial<ReceiptProps> = {}) {
+    return render(
+        <SettingsProvider>
+            <ThermalReceipt {...base} {...props} />
+        </SettingsProvider>
+    );
+}
 
 const base: ReceiptProps = {
     documentNumber: 'ABC-202508-1001',
@@ -23,25 +32,55 @@ describe('ThermalReceipt documentLabel', () => {
     });
 
     test('defaults to Original', () => {
-        render(<ThermalReceipt {...base} />);
+        renderReceipt();
         expect(screen.getByText(/ABC-202508-1001 Original/)).toBeInTheDocument();
     });
 
-    test('renders custom label Duplicado', () => {
-        render(<ThermalReceipt {...base} documentLabel="Duplicado" />);
-        expect(screen.getByText(/ABC-202508-1001 Duplicado/)).toBeInTheDocument();
+    test('renders second-copy label (2.ª via)', async () => {
+        await i18n.changeLanguage('pt');
+        renderReceipt({ documentLabel: i18n.t('thermalReceipt.secondCopy') });
+        expect(screen.getByText(/ABC-202508-1001 2\.ª via/)).toBeInTheDocument();
+    });
+
+    test('renders certification placeholder when number is unset', async () => {
+        await i18n.changeLanguage('pt');
+        renderReceipt();
+        expect(
+            screen.getByText(
+                i18n.t('thermalReceipt.certifiedLine', {
+                    hashPrefix: '',
+                    num: 'xxxx',
+                })
+            )
+        ).toBeInTheDocument();
     });
 
     test('renders certification phrase with /AT suffix', async () => {
         await i18n.changeLanguage('pt');
-        render(<ThermalReceipt {...base} certificationNumber="196/AT" />);
+        renderReceipt({ certificationNumber: '196/AT' });
         expect(
             screen.getByText(
                 i18n.t('thermalReceipt.certifiedLine', {
+                    hashPrefix: '',
                     num: '196',
                 })
             )
         ).toBeInTheDocument();
+    });
+
+    test('prints four hash chars before certification line (LogicPOS layout)', async () => {
+        await i18n.changeLanguage('pt');
+        const hashFour = 'sFUH';
+        renderReceipt({ hashFourChars: hashFour, certificationNumber: '196/AT' });
+        expect(
+            screen.getByText(
+                i18n.t('thermalReceipt.certifiedLine', {
+                    hashPrefix: `${hashFour}-`,
+                    num: '196',
+                })
+            )
+        ).toBeInTheDocument();
+        expect(screen.queryByText(/^Q:/)).not.toBeInTheDocument();
     });
 });
 

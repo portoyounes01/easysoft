@@ -155,46 +155,51 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
 
     // 5. Render
     return (
-        <aside className={`w-[24.5vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[15.5%_58%_26.5%] h-screen overflow-hidden ${className}`}>
-            {/* Top quick actions (15.5% row) */}
-            <div className="h-full overflow-hidden relative" style={{ paddingTop: '1.25vh', paddingBottom: '1.25vh', paddingLeft: '2vh', paddingRight: '2vh' }}>
-                <div className="h-full overflow-hidden">
-                    {/* Top quick actions */}
-                    <div className="grid grid-cols-2" style={{ gap: '0.8vh' }}>
-                        <POSActionButton
-                            icon={Users}
-                            label={t('pos.customer')}
-                            onClick={onCustomer}
-                            style={{ padding: '0.5vh', height: '6vh' }}
-                            className="w-full"
-                        />
-                        <POSActionButton
-                            icon={TicketPercent}
-                            label={t('pos.discountHeader')}
-                            onClick={onDiscount}
-                            style={{ padding: '0.5vh', height: '6vh' }}
-                            className="w-full"
-                        />
-                        <POSActionButton
-                            icon={Save}
-                            label={t('pos.saveBill')}
-                            onClick={onSaveBill}
-                            disabled={!canSaveBill}
-                            variant={!canSaveBill ? 'disabled' : 'default'}
-                            title={!canSaveBill ? 'Disponível após completar a venda' : undefined}
-                            style={{ padding: '0.3vh', height: '6vh' }}
-                            className="w-full"
-                        />
-                        <POSActionButton
-                            icon={Table}
-                            label={t('pos.tables')}
-                            disabled={true}
-                            variant="disabled"
-                            title={t('pos.paymentDisabled')}
-                            style={{ padding: '0.5vh', height: '6vh' }}
-                            className="w-full"
-                        />
-                    </div>
+        // <aside className={`w-[24.5vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[15.5%_58%_26.5%] h-screen overflow-hidden ${className}`}>
+
+        <aside className={`w-[24.5vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[auto_1fr_26.5%] h-screen overflow-hidden ${className}`}>
+            {/* Top quick actions — auto height (was 15.5% for 2×2 grid; only Cliente + Desconto visible) */}
+            <div className="overflow-hidden relative shrink-0" style={{ paddingTop: '1.25vh', paddingBottom: '1.25vh', paddingLeft: '2vh', paddingRight: '2vh' }}>
+                <div className="grid grid-cols-2" style={{ gap: '0.8vh' }}>
+                    <POSActionButton
+                        icon={Users}
+                        label={t('pos.customer')}
+                        onClick={onCustomer}
+                        style={{ padding: '0.5vh', height: '6vh' }}
+                        className="w-full"
+                    />
+                    <POSActionButton
+                        icon={TicketPercent}
+                        label={t('pos.discountHeader')}
+                        onClick={onDiscount}
+                        style={{ padding: '0.5vh', height: '6vh' }}
+                        className="w-full"
+                    />
+                    {/* AGENTS: Do not delete the block below (false && …) — 2.ª via + Mesas UI preserved until implemented. Remove only if explicitly requested by a human. */}
+                    {false && (
+                        <>
+                            <POSActionButton
+                                icon={Save}
+                                label={t('pos.saveBill')}
+                                onClick={onSaveBill}
+                                disabled={!canSaveBill}
+                                variant={!canSaveBill ? 'disabled' : 'default'}
+                                title={!canSaveBill ? 'Disponível após completar a venda' : undefined}
+                                style={{ padding: '0.3vh', height: '6vh' }}
+                                className="w-full"
+                            />
+                            <POSActionButton
+                                icon={Table}
+                                label={t('pos.tables')}
+                                onClick={onTables}
+                                disabled={true}
+                                variant="disabled"
+                                title={t('pos.paymentDisabled')}
+                                style={{ padding: '0.5vh', height: '6vh' }}
+                                className="w-full"
+                            />
+                        </>
+                    )}
                 </div>
             </div>
 

@@ -36,7 +36,11 @@ interface HardwareMode {
   status: string;
 }
 
-const ElectronCashierTestingInner: React.FC = () => {
+export interface ElectronTestingPanelProps {
+  embedded?: boolean;
+}
+
+export const ElectronTestingPanel: React.FC<ElectronTestingPanelProps> = ({ embedded = false }) => {
   const { connectToAnyDevice, sendToPrinter, disconnectPrinter, isConnected, isSupported } = useWebSerialPrinter();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
   // State management
@@ -377,17 +381,19 @@ Web Hardware Status:
 
   return (
     <div
-      className="ds2-visual-scope min-h-screen bg-gray-50"
+      className={embedded ? 'ds2-visual-scope' : 'ds2-visual-scope min-h-screen bg-gray-50'}
       style={visualStyle}
       data-ds2-neutral={prefs.neutralFamilyId}
     >
-      <div className={`mx-auto max-w-4xl py-6 ${layoutClasses.contentInsetX}`}>
+      <div className={embedded ? 'max-w-4xl' : `mx-auto max-w-4xl py-6 ${layoutClasses.contentInsetX}`}>
+      {!embedded && (
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Hardware Testing</h1>
         <p className="mt-2 text-gray-600">
           Test thermal printer and cash drawer functionality in both web and Electron environments
         </p>
       </div>
+      )}
 
       {renderConnectionControls()}
       {renderQuickTests()}
@@ -397,4 +403,6 @@ Web Hardware Status:
   );
 };
 
-export default ElectronCashierTestingInner;
+const ElectronCashierTesting: React.FC = () => <ElectronTestingPanel embedded={false} />;
+
+export default ElectronCashierTesting;

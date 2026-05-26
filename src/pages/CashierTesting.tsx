@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useWebSerialPrinter } from '../utils/webSerialPrinter';
-import { 
-  Zap, 
-  Printer, 
-  DollarSign, 
-  CheckCircle, 
-  AlertCircle, 
+import {
+  Zap,
+  Printer,
+  DollarSign,
+  CheckCircle,
+  AlertCircle,
   Download,
   Settings,
   RefreshCw,
@@ -16,7 +16,7 @@ import {
   Send
 } from 'lucide-react';
 import {
-    useDesignSystem2Customization,
+  useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 
@@ -52,7 +52,11 @@ const DS2_COMPACT_GRAY =
 const DS2_COMPACT_PRIMARY =
   'ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-1 px-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200';
 
-const CashierTestingInner: React.FC = () => {
+export interface CashierTestingPanelProps {
+  embedded?: boolean;
+}
+
+export const CashierTestingPanel: React.FC<CashierTestingPanelProps> = ({ embedded = false }) => {
   const { employee } = useSupabaseAuth();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
   const { connectPrinter, connectToAnyDevice, sendToPrinter, disconnectPrinter, isConnected, isSupported } =
@@ -85,8 +89,8 @@ const CashierTestingInner: React.FC = () => {
 
       if (error) {
         // Check if it's a table not found error or permission error
-        if (error.message.includes('relation "cashier_tests" does not exist') || 
-            error.message.includes('permission denied')) {
+        if (error.message.includes('relation "cashier_tests" does not exist') ||
+          error.message.includes('permission denied')) {
           console.warn('Cashier tests table not available:', error.message);
           setFetchError('Database tables not yet created. Run tests to initialize.');
           setTestLogs([]);
@@ -94,7 +98,7 @@ const CashierTestingInner: React.FC = () => {
         }
         throw error;
       }
-      
+
       setTestLogs(data || []);
     } catch (error) {
       console.error('Error fetching test logs:', error);
@@ -107,7 +111,7 @@ const CashierTestingInner: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
-    
+
     const loadLogs = async () => {
       if (employee && isMounted) {
         // Only try to fetch logs if we haven't already tried and failed
@@ -143,7 +147,7 @@ const CashierTestingInner: React.FC = () => {
       if (error) throw error;
 
       setLastTestResult(data);
-      
+
       // If test has commands, simulate sending to hardware
       if (data.tests[0]?.commands) {
         simulateHardwareCommand(data.tests[0].commands);
@@ -165,7 +169,7 @@ const CashierTestingInner: React.FC = () => {
   // Simulate hardware command execution
   const simulateHardwareCommand = async (commands: number[]) => {
     console.log('Sending ESC/POS commands to hardware:', commands);
-    
+
     // Try to send directly to hardware if connected
     if (isConnected) {
       try {
@@ -178,20 +182,20 @@ const CashierTestingInner: React.FC = () => {
         console.error('❌ Failed to send to hardware:', error);
       }
     }
-    
+
     // Fallback: show download option
     console.log('💾 Hardware not connected - generating download file...');
-    
+
     // In a real implementation, this would:
     // 1. Send commands via USB/Serial to printer
     // 2. Handle responses and errors
     // 3. Provide real-time feedback
-    
+
     // For now, we'll show the commands in a downloadable format
-    const commandString = commands.map(cmd => 
+    const commandString = commands.map(cmd =>
       '0x' + cmd.toString(16).padStart(2, '0').toUpperCase()
     ).join(', ');
-    
+
     console.log('ESC/POS Command Sequence:', commandString);
   };
 
@@ -200,7 +204,7 @@ const CashierTestingInner: React.FC = () => {
     const commandBytes = new Uint8Array(commands);
     const blob = new Blob([commandBytes], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.href = url;
     a.download = `${testName.toLowerCase().replace(/\s+/g, '-')}-commands.bin`;
@@ -245,21 +249,23 @@ const CashierTestingInner: React.FC = () => {
 
   return (
     <div
-      className="ds2-visual-scope min-h-screen bg-gray-50"
+      className={embedded ? 'ds2-visual-scope' : 'ds2-visual-scope min-h-screen bg-gray-50'}
       style={visualStyle}
       data-ds2-neutral={prefs.neutralFamilyId}
     >
-      <div className={`mx-auto max-w-6xl py-6 ${layoutClasses.contentInsetX}`}>
+      <div className={embedded ? 'max-w-6xl' : `mx-auto max-w-6xl py-6 ${layoutClasses.contentInsetX}`}>
         <div className="mb-6 rounded-lg bg-white p-6 shadow-md">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="mb-2 text-3xl font-bold text-gray-800">
-                Cashier Hardware Testing
-              </h1>
-              <p className="text-gray-600">
-                Test cash drawer and thermal printer functionality
-              </p>
-            </div>
+            {!embedded && (
+              <div>
+                <h1 className="mb-2 text-3xl font-bold text-gray-800">
+                  Cashier Hardware Testing
+                </h1>
+                <p className="text-gray-600">
+                  Test cash drawer and thermal printer functionality
+                </p>
+              </div>
+            )}
             <div className="flex items-center space-x-4">
               <button
                 type="button"
@@ -493,7 +499,7 @@ const CashierTestingInner: React.FC = () => {
                             ESC/POS Commands ({test.commands.length} bytes):
                           </p>
                           <code className="text-xs text-gray-600 break-all">
-                            {test.commands.map(cmd => 
+                            {test.commands.map(cmd =>
                               '0x' + cmd.toString(16).padStart(2, '0').toUpperCase()
                             ).join(' ')}
                           </code>
@@ -541,9 +547,8 @@ const CashierTestingInner: React.FC = () => {
                       <span className="font-medium text-sm capitalize">
                         {log.test_type.replace('-', ' ')}
                       </span>
-                      <span className={`w-2 h-2 rounded-full ${
-                        log.success ? 'bg-green-500' : 'bg-red-500'
-                      }`}></span>
+                      <span className={`w-2 h-2 rounded-full ${log.success ? 'bg-green-500' : 'bg-red-500'
+                        }`}></span>
                     </div>
                     <p className="text-xs text-gray-500">
                       {new Date(log.timestamp).toLocaleString('pt-PT')}
@@ -578,4 +583,11 @@ const CashierTestingInner: React.FC = () => {
   );
 };
 
-export default CashierTestingInner;
+/** @deprecated Use `CashierTestingPanel` — kept for stale HMR / deep links. */
+export const CashierTestingInner = CashierTestingPanel;
+
+function CashierTestingPage() {
+  return <CashierTestingPanel embedded={false} />;
+}
+
+export default CashierTestingPage;

@@ -16,11 +16,7 @@ import Transactions from './pages/Transactions';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import DataSetup from './components/DataSetup';
-import SeedManagement from './pages/SeedManagement';
 import ReceiptDemoPage from './pages/ReceiptDemo';
-import CashierTesting from './pages/CashierTesting';
-import ElectronCashierTesting from './pages/ElectronCashierTesting';
-import PrinterTestPage from './pages/PrinterTestPage';
 import DevicePairing from './pages/DevicePairing';
 import DesignSystem from './pages/DesignSystem';
 import DesignSystem2 from './pages/DesignSystem2';
@@ -113,23 +109,7 @@ const AppContent: React.FC = () => {
         }
       />
 
-      {/* POS Route - Full Screen without Sidebar */}
-      <Route
-        path="/pos"
-        element={
-          <ProtectedRoute>
-            <POSProvider>
-              <PermissionRoute permission="sales">
-                <div className="min-h-screen bg-gray-50">
-                  <POS />
-                </div>
-              </PermissionRoute>
-            </POSProvider>
-          </ProtectedRoute>
-        }
-      />
-
-      {/* All Other Routes - With Layout and Sidebar */}
+      {/* App routes — shared Layout + Sidebar (including POS) */}
       <Route
         path="/*"
         element={
@@ -137,6 +117,14 @@ const AppContent: React.FC = () => {
             <POSProvider>
               <Layout>
                 <Routes>
+                  <Route
+                    path="/pos"
+                    element={
+                      <PermissionRoute permission="sales">
+                        <POS />
+                      </PermissionRoute>
+                    }
+                  />
                   <Route
                     path="/"
                     element={
@@ -217,14 +205,7 @@ const AppContent: React.FC = () => {
                       </PermissionRoute>
                     }
                   />
-                  <Route
-                    path="/seed"
-                    element={
-                      <PermissionRoute permission="settings">
-                        <SeedManagement />
-                      </PermissionRoute>
-                    }
-                  />
+                  <Route path="/seed" element={<Navigate to="/settings?hw=seed" replace />} />
                   <Route
                     path="/receipt-demo"
                     element={
@@ -241,30 +222,9 @@ const AppContent: React.FC = () => {
                       </PermissionRoute>
                     }
                   />
-                  <Route
-                    path="/cashier-testing"
-                    element={
-                      <PermissionRoute permission="settings">
-                        <CashierTesting />
-                      </PermissionRoute>
-                    }
-                  />
-                  <Route
-                    path="/electron-testing"
-                    element={
-                      <PermissionRoute permission="settings">
-                        <ElectronCashierTesting />
-                      </PermissionRoute>
-                    }
-                  />
-                  <Route
-                    path="/printer-test"
-                    element={
-                      <PermissionRoute permission="settings">
-                        <PrinterTestPage />
-                      </PermissionRoute>
-                    }
-                  />
+                  <Route path="/cashier-testing" element={<Navigate to="/settings?hw=cashier" replace />} />
+                  <Route path="/electron-testing" element={<Navigate to="/settings?hw=electron" replace />} />
+                  <Route path="/printer-test" element={<Navigate to="/settings?hw=printer" replace />} />
                   <Route
                     path="/pair-device"
                     element={

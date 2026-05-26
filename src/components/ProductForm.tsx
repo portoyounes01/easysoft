@@ -22,6 +22,11 @@ import { supabase } from '../lib/supabase';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { DEFAULT_GENERAL_CATEGORY_ID } from '../services/productService';
+import {
+    formatMoneyInputValue,
+    parseMoneyInput,
+    sanitizeMoneyInput,
+} from '../utils/moneyInput';
 import { BaseDialog } from './ui/BaseDialog';
 import { ActionButton } from './ui/ActionButton';
 
@@ -81,6 +86,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
     const [showKeyboard, setShowKeyboard] = useState(false);
     const [showNumpad, setShowNumpad] = useState(false);
     const [activeField, setActiveField] = useState<string>('');
+    const [priceInput, setPriceInput] = useState('');
+    const [costInput, setCostInput] = useState('');
     const [pendingUploadPaths, setPendingUploadPaths] = useState<string[]>([]);
     const [pendingDeletes, setPendingDeletes] = useState<string[]>([]);
     const { employee, credentialHash } = useSupabaseAuth();
@@ -118,6 +125,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 location: product.location || '',
                 is_active: product.is_active
             });
+            setPriceInput(formatMoneyInputValue(product.price));
+            setCostInput(formatMoneyInputValue(product.cost));
         } else {
             setFormData({
                 name: '',
@@ -134,6 +143,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 location: '',
                 is_active: true
             });
+            setPriceInput('');
+            setCostInput('');
         }
         setErrors({});
     }, [product, isOpen]);
@@ -159,7 +170,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
             newErrors.name = 'Product name is required';
         }
 
-        if (formData.price <= 0) {
+        const parsedPrice = parseMoneyInput(priceInput);
+        if (parsedPrice <= 0) {
             newErrors.price = 'Price must be greater than 0';
         }
 
@@ -192,6 +204,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
         try {
             const productFormPayload: ProductFormData = {
                 ...formData,
+                price: parseMoneyInput(priceInput),
+                cost: parseMoneyInput(costInput),
                 track_stock: settings.pos.trackInventory
             };
             const productDataWithBarcode = {
@@ -323,10 +337,38 @@ const ProductForm: React.FC<ProductFormProps> = ({
         handleFieldChange(activeField as keyof ProductFormState, value);
     };
 
+    const handleMoneyInputChange = (field: 'price' | 'cost', raw: string) => {
+        const sanitized = sanitizeMoneyInput(raw);
+        if (field === 'price') {
+            setPriceInput(sanitized);
+        } else {
+            setCostInput(sanitized);
+        }
+        handleFieldChange(field, parseMoneyInput(sanitized));
+    };
+
+    const getNumpadInitialValue = (): string => {
+        if (activeField === 'price') return priceInput;
+        if (activeField === 'cost') return costInput;
+        const current = formData[activeField as keyof ProductFormState];
+        if (current === undefined || current === null) return '';
+        return String(current);
+    };
+
     // Handle virtual numpad input
     const handleNumpadInput = (value: string) => {
-        const numValue = parseFloat(value) || 0;
-        handleFieldChange(activeField as keyof ProductFormState, numValue);
+        const field = activeField as keyof ProductFormState;
+        if (field === 'price' || field === 'cost') {
+            if (field === 'price') {
+                setPriceInput(value);
+            } else {
+                setCostInput(value);
+            }
+            handleFieldChange(field, parseMoneyInput(value));
+            return;
+        }
+        const numValue = parseFloat(value.replace(',', '.')) || 0;
+        handleFieldChange(field, numValue);
     };
 
     // Auto-generate SKU based on category and product name
@@ -510,11 +552,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                         {currencySymbol}
                                     </span>
                                     <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        value={formData.price}
-                                        onChange={(e) => handleFieldChange('price', parseFloat(e.target.value) || 0)}
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={priceInput}
+                                        onChange={(e) => handleMoneyInputChange('price', e.target.value)}
                                         onClick={() => handleNumberFieldClick('price')}
                                         className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 ${errors.price ? 'border-red-500' : activeField === 'price' ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
                                             }`}
@@ -532,18 +573,23 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             {/* Cost */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    {t('products.form.cost')} ({currencySymbol})
+                                    {t('products.form.cost')}
                                 </label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={formData.cost}
-                                    onChange={(e) => handleFieldChange('cost', parseFloat(e.target.value) || 0)}
-                                    onClick={() => handleNumberFieldClick('cost')}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                    placeholder={t('forms.decimalPlaceholder')}
-                                />
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">
+                                        {currencySymbol}
+                                    </span>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={costInput}
+                                        onChange={(e) => handleMoneyInputChange('cost', e.target.value)}
+                                        onClick={() => handleNumberFieldClick('cost')}
+                                        className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 ${activeField === 'cost' ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
+                                            }`}
+                                        placeholder={t('forms.decimalPlaceholder')}
+                                    />
+                                </div>
                             </div>
 
                             {/* IVA Rate */}
@@ -572,11 +618,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             </div>
                         </div>
 
-                        {/* Inventory */}
+                        {/* AGENTS: Do not delete the block below (false && …) — stock/inventory form fields preserved for re-enable. Remove only if explicitly requested by a human. */}
+                        {false && (
                         <div className="space-y-4">
                             <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('products.form.inventory')}</h3>
 
-                            {/* Stock */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                                     {t('products.form.currentStock')}
@@ -592,7 +638,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                 />
                             </div>
 
-                            {/* Min Stock */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                                     {t('products.form.minimumStock')}
@@ -608,6 +653,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                 />
                             </div>
                         </div>
+                        )}
 
                         {/* Additional Information */}
                         <div className="space-y-4">
@@ -732,7 +778,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             onClose={() => setShowNumpad(false)}
                             onConfirm={handleNumpadInput}
                             title={t('forms.enterField', { field: activeField.replace('_', ' ') })}
-                            initialValue={formData[activeField as keyof ProductFormState]?.toString() || '0'}
+                            initialValue={getNumpadInitialValue()}
                             allowDecimal={activeField === 'price' || activeField === 'cost' || activeField === 'iva_rate'}
                         />
                     </div>

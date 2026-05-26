@@ -1,4 +1,4 @@
-/** SAFT sales families configured independently (NC = série registada na AT; NC fiscal continua a cadeia do documento original). */
+/** SAFT sales families configured independently (FS, FT, NC each with own série, ATCUD and hash chain). */
 export type FiscalSeriesDocKey = 'FS' | 'FT' | 'NC';
 
 export interface ReceiptSeriesProfile {
@@ -56,9 +56,14 @@ export function receiptProfileForSale(receipt: SystemReceiptSettingsSlice, saft:
     return receipt.seriesProfiles[saleProfileKeyFromSaft(saft)];
 }
 
-/** Perfil para avisos ATCUD em função do tipo de documento por defeito. */
+/** Perfil para avisos ATCUD / checkout (sempre FT para novas vendas). */
 export function receiptProfileForDefaultDocumentType(receipt: SystemReceiptSettingsSlice): ReceiptSeriesProfile {
-    return receipt.defaultDocumentType === 'FATURA' ? receipt.seriesProfiles.FT : receipt.seriesProfiles.FS;
+    return receipt.seriesProfiles.FT;
+}
+
+/** Nota de crédito: série e cadeia AT próprias (Definições > NC). */
+export function receiptProfileForCreditNote(receipt: SystemReceiptSettingsSlice): ReceiptSeriesProfile {
+    return receipt.seriesProfiles.NC;
 }
 
 /**
@@ -123,5 +128,7 @@ export function normalizeStoredSeriesProfile(
             merged.resetPolicy === 'monthly' || merged.resetPolicy === 'yearly'
                 ? merged.resetPolicy
                 : defaults.resetPolicy,
+        /** Legacy flag ignored — use a new `series` name (+ ATCUD) when AT registers a replacement. */
+        seriesDiscontinued: false,
     };
 }

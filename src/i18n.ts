@@ -106,7 +106,7 @@ const resources = {
             fiscalAudit: {
                 title: 'Fiscal audit log',
                 subtitle:
-                    'Append-only events (void requests, credit notes, recibos, SAF-T export, etc.).',
+                    'Append-only events (sales, reprints, post-sale print, company/series edits, SAF-T export, etc.).',
                 loading: 'Loading…',
                 loadError: 'Failed to load audit log.',
                 colTime: 'Time (UTC)',
@@ -114,6 +114,24 @@ const resources = {
                 colEmployee: 'Employee',
                 colPayload: 'Payload',
                 empty: 'No events yet.',
+                eventTypes: {
+                    FISCAL_DOCUMENT_CREATED: 'Fiscal document created',
+                    VOID_REQUESTED: 'Void requested',
+                    FISCAL_DOCUMENT_CANCELLED: 'Fiscal document cancelled',
+                    REPRINT_REQUESTED: '2nd copy reprint requested',
+                    POST_SALE_RECEIPT_PRINTED: 'Post-sale receipt printed',
+                    POST_SALE_RECEIPT_NOT_PRINTED: 'Post-sale receipt not printed',
+                    CREDIT_NOTE_ISSUED: 'Credit note issued',
+                    RECIBO_ISSUED: 'Receipt (recibo) issued',
+                    COMPANY_INFO_CHANGED: 'Company info changed',
+                    SERIES_PROFILE_CHANGED: 'Series profile changed',
+                    SETTINGS_FISCAL_CHANGED: 'Fiscal settings changed',
+                    SETTINGS_CHANGED: 'Settings changed',
+                    SAFT_EXPORTED: 'SAF-T exported',
+                    LOGIN_SUCCESS: 'Login success',
+                    LOGIN_FAILURE: 'Login failure',
+                    KEY_ROTATED: 'Signing key rotated',
+                },
             },
             seedManagement: {
                 title: 'Seed Management',
@@ -224,12 +242,13 @@ const resources = {
                 atcudPrefix: 'ATCUD:',
                 operator: 'Operator:',
                 original: 'Original',
+                secondCopy: '2nd copy',
                 dateLabel: 'Date:',
                 refInvoice: 'Ref. invoice:',
                 reason: 'Reason:',
                 unitPriceLine: 'Unit price: {{price}} €/unit',
                 paidWith: 'Paid by {{method}}',
-                certifiedLine: 'Processed by certified software no. {{num}} /AT',
+                certifiedLine: '{{hashPrefix}}Processed by certified software no. {{num}}/AT',
                 legalFooter:
                     'Services and/or goods were supplied and/or made available to the acquirer on this date (VAT Code Art. 36(5)(f)).',
                 licensedTo: 'Licensed to:',
@@ -764,7 +783,7 @@ const resources = {
                 },
                 creditNote: {
                     confirm:
-                        'Issue a fiscal credit note (NC) for {{number}}? This creates a new negative document on the same AT series.',
+                        'Issue a fiscal credit note (NC) for {{number}}? This creates a new document on the NC series configured in Settings.',
                     reasonPrompt:
                         'Reason for the credit note (optional). Shown on the receipt and in the audit log.',
                     success: 'Credit note issued: {{invoiceNo}}',
@@ -776,7 +795,7 @@ const resources = {
                     paymentCash: 'Cash',
                     paymentCard: 'Card',
                     paymentMixed: 'Mixed',
-                    secondCopy: 'Second copy',
+                    secondCopy: '2nd copy',
                 },
             },
             devicePairing: {
@@ -1044,8 +1063,14 @@ const resources = {
                         description: 'UI preferences and display options',
                     },
                     hardware: {
-                        label: 'Hardware & Printers',
-                        description: 'Thermal printer and cash drawer setup',
+                        label: 'Hardware & Tools',
+                        description: 'Printers, seed data, and hardware testing',
+                    },
+                    hardwareTools: {
+                        printer: 'Printer setup',
+                        seed: 'Seed management',
+                        cashier: 'Cashier testing',
+                        electron: 'Electron testing',
                     },
                     company: {
                         label: 'Company & Fiscal',
@@ -1142,7 +1167,7 @@ const resources = {
                     seriesForAT: 'Series name (AT / document)',
                     seriesForATPlaceholder: 'FAT2026',
                     seriesForATHelp:
-                        'Registered with AT; appears before "/" on the invoice (e.g. FS FAT2026/0001). Do not use "/".',
+                        'Registered with AT; appears before "/" on the invoice (e.g. FT FAT2026/0001). To start a new série, change this name and update the ATCUD code and validity dates. Do not use "/".',
                     seriesDescription: 'Series description (receipt / SAFT)',
                     seriesDescriptionPlaceholder: 'e.g. Main counter',
                     numericWidth: 'Numeric width',
@@ -1155,6 +1180,10 @@ const resources = {
                     defaultDocumentType: 'Default Document Type',
                     docTypeSimplified: 'Simplified invoice',
                     docTypeInvoice: 'Invoice',
+                    receiptLanguage: 'Receipt language',
+                    receiptLanguageDesc: 'Language for printed receipts and receipt preview (independent of app UI).',
+                    receiptLanguagePt: 'Portuguese',
+                    receiptLanguageEn: 'English',
                     counterLabel: 'Counter Label',
                     atValidationCode: 'AT Validation Code (ATCUD)',
                     atValidationPlaceholder: 'AT56789X1',
@@ -1165,7 +1194,7 @@ const resources = {
                     lastSeriesKey: 'Last series key:',
                     lastDocInChain: 'Last document in chain (local):',
                     seriesPerDocTypeIntro:
-                        'Counter label and per-type series (FS, FT, NC). Choose a document type below to edit its series, ATCUD and numbering.',
+                        'Counter label and per-type series (FT, NC). Sales always use FT (invoice); choose a type below to edit série, ATCUD and numbering.',
                     configureSeriesDocType: 'Document type to configure',
                     seriesStartDate: 'Series start date (optional)',
                     seriesEndDate: 'Series end date (optional)',
@@ -1181,8 +1210,6 @@ const resources = {
                         FT: 'Invoice (FT)',
                         NC: 'Credit note (NC)',
                     },
-                    ncSeriesNote:
-                        'Credit notes from a sale continue the fiscal chain of the original document. Configure your NC series here for AT registration and consistency.',
                 },
                 fiscalAT: {
                     sectionTitle: 'Fiscal AT (certification)',
@@ -1236,6 +1263,7 @@ const resources = {
                 brandTitle: 'POS System',
                 brandSubtitle: 'Professional Edition',
                 toggleNav: 'Toggle Navigation',
+                openMenu: 'Open menu',
                 searchProductPlaceholder: 'Search Product...',
                 loadingCatalogTitle: 'Loading Products...',
                 loadingCatalogSubtitle: 'Please wait while we load your product catalog',
@@ -1292,7 +1320,7 @@ const resources = {
                 orderDetails: 'Order Details',
                 dineIn: 'Dine In',
                 takeAway: 'Take Away',
-                saveBill: 'Second Copy',
+                saveBill: '2nd copy',
                 tables: 'Tables',
                 clearAllOrder: 'Clear All Order',
                 removeCartLine: 'Remove line',
@@ -1461,7 +1489,7 @@ const resources = {
             fiscalAudit: {
                 title: 'Registo de auditoria fiscal',
                 subtitle:
-                    'Eventos só de acrescentar (anulações, notas de crédito, recibos, exportação SAF-T, etc.).',
+                    'Eventos só de acrescentar (vendas, reimpressões, impressão pós-venda, alterações empresa/série, SAF-T, etc.).',
                 loading: 'A carregar…',
                 loadError: 'Falha ao carregar o registo de auditoria.',
                 colTime: 'Hora (UTC)',
@@ -1469,6 +1497,24 @@ const resources = {
                 colEmployee: 'Funcionário',
                 colPayload: 'Payload',
                 empty: 'Ainda sem eventos.',
+                eventTypes: {
+                    FISCAL_DOCUMENT_CREATED: 'Documento fiscal criado',
+                    VOID_REQUESTED: 'Pedido de anulação',
+                    FISCAL_DOCUMENT_CANCELLED: 'Documento fiscal anulado',
+                    REPRINT_REQUESTED: 'Pedido de 2.ª via',
+                    POST_SALE_RECEIPT_PRINTED: 'Recibo pós-venda impresso',
+                    POST_SALE_RECEIPT_NOT_PRINTED: 'Recibo pós-venda não impresso',
+                    CREDIT_NOTE_ISSUED: 'Nota de crédito emitida',
+                    RECIBO_ISSUED: 'Recibo emitido',
+                    COMPANY_INFO_CHANGED: 'Dados da empresa alterados',
+                    SERIES_PROFILE_CHANGED: 'Série fiscal alterada',
+                    SETTINGS_FISCAL_CHANGED: 'Definições fiscais alteradas',
+                    SETTINGS_CHANGED: 'Definições alteradas',
+                    SAFT_EXPORTED: 'SAF-T exportado',
+                    LOGIN_SUCCESS: 'Login com sucesso',
+                    LOGIN_FAILURE: 'Falha de login',
+                    KEY_ROTATED: 'Rotação de chave de assinatura',
+                },
             },
             seedManagement: {
                 title: 'Gestão de Seeds',
@@ -1579,12 +1625,13 @@ const resources = {
                 atcudPrefix: 'ATCUD:',
                 operator: 'Operador:',
                 original: 'Original',
+                secondCopy: '2.ª via',
                 dateLabel: 'Data:',
                 refInvoice: 'Ref. Fatura:',
                 reason: 'Motivo:',
                 unitPriceLine: 'Preço unitário: {{price}} €/Unidade',
                 paidWith: 'Pago em {{method}}',
-                certifiedLine: 'Processado por programa certificado n.º {{num}} /AT',
+                certifiedLine: '{{hashPrefix}}Processado por programa certificado n.º {{num}}/AT',
                 legalFooter:
                     'Os serviços e/ou bens foram realizados e/ou colocados à disposição do adquirente nesta data (Art 36 do CIVA, N°5 alínea F)',
                 licensedTo: 'Licenciado a:',
@@ -2120,7 +2167,7 @@ const resources = {
                 },
                 creditNote: {
                     confirm:
-                        'Emitir nota de crédito fiscal (NC) para {{number}}? Será criado um documento negativo na mesma série AT.',
+                        'Emitir nota de crédito fiscal (NC) para {{number}}? Será criado um documento na série NC configurada nas Definições.',
                     reasonPrompt:
                         'Motivo da nota de crédito (opcional). Aparece no recibo e no registo de auditoria.',
                     success: 'Nota de crédito emitida: {{invoiceNo}}',
@@ -2132,7 +2179,7 @@ const resources = {
                     paymentCash: 'Numerário',
                     paymentCard: 'Cartão',
                     paymentMixed: 'Misto',
-                    secondCopy: 'Segunda via',
+                    secondCopy: '2.ª via',
                 },
             },
             devicePairing: {
@@ -2401,8 +2448,14 @@ const resources = {
                         description: 'Preferências de UI e opções de ecrã',
                     },
                     hardware: {
-                        label: 'Hardware e Impressoras',
-                        description: 'Impressora térmica e gaveta de dinheiro',
+                        label: 'Hardware e Ferramentas',
+                        description: 'Impressoras, seeds e testes de hardware',
+                    },
+                    hardwareTools: {
+                        printer: 'Configuração de impressora',
+                        seed: 'Gestão de seeds',
+                        cashier: 'Testes de caixa',
+                        electron: 'Testes Electron',
                     },
                     company: {
                         label: 'Empresa e Fiscal',
@@ -2499,7 +2552,7 @@ const resources = {
                     seriesForAT: 'Nome da série (AT / documento)',
                     seriesForATPlaceholder: 'FAT2026',
                     seriesForATHelp:
-                        'Registado na AT; aparece antes de "/" no documento (ex. FS FAT2026/0001). Não use "/".',
+                        'Registado na AT; aparece antes de "/" no documento (ex. FT FAT2026/0001). Para uma série nova, altere este nome e atualize o código ATCUD e as datas de vigência. Não use "/".',
                     seriesDescription: 'Descrição da série (recibo / SAFT)',
                     seriesDescriptionPlaceholder: 'ex. Balcão principal',
                     numericWidth: 'Largura numérica',
@@ -2512,6 +2565,10 @@ const resources = {
                     defaultDocumentType: 'Tipo de Documento Padrão',
                     docTypeSimplified: 'Fatura simplificada',
                     docTypeInvoice: 'Fatura',
+                    receiptLanguage: 'Idioma do recibo',
+                    receiptLanguageDesc: 'Idioma dos recibos impressos e da pré-visualização (independente do idioma da aplicação).',
+                    receiptLanguagePt: 'Português',
+                    receiptLanguageEn: 'Inglês',
                     counterLabel: 'Rótulo do Contador',
                     atValidationCode: 'Código de validação AT (ATCUD)',
                     atValidationPlaceholder: 'AT56789X1',
@@ -2522,7 +2579,7 @@ const resources = {
                     lastSeriesKey: 'Última chave de série:',
                     lastDocInChain: 'Último documento na cadeia (local):',
                     seriesPerDocTypeIntro:
-                        'Rótulo do contador e séries por tipo (FS, FT, NC). Escolha o tipo de documento abaixo para editar série, ATCUD e numeração.',
+                        'Rótulo do contador e séries por tipo (FT, NC). As vendas usam sempre FT (fatura); escolha o tipo abaixo para editar série, ATCUD e numeração.',
                     configureSeriesDocType: 'Tipo de documento a configurar',
                     seriesStartDate: 'Data de início da série (opcional)',
                     seriesEndDate: 'Data de fim da série (opcional)',
@@ -2538,8 +2595,6 @@ const resources = {
                         FT: 'Fatura (FT)',
                         NC: 'Nota de crédito (NC)',
                     },
-                    ncSeriesNote:
-                        'A emissão de NC sobre uma venda continua na cadeia fiscal do documento original. Defina aqui a série NC para registo na AT e consistência.',
                 },
                 fiscalAT: {
                     sectionTitle: 'Fiscal AT (certificação)',
@@ -2595,6 +2650,7 @@ const resources = {
                 brandTitle: 'Sistema POS',
                 brandSubtitle: 'Edição Profissional',
                 toggleNav: 'Alternar navegação',
+                openMenu: 'Abrir menu',
                 searchProductPlaceholder: 'Procurar produto...',
                 loadingCatalogTitle: 'A carregar produtos...',
                 loadingCatalogSubtitle: 'Aguarde enquanto carregamos o catálogo',
@@ -2651,7 +2707,7 @@ const resources = {
                 orderDetails: 'Detalhes do Pedido',
                 dineIn: 'Consumir no Local',
                 takeAway: 'Levar',
-                saveBill: 'Segunda via',
+                saveBill: '2.ª via',
                 tables: 'Mesas',
                 clearAllOrder: 'Limpar Pedido',
                 removeCartLine: 'Remover linha',

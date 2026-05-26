@@ -68,7 +68,12 @@ const FiscalAudit: React.FC = () => {
                                 {rows.map(r => (
                                     <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50/80">
                                         <td className="px-4 py-3 whitespace-nowrap font-mono text-base">{r.created_at}</td>
-                                        <td className="px-4 py-3 font-medium">{r.event_type}</td>
+                                        <td className="px-4 py-3">
+                                            <div className="font-medium text-gray-900">
+                                                {t(`fiscalAudit.eventTypes.${r.event_type}`, { defaultValue: r.event_type })}
+                                            </div>
+                                            <div className="font-mono text-sm text-gray-500 mt-0.5">{r.event_type}</div>
+                                        </td>
                                         <td className="px-4 py-3 font-mono text-base">{r.employee_id ?? '—'}</td>
                                         <td className="px-4 py-3 font-mono text-sm break-all max-w-xl">{r.payload_json}</td>
                                     </tr>

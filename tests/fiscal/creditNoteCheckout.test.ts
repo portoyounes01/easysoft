@@ -32,19 +32,24 @@ function makeTestSettings(privateKeyPem: string): SystemSettings {
             softwareCertNumber: '999',
         },
         receipt: {
-            defaultDocumentType: 'FATURA_SIMPLIFICADA',
+            defaultDocumentType: 'FATURA',
             counterLabel: 'B1',
             seriesProfiles: (() => {
                 const p = defaultSeriesProfiles();
-                p.FS.series = 'A';
-                p.FS.numericWidth = 4;
-                p.FS.resetPolicy = 'yearly';
-                p.FS.lastSeriesKey = '';
-                p.FS.currentNumber = 0;
-                p.FS.atValidationCode = 'ATNC01';
-                p.FS.seriesDiscontinued = false;
-                p.FT = { ...p.FS };
-                p.NC = { ...p.FS };
+                p.FT.series = 'A';
+                p.FT.numericWidth = 4;
+                p.FT.resetPolicy = 'yearly';
+                p.FT.lastSeriesKey = '';
+                p.FT.currentNumber = 0;
+                p.FT.atValidationCode = 'ATNC01';
+                p.FT.seriesDiscontinued = false;
+                p.FS = { ...p.FT };
+                p.NC = {
+                    ...p.FS,
+                    series: 'NCSER',
+                    atValidationCode: 'ATNC99',
+                    currentNumber: 0,
+                };
                 return p;
             })(),
         },
@@ -56,7 +61,7 @@ function buildSalePayload(settings: SystemSettings, signer: WebCryptoRsaSha1Sign
     const d = '2026-06-20';
     return {
         settings,
-        receiptProfile: settings.receipt.seriesProfiles.FS,
+        receiptProfile: settings.receipt.seriesProfiles.FT,
         certificationMode: 'training',
         transactionDate: d,
         transactionTime: '12:00:00',
@@ -64,7 +69,7 @@ function buildSalePayload(settings: SystemSettings, signer: WebCryptoRsaSha1Sign
         seriesKey: 'A-2026',
         chainScope: 'ATNC01::A-2026',
         atCode: 'ATNC01',
-        invoiceTypeSaft: 'FS',
+        invoiceTypeSaft: 'FT',
         grossTotal: 12.3,
         netRounded: 10,
         taxTotal: 2.3,
@@ -140,10 +145,11 @@ describe('runFiscalCreditNoteForTransaction', () => {
         signer = await WebCryptoRsaSha1Signer.fromPkcs8Pem(privateKey);
     });
 
-    it('creates NC with negative totals and continues the hash chain', async () => {
+    it('creates NC with positive totals on the NC série chain from settings', async () => {
         const sale = await transactionLocalService.createFiscalCheckoutAtomic(buildSalePayload(settings, signer));
-        expect(sale.invoiceTypeSaft).toBe('FS');
+        expect(sale.invoiceTypeSaft).toBe('FT');
         expect(sale.grossTotal).toBe(12.3);
+        expect(sale.invoiceNo).toBe('FT A/0001');
 
         const nc = await runFiscalCreditNoteForTransaction({
             settings,
@@ -153,19 +159,33 @@ describe('runFiscalCreditNoteForTransaction', () => {
         });
 
         expect(nc.invoiceTypeSaft).toBe('NC');
-        expect(nc.grossTotal).toBe(-12.3);
-        expect(nc.sequentialNumber).toBe(sale.sequentialNumber + 1);
+        expect(nc.grossTotal).toBe(12.3);
+        expect(nc.invoiceNo).toBe('NC NCSER/0001');
+        expect(nc.sequentialNumber).toBe(1);
 
         const ncFiscal = await transactionLocalService.getFiscalDocumentById(nc.fiscalId);
         expect(ncFiscal?.invoice_type).toBe('NC');
-        expect(ncFiscal?.gross_total).toBe(-12.3);
-        expect(ncFiscal?.chain_scope).toBe('ATNC01::A-2026');
+        expect(ncFiscal?.gross_total).toBe(12.3);
+        expect(ncFiscal?.chain_scope).toBe('ATNC99::NCSER-2026');
+        expect(ncFiscal?.series_key).toBe('NCSER-2026');
         const saleFiscal = await transactionLocalService.getFiscalDocumentById(sale.fiscalId);
+        expect(ncFiscal?.chain_scope).not.toBe(saleFiscal?.chain_scope);
         expect(ncFiscal?.settled_invoice_no).toBe(saleFiscal?.invoice_no);
         expect(ncFiscal?.settled_invoice_date).toBe(saleFiscal?.invoice_date);
 
         const audits = await localDb.fiscalAuditEvents.toArray();
         expect(audits.some(a => a.event_type === 'CREDIT_NOTE_ISSUED')).toBe(true);
+    });
+
+    it('detects existing NC by settled invoice ref (not sale chain)', async () => {
+        const sale = await transactionLocalService.createFiscalCheckoutAtomic(buildSalePayload(settings, signer));
+        await runFiscalCreditNoteForTransaction({
+            settings,
+            originalTransactionId: sale.transactionId,
+            payment: { paymentMethod: 'cash', employeeId: 'e2', employeeName: 'Other' },
+            signer,
+        });
+        expect(await transactionLocalService.hasCreditNoteForOriginalTransaction(sale.transactionId)).toBe(true);
     });
 
     it('persists credit reason in notes and audit when provided', async () => {

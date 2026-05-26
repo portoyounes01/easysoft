@@ -42,19 +42,14 @@ describe('saleDocumentType', () => {
         expect(hasCompleteFaturaCustomerData(null)).toBe(false);
     });
 
-    it('resolveDefaultDocumentTypeForSale issues FATURA when complete customer', () => {
+    it('resolveDefaultDocumentTypeForSale always issues FATURA (FT)', () => {
         expect(resolveDefaultDocumentTypeForSale('FATURA_SIMPLIFICADA', base())).toBe('FATURA');
-    });
-
-    it('resolveDefaultDocumentTypeForSale uses settings when customer incomplete', () => {
-        expect(
-            resolveDefaultDocumentTypeForSale('FATURA_SIMPLIFICADA', base({ address: null }))
-        ).toBe('FATURA_SIMPLIFICADA');
+        expect(resolveDefaultDocumentTypeForSale('FATURA_SIMPLIFICADA', null)).toBe('FATURA');
     });
 
     it('saftTypeToReceiptDocumentType maps FT/FS/NC', () => {
         expect(saftTypeToReceiptDocumentType('FT')).toBe('FATURA');
-        expect(saftTypeToReceiptDocumentType('FS')).toBe('FATURA_SIMPLIFICADA');
+        expect(saftTypeToReceiptDocumentType('FS')).toBe('FATURA');
         expect(saftTypeToReceiptDocumentType('NC')).toBe('NOTA_CREDITO');
     });
 });

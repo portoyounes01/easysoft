@@ -1,7 +1,14 @@
 import type { SystemSettings } from '../../contexts/SettingsContext';
 import type { LocalFiscalDocument, LocalTransaction, LocalTransactionItem } from '../../types/supabase';
 import { customerLocalService } from '../../lib/localDatabase';
-import { CONSUMER_FINAL_CUSTOMER_TAX_ID, isSaftPaymentReceiptType } from '../spec';
+import {
+    CONSUMER_FINAL_CUSTOMER_TAX_ID,
+    isSaftPaymentReceiptType,
+} from '../spec';
+import {
+    CONSUMER_FINAL_CUSTOMER_NAME,
+    CONSUMER_FINAL_DEFAULT_ADDRESS,
+} from '../fiscalCustomer';
 
 const NS = 'urn:OECD:StandardAuditFile-Tax:PT_1.04_01';
 
@@ -95,8 +102,8 @@ export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): P
     const customers = new Map<string, SaftCustomerRow>();
 
     const placeholderBilling: Omit<SaftCustomerRow, 'taxId' | 'name'> = {
-        addressDetail: 'Desconhecido',
-        city: 'Desconhecido',
+        addressDetail: CONSUMER_FINAL_DEFAULT_ADDRESS,
+        city: CONSUMER_FINAL_DEFAULT_ADDRESS,
         postalCode: '0000-000',
         country: 'PT',
     };
@@ -105,14 +112,22 @@ export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): P
         const taxId = fiscal.customer_tax_id?.replace(/\s/g, '') || CONSUMER_FINAL_CUSTOMER_TAX_ID;
         const custName =
             taxId === CONSUMER_FINAL_CUSTOMER_TAX_ID
-                ? 'Consumidor final'
-                : tx.customer_name?.trim() || 'Cliente';
+                ? CONSUMER_FINAL_CUSTOMER_NAME
+                : tx.customer_name?.trim() || CONSUMER_FINAL_CUSTOMER_NAME;
 
         const linked = tx.customer_id ? customerById.get(tx.customer_id) : undefined;
+        const linkedMorada = linked
+            ? [
+                  (linked.address ?? '').trim(),
+                  [(linked.postal_code ?? '').trim(), (linked.city ?? '').trim()].filter(Boolean).join(' '),
+              ]
+                  .filter(Boolean)
+                  .join(', ')
+            : '';
         const billing: Omit<SaftCustomerRow, 'taxId' | 'name'> = linked
             ? {
-                  addressDetail: (linked.address ?? '').trim() || placeholderBilling.addressDetail,
-                  city: (linked.city ?? '').trim() || placeholderBilling.city,
+                  addressDetail: linkedMorada || CONSUMER_FINAL_DEFAULT_ADDRESS,
+                  city: (linked.city ?? '').trim() || CONSUMER_FINAL_DEFAULT_ADDRESS,
                   postalCode: (linked.postal_code ?? '').trim() || placeholderBilling.postalCode,
                   country: (linked.country ?? 'PT').trim().slice(0, 2).toUpperCase() || 'PT',
               }
@@ -132,7 +147,7 @@ export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): P
     if (customers.size === 0) {
         customers.set(CONSUMER_FINAL_CUSTOMER_TAX_ID, {
             taxId: CONSUMER_FINAL_CUSTOMER_TAX_ID,
-            name: 'Consumidor final',
+            name: CONSUMER_FINAL_CUSTOMER_NAME,
             ...placeholderBilling,
         });
     }
@@ -234,11 +249,11 @@ ${productXml}
     for (const { fiscal, tx } of invoiceLoaded) {
         const taxId = fiscal.customer_tax_id?.replace(/\s/g, '') || CONSUMER_FINAL_CUSTOMER_TAX_ID;
         const customerId = `C${taxId}`;
-        const gross = fiscal.gross_total;
+        const gross = Math.abs(fiscal.gross_total);
         if (fiscal.invoice_type === 'NC') {
-            totalCredit += Math.abs(gross);
+            totalCredit += gross;
         } else {
-            totalDebit += Math.abs(gross);
+            totalDebit += gross;
         }
 
         const ncSettledNo = fiscal.invoice_type === 'NC' ? (fiscal.settled_invoice_no?.trim() ?? '') : '';
@@ -255,7 +270,7 @@ ${productXml}
         const lines = tx.items
             .map((it, idx) => {
                 const code = it.product_sku || it.product_id;
-                const lineGross = it.line_total;
+                const lineGross = Math.abs(it.line_total);
                 const taxCode = mapIvaDecimalToSaftTaxCode(it.iva_rate);
                 const taxPct = fmtDec(Math.round(it.iva_rate * 10000) / 100);
                 const unitGross = it.quantity > 0 ? lineGross / it.quantity : lineGross;
@@ -310,9 +325,9 @@ ${productXml}
         <CustomerID>${xmlEscape(customerId)}</CustomerID>
         ${lines}
         <DocumentTotals>
-          <TaxPayable>${fmtDec(fiscal.tax_total)}</TaxPayable>
-          <NetTotal>${fmtDec(fiscal.net_total)}</NetTotal>
-          <GrossTotal>${fmtDec(fiscal.gross_total)}</GrossTotal>
+          <TaxPayable>${fmtDec(Math.abs(fiscal.tax_total))}</TaxPayable>
+          <NetTotal>${fmtDec(Math.abs(fiscal.net_total))}</NetTotal>
+          <GrossTotal>${fmtDec(Math.abs(fiscal.gross_total))}</GrossTotal>
         </DocumentTotals>
       </Invoice>`);
     }

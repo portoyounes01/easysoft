@@ -81,7 +81,7 @@ describe('SAF-T export', () => {
             payment_method: 'cash',
             created_at: '2026-04-10T12:00:00.000Z',
             atcud_body: 'ATCODE1-0001',
-            hash_four_chars: 'a-b-c-d',
+            hash_four_chars: 'abcd',
             needs_push: false,
         };
 
@@ -151,6 +151,8 @@ describe('SAF-T export', () => {
 
         expect(xml).toContain('urn:OECD:StandardAuditFile-Tax:PT_1.04_01');
         expect(xml).toContain('<InvoiceNo>FS A/0001</InvoiceNo>');
+        expect(xml).toContain('<SourceID>u1</SourceID>');
+        expect(xml.match(/<SourceID>u1<\/SourceID>/g)?.length).toBe(2);
         expect(xml).toContain('<GeneralLedgerEntries>');
         const masterEnd = xml.indexOf('</MasterFiles>');
         const gle = xml.indexOf('<GeneralLedgerEntries>');
@@ -190,7 +192,7 @@ describe('SAF-T export', () => {
             payment_method: 'cash',
             created_at: '2026-04-11T10:00:00.000Z',
             atcud_body: 'ATCODE1-0002',
-            hash_four_chars: 'a-b-c-d',
+            hash_four_chars: 'abcd',
             needs_push: false,
         };
 
@@ -284,9 +286,9 @@ describe('SAF-T export', () => {
             settled_invoice_date: settledDate,
             invoice_date: '2026-04-12',
             system_entry_date: '2026-04-12T10:00:00',
-            gross_total: -12.3,
-            net_total: -10,
-            tax_total: -2.3,
+            gross_total: 12.3,
+            net_total: 10,
+            tax_total: 2.3,
             hash_base64: 'QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==',
             hash_control: '1',
             hash_plaintext: 'x',
@@ -298,7 +300,7 @@ describe('SAF-T export', () => {
             payment_method: 'cash',
             created_at: '2026-04-12T10:00:00.000Z',
             atcud_body: 'ATCODE1-0003',
-            hash_four_chars: 'a-b-c-d',
+            hash_four_chars: 'abcd',
             needs_push: false,
         };
 
@@ -314,8 +316,8 @@ describe('SAF-T export', () => {
             unit_price: 12.3,
             unit_cost: 5,
             iva_rate: 0.23,
-            line_total: -12.3,
-            tax_amount: -2.3,
+            line_total: 12.3,
+            tax_amount: 2.3,
             profit_amount: 0,
             discount_amount: 0,
             discount_percentage: 0,
@@ -336,10 +338,10 @@ describe('SAF-T export', () => {
             customer_name: null,
             transaction_date: '2026-04-12',
             transaction_time: '10:00:00',
-            subtotal: -12.3,
+            subtotal: 12.3,
             discount: 0,
-            tax: -2.3,
-            total: -12.3,
+            tax: 2.3,
+            total: 12.3,
             payment_method: 'cash',
             amount_paid: null,
             change_given: 0,

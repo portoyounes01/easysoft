@@ -1,29 +1,19 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { generateQRCodeImage } from '../utils/qrCode';
-import { NavLink } from 'react-router-dom';
 import {
-  ShoppingCart,
-  X,
-  CreditCard,
   Grid,
   Coffee,
   Milk,
   Cake,
   Candy,
-  LogOut,
   UserCircle,
   Search,
-  Users,
   AlertCircle,
   Clock,
   Loader2,
   Package,
   RefreshCw,
   Menu,
-  // LayoutDashboard,
-  BarChart3,
-  Settings,
-  FileText
 } from 'lucide-react';
 import { usePOS } from '../contexts/POSContext';
 import { syncManager } from '../services/syncManager';
@@ -38,19 +28,20 @@ import { useTranslation } from 'react-i18next';
 import { isSupabaseConfigured, checkSupabaseConnection } from '../lib/supabase';
 import { customerLocalService, initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
-import { receiptProfileForDefaultDocumentType, isIssueDateOutsideSeriesWindow } from '../fiscal/receiptSeriesProfile';
+import { receiptProfileForDefaultDocumentType } from '../fiscal/receiptSeriesProfile';
 import { saftTypeToReceiptDocumentType } from '../fiscal/saleDocumentType';
+import { buildReceiptCustomerProps } from '../fiscal/fiscalCustomer';
 import { ReceiptProps } from '../components/ThermalReceipt';
-import ReceiptHistorySelector from '../components/ReceiptHistorySelector';
+import { getReceiptT } from '../utils/receiptLanguage';
+import type { PostSalePrintAuditContext } from '../fiscal/fiscalAuditLog';
+// import ReceiptHistorySelector from '../components/ReceiptHistorySelector'; // AGENTS: do not delete — 2.ª via picker (commented until implemented)
 import { CustomerDialog } from '../components/CustomerDialog';
 import PaymentDialog from '../components/PaymentDialog';
 import ReceiptDialog from '../components/ReceiptDialog';
 import { CategoryFilterButton } from '../components/ui/CategoryFilterButton';
 import { ProductCard } from '../components/ui/ProductCard';
-import {
-  DesignSystem2CustomizationProvider,
-  useDesignSystem2Customization,
-} from '../contexts/DesignSystem2CustomizationContext';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import { useLayoutNav } from '../contexts/LayoutNavContext';
 import '../styles/design-system-2-scope.css';
 
 // Icon mapping for categories
@@ -65,7 +56,8 @@ const iconMap = {
 
 const POSInner: React.FC = () => {
   const { t } = useTranslation();
-  const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+  const { toggleNavSidebar } = useLayoutNav();
+  const { visualStyle, prefs } = useDesignSystem2Customization();
   const { cart, addToCart, clearCart, updateQuantity, selectedCustomer, selectCustomer, processTransaction } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
   const { settings, updateSettings } = useSettings();
@@ -88,17 +80,14 @@ const POSInner: React.FC = () => {
   // Receipt preview modal state
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
   const [receiptPreviewData, setReceiptPreviewData] = useState<ReceiptProps | null>(null);
+  /* AGENTS: Do not delete — 2.ª via / receipt history state (commented until Mesas + 2.ª via POS flow is implemented).
   const [lastCompletedReceipt, setLastCompletedReceipt] = useState<ReceiptProps | null>(null);
   const [recentReceipts, setRecentReceipts] = useState<ReceiptProps[]>([]);
   const [showReceiptHistory, setShowReceiptHistory] = useState(false);
+  */
   const [nextReceiptAfterClose, setNextReceiptAfterClose] = useState<ReceiptProps | null>(null);
+  const [postSalePrintAudit, setPostSalePrintAudit] = useState<PostSalePrintAuditContext | null>(null);
   const [lastFiscalInvoiceNo, setLastFiscalInvoiceNo] = useState<string | null>(null);
-
-  const seriesValidityOutOfWindow = useMemo(() => {
-    const prof = receiptProfileForDefaultDocumentType(settings.receipt);
-    const today = new Date().toISOString().split('T')[0];
-    return isIssueDateOutsideSeriesWindow(today, prof) !== null;
-  }, [settings.receipt]);
 
   // Stock validation helper function
   const canAddToCart = (product: LocalProduct, requestedQuantity = 1): boolean => {
@@ -155,20 +144,9 @@ const POSInner: React.FC = () => {
 
   // Quantity increases from product grid; order panel line tap removes one unit
   const [showPayment, setShowPayment] = useState(false);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  // POS uses a temporary navigation overlay instead of a persistent sidebar
-  const [showNavigation, setShowNavigation] = useState(false);
   const [discount, setDiscount] = useState({ type: 'none' as 'none' | 'percentage' | 'fixed', value: 0 });
   const [showDiscountDialog, setShowDiscountDialog] = useState(false);
-
-  // Toggle sidebar and persist state
-  // Collapsed state preserved; toggled via showNavigation overlay only in POS
-
-  // Toggle navigation overlay
-  const toggleNavigation = () => {
-    setShowNavigation(!showNavigation);
-  };
 
   const [cashReceived, setCashReceived] = useState(0);
 
@@ -352,23 +330,6 @@ const POSInner: React.FC = () => {
     setDiscount({ type: 'none', value: 0 });
   };
 
-  const handleLogout = () => {
-    signOut();
-  };
-
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return 'from-red-500 to-pink-600';
-      case 'manager':
-        return 'from-orange-500 to-amber-600';
-      case 'cashier':
-        return 'from-blue-500 to-purple-600';
-      default:
-        return 'from-gray-500 to-slate-600';
-    }
-  };
-
   const handleCustomerSelect = (customer: LocalCustomer) => {
     selectCustomer(customer);
     setShowCustomerModal(false);
@@ -464,148 +425,35 @@ const POSInner: React.FC = () => {
 
   return (
     <div
-      className="ds2-visual-scope flex h-screen min-h-0 w-full bg-neutral-50"
+      className="ds2-visual-scope flex h-full min-h-0 w-full bg-neutral-50"
       style={visualStyle}
       data-ds2-neutral={prefs.neutralFamilyId}
     >
       {/* Main Content Area - takes most space */}
-      <div className="flex-1 flex flex-col">
-        {settings.fiscal.trainingMode && (
-          <div className="flex-none bg-orange-500 text-white text-center text-xl font-bold py-3 px-4">
-            MODO DE FORMAÇÃO — documentos sem valor fiscal
-          </div>
-        )}
-        {receiptProfileForDefaultDocumentType(settings.receipt).seriesDiscontinued && (
-          <div className="flex-none bg-amber-100 text-amber-950 text-center text-lg font-semibold py-2 px-4 border-b border-amber-300">
-            Série fiscal descontinuada — confirme junto da AT antes de faturar.
-          </div>
-        )}
-        {seriesValidityOutOfWindow && (
-          <div className="flex-none bg-red-100 text-red-900 text-center text-lg font-semibold py-2 px-4 border-b border-red-200">
-            {t('settings.company.seriesOutsideValidityBanner')}
-          </div>
-        )}
-        {/* Top Header - only over left sidebar + center, not cart */}
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Top Header - search over categories + products (not cart) */}
         <div className="flex-none bg-white shadow-sm border-b border-gray-200 px-4 py-3">
-          <div className="flex items-center justify-between">
-            {/* Left - Hamburger Menu only */}
-            <div className="flex items-center">
-              <button
-                onClick={toggleNavigation}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                title={t('pos.toggleNav')}
-              >
-                <Menu className="w-6 h-6 text-gray-600" />
-              </button>
-            </div>
-
-            {/* Center - Search Bar */}
-            <div className="flex-1 max-w-md mx-8">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleNavSidebar}
+              className="flex min-h-touch min-w-[3.75rem] shrink-0 items-center justify-center rounded-xl border-2 border-gray-200 bg-white text-gray-700 shadow-sm transition-all duration-200 hover:bg-gray-50 active:scale-95"
+              aria-label={t('pos.openMenu')}
+            >
+              <Menu className="h-6 w-6" strokeWidth={2.25} aria-hidden />
+            </button>
+            <div className="flex min-w-0 flex-1 justify-center">
+              <div className="relative w-full max-w-md">
+                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 transform text-gray-400" aria-hidden />
                 <input
                   type="text"
                   placeholder={t('pos.searchProductPlaceholder')}
-                  className="w-full pl-10 pr-4 py-2 bg-neutral-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full rounded-lg border border-gray-300 bg-neutral-50 py-2 pl-10 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
-
-
           </div>
         </div>
-
-        {/* Navigation Overlay */}
-        {showNavigation && (
-          <>
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 bg-black bg-opacity-30 z-40"
-              onClick={() => setShowNavigation(false)}
-            />
-
-            {/* Navigation Sidebar */}
-            <div
-              className={`fixed top-0 left-0 z-50 flex h-full ${layoutClasses.sidebarW} flex-col bg-gradient-to-b from-slate-900 to-slate-800 text-white shadow-2xl transition-transform duration-300 ease-in-out`}
-            >
-              <div className="p-6 border-b border-slate-700">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-2 rounded-lg flex-shrink-0">
-                      <FileText className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h1 className="text-xl font-bold">{t('pos.brandTitle')}</h1>
-                      <p className="text-slate-400 text-sm">{t('pos.brandSubtitle')}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowNavigation(false)}
-                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              <nav className="flex-1 p-4">
-                <ul className="space-y-2">
-                  {[
-                    // { path: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard' },
-                    { path: '/pos', icon: ShoppingCart, label: 'Point of Sale', permission: 'sales' },
-                    { path: '/products', icon: Package, label: 'Products', permission: 'inventory' },
-                    { path: '/employees', icon: Users, label: 'Employees', permission: 'employees' },
-                    { path: '/reports', icon: BarChart3, label: 'Reports', permission: 'reports' },
-                    { path: '/transactions', icon: CreditCard, label: 'Transactions', permission: 'transactions' },
-                    { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' }
-                  ].map((item) => {
-                    if (!employee) return null;
-                    if (employee.role !== 'admin' && !employee.access_levels.includes(item.permission) && !employee.access_levels.includes('all')) return null;
-
-                    const Icon = item.icon;
-                    return (
-                      <li key={item.path}>
-                        <NavLink
-                          to={item.path}
-                          onClick={() => setShowNavigation(false)}
-                          className={({ isActive }) =>
-                            `flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 group relative ${isActive
-                              ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg transform scale-105'
-                              : 'text-slate-300 hover:bg-slate-700 hover:text-white hover:transform hover:scale-105'
-                            }`
-                          }
-                        >
-                          <Icon className="w-5 h-5 flex-shrink-0" />
-                          <span className="font-medium">{item.label}</span>
-                        </NavLink>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </nav>
-
-              <div className="p-4 border-t border-slate-700">
-                <div className="flex items-center p-3 bg-slate-800 rounded-lg mb-3 space-x-3">
-                  <div className={`bg-gradient-to-r ${getRoleColor(employee?.role || '')} p-2 rounded-full flex-shrink-0`}>
-                    <UserCircle className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{employee?.name}</p>
-                    <p className="text-slate-400 text-xs">{employee?.role.toUpperCase()}</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setShowLogoutConfirm(true)}
-                  className="w-full flex items-center px-4 py-3 text-slate-300 hover:bg-red-600 hover:text-white rounded-lg transition-all duration-200 hover:transform hover:scale-105 space-x-3"
-                >
-                  <LogOut className="w-5 h-5 group-hover:animate-pulse flex-shrink-0" />
-                  <span className="font-medium">{t('common.logout')}</span>
-                </button>
-              </div>
-            </div>
-          </>
-        )}
 
         {/* Content Area - Left sidebar + Center products */}
         <div className="flex-1 flex overflow-hidden">
@@ -717,57 +565,84 @@ const POSInner: React.FC = () => {
                   </div>
                 )}
                 <div className="flex-1 min-h-0 overflow-y-auto">
-                {/* Show products for selected category OR all products if no category selected */}
-                {(() => {
-                  const productsToShow = selectedCategoryId ? filteredProducts : getActiveProducts();
+                  {/* Show products for selected category OR all products if no category selected */}
+                  {(() => {
+                    const productsToShow = selectedCategoryId ? filteredProducts : getActiveProducts();
 
-                  return (
-                    <>
-                      {/* Products Grid - uses flexbox with vw-based gap to match ProductCard sizing */}
-                      {productsToShow.length > 0 ? (
-                        <div className="flex flex-wrap" style={{ gap: '1vw' }}>
-                          {productsToShow.map((product) => {
-                            const canAdd = canAddToCart(product, 1);
-                            const isOutOfStock = !canAdd && !settings.pos.allowNegativeStock;
-                            const cartItem = cart.find(item => item.product.id === product.id);
-                            const cartQuantity = cartItem ? cartItem.quantity : 0;
-                            const remainingStock = product.stock - cartQuantity;
+                    return (
+                      <>
+                        {/* Products Grid - uses flexbox with vw-based gap to match ProductCard sizing */}
+                        {productsToShow.length > 0 ? (
+                          <div className="flex flex-wrap" style={{ gap: '1vw' }}>
+                            {productsToShow.map((product) => {
+                              const canAdd = canAddToCart(product, 1);
+                              const isOutOfStock = !canAdd && !settings.pos.allowNegativeStock;
+                              const cartItem = cart.find(item => item.product.id === product.id);
+                              const cartQuantity = cartItem ? cartItem.quantity : 0;
+                              const remainingStock = product.stock - cartQuantity;
 
-                            return (
-                              <ProductCard
-                                key={product.id}
-                                name={product.name}
-                                price={product.price}
-                                stock={product.stock}
-                                imageUrl={product.image_url || undefined}
-                                cartQuantity={cartQuantity}
-                                remainingStock={remainingStock}
-                                isOutOfStock={isOutOfStock}
-                                canAdd={canAdd}
-                                onClick={() => handleAddToCart(product)}
-                                outOfStockLabel={t('pos.outOfStock')}
-                              />
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        /* Empty Products State */
-                        <div className="text-center py-20">
-                          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                          <h3 className="text-xl font-semibold text-gray-500 mb-2">
-                            {selectedCategoryId ? t('pos.noProductsFoundTitle') : t('pos.noCatalogProductsTitle')}
-                          </h3>
-                          <p className="text-gray-400">
-                            {selectedCategoryId ? t('pos.noProductsFoundMessage') : t('pos.noCatalogProductsMessage')}
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
+                              return (
+                                <ProductCard
+                                  key={product.id}
+                                  name={product.name}
+                                  price={product.price}
+                                  stock={product.stock}
+                                  imageUrl={product.image_url || undefined}
+                                  cartQuantity={cartQuantity}
+                                  remainingStock={remainingStock}
+                                  isOutOfStock={isOutOfStock}
+                                  canAdd={canAdd}
+                                  onClick={() => handleAddToCart(product)}
+                                  outOfStockLabel={t('pos.outOfStock')}
+                                />
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          /* Empty Products State */
+                          <div className="text-center py-20">
+                            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-xl font-semibold text-gray-500 mb-2">
+                              {selectedCategoryId ? t('pos.noProductsFoundTitle') : t('pos.noCatalogProductsTitle')}
+                            </h3>
+                            <p className="text-gray-400">
+                              {selectedCategoryId ? t('pos.noProductsFoundMessage') : t('pos.noCatalogProductsMessage')}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Bottom User Status Bar — spans categories + products, not cart */}
+        <div id="pos-status-bar" className="flex-none bg-white border-t border-gray-200 px-3 py-1">
+          <div className="flex items-center justify-between max-w-7xl mx-auto">
+            <div className="flex items-center space-x-3">
+              <p className="text-xs font-medium text-gray-800">{employee?.name} • <span className="capitalize text-gray-600">{employee?.role}</span></p>
+              {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
+                <span className="text-green-600 text-xs font-medium">
+                  {t('pos.saleInProgress')}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center space-x-3 text-xs text-gray-500">
+              {settings.autoLogout.enabled && (
+                <span>
+                  {Math.floor(timeUntilAutoLogout / 60000)}:{String(Math.floor((timeUntilAutoLogout % 60000) / 1000)).padStart(2, '0')}
+                </span>
+              )}
+              {settings.pos.autoClearCart.enabled && settings.pos.autoClearCart.timeoutMinutes > 0 && cart.length > 0 && (
+                <span className="text-orange-600">
+                  Cart: {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
+                </span>
+              )}
+              <span>POS Terminal • {new Date().toLocaleDateString('pt-PT')}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -792,13 +667,7 @@ const POSInner: React.FC = () => {
             : undefined
         }
         onCustomer={() => setShowCustomerModal(true)}
-        onTables={() => { }}
         onDiscount={handleDiscountClick}
-        onSaveBill={() => {
-          if (!lastCompletedReceipt) return;
-          setShowReceiptHistory(true);
-        }}
-        canSaveBill={Boolean(lastCompletedReceipt)}
         onProcess={() => setShowPayment(true)}
         totalsOverride={{
           subtotal: Number(subtotal.toFixed(2)),
@@ -905,7 +774,7 @@ const POSInner: React.FC = () => {
               const receiptData: ReceiptProps = {
                 documentType: fiscal
                   ? saftTypeToReceiptDocumentType(fiscal.invoiceTypeSaft)
-                  : (settings.receipt.defaultDocumentType as 'FATURA' | 'FATURA_SIMPLIFICADA'),
+                  : 'FATURA',
                 date: new Date(),
                 counter: settings.receipt.counterLabel,
                 verificationCode: fiscal?.atcudBody || '',
@@ -915,7 +784,7 @@ const POSInner: React.FC = () => {
                 qrCodeData: fiscal?.qrPayload,
                 qrCodeImage,
                 trainingMode: settings.fiscal.trainingMode,
-                documentLabel: 'Original',
+                documentLabel: getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.original'),
                 emitterName: employeeName,
                 company: {
                   name: settings.company.name,
@@ -926,24 +795,7 @@ const POSInner: React.FC = () => {
                   phone: settings.company.phone || undefined,
                   email: settings.company.email || undefined,
                 },
-                customer: selectedCustomer
-                  ? (() => {
-                      const c = selectedCustomer;
-                      const morada = [
-                        c.address?.trim(),
-                        [c.postal_code?.trim(), c.city?.trim()]
-                          .filter(Boolean)
-                          .join(' '),
-                      ]
-                        .filter(Boolean)
-                        .join(', ');
-                      return {
-                        name: c.name,
-                        taxNumber: c.tax_number?.trim() || undefined,
-                        address: morada || undefined,
-                      };
-                    })()
-                  : undefined,
+                customer: buildReceiptCustomerProps(selectedCustomer),
                 items: cartSnapshot.map((ci) => ({
                   id: ci.product.id,
                   description: ci.product.name,
@@ -972,9 +824,14 @@ const POSInner: React.FC = () => {
 
               setShowPayment(false);
               setReceiptPreviewData(receiptData);
-              setLastCompletedReceipt(receiptData);
-              setRecentReceipts((prev) => [receiptData, ...prev].slice(0, 20));
+              // setLastCompletedReceipt(receiptData);
+              // setRecentReceipts((prev) => [receiptData, ...prev].slice(0, 20));
               setNextReceiptAfterClose(null);
+              setPostSalePrintAudit({
+                documentNumber: fiscal?.invoiceNo || receiptData.documentNumber || '',
+                transactionId: fiscal?.transactionId,
+                fiscalDocumentId: fiscal?.fiscalId,
+              });
               if (fiscal?.invoiceNo) {
                 setLastFiscalInvoiceNo(fiscal.invoiceNo);
               }
@@ -994,6 +851,7 @@ const POSInner: React.FC = () => {
           open={showReceiptPreview}
           onClose={() => {
             setShowReceiptPreview(false);
+            setPostSalePrintAudit(null);
             if (nextReceiptAfterClose) {
               const next = nextReceiptAfterClose;
               setNextReceiptAfterClose(null);
@@ -1002,56 +860,24 @@ const POSInner: React.FC = () => {
             }
           }}
           receipt={receiptPreviewData}
+          postSalePrintAudit={postSalePrintAudit}
         />
       )}
 
-      {/* Receipt History Selector for Duplicado (2.ª via) */}
+      {/*
+        AGENTS: Do not delete — 2.ª via receipt history picker (commented until implemented). Remove only if explicitly requested by a human.
       <ReceiptHistorySelector
         open={showReceiptHistory}
         receipts={recentReceipts}
         onClose={() => setShowReceiptHistory(false)}
         onSelect={(r) => {
           setShowReceiptHistory(false);
-          setReceiptPreviewData({ ...r, documentLabel: 'Duplicado' });
+          setPostSalePrintAudit(null);
+          setReceiptPreviewData({ ...r, documentLabel: t('thermalReceipt.secondCopy') });
           setShowReceiptPreview(true);
         }}
       />
-
-      {/* Logout Confirmation Modal */}
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-3xl p-8 w-[400px] max-w-md shadow-2xl">
-            <div className="text-center">
-              <div className={`bg-gradient-to-r ${getRoleColor(employee?.role || '')} p-4 rounded-full inline-block mb-6`}>
-                <UserCircle className="w-12 h-12 text-white" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-4">{t('pos.confirmLogoutTitle')}</h3>
-              <p className="text-lg text-gray-600 mb-2">
-                {t('pos.confirmLogoutQuestion')}, <strong>{employee?.name}</strong>?
-              </p>
-              <p className="text-sm text-gray-500 mb-8">
-                {t('pos.unsavedWork')}
-              </p>
-
-              <div className="flex space-x-4">
-                <button
-                  onClick={() => setShowLogoutConfirm(false)}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-touch transition-colors"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold py-4 rounded-2xl min-h-touch transition-colors flex items-center justify-center space-x-2"
-                >
-                  <LogOut className="w-5 h-5" />
-                  <span>{t('common.logout')}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      */}
 
       {/* Auto-Logout Warning Modal */}
       {showAutoLogoutWarning && settings.autoLogout.enabled && (
@@ -1091,43 +917,10 @@ const POSInner: React.FC = () => {
           </div>
         </div>
       )}
-
-
-
-      {/* Bottom User Status Bar */}
-      <div id="pos-status-bar" className="fixed bottom-0 left-0 bg-white border-t border-gray-200 px-3 py-1 z-10" style={{ right: '24.5vw' }}>
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <p className="text-xs font-medium text-gray-800">{employee?.name} • <span className="capitalize text-gray-600">{employee?.role}</span></p>
-            {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
-              <span className="text-green-600 text-xs font-medium">
-                {t('pos.saleInProgress')}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center space-x-3 text-xs text-gray-500">
-            {settings.autoLogout.enabled && (
-              <span>
-                {Math.floor(timeUntilAutoLogout / 60000)}:{String(Math.floor((timeUntilAutoLogout % 60000) / 1000)).padStart(2, '0')}
-              </span>
-            )}
-            {settings.pos.autoClearCart.enabled && settings.pos.autoClearCart.timeoutMinutes > 0 && cart.length > 0 && (
-              <span className="text-orange-600">
-                Cart: {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
-              </span>
-            )}
-            <span>POS Terminal • {new Date().toLocaleDateString('pt-PT')}</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
 
-const POS: React.FC = () => (
-  <DesignSystem2CustomizationProvider>
-    <POSInner />
-  </DesignSystem2CustomizationProvider>
-);
+const POS: React.FC = () => <POSInner />;
 
 export default POS;

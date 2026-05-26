@@ -27,7 +27,7 @@ describe('AT RSA-SHA1 fiscal signing', () => {
         const { hashBase64 } = await signer.signHashPlaintext(plaintext);
 
         expect(hashBase64).toBe(nodeB64);
-        expect(extractQrHashFourChars(nodeB64).split('-')).toHaveLength(4);
+        expect(extractQrHashFourChars(nodeB64)).toHaveLength(4);
     });
 
     it('accepts PKCS#1 PEM (BEGIN RSA PRIVATE KEY) via automatic PKCS#8 wrap', async () => {
@@ -70,14 +70,14 @@ describe('AT RSA-SHA1 fiscal signing', () => {
         expect(second).toContain('250.50');
     });
 
-    it('includes negative gross total with two decimals (credit notes)', () => {
+    it('includes positive gross total with two decimals (credit notes)', () => {
         const p = buildHashPlaintext({
             invoiceDate: '2026-04-10',
             systemEntryDate: '2026-04-10T11:00:00',
             invoiceNo: 'NC A/0003',
-            grossTotal: -12.3,
+            grossTotal: 12.3,
             previousHashBase64: 'eA==',
         });
-        expect(p).toContain(';-12.30;');
+        expect(p).toContain(';12.30;');
     });
 });

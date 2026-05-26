@@ -3,6 +3,7 @@ import React, { createContext, useContext, useReducer, useEffect, ReactNode } fr
 import { applyFiscalSecretsFromEnv, settingsWithoutPersistedFiscalSecrets } from '../utils/fiscalEnvDefaults';
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { defaultSeriesProfiles, normalizeStoredSeriesProfile } from '../fiscal/receiptSeriesProfile';
+import { normalizeReceiptLanguage, type ReceiptLanguage } from '../utils/receiptLanguage';
 
 function mergeSeriesProfilesDeep(
     base: Record<FiscalSeriesDocKey, ReceiptSeriesProfile>,
@@ -24,11 +25,22 @@ function mergeReceiptBranch(
     prev: SystemSettings['receipt'],
     patch?: DeepPartial<SystemSettings['receipt']>
 ): SystemSettings['receipt'] {
-    if (!patch) return { ...prev, printDuplicateOnIssue: false };
+    if (!patch) {
+        return {
+            ...prev,
+            printDuplicateOnIssue: false,
+            defaultDocumentType: 'FATURA',
+            receiptLanguage: normalizeReceiptLanguage(prev.receiptLanguage),
+        };
+    }
     return {
         ...prev,
         ...patch,
+        defaultDocumentType: 'FATURA',
         printDuplicateOnIssue: false,
+        receiptLanguage: patch.receiptLanguage
+            ? normalizeReceiptLanguage(patch.receiptLanguage)
+            : prev.receiptLanguage,
         seriesProfiles: mergeSeriesProfilesDeep(prev.seriesProfiles, patch.seriesProfiles),
     };
 }
@@ -40,12 +52,10 @@ function migrateStoredReceipt(raw: unknown, defaults: SystemSettings['receipt'])
     if (r.seriesProfiles && typeof r.seriesProfiles === 'object') {
         const sp = r.seriesProfiles as Partial<Record<FiscalSeriesDocKey, Partial<ReceiptSeriesProfile>>>;
         return {
-            defaultDocumentType:
-                r.defaultDocumentType === 'FATURA' || r.defaultDocumentType === 'FATURA_SIMPLIFICADA'
-                    ? r.defaultDocumentType
-                    : defaults.defaultDocumentType,
+            defaultDocumentType: 'FATURA',
             counterLabel: typeof r.counterLabel === 'string' ? r.counterLabel : defaults.counterLabel,
             printDuplicateOnIssue: false,
+            receiptLanguage: normalizeReceiptLanguage(r.receiptLanguage ?? defaults.receiptLanguage),
             seriesProfiles: {
                 FS: normalizeStoredSeriesProfile(
                     { ...defaults.seriesProfiles.FS, ...sp.FS } as Parameters<typeof normalizeStoredSeriesProfile>[0],
@@ -93,12 +103,10 @@ function migrateStoredReceipt(raw: unknown, defaults: SystemSettings['receipt'])
     );
     const dup = { ...slice };
     return {
-        defaultDocumentType:
-            r.defaultDocumentType === 'FATURA' || r.defaultDocumentType === 'FATURA_SIMPLIFICADA'
-                ? r.defaultDocumentType
-                : defaults.defaultDocumentType,
+        defaultDocumentType: 'FATURA',
         counterLabel: typeof r.counterLabel === 'string' ? r.counterLabel : defaults.counterLabel,
         printDuplicateOnIssue: false,
+        receiptLanguage: normalizeReceiptLanguage(r.receiptLanguage ?? defaults.receiptLanguage),
         seriesProfiles: { FS: { ...dup }, FT: { ...dup }, NC: { ...dup } },
     };
 }
@@ -144,10 +152,12 @@ export interface SystemSettings {
         counterLabel: string;
         /**
          * FS = fatura simplificada, FT = fatura, NC = série de notas de crédito (registo AT).
-         * A emissão de NC sobre uma venda continua a usar a cadeia/hash do documento original.
+         * NC tem série e cadeia AT próprias (`seriesProfiles.NC`); referencia o documento original via settled invoice.
          */
         seriesProfiles: Record<FiscalSeriesDocKey, ReceiptSeriesProfile>;
         printDuplicateOnIssue?: boolean;
+        /** Printed receipt language (thermal preview / reprints); independent of app UI language. */
+        receiptLanguage: ReceiptLanguage;
     };
     /** Portugal AT: signing, training mode, key version (HashControl). */
     fiscal: {
@@ -220,11 +230,12 @@ const defaultSettings: SystemSettings = {
         softwareInfo: '',
     },
     receipt: {
-        defaultDocumentType: 'FATURA_SIMPLIFICADA',
+        defaultDocumentType: 'FATURA',
         counterLabel: 'BALCÃO 1',
-        /** Fatura simplificada, fatura completa, e série NC (registo AT); emissão de NC continua a cadeia do documento original. */
+        /** Fatura simplificada, fatura completa, e série NC (cadeia e numeração independentes). */
         seriesProfiles: defaultSeriesProfiles(),
         printDuplicateOnIssue: false,
+        receiptLanguage: 'pt',
     },
     fiscal: {
         hashControlVersion: '1',

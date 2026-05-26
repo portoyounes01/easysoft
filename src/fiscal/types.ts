@@ -102,7 +102,7 @@ import type { ReceiptSeriesProfile } from './receiptSeriesProfile';
 /** Input to atomic fiscal persistence (sequential + hash + insert in one IndexedDB transaction). */
 export interface FiscalCheckoutAtomicPayload {
     settings: SystemSettings;
-    /** Série efectiva para prefixo, largura e número corrente (pode ser derivada do documento original em NC). */
+    /** Série efectiva para prefixo, largura e número corrente (NC usa `seriesProfiles.NC`). */
     receiptProfile: ReceiptSeriesProfile;
     certificationMode: CertificationMode;
     transactionDate: string;
@@ -156,8 +156,12 @@ export type FiscalAuditEventType =
     | 'VOID_REQUESTED'
     | 'FISCAL_DOCUMENT_CANCELLED'
     | 'REPRINT_REQUESTED'
+    | 'POST_SALE_RECEIPT_PRINTED'
+    | 'POST_SALE_RECEIPT_NOT_PRINTED'
     | 'CREDIT_NOTE_ISSUED'
     | 'RECIBO_ISSUED'
+    | 'COMPANY_INFO_CHANGED'
+    | 'SERIES_PROFILE_CHANGED'
     | 'SETTINGS_FISCAL_CHANGED'
     | 'SETTINGS_CHANGED'
     | 'SAFT_EXPORTED'
