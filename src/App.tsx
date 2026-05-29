@@ -6,6 +6,7 @@ import { POSProvider } from './contexts/POSContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import Layout from './components/Layout/Layout';
 import LoginForm from './components/Auth/LoginForm';
+import LoginForm2 from './components/Auth/LoginForm2';
 import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
 import Products from './pages/Products';
@@ -105,6 +106,16 @@ const AppContent: React.FC = () => {
             <Navigate to={getRoleBasedRedirect(employee.role)} replace />
           ) : (
             <LoginForm />
+          )
+        }
+      />
+      <Route
+        path="/login2"
+        element={
+          isAuthenticated && employee ? (
+            <Navigate to={getRoleBasedRedirect(employee.role)} replace />
+          ) : (
+            <LoginForm2 />
           )
         }
       />

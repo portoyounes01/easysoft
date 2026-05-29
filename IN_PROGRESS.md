@@ -1,3 +1,14 @@
+## Login2 route — DS2 login redesign (2026-05-26)
+
+- **`/login2`** in **`App.tsx`**; **`/login`** + **`LoginForm.tsx`** unchanged.
+- **`LoginForm2.tsx`:** No sidebar. Logo (no card) with language switcher top-aligned to logo top; welcome centered below. Left-aligned carousel + PIN card. Round avatars. **Other Employee** card → ID + PIN fields + Sign in (numpad fills PIN). Listed staff exclude system admin. DS2 scope + provider.
+
+### Login2 viewport + zoom (2026-05-27)
+
+- **Removed** fixed **1280×800** scale canvas (`Login2ScaleToFit` / `useLogin2ViewportScale`) — scale-to-fill was cropping header/footer.
+- **`LoginForm2`:** `100dvh` flex shell (POS-style); header **3-column grid** (connectivity | logo | language) so corners are never clipped.
+- **`useLogin2BrowserZoomCompensate`:** CSS `zoom: 1/visualViewport.scale` on route host for **Cmd/Ctrl +/-** stability (Chromium/Electron).
+
 ## Track inventory — global POS setting (2026-05-14)
 
 - **`SettingsContext` / Definições → POS:** novo **`pos.trackInventory`** (predefinição `true`); persistido em **`localStorage`** com o resto das definições.

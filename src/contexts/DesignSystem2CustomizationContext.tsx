@@ -141,6 +141,16 @@ export interface DesignSystem2CustomizationClasses {
     contentInsetX: string;
     contentColumnMaxW: string;
     previewSurface: string;
+    /** Vertical page padding (top + bottom) — scales with density */
+    pageInsetY: string;
+    /** Vertical gap between major sections — scales with density */
+    sectionGapY: string;
+    /** Internal card padding — scales with density */
+    cardPadding: string;
+    /** Card container chrome: bg + border + shadow + radius */
+    cardSurface: string;
+    /** Elevated card chrome (selected / primary cards) */
+    cardSurfaceElevated: string;
 }
 
 function classesFromPrefs(prefs: DesignSystem2Prefs): DesignSystem2CustomizationClasses {
@@ -189,6 +199,36 @@ function classesFromPrefs(prefs: DesignSystem2Prefs): DesignSystem2Customization
         minimal: `bg-transparent ${densityPreviewPad[prefs.density]} border-0 shadow-none`,
     };
 
+    const pageInsetY: Record<DesignSystem2Density, string> = {
+        compact: 'py-6',
+        normal: 'py-8 md:py-12',
+        spacious: 'py-12 md:py-16',
+    };
+
+    const sectionGapY: Record<DesignSystem2Density, string> = {
+        compact: 'mb-6 md:mb-8',
+        normal: 'mb-10 md:mb-12',
+        spacious: 'mb-12 md:mb-16',
+    };
+
+    const cardPadding: Record<DesignSystem2Density, string> = {
+        compact: 'py-6 px-5 md:px-8',
+        normal: 'py-10 px-8 md:px-12',
+        spacious: 'py-12 px-10 md:px-14',
+    };
+
+    const cardSurface: Record<DesignSystem2PreviewChrome, string> = {
+        roundedShadow: 'bg-white border border-neutral-200 shadow-lg rounded-2xl',
+        roundedFlat: 'bg-white border border-neutral-200 rounded-2xl',
+        minimal: 'bg-white border border-neutral-100 rounded-xl',
+    };
+
+    const cardSurfaceElevated: Record<DesignSystem2PreviewChrome, string> = {
+        roundedShadow: 'bg-white border-2 border-blue-500 shadow-xl rounded-2xl',
+        roundedFlat: 'bg-white border-2 border-blue-500 rounded-2xl',
+        minimal: 'bg-white border-2 border-blue-500 rounded-xl',
+    };
+
     return {
         rootBg: rootBg[prefs.baseColorId],
         sidebarW: sidebarW[prefs.sidebarWidth],
@@ -196,6 +236,11 @@ function classesFromPrefs(prefs: DesignSystem2Prefs): DesignSystem2Customization
         contentInsetX: contentInsetX[prefs.density],
         contentColumnMaxW: contentColumnMaxW[prefs.maxWidth],
         previewSurface: previewSurface[prefs.previewChrome],
+        pageInsetY: pageInsetY[prefs.density],
+        sectionGapY: sectionGapY[prefs.density],
+        cardPadding: cardPadding[prefs.density],
+        cardSurface: cardSurface[prefs.previewChrome],
+        cardSurfaceElevated: cardSurfaceElevated[prefs.previewChrome],
     };
 }
 

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { SlidersHorizontal, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useDesignSystem2Customization } from '../../contexts/DesignSystem2CustomizationContext';
 import {
     DESIGN_SYSTEM_2_COLOR_CHOICES,
@@ -23,9 +24,26 @@ import type {
 const SELECT_ROW =
     'min-h-touch w-full rounded-xl border-2 border-neutral-200 bg-white px-4 text-base font-medium text-neutral-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
 
+const TOKEN_ROW =
+    'rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-mono text-neutral-700 break-all';
+
 const DesignSystem2Customizer: React.FC = () => {
-    const { prefs, setPrefs, resetPrefs } = useDesignSystem2Customization();
+    const { t } = useTranslation();
+    const { prefs, setPrefs, resetPrefs, layoutClasses } = useDesignSystem2Customization();
     const [open, setOpen] = useState(false);
+
+    const layoutTokenRows = useMemo(
+        () =>
+            [
+                { label: t('designSystemPage.customizer.tokenPageInsetY'), value: layoutClasses.pageInsetY },
+                { label: t('designSystemPage.customizer.tokenSectionGapY'), value: layoutClasses.sectionGapY },
+                { label: t('designSystemPage.customizer.tokenCardPadding'), value: layoutClasses.cardPadding },
+                { label: t('designSystemPage.customizer.tokenCardSurface'), value: layoutClasses.cardSurface },
+                { label: t('designSystemPage.customizer.tokenContentInsetX'), value: layoutClasses.contentInsetX },
+                { label: t('designSystemPage.customizer.tokenContentMaxW'), value: layoutClasses.contentColumnMaxW },
+            ] as const,
+        [t, layoutClasses]
+    );
 
     const densityOptions = useMemo(
         () =>
@@ -107,7 +125,7 @@ const DesignSystem2Customizer: React.FC = () => {
                     <AdminActionButton
                         type="button"
                         variant="primary"
-                        label="Customize"
+                        label={t('designSystemPage.customizer.openLabel')}
                         icon={SlidersHorizontal}
                         onClick={() => setOpen(true)}
                         className="shadow-lg"
@@ -120,16 +138,18 @@ const DesignSystem2Customizer: React.FC = () => {
                 <div
                     className="fixed bottom-6 right-6 z-50 w-[min(100vw-1.5rem,22rem)] max-h-[min(85vh,calc(100vh-3rem))] flex flex-col bg-white rounded-3xl shadow-2xl border-2 border-neutral-200 overflow-hidden"
                     role="dialog"
-                    aria-label="Design system preview options"
+                    aria-label={t('designSystemPage.customizer.title')}
                 >
                     <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-neutral-200 bg-neutral-50 shrink-0">
-                        <h2 className="text-xl font-bold text-neutral-900">Customize preview</h2>
+                        <h2 className="text-xl font-bold text-neutral-900">
+                            {t('designSystemPage.customizer.title')}
+                        </h2>
                         <AdminActionButton
                             type="button"
                             variant="icon"
                             icon={X}
                             onClick={() => setOpen(false)}
-                            aria-label="Close customize panel"
+                            aria-label={t('designSystemPage.customizer.closeAria')}
                         />
                     </div>
                     <div className="overflow-y-auto p-5 space-y-6">
@@ -233,6 +253,9 @@ const DesignSystem2Customizer: React.FC = () => {
                                 value={prefs.density}
                                 onChange={onChangeDensity}
                             />
+                            <p className="text-xs text-neutral-500 mt-2">
+                                {t('designSystemPage.customizer.densityHint')}
+                            </p>
                         </div>
                         <div>
                             <p className="text-sm font-semibold text-neutral-700 mb-2">Max width</p>
@@ -241,6 +264,9 @@ const DesignSystem2Customizer: React.FC = () => {
                                 value={prefs.maxWidth}
                                 onChange={onChangeMaxWidth}
                             />
+                            <p className="text-xs text-neutral-500 mt-2">
+                                {t('designSystemPage.customizer.maxWidthHint')}
+                            </p>
                         </div>
                         <div>
                             <p className="text-sm font-semibold text-neutral-700 mb-2">Preview surface</p>
@@ -249,6 +275,33 @@ const DesignSystem2Customizer: React.FC = () => {
                                 value={prefs.previewChrome}
                                 onChange={onChangePreview}
                             />
+                            <p className="text-xs text-neutral-500 mt-2">
+                                {t('designSystemPage.customizer.previewSurfaceHint')}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border-2 border-neutral-200 bg-white p-4 space-y-3">
+                            <div>
+                                <p className="text-sm font-semibold text-neutral-800">
+                                    {t('designSystemPage.customizer.layoutTokensTitle')}
+                                </p>
+                                <p className="text-xs text-neutral-500 mt-1">
+                                    {t('designSystemPage.customizer.layoutTokensBlurb')}
+                                </p>
+                            </div>
+                            <ul className="space-y-2" aria-live="polite">
+                                {layoutTokenRows.map((row) => (
+                                    <li key={row.label}>
+                                        <p className="text-xs font-medium text-neutral-600 mb-1">{row.label}</p>
+                                        <p className={TOKEN_ROW}>{row.value}</p>
+                                    </li>
+                                ))}
+                            </ul>
+                            <div
+                                className={`${layoutClasses.cardSurface} ${layoutClasses.cardPadding} text-center text-sm text-neutral-600`}
+                                aria-hidden
+                            >
+                                {t('designSystemPage.customizer.tokenCardSurface')}
+                            </div>
                         </div>
                         <div>
                             <p className="text-sm font-semibold text-neutral-700 mb-2">Sidebar width</p>
@@ -260,16 +313,14 @@ const DesignSystem2Customizer: React.FC = () => {
                         </div>
                         <ActionButton
                             type="button"
-                            label="Reset to defaults"
+                            label={t('designSystemPage.customizer.resetLabel')}
                             variant="secondary"
                             className="w-full min-h-touch"
                             onClick={() => {
                                 resetPrefs();
                             }}
                         />
-                        <p className="text-xs text-neutral-500">
-                            Preferences are saved in this browser (local storage).
-                        </p>
+                        <p className="text-xs text-neutral-500">{t('designSystemPage.customizer.savedHint')}</p>
                     </div>
                 </div>
             )}

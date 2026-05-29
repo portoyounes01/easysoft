@@ -1,6 +1,18 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+/* Full-height app shell (POS Layout uses h-screen; login2 uses fixed scale-to-fit host) */
+html,
+body,
+#root {
+    height: 100%;
+}
+
+/* Login2: full viewport, flex layout inside; zoom compensation applied on host via JS */
+.login2-route-host {
+    overflow: hidden;
+}
+
 /* Custom scrollbars for scrollable lists */
 .scrollbar-light {
     scrollbar-width: thin;
