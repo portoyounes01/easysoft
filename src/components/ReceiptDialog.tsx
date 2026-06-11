@@ -51,6 +51,18 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({ open, onClose, receipt, p
         window.print();
     };
 
+    const officialOutput = receipt.officialOutput;
+    const hasProviderHtml =
+        officialOutput?.provider === 'vendus' &&
+        officialOutput.format === 'html' &&
+        typeof officialOutput.data === 'string' &&
+        officialOutput.data.trim().length > 0;
+    const hasProviderPdfUrl =
+        officialOutput?.provider === 'vendus' &&
+        officialOutput.format === 'pdf_url' &&
+        typeof officialOutput.url === 'string' &&
+        officialOutput.url.trim().length > 0;
+
     return (
         <BaseDialog
             open={open}
@@ -78,12 +90,25 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({ open, onClose, receipt, p
             }
         >
             <div className="px-6 py-6 flex-1 min-h-0 overflow-y-auto bg-gray-50">
-                <ThermalReceipt {...receipt} />
+                {hasProviderHtml ? (
+                    <iframe
+                        title="Vendus official receipt"
+                        srcDoc={officialOutput.data}
+                        className="min-h-[70vh] w-full rounded-lg border border-gray-200 bg-white"
+                    />
+                ) : hasProviderPdfUrl ? (
+                    <iframe
+                        title="Vendus official receipt PDF"
+                        src={officialOutput.url}
+                        className="min-h-[70vh] w-full rounded-lg border border-gray-200 bg-white"
+                    />
+                ) : (
+                    <ThermalReceipt {...receipt} />
+                )}
             </div>
         </BaseDialog>
     );
 };
 
 export default React.memo(ReceiptDialog);
-
 

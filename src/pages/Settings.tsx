@@ -23,6 +23,7 @@ import type { SystemSettings } from '../contexts/SettingsContext';
 import { initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import { buildSaftAuditFileXml } from '../fiscal/saft/exportSaft';
 import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
+import { fetchVendusSaftXml } from '../fiscal/vendusFiscalIssuer';
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { generateUUID } from '../utils/uuid';
 import { IVA_RATES } from '../types/supabase';
@@ -184,6 +185,64 @@ const Settings: React.FC = () => {
         window.setTimeout(() => window.location.reload(), 200);
     };
 
+    const handleFiscalIssuerChange = (issuer: SystemSettings['fiscal']['issuer']) => {
+        updateSettings({
+            fiscal: {
+                issuer,
+                vendus: {
+                    enabled: issuer === 'vendus',
+                },
+            },
+        });
+        setPendingChanges(true);
+    };
+
+    const handleVendusSettingChange = <K extends keyof SystemSettings['fiscal']['vendus']>(
+        field: K,
+        value: SystemSettings['fiscal']['vendus'][K]
+    ) => {
+        updateSettings({
+            fiscal: {
+                vendus: {
+                    [field]: value,
+                },
+            },
+        } as Parameters<typeof updateSettings>[0]);
+        setPendingChanges(true);
+    };
+
+    const handleVendusPaymentMethodChange = (
+        method: keyof SystemSettings['fiscal']['vendus']['paymentMethodIds'],
+        value: string
+    ) => {
+        updateSettings({
+            fiscal: {
+                vendus: {
+                    paymentMethodIds: {
+                        [method]: value,
+                    },
+                },
+            },
+        } as Parameters<typeof updateSettings>[0]);
+        setPendingChanges(true);
+    };
+
+    const handleVendusExemptTaxChange = (
+        field: keyof SystemSettings['fiscal']['vendus']['exemptTax'],
+        value: string
+    ) => {
+        updateSettings({
+            fiscal: {
+                vendus: {
+                    exemptTax: {
+                        [field]: value,
+                    },
+                },
+            },
+        } as Parameters<typeof updateSettings>[0]);
+        setPendingChanges(true);
+    };
+
     const handleSave = async () => {
         setSaveStatus('saving');
         try {
@@ -215,6 +274,27 @@ const Settings: React.FC = () => {
         setSaftBusy(true);
         setSaftMessage(null);
         try {
+            if (settings.fiscal.issuer === 'vendus') {
+                const [startYear, startMonth] = saftStart.split('-').map(Number);
+                const [endYear, endMonth] = saftEnd.split('-').map(Number);
+                if (startYear !== endYear || startMonth !== endMonth) {
+                    throw new Error('A exportação SAF-T Vendus deve ser mensal. Escolha datas dentro do mesmo mês.');
+                }
+                const xml = await fetchVendusSaftXml({
+                    settings,
+                    year: startYear,
+                    month: startMonth,
+                });
+                const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `SAFT_VENDUS_${startYear}_${String(startMonth).padStart(2, '0')}.xml`;
+                a.click();
+                URL.revokeObjectURL(url);
+                setSaftMessage('SAF-T Vendus descarregado. A cópia local não foi marcada como exportada.');
+                return;
+            }
             const fiscalDocs = await transactionLocalService.getFiscalDocumentsByDateRange(saftStart, saftEnd);
             const xml = await buildSaftAuditFileXml({
                 settings,
@@ -1018,6 +1098,149 @@ const Settings: React.FC = () => {
                                                 </label>
                                             </div>
                                         </div>
+                                        <div className="space-y-4 md:col-span-2">
+                                            <div className="p-4 bg-white rounded-lg border border-gray-200">
+                                                <h4 className="font-medium text-gray-800 mb-2">Emissor fiscal</h4>
+                                                <p className="text-sm text-gray-600 mb-4">
+                                                    Use Vendus apenas enquanto a certificação/licença AT local ainda não estiver ativa.
+                                                    Em modo Vendus, a venda fica bloqueada sem ligação.
+                                                </p>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Emissor ativo</label>
+                                                        <select
+                                                            value={settings.fiscal.issuer}
+                                                            onChange={(e) =>
+                                                                handleFiscalIssuerChange(e.target.value as SystemSettings['fiscal']['issuer'])
+                                                            }
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                                                        >
+                                                            <option value="local_at">Local AT</option>
+                                                            <option value="vendus">Vendus</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Modo Vendus</label>
+                                                        <select
+                                                            value={settings.fiscal.vendus.mode}
+                                                            onChange={(e) =>
+                                                                handleVendusSettingChange(
+                                                                    'mode',
+                                                                    e.target.value as SystemSettings['fiscal']['vendus']['mode']
+                                                                )
+                                                            }
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                                                        >
+                                                            <option value="tests">Tests</option>
+                                                            <option value="normal">Normal</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Register ID</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.fiscal.vendus.registerId}
+                                                            onChange={(e) => handleVendusSettingChange('registerId', e.target.value)}
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                                                            placeholder="12345"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Store ID</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.fiscal.vendus.storeId || ''}
+                                                            onChange={(e) => handleVendusSettingChange('storeId', e.target.value)}
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                                                            placeholder="Opcional"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de documento</label>
+                                                        <select
+                                                            value={settings.fiscal.vendus.documentType}
+                                                            onChange={(e) =>
+                                                                handleVendusSettingChange(
+                                                                    'documentType',
+                                                                    e.target.value as SystemSettings['fiscal']['vendus']['documentType']
+                                                                )
+                                                            }
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                                                        >
+                                                            <option value="FT">FT</option>
+                                                            <option value="FS">FS</option>
+                                                            <option value="FR">FR</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Output oficial</label>
+                                                        <select
+                                                            value={settings.fiscal.vendus.output}
+                                                            onChange={(e) =>
+                                                                handleVendusSettingChange(
+                                                                    'output',
+                                                                    e.target.value as SystemSettings['fiscal']['vendus']['output']
+                                                                )
+                                                            }
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                                                        >
+                                                            <option value="html">HTML</option>
+                                                            <option value="pdf_url">PDF URL</option>
+                                                            <option value="pdf">PDF</option>
+                                                            <option value="escpos">ESC/POS</option>
+                                                            <option value="auto">Auto</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Pagamento cash ID</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.fiscal.vendus.paymentMethodIds.cash || ''}
+                                                            onChange={(e) => handleVendusPaymentMethodChange('cash', e.target.value)}
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Pagamento card ID</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.fiscal.vendus.paymentMethodIds.card || ''}
+                                                            onChange={(e) => handleVendusPaymentMethodChange('card', e.target.value)}
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Pagamento mixed ID</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.fiscal.vendus.paymentMethodIds.mixed || ''}
+                                                            onChange={(e) => handleVendusPaymentMethodChange('mixed', e.target.value)}
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Código isenção IVA</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.fiscal.vendus.exemptTax.code || ''}
+                                                            onChange={(e) => handleVendusExemptTaxChange('code', e.target.value)}
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                                                            placeholder="M99"
+                                                        />
+                                                    </div>
+                                                    <div className="md:col-span-2">
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Lei/motivo isenção IVA</label>
+                                                        <input
+                                                            type="text"
+                                                            value={settings.fiscal.vendus.exemptTax.law || ''}
+                                                            onChange={(e) => handleVendusExemptTaxChange('law', e.target.value)}
+                                                            className="w-full min-h-touch px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
+                                                            placeholder="Obrigatório se usar artigos isentos"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div className="mt-8 pt-6 border-t border-emerald-200">
@@ -1069,4 +1292,4 @@ const Settings: React.FC = () => {
     );
 };
 
-export default Settings; 
+export default Settings;

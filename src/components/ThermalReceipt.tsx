@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { generateQRCodeImage } from '../utils/qrCode';
 import { useSettings } from '../contexts/SettingsContext';
 import { getReceiptT } from '../utils/receiptLanguage';
+import type { FiscalOfficialOutput } from '../fiscal/types';
 
 interface ReceiptItem {
   id: string;
@@ -72,6 +73,8 @@ export interface ReceiptProps {
   emitterName?: string;
   /** Overrides settings receipt language when set (e.g. receipt demo). */
   receiptLanguage?: 'en' | 'pt';
+  /** Official provider-rendered output; used for Vendus during transition. */
+  officialOutput?: FiscalOfficialOutput;
 }
 
 /** Shown on receipt when `certificationNumber` is unset (AT placeholder until assigned). */

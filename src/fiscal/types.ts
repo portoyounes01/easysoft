@@ -1,9 +1,51 @@
 import type { SystemSettings } from '../contexts/SettingsContext';
 import type { LocalTransaction, LocalTransactionItem } from '../types/supabase';
-import type { SaftFiscalDocumentType, SaftInvoiceType } from './spec';
+import type { SaftFiscalDocumentType } from './spec';
 import type { FiscalSigner } from './signing';
 
 export type CertificationMode = 'production' | 'training';
+export type FiscalProvider = 'local_at' | 'vendus';
+
+export interface FiscalOfficialOutput {
+    provider: FiscalProvider;
+    format: string;
+    data?: string;
+    url?: string;
+    rawData?: unknown;
+}
+
+export interface VendusIssuedItemReference {
+    localProductId: string | null;
+    localSku: string | null;
+    vendusItemId: string | null;
+    referenceId: string | null;
+    documentRow: number;
+}
+
+export interface VendusFiscalSnapshot {
+    documentId: string;
+    number: string;
+    type: SaftFiscalDocumentType;
+    date: string;
+    systemTime: string;
+    localTime: string;
+    amountGross: number;
+    amountNet: number;
+    hash: string;
+    atcud: string;
+    qrcodeSvg?: string;
+    qrcodeData?: string;
+    outputFormat: string;
+    output?: string;
+    outputData?: unknown;
+    txId: string;
+    externalReference: string;
+    registerId: string;
+    storeId?: string;
+    mode: 'normal' | 'tests';
+    items: VendusIssuedItemReference[];
+    raw: unknown;
+}
 
 /** Immutable fiscal row persisted at issuance (local + server mirror). */
 export interface FiscalDocumentRow {
@@ -50,6 +92,13 @@ export interface FiscalDocumentRow {
     cancelled_at?: string | null;
     cancelled_reason?: string | null;
     cancelled_by_employee_id?: string | null;
+    /** Fiscal issuer that owns numbering/signing. Defaults to local_at for legacy rows. */
+    fiscal_provider?: FiscalProvider;
+    external_document_id?: string | null;
+    external_reference?: string | null;
+    external_tx_id?: string | null;
+    external_output_format?: string | null;
+    external_payload_json?: string | null;
 }
 
 /** Snapshot passed to receipt / QR builder after persistence. */
@@ -75,6 +124,10 @@ export interface FiscalCheckoutResult {
     sourceId: string;
     sequentialNumber: number;
     seriesKey: string;
+    fiscalProvider?: FiscalProvider;
+    externalDocumentId?: string;
+    externalReference?: string;
+    officialOutput?: FiscalOfficialOutput;
 }
 
 /** Row slice for fiscal checkout before invoice / hash exist (filled inside atomic DB txn). */
@@ -138,6 +191,27 @@ export interface FiscalCheckoutAtomicPayload {
     signer: FiscalSigner;
 }
 
+export interface VendusFiscalCheckoutPersistencePayload {
+    certificationMode: CertificationMode;
+    transactionDate: string;
+    transactionTime: string;
+    systemEntryDate: string;
+    grossTotal: number;
+    netRounded: number;
+    taxTotal: number;
+    totalDiscountAmount: number;
+    originalSubtotal: number;
+    total: number;
+    changeGiven: number;
+    transactionBase: FiscalCheckoutTransactionBase;
+    transactionItems: FiscalCheckoutItemBase[];
+    customerTaxId: string | null;
+    payment: FiscalCheckoutAtomicPayload['payment'];
+    vendus: VendusFiscalSnapshot;
+    settledInvoiceNo?: string;
+    settledInvoiceDateYmd?: string;
+}
+
 /** Serialized into `transactions.fiscal_metadata_json` at issuance (immutable snapshot). */
 export interface FiscalTransactionMetadata {
     invoiceNo: string;
@@ -149,6 +223,18 @@ export interface FiscalTransactionMetadata {
     chainScope: string;
     sequentialNumber: number;
     certificationMode: CertificationMode;
+    fiscalProvider?: FiscalProvider;
+    externalDocumentId?: string;
+    externalReference?: string;
+    externalTxId?: string;
+    officialOutput?: FiscalOfficialOutput;
+    vendus?: {
+        registerId: string;
+        storeId?: string;
+        mode: 'normal' | 'tests';
+        outputFormat: string;
+        items: VendusIssuedItemReference[];
+    };
 }
 
 export type FiscalAuditEventType =

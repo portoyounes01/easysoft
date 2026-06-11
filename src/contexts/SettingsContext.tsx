@@ -45,6 +45,49 @@ function mergeReceiptBranch(
     };
 }
 
+function defaultVendusSettings(): VendusFiscalSettings {
+    return {
+        enabled: false,
+        mode: 'tests',
+        registerId: '',
+        storeId: '',
+        documentType: 'FT',
+        output: 'html',
+        paymentMethodIds: {
+            cash: '',
+            card: '',
+            mixed: '',
+        },
+        exemptTax: {
+            code: 'M99',
+            law: '',
+        },
+    };
+}
+
+function mergeFiscalBranch(
+    prev: SystemSettings['fiscal'],
+    patch?: DeepPartial<SystemSettings['fiscal']>
+): SystemSettings['fiscal'] {
+    if (!patch) return prev;
+    return {
+        ...prev,
+        ...patch,
+        vendus: {
+            ...prev.vendus,
+            ...(patch.vendus || {}),
+            paymentMethodIds: {
+                ...prev.vendus.paymentMethodIds,
+                ...(patch.vendus?.paymentMethodIds || {}),
+            },
+            exemptTax: {
+                ...prev.vendus.exemptTax,
+                ...(patch.vendus?.exemptTax || {}),
+            },
+        },
+    };
+}
+
 function migrateStoredReceipt(raw: unknown, defaults: SystemSettings['receipt']): SystemSettings['receipt'] {
     if (!raw || typeof raw !== 'object') return defaults;
 
@@ -161,10 +204,30 @@ export interface SystemSettings {
     };
     /** Portugal AT: signing, training mode, key version (HashControl). */
     fiscal: {
+        issuer: 'local_at' | 'vendus';
         hashControlVersion: string;
         /** RSA private key PKCS#8 PEM — dev/local; prefer secure storage in production */
         privateKeyPem?: string;
         trainingMode: boolean;
+        vendus: VendusFiscalSettings;
+    };
+}
+
+export interface VendusFiscalSettings {
+    enabled: boolean;
+    mode: 'normal' | 'tests';
+    registerId: string;
+    storeId?: string;
+    documentType: 'FT' | 'FS' | 'FR';
+    output: 'auto' | 'pdf_url' | 'pdf' | 'html' | 'escpos' | 'tpasibs';
+    paymentMethodIds: {
+        cash?: string;
+        card?: string;
+        mixed?: string;
+    };
+    exemptTax: {
+        code?: string;
+        law?: string;
     };
 }
 
@@ -176,11 +239,15 @@ export type DeepPartial<T> = {
 function sanitizeSettingsUpdatePatch(patch: DeepPartial<SystemSettings>): DeepPartial<SystemSettings> {
     const next: DeepPartial<SystemSettings> = { ...patch };
     if (patch.company) {
-        const { certificationNumber: _cn, softwareCertNumber: _sn, ...companyRest } = patch.company;
+        const companyRest = { ...patch.company };
+        delete companyRest.certificationNumber;
+        delete companyRest.softwareCertNumber;
         next.company = companyRest as DeepPartial<SystemSettings['company']>;
     }
     if (patch.fiscal) {
-        const { privateKeyPem: _pem, hashControlVersion: _hc, ...fiscalRest } = patch.fiscal;
+        const fiscalRest = { ...patch.fiscal };
+        delete fiscalRest.privateKeyPem;
+        delete fiscalRest.hashControlVersion;
         next.fiscal = fiscalRest as DeepPartial<SystemSettings['fiscal']>;
     }
     return next;
@@ -238,9 +305,11 @@ const defaultSettings: SystemSettings = {
         receiptLanguage: 'pt',
     },
     fiscal: {
+        issuer: 'local_at',
         hashControlVersion: '1',
         privateKeyPem: undefined,
         trainingMode: false,
+        vendus: defaultVendusSettings(),
     },
 };
 
@@ -286,10 +355,7 @@ const settingsReducer = (state: SettingsState, action: SettingsAction): Settings
                         ...(action.payload.company || {}),
                     },
                     receipt: mergeReceiptBranch(state.settings.receipt, action.payload.receipt),
-                    fiscal: {
-                        ...state.settings.fiscal,
-                        ...(action.payload.fiscal || {}),
-                    },
+                    fiscal: mergeFiscalBranch(state.settings.fiscal, action.payload.fiscal),
                 },
             };
         case 'RESET_SETTINGS':
@@ -348,10 +414,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 ...(patch.company || {}),
             },
             receipt: mergeReceiptBranch(state.settings.receipt, patch.receipt),
-            fiscal: {
-                ...state.settings.fiscal,
-                ...(patch.fiscal || {}),
-            },
+            fiscal: mergeFiscalBranch(state.settings.fiscal, patch.fiscal),
         };
 
         localStorage.setItem(
@@ -398,10 +461,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                             ...(parsedSettings.company || {}),
                         },
                         receipt: migrateStoredReceipt(parsedSettings.receipt, defaultSettings.receipt),
-                        fiscal: {
-                            ...defaultSettings.fiscal,
-                            ...(parsedSettings.fiscal || {}),
-                        },
+                        fiscal: mergeFiscalBranch(defaultSettings.fiscal, parsedSettings.fiscal),
                     };
                     dispatch({
                         type: 'LOAD_SETTINGS',
@@ -438,4 +498,4 @@ export const useSettings = () => {
         throw new Error('useSettings must be used within a SettingsProvider');
     }
     return context;
-}; 
+};

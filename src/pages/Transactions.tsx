@@ -401,7 +401,8 @@ const TransactionsInner: React.FC = () => {
             hashFourChars: fiscal?.hash_four_chars ?? meta?.hashFourChars,
             qrCodeData: qrPayload ?? undefined,
             qrCodeImage,
-            trainingMode: settings.fiscal.trainingMode,
+            trainingMode: meta ? meta.certificationMode === 'training' : settings.fiscal.trainingMode,
+            officialOutput: meta?.officialOutput,
             documentLabel,
             emitterName: header.employee_name,
             company: {

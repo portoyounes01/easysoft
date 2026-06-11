@@ -1067,6 +1067,21 @@ export interface LocalFiscalAuditEvent {
     created_at: string;
 }
 
+export interface LocalVendusIssueAttempt {
+    id: string;
+    kind: 'sale' | 'credit_note';
+    tx_id: string;
+    external_reference: string;
+    status: 'pending' | 'issued' | 'persisted' | 'failed';
+    vendus_document_id: string | null;
+    local_transaction_id: string | null;
+    request_json: string;
+    response_json: string | null;
+    error_message: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
 // Local database interfaces for customers
 export interface LocalCustomer extends Omit<CustomerRow, 'created_at' | 'updated_at' | 'last_synced_at' | 'deleted_at'> {
     // Local specific fields
@@ -1153,4 +1168,4 @@ export interface PendingTransactionItemOperation {
     timestamp: string;
     retryCount: number;
     error?: string;
-} 
+}

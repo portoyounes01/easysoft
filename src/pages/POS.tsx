@@ -783,7 +783,8 @@ const POSInner: React.FC = () => {
                 hashFourChars: fiscal?.hashFourChars,
                 qrCodeData: fiscal?.qrPayload,
                 qrCodeImage,
-                trainingMode: settings.fiscal.trainingMode,
+                trainingMode: fiscal ? fiscal.certificationMode === 'training' : settings.fiscal.trainingMode,
+                officialOutput: fiscal?.officialOutput,
                 documentLabel: getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.original'),
                 emitterName: employeeName,
                 company: {

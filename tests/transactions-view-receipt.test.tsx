@@ -5,6 +5,7 @@ import '@testing-library/jest-dom';
 import Transactions from '../src/pages/Transactions';
 import { LanguageProvider } from '../src/contexts/LanguageContext';
 import { SettingsProvider } from '../src/contexts/SettingsContext';
+import { DesignSystem2CustomizationProvider } from '../src/contexts/DesignSystem2CustomizationContext';
 
 vi.mock('../src/lib/supabase', () => ({
     isSupabaseConfigured: () => true,
@@ -103,7 +104,9 @@ const renderPage = () => {
     return render(
         <SettingsProvider>
             <LanguageProvider>
-                <Transactions />
+                <DesignSystem2CustomizationProvider>
+                    <Transactions />
+                </DesignSystem2CustomizationProvider>
             </LanguageProvider>
         </SettingsProvider>
     );
@@ -155,5 +158,4 @@ describe('Transactions page - View receipt dialog', () => {
         expect(await screen.findByRole('button', { name: /credit note \(nc\)/i })).toBeInTheDocument();
     });
 });
-
 

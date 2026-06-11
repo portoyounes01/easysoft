@@ -11,6 +11,7 @@ import {
     LocalDailySalesSummary,
     LocalFiscalDocument,
     LocalFiscalAuditEvent,
+    LocalVendusIssueAttempt,
     PendingEmployeeOperation,
     PendingCategoryOperation,
     PendingProductOperation,
@@ -18,7 +19,12 @@ import {
     PendingTransactionOperation,
     SyncMetadata
 } from '../types/supabase';
-import type { FiscalCheckoutAtomicPayload, FiscalCheckoutResult, FiscalTransactionMetadata } from '../fiscal/types';
+import type {
+    FiscalCheckoutAtomicPayload,
+    FiscalCheckoutResult,
+    FiscalTransactionMetadata,
+    VendusFiscalCheckoutPersistencePayload,
+} from '../fiscal/types';
 import { buildHashPlaintext, extractQrHashFourChars } from '../fiscal/signing';
 import { buildAtQrPayloadString } from '../fiscal/qrPayload';
 import { assertInvoiceSeriesSegment, buildInvoiceNo, computeNextSequential, formatSequential, invoiceSeriesSegment } from '../fiscal/seriesUtils';
@@ -48,6 +54,7 @@ export class LocalPOSDatabase extends Dexie {
     transactionItems!: Table<LocalTransactionItem>;
     fiscalDocuments!: Table<LocalFiscalDocument>;
     fiscalAuditEvents!: Table<LocalFiscalAuditEvent>;
+    vendusIssueAttempts!: Table<LocalVendusIssueAttempt>;
     dailySalesSummaries!: Table<LocalDailySalesSummary>;
     
     // Sync queue tables
@@ -213,6 +220,15 @@ export class LocalPOSDatabase extends Dexie {
                 if (r.settled_invoice_no === undefined) r.settled_invoice_no = null;
                 if (r.settled_invoice_date === undefined) r.settled_invoice_date = null;
             });
+        });
+
+        const schemaV10 = {
+            ...schemaV9,
+            vendusIssueAttempts: 'id, tx_id, external_reference, status, created_at, updated_at',
+        } as const;
+
+        this.version(10).stores(schemaV10).upgrade(async () => {
+            console.log('Upgrading database to version 10 - Vendus issue attempt log');
         });
 
         // Add hooks for auto-updating sync flags
@@ -1240,6 +1256,7 @@ export class TransactionLocalService {
                 chainScope,
                 sequentialNumber: nextSequential,
                 certificationMode: payload.certificationMode,
+                fiscalProvider: 'local_at',
             };
 
             const transaction: LocalTransaction = {
@@ -1295,6 +1312,12 @@ export class TransactionLocalService {
                 hash_four_chars: hashFourChars,
                 saft_exported_at: null,
                 saft_export_batch_id: null,
+                fiscal_provider: 'local_at',
+                external_document_id: null,
+                external_reference: null,
+                external_tx_id: null,
+                external_output_format: null,
+                external_payload_json: null,
                 id: fiscalId,
                 transaction_id: transactionId,
                 needs_push: true,
@@ -1358,6 +1381,7 @@ export class TransactionLocalService {
                         sourceId,
                         sequentialNumber: nextSequential,
                         seriesKey,
+                        fiscalProvider: 'local_at',
                     };
                 });
                 await this.queueOperation('CREATE', transactionId, { ...transaction, items: transactionItems });
@@ -1372,6 +1396,218 @@ export class TransactionLocalService {
         }
 
         throw new Error('Fiscal checkout: excedidas tentativas (cadeia fiscal avançou durante a assinatura).');
+    }
+
+    async createVendusIssueAttempt(
+        row: Omit<LocalVendusIssueAttempt, 'created_at' | 'updated_at'> &
+            Partial<Pick<LocalVendusIssueAttempt, 'created_at' | 'updated_at'>>
+    ): Promise<void> {
+        const now = new Date().toISOString();
+        await localDb.vendusIssueAttempts.add({
+            ...row,
+            created_at: row.created_at ?? now,
+            updated_at: row.updated_at ?? now,
+        });
+    }
+
+    async updateVendusIssueAttempt(
+        id: string,
+        updates: Partial<Omit<LocalVendusIssueAttempt, 'id' | 'created_at'>>
+    ): Promise<void> {
+        await localDb.vendusIssueAttempts.update(id, {
+            ...updates,
+            updated_at: new Date().toISOString(),
+        });
+    }
+
+    async listPendingVendusIssueAttempts(): Promise<LocalVendusIssueAttempt[]> {
+        return localDb.vendusIssueAttempts
+            .where('status')
+            .equals('pending')
+            .toArray();
+    }
+
+    async createVendusFiscalCheckoutAtomic(
+        payload: VendusFiscalCheckoutPersistencePayload
+    ): Promise<FiscalCheckoutResult> {
+        const fiscalId = generateUUID();
+        const transactionId = generateUUID();
+        const persistedAt = new Date();
+        const vendus = payload.vendus;
+        const sourceId = payload.payment.employeeNumber?.trim() || payload.payment.employeeId.slice(0, 12);
+        const invoiceNo = vendus.number;
+        const atcudBody = vendus.atcud.replace(/^\s*ATCUD\s*:\s*/i, '').trim();
+        const hashValue = vendus.hash || '';
+        const hashFourChars = hashValue.slice(0, 4);
+        const qrPayload = vendus.qrcodeData || '';
+        const chainScope = `vendus::${vendus.mode}::${vendus.registerId}::${vendus.type}`;
+        const seriesKey = chainScope;
+        const sequentialNumber = (() => {
+            const match = invoiceNo.match(/(\d+)\s*$/);
+            if (match) return Number(match[1]);
+            const asNumber = Number(vendus.documentId);
+            return Number.isFinite(asNumber) && asNumber > 0 ? asNumber : Date.now();
+        })();
+
+        const officialOutput = {
+            provider: 'vendus' as const,
+            format: vendus.outputFormat,
+            data: typeof vendus.output === 'string' ? vendus.output : undefined,
+            url:
+                vendus.outputFormat === 'pdf_url' && typeof vendus.output === 'string'
+                    ? vendus.output
+                    : undefined,
+            rawData: vendus.outputData,
+        };
+
+        const fiscalMetadata: FiscalTransactionMetadata = {
+            invoiceNo,
+            atcudBody,
+            hashBase64: hashValue,
+            hashFourChars,
+            hashControl: 'vendus',
+            qrPayload,
+            chainScope,
+            sequentialNumber,
+            certificationMode: payload.certificationMode,
+            fiscalProvider: 'vendus',
+            externalDocumentId: vendus.documentId,
+            externalReference: vendus.externalReference,
+            externalTxId: vendus.txId,
+            officialOutput,
+            vendus: {
+                registerId: vendus.registerId,
+                storeId: vendus.storeId,
+                mode: vendus.mode,
+                outputFormat: vendus.outputFormat,
+                items: vendus.items,
+            },
+        };
+
+        const transaction: LocalTransaction = {
+            ...payload.transactionBase,
+            id: transactionId,
+            fiscal_document_id: fiscalId,
+            transaction_number: invoiceNo,
+            receipt_number: invoiceNo,
+            fiscal_metadata_json: JSON.stringify(fiscalMetadata),
+            created_at: persistedAt,
+            updated_at: persistedAt,
+            needs_push: true,
+            is_conflicted: false,
+            last_synced_at: null,
+        };
+
+        const transactionItems: LocalTransactionItem[] = payload.transactionItems.map(item => ({
+            ...item,
+            id: generateUUID(),
+            transaction_id: transactionId,
+            created_at: persistedAt,
+            updated_at: persistedAt,
+            needs_push: true,
+            is_conflicted: false,
+            last_synced_at: null,
+        }));
+
+        const fiscalDoc: LocalFiscalDocument = {
+            chain_scope: chainScope,
+            series_key: seriesKey,
+            at_validation_code: atcudBody.split('-')[0] || 'VENDUS',
+            sequential_number: sequentialNumber,
+            invoice_no: invoiceNo,
+            invoice_type: vendus.type,
+            settled_invoice_no: payload.settledInvoiceNo ?? null,
+            settled_invoice_date: payload.settledInvoiceDateYmd ?? null,
+            invoice_date: vendus.date || payload.transactionDate,
+            system_entry_date: vendus.systemTime || payload.systemEntryDate,
+            gross_total: vendus.amountGross,
+            net_total: vendus.amountNet,
+            tax_total: Number((vendus.amountGross - vendus.amountNet).toFixed(2)),
+            hash_base64: hashValue,
+            hash_control: 'vendus',
+            hash_plaintext: 'VENDUS_EXTERNAL_ISSUER',
+            previous_hash_base64: '',
+            qr_payload: qrPayload,
+            source_id: sourceId,
+            certification_mode: payload.certificationMode,
+            customer_tax_id: payload.customerTaxId,
+            payment_method: payload.payment.paymentMethod,
+            created_at: persistedAt.toISOString(),
+            atcud_body: atcudBody,
+            hash_four_chars: hashFourChars,
+            saft_exported_at: null,
+            saft_export_batch_id: null,
+            cancelled_at: null,
+            cancelled_reason: null,
+            cancelled_by_employee_id: null,
+            fiscal_provider: 'vendus',
+            external_document_id: vendus.documentId,
+            external_reference: vendus.externalReference,
+            external_tx_id: vendus.txId,
+            external_output_format: vendus.outputFormat,
+            external_payload_json: JSON.stringify(vendus.raw),
+            id: fiscalId,
+            transaction_id: transactionId,
+            needs_push: true,
+        };
+
+        const auditRow: LocalFiscalAuditEvent = {
+            id: generateUUID(),
+            event_type: vendus.type === 'NC' ? 'CREDIT_NOTE_ISSUED' : 'FISCAL_DOCUMENT_CREATED',
+            payload_json: JSON.stringify({
+                transactionId,
+                fiscalId,
+                invoiceNo,
+                fiscalProvider: 'vendus',
+                vendusDocumentId: vendus.documentId,
+                externalReference: vendus.externalReference,
+                txId: vendus.txId,
+            }),
+            employee_id: payload.payment.employeeId,
+            created_at: new Date().toISOString(),
+        };
+
+        await localDb.transaction(
+            'rw',
+            [
+                localDb.transactions,
+                localDb.transactionItems,
+                localDb.fiscalDocuments,
+                localDb.fiscalAuditEvents,
+            ],
+            async () => {
+                await localDb.fiscalDocuments.add(fiscalDoc);
+                await localDb.transactions.add(transaction);
+                await localDb.transactionItems.bulkAdd(transactionItems);
+                await localDb.fiscalAuditEvents.add(auditRow);
+            }
+        );
+        await this.queueOperation('CREATE', transactionId, { ...transaction, items: transactionItems });
+
+        return {
+            transactionId,
+            fiscalId,
+            invoiceNo,
+            atcudBody,
+            hashBase64: hashValue,
+            hashFourChars,
+            qrPayload,
+            hashControl: 'vendus',
+            certificationMode: payload.certificationMode,
+            grossTotal: vendus.amountGross,
+            netTotal: vendus.amountNet,
+            taxTotal: Number((vendus.amountGross - vendus.amountNet).toFixed(2)),
+            systemEntryDate: vendus.systemTime || payload.systemEntryDate,
+            invoiceDate: vendus.date || payload.transactionDate,
+            invoiceTypeSaft: vendus.type,
+            sourceId,
+            sequentialNumber,
+            seriesKey,
+            fiscalProvider: 'vendus',
+            externalDocumentId: vendus.documentId,
+            externalReference: vendus.externalReference,
+            officialOutput,
+        };
     }
 
     /** Mark fiscal rows included in a SAF-T export (optional anti-duplicate workflow). */

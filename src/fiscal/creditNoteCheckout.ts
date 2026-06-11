@@ -52,6 +52,15 @@ export async function runFiscalCreditNoteForTransaction(params: {
     if (origFiscal.cancelled_at) {
         throw new Error('Não é possível emitir nota de crédito sobre um documento anulado.');
     }
+    if (origFiscal.fiscal_provider === 'vendus') {
+        const { issueVendusCreditNoteForTransaction } = await import('./vendusFiscalIssuer');
+        return issueVendusCreditNoteForTransaction({
+            settings,
+            originalTransactionId,
+            payment,
+            creditReason,
+        });
+    }
 
     const now = new Date();
     const transactionDate = now.toISOString().split('T')[0];
