@@ -82,7 +82,7 @@ const VirtualNumpad: React.FC<VirtualNumpadProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded-3xl p-8 w-[400px] max-w-md shadow-2xl">
                 <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">{title}</h3>
 

@@ -5,7 +5,6 @@ import { SupabaseAuthProvider, useSupabaseAuth } from './contexts/SupabaseAuthCo
 import { POSProvider } from './contexts/POSContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import Layout from './components/Layout/Layout';
-import LoginForm from './components/Auth/LoginForm';
 import LoginForm2 from './components/Auth/LoginForm2';
 import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
@@ -19,7 +18,7 @@ import Settings from './pages/Settings';
 import DataSetup from './components/DataSetup';
 import ReceiptDemoPage from './pages/ReceiptDemo';
 import DevicePairing from './pages/DevicePairing';
-import DesignSystem from './pages/DesignSystem';
+import Appearances from './pages/Appearances';
 import DesignSystem2 from './pages/DesignSystem2';
 import FiscalAudit from './pages/FiscalAudit';
 
@@ -105,7 +104,7 @@ const AppContent: React.FC = () => {
           isAuthenticated && employee ? (
             <Navigate to={getRoleBasedRedirect(employee.role)} replace />
           ) : (
-            <LoginForm />
+            <LoginForm2 />
           )
         }
       />
@@ -209,6 +208,14 @@ const AppContent: React.FC = () => {
                     }
                   />
                   <Route
+                    path="/appearances"
+                    element={
+                      <PermissionRoute permission="settings">
+                        <Appearances />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
                     path="/setup"
                     element={
                       <PermissionRoute permission="settings">
@@ -247,19 +254,12 @@ const AppContent: React.FC = () => {
                   <Route
                     path="/design-system"
                     element={
-                      <ProtectedRoute>
-                        <DesignSystem />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/design-system-2"
-                    element={
-                      <ProtectedRoute>
+                      <PermissionRoute permission="settings">
                         <DesignSystem2 />
-                      </ProtectedRoute>
+                      </PermissionRoute>
                     }
                   />
+                  <Route path="/design-system-2" element={<Navigate to="/design-system" replace />} />
                 </Routes>
               </Layout>
             </POSProvider>

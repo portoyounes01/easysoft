@@ -100,9 +100,9 @@ const CategoriesInner: React.FC = () => {
             style={visualStyle}
             data-ds2-neutral={prefs.neutralFamilyId}
         >
-            <div className="space-y-6">
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div
-                    className={`flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between ${layoutClasses.contentInsetX}`}
+                    className={`flex flex-col gap-4 border-b border-gray-100 py-5 sm:flex-row sm:items-start sm:justify-between ${layoutClasses.contentInsetX}`}
                 >
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight text-gray-900">
@@ -164,9 +164,9 @@ const CategoriesInner: React.FC = () => {
                             </div>
                         </div> */}
 
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div>
                     <div
-                        className={`border-b border-gray-200 py-4 ${layoutClasses.contentInsetX}`}
+                        className={`border-b border-gray-100 py-4 ${layoutClasses.contentInsetX}`}
                     >
                         <div className="flex items-center justify-between gap-4">
                             <h2 className="flex items-center space-x-2 text-xl font-semibold text-gray-800">

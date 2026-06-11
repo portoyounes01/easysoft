@@ -52,6 +52,8 @@ const resources = {
                     transactions: 'Transactions',
                     fiscalAudit: 'Fiscal audit',
                     settings: 'Settings',
+                    appearances: 'Appearances',
+                    designSystem: 'Design system',
                     printerTest: 'Printer Setup',
                     devicePairing: 'Device Pairing',
                     seedManagement: 'Seed Management',
@@ -116,7 +118,9 @@ const resources = {
                 customId: 'Custom ID',
                 employeeIdLabel: 'Employee ID',
                 employeeIdPlaceholder: 'Enter employee ID',
+                employeeIdHelper: 'Use your assigned employee number',
                 pinPlaceholder: 'Enter PIN',
+                changeEmployee: 'Change',
                 signIn: 'Sign In',
             },
             fiscalAudit: {
@@ -1470,6 +1474,8 @@ const resources = {
                     transactions: 'Transações',
                     fiscalAudit: 'Auditoria fiscal',
                     settings: 'Definições',
+                    appearances: 'Aparências',
+                    designSystem: 'Design system',
                     printerTest: 'Configuração de Impressora',
                     devicePairing: 'Emparelhamento de Dispositivo',
                     seedManagement: 'Gestão de Seeds',
@@ -1535,7 +1541,9 @@ const resources = {
                 customId: 'ID personalizado',
                 employeeIdLabel: 'ID do funcionário',
                 employeeIdPlaceholder: 'Introduza o ID do funcionário',
+                employeeIdHelper: 'Use o número de funcionário atribuído',
                 pinPlaceholder: 'Introduza o PIN',
+                changeEmployee: 'Alterar',
                 signIn: 'Entrar',
             },
             fiscalAudit: {
@@ -2866,4 +2874,4 @@ i18n
         },
     });
 
-export default i18n; 
+export default i18n;

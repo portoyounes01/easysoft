@@ -571,7 +571,7 @@ export const CashierTestingPanel: React.FC<CashierTestingPanelProps> = ({ embedd
 
         {/* Loading Overlay */}
         {isLoading && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
             <div className="ds2-control-radius-lg flex items-center space-x-4 rounded-lg bg-white p-6">
               <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-500"></div>
               <span className="text-lg">Running test...</span>

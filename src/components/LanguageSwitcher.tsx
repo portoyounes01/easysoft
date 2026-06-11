@@ -5,7 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 interface LanguageSwitcherProps {
     className?: string;
-    /** Dark sidebar style (matches `Sidebar` footer actions) */
+    /** Sidebar style (matches `Sidebar` footer actions) */
     variant?: 'default' | 'sidebar';
     /** When sidebar is collapsed: icon-only + tooltip */
     collapsed?: boolean;
@@ -18,9 +18,12 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
 }) => {
     const { language, setLanguage } = useLanguage();
     const { t } = useTranslation();
+    const languageCode = language.split(/[-_]/)[0].toLowerCase();
+    const languageLabel = languageCode.toUpperCase();
+    const languageName = languageCode === 'pt' ? 'Português' : 'English';
 
     const toggleLanguage = () => {
-        const newLang = language === 'en' ? 'pt' : 'en';
+        const newLang = languageCode === 'en' ? 'pt' : 'en';
         setLanguage(newLang);
     };
 
@@ -30,23 +33,23 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
             <button
                 type="button"
                 onClick={toggleLanguage}
-                className={`w-full flex items-center px-4 py-3 min-h-touch text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg transition-all duration-200 hover:transform hover:scale-105 group relative mb-3 border border-slate-600/40 hover:border-slate-500 ${collapsed ? 'justify-center space-x-0' : 'space-x-3'
+                className={`group relative mb-2 flex min-h-touch-xs w-full items-center rounded-md border border-gray-200 bg-white px-2.5 py-2 text-gray-900 transition-all duration-200 hover:border-emerald-100 hover:bg-emerald-50 hover:text-emerald-700 ${collapsed ? 'justify-center space-x-0' : 'space-x-2.5'
                     } ${className || ''}`}
-                title={collapsed ? `${label} (${language.toUpperCase()})` : undefined}
-                aria-label={`${label}: ${language === 'en' ? 'English' : 'Português'}`}
+                title={collapsed ? `${label} (${languageLabel})` : undefined}
+                aria-label={`${label}: ${languageName}`}
             >
-                <Languages className="w-5 h-5 flex-shrink-0" />
+                <Languages className="h-4 w-4 flex-shrink-0" />
                 {!collapsed && (
                     <>
-                        <span className="font-medium flex-1 text-left">{label}</span>
-                        <span className="text-xs font-semibold bg-slate-600 px-2 py-1.5 rounded-md tabular-nums">
-                            {language.toUpperCase()}
+                        <span className="flex-1 text-left text-xs font-medium">{label}</span>
+                        <span className="rounded bg-gray-100 px-2 py-1 text-[11px] font-semibold tabular-nums text-gray-500 group-hover:bg-white group-hover:text-emerald-700">
+                            {languageLabel}
                         </span>
                     </>
                 )}
                 {collapsed && (
-                    <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                        {label} ({language.toUpperCase()})
+                    <div className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-900 opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100">
+                        {label} ({languageLabel})
                     </div>
                 )}
             </button>
@@ -58,8 +61,9 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
             type="button"
             onClick={toggleLanguage}
             className={`bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded-lg text-xs font-semibold transition-colors min-h-touch-xs min-w-touch-xs ${className || ''}`}
+            aria-label={`${t('common.language')}: ${languageName}`}
         >
-            {language.toUpperCase()}
+            {languageLabel}
         </button>
     );
 };

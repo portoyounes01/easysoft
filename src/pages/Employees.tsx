@@ -1012,7 +1012,7 @@ const EmployeesInner: React.FC = () => {
             {showDeleteConfirm && (
                 <>
                     {/* Backdrop */}
-                    <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setShowDeleteConfirm(null)} />
+                    <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowDeleteConfirm(null)} />
 
                     {/* Modal */}
                     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">

@@ -22,7 +22,6 @@ import Elevation from '../components/DesignSystem2/Elevation';
 import Table2 from '../components/DesignSystem2/Table2';
 import Premade2 from '../components/DesignSystem2/Premade2';
 import '../styles/design-system-2-scope.css';
-import DesignSystem2Customizer from '../components/DesignSystem2/DesignSystem2Customizer';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -46,6 +45,16 @@ const DesignSystem2Inner: React.FC = () => {
 
     /** Core Colors uses Tailwind hue scales tied to Customize — keep outside `.ds2-visual-scope` so scope `!important` rules never flatten swatches. */
     const colorDocsOutsidePreviewScope = activeSection === 'color-style';
+
+    const docsSidebarWidthClass = useMemo(() => {
+        const widthClasses = {
+            sm: 'xl:w-64',
+            md: 'xl:w-72',
+            lg: 'xl:w-80',
+        } as const;
+
+        return widthClasses[prefs.sidebarWidth];
+    }, [prefs.sidebarWidth]);
 
     const navItems: { id: Section; label: string; icon: LucideIcon }[] = useMemo(
         () => [
@@ -100,18 +109,18 @@ const DesignSystem2Inner: React.FC = () => {
     };
 
     return (
-        <div className={`flex h-screen min-h-0 min-w-0 ${layoutClasses.rootBg}`}>
+        <div className={`flex min-h-full min-w-0 flex-col xl:flex-row ${layoutClasses.rootBg}`}>
             <div
-                className={`ds2-visual-scope ${layoutClasses.sidebarW} shrink-0 flex flex-col bg-gradient-to-b from-slate-900 to-slate-800 text-white shadow-2xl border-r border-slate-800 overflow-y-auto`}
+                className={`ds2-visual-scope w-full ${docsSidebarWidthClass} xl:shrink-0 flex flex-col bg-gradient-to-b from-slate-900 to-slate-800 text-white shadow-2xl border-r border-slate-800 overflow-y-auto`}
                 style={visualStyle}
                 data-ds2-neutral={prefs.neutralFamilyId}
             >
                 <div className="p-6 border-b border-slate-700">
-                    <h1 className="text-2xl font-bold text-white">{t('designSystemPage.title')} (2)</h1>
-                    <p className="text-sm text-slate-400 mt-1">{t('designSystemPage.subtitle')} — referenced UI</p>
+                    <h1 className="text-2xl font-bold text-white">{t('designSystemPage.title')}</h1>
+                    <p className="text-sm text-slate-400 mt-1">{t('designSystemPage.subtitle')} — current UI</p>
                 </div>
-                <nav className="flex-1 p-4">
-                    <ul className="space-y-2">
+                <nav className="p-4 xl:flex-1">
+                    <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:block xl:space-y-2">
                         {navItems.map((item) => (
                             <li key={item.id}>
                                 <TabButton
@@ -150,7 +159,6 @@ const DesignSystem2Inner: React.FC = () => {
                 </div>
             </div>
 
-            <DesignSystem2Customizer />
         </div>
     );
 };

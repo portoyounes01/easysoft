@@ -24,7 +24,7 @@ export const BaseDialog: React.FC<BaseDialogProps> = ({
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
             <div
                 className={`bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden ${className}`}
                 onClick={(e) => e.stopPropagation()}

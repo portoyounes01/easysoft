@@ -717,7 +717,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                             />
 
                             {/* Image Actions Overlay */}
-                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center">
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-200 flex items-center justify-center">
                                 <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-2">
                                     <button
                                         type="button"
@@ -863,7 +863,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
             {/* Full Size Preview Modal */}
             {showPreview && state.previewUrl && (
                 <div
-                    className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+                    className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
                     onClick={() => setShowPreview(false)}
                 >
                     <div className="relative max-w-4xl max-h-full">

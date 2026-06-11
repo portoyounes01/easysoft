@@ -40,7 +40,7 @@ const BackupCustomerDialog: React.FC<BackupCustomerDialogProps> = ({
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
             <div className={`bg-white rounded-3xl p-8 shadow-2xl flex flex-col ${isNumpadOpen ? 'w-[1000px] max-w-6xl' : 'w-[600px] max-w-2xl'} h-[600px]`} onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="text-2xl font-bold text-gray-800">{t('pos.selectCustomerTitle')}</h3>
@@ -151,5 +151,4 @@ const BackupCustomerDialog: React.FC<BackupCustomerDialogProps> = ({
 };
 
 export default React.memo(BackupCustomerDialog);
-
 

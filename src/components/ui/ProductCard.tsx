@@ -96,7 +96,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
                 {/* Out of Stock Overlay */}
                 {isOutOfStock && (
-                    <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                         <div
                             className="bg-red-500 text-neutral-50 rounded-lg font-bold"
                             style={{

@@ -10,7 +10,411 @@ body,
 
 /* Login2: full viewport, flex layout inside; zoom compensation applied on host via JS */
 .login2-route-host {
+    --login2-header-side: clamp(2.75rem, 2.75vw, 3rem);
+    --login2-main-top-gap: clamp(1.5rem, 3.08vh, 1.825rem);
+    --login2-main-gap: clamp(2.375rem, 3vw, 3.25rem);
+    --login2-right-w: clamp(23.25rem, 29.1vw, 30.25rem);
+    --login2-numpad-h: clamp(23.875rem, 29.9vw, 31.125rem);
+    --login2-signin-h: clamp(4rem, 4.82vw, 5rem);
+    --login2-stack-gap: clamp(1.25rem, 1.2vw, 1.375rem);
+    --login2-selected-gap: clamp(1.55rem, 1.7vw, 1.75rem);
+    --login2-summary-h: clamp(7.25rem, 9.1vw, 9.45rem);
     overflow: hidden;
+}
+
+.login2-route-host .ds2-visual-scope {
+    background:
+        radial-gradient(circle at 18% 18%, rgba(148, 163, 184, 0.08), transparent 25rem),
+        radial-gradient(circle at 78% 28%, rgba(148, 163, 184, 0.075), transparent 24rem),
+        linear-gradient(180deg, rgb(249, 250, 252), rgb(247, 249, 251));
+}
+
+.login2-page-shell {
+    padding-top: clamp(1.75rem, 3.2vw, 3rem);
+    padding-bottom: 0.75rem;
+}
+
+.login2-content-container {
+    width: min(85.5vw, 88.75rem);
+    max-width: 88.75rem;
+    overflow: visible !important;
+}
+
+.login2-content-container header > div:first-child {
+    width: calc(100vw - (var(--login2-header-side) * 2));
+    margin-left: calc((100% - 100vw + (var(--login2-header-side) * 2)) / 2);
+    margin-bottom: 0 !important;
+}
+
+.login2-content-container header > div:first-child > div:nth-child(2) {
+    transform: translate(-0.625rem, -1.375rem);
+}
+
+.login2-content-container header > div:nth-child(2) {
+    transform: translateX(-0.625rem);
+}
+
+.login2-content-container header h1 {
+    font-size: clamp(3.5rem, 3.55vw, 3.75rem);
+    line-height: 1.02;
+    font-weight: 800;
+}
+
+.login2-content-container header p {
+    font-size: clamp(1.45rem, 1.65vw, 1.75rem);
+    line-height: 1.15;
+}
+
+.login2-language-switcher {
+    position: fixed !important;
+    top: 2.625rem;
+    right: 3.5rem;
+    z-index: 20;
+    display: inline-flex !important;
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    align-items: center;
+    gap: 1.35rem;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    color: rgb(100, 116, 139) !important;
+    font-size: 1.2rem !important;
+    font-weight: 700 !important;
+    line-height: 1.45rem !important;
+}
+
+.login2-route-host header [role="status"] {
+    position: fixed;
+    top: 2.375rem;
+    left: 2.5rem;
+    z-index: 20;
+}
+
+.login2-language-switcher::after {
+    content: "";
+    width: 0.72rem;
+    height: 0.72rem;
+    margin-top: -0.15rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+}
+
+.login2-logo-icon,
+.login2-logo-image {
+    width: clamp(4.25rem, 4.6vw, 4.75rem);
+    height: clamp(4.25rem, 4.6vw, 4.75rem);
+}
+
+.login2-main-grid {
+    grid-template-columns: minmax(0, 1fr) var(--login2-right-w);
+    gap: var(--login2-main-gap);
+    padding-top: var(--login2-main-top-gap);
+    transform: translateX(-0.625rem);
+}
+
+.login2-panel {
+    border: 1px solid rgba(203, 213, 225, 0.72);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.86);
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.85) inset,
+        0 18px 48px rgba(15, 23, 42, 0.06);
+}
+
+.login2-employee-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 10rem));
+    grid-auto-rows: 8.875rem;
+    justify-content: start;
+}
+
+.login2-staff-card {
+    height: 8.875rem;
+    padding: 1.125rem 0.875rem;
+    border: 1px solid rgba(203, 213, 225, 0.86);
+    border-radius: 1.25rem;
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.055);
+}
+
+.login2-staff-card-selected {
+    position: relative;
+    z-index: 1;
+    border-color: rgb(37, 99, 235);
+    background: rgba(239, 246, 255, 0.86);
+    box-shadow:
+        0 0 0 3px rgba(37, 99, 235, 0.16),
+        0 16px 34px rgba(37, 99, 235, 0.12);
+}
+
+.login2-selected-summary {
+    height: var(--login2-summary-h);
+    padding: clamp(1.125rem, 2vw, 1.875rem) clamp(2.5rem, 3.55vw, 3.125rem) clamp(1.125rem, 2vw, 1.875rem) clamp(2.25rem, 2.35vw, 2.45rem);
+}
+
+.login2-selected-summary > div:first-child {
+    gap: clamp(2.5rem, 2.6vw, 2.75rem);
+}
+
+.login2-selected-summary p:first-child {
+    font-size: clamp(1.45rem, 1.62vw, 1.75rem);
+    line-height: 1.15;
+}
+
+.login2-selected-summary p:last-child {
+    font-size: clamp(1.2rem, 1.45vw, 1.5rem);
+    line-height: 1.2;
+}
+
+.login2-credential-card {
+    justify-content: flex-start;
+    padding: clamp(2rem, 3vw, 2.5rem) clamp(2rem, 3.6vw, 3.125rem);
+    padding-right: clamp(2.65rem, 4.45vw, 3.875rem);
+}
+
+.login2-credential-card label {
+    margin-bottom: 0.625rem;
+    color: rgb(15, 23, 42);
+    font-size: clamp(0.95rem, 1.35vw, 1.25rem);
+}
+
+.login2-credential-card input {
+    min-height: clamp(3rem, 3.85vw, 4rem);
+    border-width: 1px;
+    border-color: rgb(203, 213, 225);
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.72);
+    padding: 0 clamp(1rem, 1.5vw, 1.25rem);
+    color: rgb(15, 23, 42);
+    font-size: clamp(1rem, 1.55vw, 1.35rem);
+}
+
+.login2-input-helper {
+    margin-top: clamp(0.875rem, 1.25vw, 1.25rem);
+    color: rgb(100, 116, 139);
+    font-size: clamp(0.875rem, 1.25vw, 1.125rem);
+    font-weight: 500;
+}
+
+.login2-custom-avatar,
+.login2-selected-avatar {
+    width: clamp(4.5rem, 5.55vw, 5.75rem);
+    height: clamp(4.5rem, 5.55vw, 5.75rem);
+}
+
+.login2-custom-avatar {
+    background: rgb(226, 234, 255);
+}
+
+.login2-custom-avatar svg,
+.login2-selected-avatar-icon {
+    width: clamp(2.125rem, 2.75vw, 2.875rem);
+    height: clamp(2.125rem, 2.75vw, 2.875rem);
+}
+
+.login2-change-button {
+    min-width: clamp(6.5rem, 8vw, 8.375rem);
+    height: clamp(2.75rem, 3.35vw, 3.5rem);
+    border: 1px solid rgb(96, 165, 250);
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.52);
+    padding: 0 1.25rem;
+    color: rgb(37, 99, 235);
+    font-size: clamp(1.05rem, 1.24vw, 1.25rem);
+}
+
+.login2-change-button:hover {
+    background: rgba(239, 246, 255, 0.9);
+}
+
+.login2-numpad-card {
+    height: var(--login2-numpad-h);
+    padding: clamp(1.875rem, 2.35vw, 2.375rem);
+}
+
+.login2-numpad-grid {
+    max-width: clamp(19.5rem, 24.2vw, 25.2rem);
+    gap: clamp(0.75rem, 0.85vw, 0.875rem);
+}
+
+.login2-numpad-key {
+    aspect-ratio: auto !important;
+    height: clamp(5.875rem, 5.9vw, 6.125rem);
+    border: 1px solid rgba(203, 213, 225, 0.72);
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.9) inset,
+        0 9px 22px rgba(15, 23, 42, 0.07);
+}
+
+.login2-numpad-key:hover {
+    background: rgb(248, 250, 252);
+}
+
+.login2-numpad-key-muted {
+    background: rgba(241, 245, 249, 0.94);
+}
+
+.login2-right-stack {
+    gap: var(--login2-stack-gap);
+}
+
+.login2-selected-stack {
+    gap: var(--login2-selected-gap);
+}
+
+.login2-signin-button {
+    height: var(--login2-signin-h);
+    min-height: var(--login2-signin-h) !important;
+    border-radius: 0.625rem !important;
+    background: linear-gradient(90deg, rgba(177, 220, 190, 0.9), rgba(160, 211, 177, 0.9)) !important;
+    box-shadow: 0 14px 30px rgba(34, 197, 94, 0.12);
+    font-size: clamp(1.25rem, 1.42vw, 1.5rem) !important;
+    font-weight: 700 !important;
+}
+
+@media (min-width: 768px) {
+    .login2-selected-stack {
+        height: calc(var(--login2-numpad-h) + var(--login2-stack-gap) + var(--login2-signin-h) - 0.375rem);
+        margin-top: 0.375rem;
+    }
+}
+
+@media (max-width: 900px) {
+    .login2-mobile-pane-padding {
+        padding: 0.75rem 1rem !important;
+    }
+
+    .login2-credential-card {
+        padding: 1rem !important;
+    }
+
+    .login2-numpad-card {
+        padding: 0.75rem 1rem !important;
+    }
+
+    .login2-route-host header [role="status"] {
+        position: static;
+    }
+
+    .login2-main-grid {
+        transform: none;
+    }
+
+.login2-customizer-shell {
+        display: none !important;
+    }
+}
+
+.login2-customizer-shell {
+    display: none !important;
+}
+
+@media (max-width: 900px) and (max-height: 700px) {
+    .login2-numpad-grid {
+        max-width: 9.5rem !important;
+        grid-template-columns: repeat(3, 2.75rem) !important;
+        gap: 0.375rem !important;
+        justify-content: center;
+    }
+
+    .login2-numpad-grid > * {
+        width: 2.75rem !important;
+        height: 2.75rem !important;
+    }
+
+    .login2-other-form-stack {
+        gap: 0.375rem !important;
+    }
+
+    .login2-other-form-stack input,
+    .login2-signin-button {
+        min-height: 2.75rem !important;
+    }
+
+    .login2-signin-button {
+        height: 2.75rem !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+}
+
+@media (min-width: 901px) and (max-height: 820px) {
+    .login2-route-host .ds2-visual-scope > div {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+
+    .login2-route-host header {
+        margin-bottom: 0 !important;
+    }
+
+    .login2-route-host header > div:first-child {
+        margin-bottom: 0.25rem !important;
+    }
+
+    .login2-route-host header h1 {
+        font-size: 1.875rem !important;
+        line-height: 2.25rem !important;
+        margin-bottom: 0 !important;
+    }
+
+    .login2-route-host header p {
+        font-size: 1.125rem !important;
+        line-height: 1.5rem !important;
+    }
+
+    .login2-route-host section {
+        margin-bottom: 0.25rem !important;
+    }
+
+    .login2-route-host section h2 {
+        font-size: 1.5rem !important;
+        line-height: 2rem !important;
+        margin-bottom: 0.25rem !important;
+    }
+
+    .login2-route-host [role="listbox"] {
+        padding-top: 0.375rem !important;
+        padding-bottom: 0.375rem !important;
+    }
+
+    .login2-staff-card {
+        height: 8.25rem !important;
+        padding-top: 0.875rem !important;
+        padding-bottom: 0.875rem !important;
+    }
+
+    .login2-staff-card > div {
+        width: 3rem !important;
+        height: 3rem !important;
+        margin-bottom: 0.375rem !important;
+    }
+
+    .login2-mobile-pane-padding {
+        padding: 0.75rem 1rem !important;
+    }
+
+    .login2-other-form-stack {
+        gap: 0.375rem !important;
+    }
+
+    .login2-other-form-stack input,
+    .login2-signin-button {
+        min-height: 2.75rem !important;
+    }
+
+    .login2-signin-button {
+        height: 2.75rem !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
 }
 
 /* Custom scrollbars for scrollable lists */

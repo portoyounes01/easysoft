@@ -1,25 +1,28 @@
-import React, { useMemo, useState } from 'react';
-import { NavLink } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
+import React, { useMemo, useState } from "react";
+import { NavLink } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   // LayoutDashboard,
+  Menu,
   ShoppingCart,
   Package,
   Users,
-  FileText,
   Settings,
   BarChart3,
   CreditCard,
   UserCircle,
   LogOut,
+  Zap,
   Tag,
   ClipboardList,
   Contact,
-} from 'lucide-react';
-import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
-import { useDesignSystem2Customization } from '../../contexts/DesignSystem2CustomizationContext';
-import LanguageSwitcher from '../LanguageSwitcher';
-import '../../styles/design-system-2-scope.css';
+  Palette,
+  Layers,
+} from "lucide-react";
+import { useSupabaseAuth } from "../../contexts/SupabaseAuthContext";
+import { useDesignSystem2Customization } from "../../contexts/DesignSystem2CustomizationContext";
+import LanguageSwitcher from "../LanguageSwitcher";
+import "../../styles/design-system-2-scope.css";
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -27,37 +30,94 @@ interface SidebarProps {
   onNavigate?: () => void;
 }
 
-/** Matches `TabButton` `variant="sidebar"` active / idle chrome — remapped inside `.ds2-visual-scope` to DS2 secondary + radius. */
 const sidebarNavClass = (isActive: boolean, isCollapsed: boolean): string => {
   const base =
-    'flex min-h-touch-sm items-center space-x-3 px-4 py-3 ds2-control-radius-lg transition-all duration-200 group relative';
+    "group relative flex min-h-[44px] items-center gap-4 rounded-[18px] border px-4 text-sm transition-all duration-200";
   const active =
-    'bg-gradient-to-r from-blue-600 to-blue-500 text-neutral-100 shadow-lg transform scale-105';
-  const idle = 'text-neutral-300 hover:bg-slate-800 hover:text-yellow-400';
-  const collapsed = isCollapsed ? 'justify-center' : '';
+    "border-[#d6d6d6] bg-white text-[#171717] shadow-[0_1px_2px_rgba(0,0,0,0.06)] before:absolute before:left-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-emerald-500";
+  const idle =
+    "border-transparent text-[#171717] hover:border-[#d8d8d8] hover:bg-white";
+  const collapsed = isCollapsed ? "justify-center" : "";
   return `${base} ${isActive ? active : idle} ${collapsed}`.trim();
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
   const { employee, signOut, hasPermission } = useSupabaseAuth();
   const { t } = useTranslation();
-  const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+  const { visualStyle, prefs } = useDesignSystem2Customization();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const menuItems = useMemo(
     () => [
       // { path: '/', icon: LayoutDashboard, labelKey: 'sidebar.menu.dashboard', permission: 'dashboard' },
-      { path: '/pos', icon: ShoppingCart, labelKey: 'sidebar.menu.pos', permission: 'sales' },
-      { path: '/products', icon: Package, labelKey: 'sidebar.menu.products', permission: 'inventory' },
-      { path: '/categories', icon: Tag, labelKey: 'sidebar.menu.categories', permission: 'inventory' },
-      { path: '/customers', icon: Contact, labelKey: 'sidebar.menu.customers', permission: 'inventory' },
-      { path: '/employees', icon: Users, labelKey: 'sidebar.menu.employees', permission: 'employees' },
-      { path: '/reports', icon: BarChart3, labelKey: 'sidebar.menu.reports', permission: 'reports' },
-      { path: '/transactions', icon: CreditCard, labelKey: 'sidebar.menu.transactions', permission: 'transactions' },
-      { path: '/fiscal-audit', icon: ClipboardList, labelKey: 'sidebar.menu.fiscalAudit', permission: 'settings' },
-      { path: '/settings', icon: Settings, labelKey: 'sidebar.menu.settings', permission: 'settings' },
+      {
+        path: "/pos",
+        icon: ShoppingCart,
+        labelKey: "sidebar.menu.pos",
+        permission: "sales",
+      },
+      {
+        path: "/products",
+        icon: Package,
+        labelKey: "sidebar.menu.products",
+        permission: "inventory",
+      },
+      {
+        path: "/categories",
+        icon: Tag,
+        labelKey: "sidebar.menu.categories",
+        permission: "inventory",
+      },
+      {
+        path: "/customers",
+        icon: Contact,
+        labelKey: "sidebar.menu.customers",
+        permission: "inventory",
+      },
+      {
+        path: "/employees",
+        icon: Users,
+        labelKey: "sidebar.menu.employees",
+        permission: "employees",
+      },
+      {
+        path: "/reports",
+        icon: BarChart3,
+        labelKey: "sidebar.menu.reports",
+        permission: "reports",
+      },
+      {
+        path: "/transactions",
+        icon: CreditCard,
+        labelKey: "sidebar.menu.transactions",
+        permission: "transactions",
+      },
+      {
+        path: "/fiscal-audit",
+        icon: ClipboardList,
+        labelKey: "sidebar.menu.fiscalAudit",
+        permission: "settings",
+      },
+      {
+        path: "/settings",
+        icon: Settings,
+        labelKey: "sidebar.menu.settings",
+        permission: "settings",
+      },
+      {
+        path: "/appearances",
+        icon: Palette,
+        labelKey: "sidebar.menu.appearances",
+        permission: "settings",
+      },
+      {
+        path: "/design-system",
+        icon: Layers,
+        labelKey: "sidebar.menu.designSystem",
+        permission: "settings",
+      },
     ],
-    []
+    [],
   );
 
   const handleLogout = () => {
@@ -73,31 +133,33 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
     setShowLogoutConfirm(false);
   };
 
-  const widthClass = isCollapsed ? 'w-20' : layoutClasses.sidebarW;
+  const widthClass = isCollapsed ? "w-14" : "w-[320px]";
 
   return (
     <>
       <div
-        className={`ds2-visual-scope flex h-screen flex-col overflow-y-auto bg-gradient-to-b from-slate-900 to-slate-800 text-white shadow-2xl transition-[width] duration-300 ${widthClass}`}
+        className={`ds2-visual-scope flex h-screen flex-col overflow-y-auto bg-[#f7f7f7] text-[#171717] transition-[width] duration-300 ${widthClass}`}
         style={visualStyle}
         data-ds2-neutral={prefs.neutralFamilyId}
       >
-        <div className="border-b border-slate-700 p-6">
-          <div className="flex items-center space-x-3">
-            <div className="flex-shrink-0 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 p-2 ds2-control-radius-lg">
-              <FileText className="h-6 w-6 text-white" />
-            </div>
+        <div className="flex flex-shrink-0 items-center border-b border-[#dedede] px-5" style={{ height: 80 }}>
+          <div className="flex min-w-0 items-center gap-5">
+            <Menu className="h-[20px] w-[20px] flex-shrink-0 text-[#727272]" />
             {!isCollapsed && (
-              <div>
-                <h1 className="text-xl font-bold">{t('sidebar.brandTitle')}</h1>
-                <p className="text-sm text-slate-400">{t('sidebar.brandSubtitle')}</p>
+              <div className="flex min-w-0 items-center gap-2.5">
+                <Zap className="h-[32px] w-[32px] flex-shrink-0 fill-emerald-500 text-emerald-500" />
+                <div className="min-w-0">
+                  <h1 className="truncate text-lg font-semibold leading-none text-[#4b4b4b]">
+                    {t("sidebar.brandTitle")}
+                  </h1>
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
+        <nav className="flex-1 px-6 py-5">
+          <ul className="space-y-4">
             {menuItems.map((item) => {
               if (!hasPermission(item.permission)) return null;
 
@@ -107,16 +169,22 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
                 <li key={item.path}>
                   <NavLink
                     to={item.path}
-                    end={item.path === '/'}
-                    className={({ isActive }) => sidebarNavClass(isActive, isCollapsed)}
+                    end={item.path === "/"}
+                    className={({ isActive }) =>
+                      sidebarNavClass(isActive, isCollapsed)
+                    }
                     title={isCollapsed ? label : undefined}
                     onClick={() => onNavigate?.()}
                   >
-                    <Icon className="h-5 w-5 flex-shrink-0" />
-                    {!isCollapsed && <span className="font-medium">{label}</span>}
+                    <Icon className="h-4 w-4 flex-shrink-0 stroke-[2]" />
+                    {!isCollapsed && (
+                      <span className="truncate font-normal tracking-normal">
+                        {label}
+                      </span>
+                    )}
 
                     {isCollapsed && (
-                      <div className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-sm text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                      <div className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-900 opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100">
                         {label}
                       </div>
                     )}
@@ -127,17 +195,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
           </ul>
         </nav>
 
-        <div className="border-t border-slate-700 p-4">
+        <div className="p-3">
           <div
-            className={`mb-3 flex items-center rounded-lg bg-slate-800 p-3 ds2-control-radius-lg ${isCollapsed ? 'justify-center space-x-0' : 'space-x-3'}`}
+            className={`mb-2 flex min-h-touch-xs items-center rounded-md px-2.5 py-2 ${isCollapsed ? "justify-center space-x-0" : "space-x-2.5"}`}
           >
-            <div className="flex-shrink-0 rounded-full bg-gradient-to-r from-green-500 to-teal-500 p-2">
-              <UserCircle className="h-5 w-5 text-white" />
+            <div className="flex-shrink-0 rounded-full bg-gray-100 p-1.5">
+              <UserCircle className="h-4 w-4 text-gray-500" />
             </div>
             {!isCollapsed && (
-              <div className="flex-1">
-                <p className="text-sm font-medium">{employee?.name}</p>
-                <p className="text-xs text-slate-400">{employee?.role.toUpperCase()}</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-gray-950">
+                  {employee?.name}
+                </p>
+                <p className="truncate text-[11px] font-medium text-gray-400">
+                  {employee?.role.toUpperCase()}
+                </p>
               </div>
             )}
           </div>
@@ -147,15 +219,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
           <button
             type="button"
             onClick={handleLogout}
-            className={`group relative flex min-h-touch w-full items-center rounded-lg px-4 py-3 text-slate-300 transition-all duration-200 hover:scale-105 hover:bg-red-600 hover:text-white ds2-control-radius-lg ${isCollapsed ? 'justify-center space-x-0' : 'space-x-3'}`}
-            title={isCollapsed ? t('common.logout') : undefined}
+            className={`group relative flex min-h-touch-xs w-full items-center rounded-md border border-gray-200 bg-white px-2.5 py-2 text-gray-900 transition-all duration-200 hover:border-red-100 hover:bg-red-50 hover:text-red-600 ${isCollapsed ? "justify-center space-x-0" : "space-x-2.5"}`}
+            title={isCollapsed ? t("common.logout") : undefined}
           >
-            <LogOut className="h-5 w-5 flex-shrink-0 group-hover:animate-pulse" />
-            {!isCollapsed && <span className="font-medium">{t('common.logout')}</span>}
+            <LogOut className="h-4 w-4 flex-shrink-0" />
+            {!isCollapsed && (
+              <span className="text-xs font-medium">{t("common.logout")}</span>
+            )}
 
             {isCollapsed && (
-              <div className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-sm text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                {t('common.logout')}
+              <div className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-900 opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100">
+                {t("common.logout")}
               </div>
             )}
           </button>
@@ -163,14 +237,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
       </div>
 
       {showLogoutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-96 max-w-md rounded-xl bg-white p-6 shadow-2xl">
             <div className="mb-6 text-center">
               <div className="mb-4 inline-block rounded-full bg-red-100 p-3">
                 <LogOut className="h-8 w-8 text-red-600" />
               </div>
-              <h3 className="mb-2 text-xl font-bold text-gray-800">{t('sidebar.logoutConfirmTitle')}</h3>
-              <p className="text-gray-600">{t('sidebar.logoutConfirmMessage')}</p>
+              <h3 className="mb-2 text-xl font-bold text-gray-800">
+                {t("sidebar.logoutConfirmTitle")}
+              </h3>
+              <p className="text-gray-600">
+                {t("sidebar.logoutConfirmMessage")}
+              </p>
             </div>
 
             <div className="flex space-x-3">
@@ -179,7 +257,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
                 onClick={cancelLogout}
                 className="min-h-touch-sm flex-1 rounded-lg bg-gray-200 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-300"
               >
-                {t('common.cancel')}
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -187,7 +265,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
                 className="flex min-h-touch-sm flex-1 items-center justify-center space-x-2 rounded-lg bg-red-600 py-3 font-semibold text-white transition-colors hover:bg-red-700"
               >
                 <LogOut className="h-4 w-4" />
-                <span>{t('common.logout')}</span>
+                <span>{t("common.logout")}</span>
               </button>
             </div>
           </div>

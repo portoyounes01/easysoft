@@ -162,7 +162,7 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
 
       {/* Rule Editor Modal */}
       {showModal && editingRule && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-lg">
             <h3 className="text-lg font-bold mb-4">
               {editingRule.id.startsWith('new-') ? t('printerWorkflow.createRuleTitle') : t('printerWorkflow.editRuleTitleModal')}

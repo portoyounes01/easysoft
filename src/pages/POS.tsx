@@ -881,7 +881,7 @@ const POSInner: React.FC = () => {
 
       {/* Auto-Logout Warning Modal */}
       {showAutoLogoutWarning && settings.autoLogout.enabled && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-white rounded-3xl p-8 w-[450px] max-w-md shadow-2xl border-4 border-yellow-400">
             <div className="text-center">
               <div className="bg-gradient-to-r from-yellow-500 to-orange-500 p-4 rounded-full inline-block mb-6">
