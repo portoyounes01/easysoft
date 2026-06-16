@@ -20,6 +20,7 @@ import {
     SyncMetadata
 } from '../types/supabase';
 import type {
+    ExternalFiscalCheckoutPersistencePayload,
     FiscalCheckoutAtomicPayload,
     FiscalCheckoutResult,
     FiscalTransactionMetadata,
@@ -1606,6 +1607,191 @@ export class TransactionLocalService {
             fiscalProvider: 'vendus',
             externalDocumentId: vendus.documentId,
             externalReference: vendus.externalReference,
+            officialOutput,
+        };
+    }
+
+    /**
+     * Persist a document issued by any cloud fiscal backend (InvoiceXpress, Fiskaly, …).
+     * Provider-agnostic sibling of {@link createVendusFiscalCheckoutAtomic}: the external
+     * issuer owns numbering / ATCUD / hash / QR; we store an immutable snapshot atomically.
+     */
+    async createExternalFiscalCheckoutAtomic(
+        payload: ExternalFiscalCheckoutPersistencePayload
+    ): Promise<FiscalCheckoutResult> {
+        const fiscalId = generateUUID();
+        const transactionId = generateUUID();
+        const persistedAt = new Date();
+        const ext = payload.external;
+        const sourceId = payload.payment.employeeNumber?.trim() || payload.payment.employeeId.slice(0, 12);
+        const invoiceNo = ext.number;
+        const atcudBody = ext.atcud.replace(/^\s*ATCUD\s*:\s*/i, '').trim();
+        const hashValue = ext.hash || '';
+        const hashFourChars = hashValue.slice(0, 4);
+        const qrPayload = ext.qrcodeData || '';
+        const chainScope = ext.chainScope;
+        const seriesKey = chainScope;
+        const atValidationCode = (ext.atValidationCode || atcudBody.split('-')[0] || ext.provider).toUpperCase();
+        const sequentialNumber = (() => {
+            const match = invoiceNo.match(/(\d+)\s*$/);
+            if (match) return Number(match[1]);
+            const asNumber = Number(ext.documentId);
+            return Number.isFinite(asNumber) && asNumber > 0 ? asNumber : Date.now();
+        })();
+
+        const officialOutput = {
+            provider: ext.provider,
+            format: ext.outputFormat,
+            data: typeof ext.output === 'string' ? ext.output : undefined,
+            url: ext.outputFormat === 'pdf_url' && typeof ext.output === 'string' ? ext.output : undefined,
+            rawData: ext.outputData,
+        };
+
+        const fiscalMetadata: FiscalTransactionMetadata = {
+            invoiceNo,
+            atcudBody,
+            hashBase64: hashValue,
+            hashFourChars,
+            hashControl: ext.provider,
+            qrPayload,
+            chainScope,
+            sequentialNumber,
+            certificationMode: payload.certificationMode,
+            fiscalProvider: ext.provider,
+            externalDocumentId: ext.documentId,
+            externalReference: ext.externalReference,
+            externalTxId: ext.txId,
+            officialOutput,
+            external: {
+                provider: ext.provider,
+                outputFormat: ext.outputFormat,
+                items: ext.items,
+                meta: ext.providerMeta,
+            },
+        };
+
+        const transaction: LocalTransaction = {
+            ...payload.transactionBase,
+            id: transactionId,
+            fiscal_document_id: fiscalId,
+            transaction_number: invoiceNo,
+            receipt_number: invoiceNo,
+            fiscal_metadata_json: JSON.stringify(fiscalMetadata),
+            created_at: persistedAt,
+            updated_at: persistedAt,
+            needs_push: true,
+            is_conflicted: false,
+            last_synced_at: null,
+        };
+
+        const transactionItems: LocalTransactionItem[] = payload.transactionItems.map(item => ({
+            ...item,
+            id: generateUUID(),
+            transaction_id: transactionId,
+            created_at: persistedAt,
+            updated_at: persistedAt,
+            needs_push: true,
+            is_conflicted: false,
+            last_synced_at: null,
+        }));
+
+        const fiscalDoc: LocalFiscalDocument = {
+            chain_scope: chainScope,
+            series_key: seriesKey,
+            at_validation_code: atValidationCode,
+            sequential_number: sequentialNumber,
+            invoice_no: invoiceNo,
+            invoice_type: ext.type,
+            settled_invoice_no: payload.settledInvoiceNo ?? null,
+            settled_invoice_date: payload.settledInvoiceDateYmd ?? null,
+            invoice_date: ext.date || payload.transactionDate,
+            system_entry_date: ext.systemTime || payload.systemEntryDate,
+            gross_total: ext.amountGross,
+            net_total: ext.amountNet,
+            tax_total: Number((ext.amountGross - ext.amountNet).toFixed(2)),
+            hash_base64: hashValue,
+            hash_control: ext.provider,
+            hash_plaintext: `${ext.provider.toUpperCase()}_EXTERNAL_ISSUER`,
+            previous_hash_base64: '',
+            qr_payload: qrPayload,
+            source_id: sourceId,
+            certification_mode: payload.certificationMode,
+            customer_tax_id: payload.customerTaxId,
+            payment_method: payload.payment.paymentMethod,
+            created_at: persistedAt.toISOString(),
+            atcud_body: atcudBody,
+            hash_four_chars: hashFourChars,
+            saft_exported_at: null,
+            saft_export_batch_id: null,
+            cancelled_at: null,
+            cancelled_reason: null,
+            cancelled_by_employee_id: null,
+            fiscal_provider: ext.provider,
+            external_document_id: ext.documentId,
+            external_reference: ext.externalReference,
+            external_tx_id: ext.txId,
+            external_output_format: ext.outputFormat,
+            external_payload_json: JSON.stringify(ext.raw),
+            id: fiscalId,
+            transaction_id: transactionId,
+            needs_push: true,
+        };
+
+        const auditRow: LocalFiscalAuditEvent = {
+            id: generateUUID(),
+            event_type: ext.type === 'NC' ? 'CREDIT_NOTE_ISSUED' : 'FISCAL_DOCUMENT_CREATED',
+            payload_json: JSON.stringify({
+                transactionId,
+                fiscalId,
+                invoiceNo,
+                fiscalProvider: ext.provider,
+                externalDocumentId: ext.documentId,
+                externalReference: ext.externalReference,
+                txId: ext.txId,
+            }),
+            employee_id: payload.payment.employeeId,
+            created_at: new Date().toISOString(),
+        };
+
+        await localDb.transaction(
+            'rw',
+            [
+                localDb.transactions,
+                localDb.transactionItems,
+                localDb.fiscalDocuments,
+                localDb.fiscalAuditEvents,
+            ],
+            async () => {
+                await localDb.fiscalDocuments.add(fiscalDoc);
+                await localDb.transactions.add(transaction);
+                await localDb.transactionItems.bulkAdd(transactionItems);
+                await localDb.fiscalAuditEvents.add(auditRow);
+            }
+        );
+        await this.queueOperation('CREATE', transactionId, { ...transaction, items: transactionItems });
+
+        return {
+            transactionId,
+            fiscalId,
+            invoiceNo,
+            atcudBody,
+            hashBase64: hashValue,
+            hashFourChars,
+            qrPayload,
+            hashControl: ext.provider,
+            certificationMode: payload.certificationMode,
+            grossTotal: ext.amountGross,
+            netTotal: ext.amountNet,
+            taxTotal: Number((ext.amountGross - ext.amountNet).toFixed(2)),
+            systemEntryDate: ext.systemTime || payload.systemEntryDate,
+            invoiceDate: ext.date || payload.transactionDate,
+            invoiceTypeSaft: ext.type,
+            sourceId,
+            sequentialNumber,
+            seriesKey,
+            fiscalProvider: ext.provider,
+            externalDocumentId: ext.documentId,
+            externalReference: ext.externalReference,
             officialOutput,
         };
     }

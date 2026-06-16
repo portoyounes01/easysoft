@@ -90,6 +90,10 @@ interface VendusDocumentResponse {
 interface VendusFunctionResponse {
     document?: VendusDocumentResponse;
     xml?: string;
+    ok?: boolean;
+    account?: unknown;
+    taxes?: unknown;
+    paymentMethods?: unknown;
     error?: string;
 }
 
@@ -541,4 +545,25 @@ export async function fetchVendusSaftXml(params: {
         throw new Error('Vendus não devolveu SAF-T.');
     }
     return atob(response.xml);
+}
+
+export interface VendusHealthCheckResult {
+    ok: boolean;
+    account: unknown;
+    taxes: unknown;
+    paymentMethods: unknown;
+}
+
+export async function checkVendusFiscalHealth(settings: SystemSettings): Promise<VendusHealthCheckResult> {
+    assertVendusEnabled(settings);
+    assertOnlineForVendus();
+    const response = await invokeVendusFunction({
+        action: 'health_check',
+    });
+    return {
+        ok: Boolean(response.ok),
+        account: response.account,
+        taxes: response.taxes,
+        paymentMethods: response.paymentMethods,
+    };
 }

@@ -1069,10 +1069,13 @@ export interface LocalFiscalAuditEvent {
 
 export interface LocalVendusIssueAttempt {
     id: string;
+    /** Issuing backend; absent on legacy rows (treated as `vendus`). */
+    provider?: 'vendus' | 'invoicexpress' | 'fiskaly';
     kind: 'sale' | 'credit_note';
     tx_id: string;
     external_reference: string;
     status: 'pending' | 'issued' | 'persisted' | 'failed';
+    /** External document id (named for Vendus historically; generic across providers). */
     vendus_document_id: string | null;
     local_transaction_id: string | null;
     request_json: string;

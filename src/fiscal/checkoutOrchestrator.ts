@@ -40,6 +40,28 @@ export async function runFiscalCheckout(params: {
         });
     }
 
+    if (settings.fiscal.issuer === 'invoicexpress') {
+        const { issueInvoiceXpressSale } = await import('./invoicexpressFiscalIssuer');
+        return issueInvoiceXpressSale({
+            settings,
+            cart,
+            selectedCustomer,
+            payment,
+            globalDiscount,
+        });
+    }
+
+    if (settings.fiscal.issuer === 'fiskaly') {
+        const { issueFiskalySale } = await import('./fiskalyFiscalIssuer');
+        return issueFiskalySale({
+            settings,
+            cart,
+            selectedCustomer,
+            payment,
+            globalDiscount,
+        });
+    }
+
     const invoiceTypeSaft = SALE_INVOICE_TYPE_SAFT;
     const receiptProfile = receiptProfileForSale(settings.receipt, invoiceTypeSaft);
     const draft = buildSaleCheckoutDraft({ cart, selectedCustomer, payment, globalDiscount });

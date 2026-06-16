@@ -4,7 +4,9 @@ import type { SaftFiscalDocumentType } from './spec';
 import type { FiscalSigner } from './signing';
 
 export type CertificationMode = 'production' | 'training';
-export type FiscalProvider = 'local_at' | 'vendus';
+export type FiscalProvider = 'local_at' | 'vendus' | 'invoicexpress' | 'fiskaly';
+/** Cloud issuers that own numbering / ATCUD / hash / QR (everything except the local AT chain). */
+export type ExternalFiscalProvider = Exclude<FiscalProvider, 'local_at'>;
 
 export interface FiscalOfficialOutput {
     provider: FiscalProvider;
@@ -44,6 +46,49 @@ export interface VendusFiscalSnapshot {
     storeId?: string;
     mode: 'normal' | 'tests';
     items: VendusIssuedItemReference[];
+    raw: unknown;
+}
+
+/** Per-line link back to the external issuer's document rows (for credit notes / reconciliation). */
+export interface ExternalIssuedItemReference {
+    localProductId: string | null;
+    localSku: string | null;
+    externalItemId: string | null;
+    referenceId: string | null;
+    documentRow: number;
+}
+
+/**
+ * Provider-agnostic snapshot of a document issued by a cloud fiscal backend
+ * (InvoiceXpress, Fiskaly, …). The issuer owns numbering, ATCUD, hash and QR;
+ * the app only persists this snapshot. Modelled on {@link VendusFiscalSnapshot}.
+ */
+export interface ExternalFiscalSnapshot {
+    provider: ExternalFiscalProvider;
+    documentId: string;
+    number: string;
+    type: SaftFiscalDocumentType;
+    date: string;
+    systemTime: string;
+    localTime: string;
+    amountGross: number;
+    amountNet: number;
+    hash: string;
+    atcud: string;
+    qrcodeSvg?: string;
+    qrcodeData?: string;
+    outputFormat: string;
+    output?: string;
+    outputData?: unknown;
+    txId: string;
+    externalReference: string;
+    /** Hash-chain scope label, provider-specific (e.g. `invoicexpress::<account>::FT`). */
+    chainScope: string;
+    /** AT validation code prefix when the provider exposes it (else derived from ATCUD/provider). */
+    atValidationCode?: string;
+    items: ExternalIssuedItemReference[];
+    /** Provider-specific metadata persisted into `fiscal_metadata_json.external.meta`. */
+    providerMeta?: Record<string, unknown>;
     raw: unknown;
 }
 
@@ -212,6 +257,28 @@ export interface VendusFiscalCheckoutPersistencePayload {
     settledInvoiceDateYmd?: string;
 }
 
+/** Input to atomic persistence of a document issued by any cloud fiscal backend. */
+export interface ExternalFiscalCheckoutPersistencePayload {
+    certificationMode: CertificationMode;
+    transactionDate: string;
+    transactionTime: string;
+    systemEntryDate: string;
+    grossTotal: number;
+    netRounded: number;
+    taxTotal: number;
+    totalDiscountAmount: number;
+    originalSubtotal: number;
+    total: number;
+    changeGiven: number;
+    transactionBase: FiscalCheckoutTransactionBase;
+    transactionItems: FiscalCheckoutItemBase[];
+    customerTaxId: string | null;
+    payment: FiscalCheckoutAtomicPayload['payment'];
+    external: ExternalFiscalSnapshot;
+    settledInvoiceNo?: string;
+    settledInvoiceDateYmd?: string;
+}
+
 /** Serialized into `transactions.fiscal_metadata_json` at issuance (immutable snapshot). */
 export interface FiscalTransactionMetadata {
     invoiceNo: string;
@@ -234,6 +301,13 @@ export interface FiscalTransactionMetadata {
         mode: 'normal' | 'tests';
         outputFormat: string;
         items: VendusIssuedItemReference[];
+    };
+    /** Generic cloud-issuer block (InvoiceXpress, Fiskaly, …). */
+    external?: {
+        provider: ExternalFiscalProvider;
+        outputFormat: string;
+        items: ExternalIssuedItemReference[];
+        meta?: Record<string, unknown>;
     };
 }
 

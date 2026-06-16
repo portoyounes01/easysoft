@@ -65,6 +65,36 @@ function defaultVendusSettings(): VendusFiscalSettings {
     };
 }
 
+function defaultInvoiceXpressSettings(): InvoiceXpressFiscalSettings {
+    return {
+        enabled: false,
+        accountName: '',
+        documentType: 'invoice_receipt',
+        finalizeOnIssue: true,
+        sequenceId: '',
+        exemptTax: {
+            code: 'M99',
+            law: '',
+        },
+    };
+}
+
+function defaultFiskalySettings(): FiskalyFiscalSettings {
+    return {
+        enabled: false,
+        environment: 'test',
+        taxpayerId: '',
+        locationId: '',
+        systemId: '',
+        seriesId: '',
+        documentType: 'FT',
+        exemptTax: {
+            code: 'M99',
+            law: '',
+        },
+    };
+}
+
 function mergeFiscalBranch(
     prev: SystemSettings['fiscal'],
     patch?: DeepPartial<SystemSettings['fiscal']>
@@ -83,6 +113,22 @@ function mergeFiscalBranch(
             exemptTax: {
                 ...prev.vendus.exemptTax,
                 ...(patch.vendus?.exemptTax || {}),
+            },
+        },
+        invoicexpress: {
+            ...prev.invoicexpress,
+            ...(patch.invoicexpress || {}),
+            exemptTax: {
+                ...prev.invoicexpress.exemptTax,
+                ...(patch.invoicexpress?.exemptTax || {}),
+            },
+        },
+        fiskaly: {
+            ...prev.fiskaly,
+            ...(patch.fiskaly || {}),
+            exemptTax: {
+                ...prev.fiskaly.exemptTax,
+                ...(patch.fiskaly?.exemptTax || {}),
             },
         },
     };
@@ -204,12 +250,14 @@ export interface SystemSettings {
     };
     /** Portugal AT: signing, training mode, key version (HashControl). */
     fiscal: {
-        issuer: 'local_at' | 'vendus';
+        issuer: 'local_at' | 'vendus' | 'invoicexpress' | 'fiskaly';
         hashControlVersion: string;
         /** RSA private key PKCS#8 PEM — dev/local; prefer secure storage in production */
         privateKeyPem?: string;
         trainingMode: boolean;
         vendus: VendusFiscalSettings;
+        invoicexpress: InvoiceXpressFiscalSettings;
+        fiskaly: FiskalyFiscalSettings;
     };
 }
 
@@ -225,6 +273,46 @@ export interface VendusFiscalSettings {
         card?: string;
         mixed?: string;
     };
+    exemptTax: {
+        code?: string;
+        law?: string;
+    };
+}
+
+/**
+ * InvoiceXpress (cloud, PT-certified). API key lives in the `invoicexpress-fiscal`
+ * edge function env (INVOICEXPRESS_API_KEY); only non-secret routing config is stored here.
+ */
+export interface InvoiceXpressFiscalSettings {
+    enabled: boolean;
+    /** Subdomain: `{accountName}.app.invoicexpress.com`. */
+    accountName: string;
+    /** Maps to the document endpoint + SAF-T document type. */
+    documentType: 'invoice_receipt' | 'simplified_invoice' | 'invoice';
+    /** Change-state the document to `finalized` immediately after creation. */
+    finalizeOnIssue: boolean;
+    /** Optional fixed série id (InvoiceXpress `sequence_id`); blank = account default. */
+    sequenceId?: string;
+    exemptTax: {
+        code?: string;
+        law?: string;
+    };
+}
+
+/**
+ * Fiskaly SIGN PT (cloud, AT-certified). API key/secret live in the `fiskaly-fiscal`
+ * edge function env (FISKALY_API_KEY / FISKALY_API_SECRET); routing config is stored here.
+ */
+export interface FiskalyFiscalSettings {
+    enabled: boolean;
+    /** `test` → test.api.fiskaly.com, `live` → live.api.fiskaly.com. */
+    environment: 'test' | 'live';
+    /** Fiskaly resource hierarchy: taxpayer → location → system → series. */
+    taxpayerId: string;
+    locationId: string;
+    systemId: string;
+    seriesId?: string;
+    documentType: 'FT' | 'FS' | 'FR';
     exemptTax: {
         code?: string;
         law?: string;
@@ -310,6 +398,8 @@ const defaultSettings: SystemSettings = {
         privateKeyPem: undefined,
         trainingMode: false,
         vendus: defaultVendusSettings(),
+        invoicexpress: defaultInvoiceXpressSettings(),
+        fiskaly: defaultFiskalySettings(),
     },
 };
 
