@@ -81,6 +81,31 @@ export interface SeedResult {
   };
 }
 
+interface StartupSeedJson {
+  employees?: unknown[];
+  categories?: unknown[];
+  products?: unknown[];
+}
+
+async function loadStartupSeedJson(): Promise<StartupSeedJson | null> {
+  try {
+    const response = await fetch('/startup-seed.json');
+    if (!response.ok) return null;
+    const data = (await response.json()) as StartupSeedJson;
+    if (
+      Array.isArray(data.employees) ||
+      Array.isArray(data.categories) ||
+      Array.isArray(data.products)
+    ) {
+      return data;
+    }
+    return null;
+  } catch (error) {
+    console.warn('Startup JSON seed unavailable; falling back to YAML seed files:', error);
+    return null;
+  }
+}
+
 export class SeedDataService {
   // Fast local-only seed for app startup. No Supabase health checks, cloud writes, or sync.
   async seedLocalFromYaml(): Promise<SeedResult> {
@@ -89,35 +114,45 @@ export class SeedDataService {
 
       await initializeLocalDatabase();
 
-      try {
-        YamlLoader.clearCache();
-      } catch {
-        // Cache clearing is best-effort; loading fresh files below can still proceed.
+      const startupSeed = await loadStartupSeedJson();
+      let seedEmployees = startupSeed?.employees;
+      let seedCategories = startupSeed?.categories;
+      let seedProducts = startupSeed?.products;
+
+      if (!startupSeed) {
+        try {
+          YamlLoader.clearCache();
+        } catch {
+          // Cache clearing is best-effort; loading fresh files below can still proceed.
+        }
+        const yamlFiles = await YamlLoader.loadMultipleYamlFiles([
+          'employees.yml',
+          'categories.yml',
+          'products.yml'
+        ]);
+        seedEmployees = yamlFiles.employees?.employees;
+        seedCategories = yamlFiles.categories?.categories;
+        seedProducts = yamlFiles.products?.products;
       }
-      const yamlFiles = await YamlLoader.loadMultipleYamlFiles([
-        'employees.yml',
-        'categories.yml',
-        'products.yml'
-      ]);
 
       let employeesCount = 0;
       let categoriesCount = 0;
       let productsCount = 0;
 
-      if (yamlFiles.categories?.categories) {
-        const categories = this.normalizeCategories(yamlFiles.categories.categories);
+      if (Array.isArray(seedCategories)) {
+        const categories = this.normalizeCategories(seedCategories);
         await this.seedCategories(categories);
         categoriesCount = categories.length;
       }
 
-      if (yamlFiles.products?.products) {
-        const products = this.normalizeProducts(yamlFiles.products.products);
+      if (Array.isArray(seedProducts)) {
+        const products = this.normalizeProducts(seedProducts);
         await this.seedProducts(products);
         productsCount = products.length;
       }
 
-      if (yamlFiles.employees?.employees) {
-        const employees = await this.normalizeEmployees(yamlFiles.employees.employees, {
+      if (Array.isArray(seedEmployees)) {
+        const employees = await this.normalizeEmployees(seedEmployees, {
           applyStartupCredentialDefaults: true,
         });
         await this.seedEmployees(employees, { updateExistingCredentials: true });

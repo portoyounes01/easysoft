@@ -69,7 +69,38 @@ describe('startup local seed', () => {
     expect(category?.name).toBe('Kebabs');
     expect(product?.name).toBe('Pita Kebab');
     expect(product?.category_id).toBe(categoryId);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('uses startup-seed.json when available so production does not depend on YAML serving', async () => {
+    const jsonEmployeeId = '88888888-8888-4888-8888-888888888888';
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith('/startup-seed.json')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          employees: [{
+            id: jsonEmployeeId,
+            employee_number: 'JSON001',
+            name: 'JSON Cashier',
+            pin: '9999',
+            role: 'cashier',
+            access_levels: ['sales'],
+            is_active: true,
+            hire_date: '2024-01-15',
+          }],
+          categories: [],
+          products: [],
+        }), { status: 200 }));
+      }
+      return Promise.resolve(new Response('', { status: 404 }));
+    }));
+
+    const result = await seedDataService.seedLocalFromYaml();
+    const employee = await localDb.employees.where('employee_number').equals('JSON001').first();
+
+    expect(result.details.employeesCount).toBe(1);
+    expect(employee?.id).toBe(jsonEmployeeId);
+    expect(await verifyPasswordHash('1111', employee?.pin ?? '')).toBe(true);
   });
 
   it('applies startup credential defaults by role', async () => {

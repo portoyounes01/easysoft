@@ -28,8 +28,10 @@ export async function prepareLocalStartupData(): Promise<StartupSeedResult> {
       seedResult.details.employeesCount + seedResult.details.categoriesCount + seedResult.details.productsCount;
     result.localSeedLoaded = seedResult.success && localSeedRowCount > 0;
 
-    if (seedResult.success) {
+    if (result.localSeedLoaded) {
       console.log('🎉 Local startup seed ready', seedResult.details);
+    } else if (seedResult.success) {
+      console.warn('⚠️ Local startup seed had no rows to load:', seedResult.details);
     } else {
       console.warn('⚠️ Local startup seed skipped or failed:', seedResult.message);
     }
