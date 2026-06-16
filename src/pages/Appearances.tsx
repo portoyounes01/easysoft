@@ -26,8 +26,8 @@ import {
     type DesignSystem2SidebarWidth,
 } from '../contexts/DesignSystem2CustomizationContext';
 import {
+    DESIGN_SYSTEM_2_ACCENTS,
     DESIGN_SYSTEM_2_BASE_OPTIONS,
-    DESIGN_SYSTEM_2_COLOR_CHOICES,
     DESIGN_SYSTEM_2_NEUTRAL_OPTIONS,
 } from '../theme/designSystem2VisualTokens';
 import '../styles/design-system-2-scope.css';
@@ -446,7 +446,7 @@ const Appearances: React.FC = () => {
                             description="Used for payment actions, focus rings, selected states, and confirmations."
                         >
                             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                                {DESIGN_SYSTEM_2_COLOR_CHOICES.map((color) => (
+                                {DESIGN_SYSTEM_2_ACCENTS.map((color) => (
                                     <ColorSwatchButton
                                         key={color.id}
                                         color={color}
@@ -463,7 +463,7 @@ const Appearances: React.FC = () => {
                             description="Used for sidebar highlights, admin buttons, table actions, and tabs."
                         >
                             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                                {DESIGN_SYSTEM_2_COLOR_CHOICES.map((color) => (
+                                {DESIGN_SYSTEM_2_ACCENTS.map((color) => (
                                     <ColorSwatchButton
                                         key={color.id}
                                         color={color}

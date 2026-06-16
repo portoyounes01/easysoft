@@ -9,7 +9,6 @@ import React, {
     type ReactNode,
 } from 'react';
 import {
-    DESIGN_SYSTEM_2_COLOR_CHOICES,
     getPrimaryCssVars,
     getSecondaryCssVars,
     getPairingCssVars,
@@ -21,6 +20,7 @@ import {
 } from '../theme/designSystem2VisualTokens';
 
 const STORAGE_KEY = 'design-system-2-prefs';
+const PREFS_SCHEMA_VERSION = 2;
 
 export type DesignSystem2Density = 'compact' | 'normal' | 'spacious';
 export type DesignSystem2MaxWidth = '5xl' | '6xl' | '7xl' | 'full';
@@ -51,6 +51,7 @@ export interface DesignSystem2Prefs {
     /** Which gray family maps `neutral-*` utilities in the preview scope */
     neutralFamilyId: DesignSystem2NeutralFamilyId;
     radiusPreset: DesignSystem2RadiusPreset;
+    schemaVersion: number;
 }
 
 const defaultPrefs: DesignSystem2Prefs = {
@@ -59,13 +60,23 @@ const defaultPrefs: DesignSystem2Prefs = {
     previewChrome: 'roundedShadow',
     sidebarWidth: 'md',
     primaryColorId: 'green',
-    secondaryColorId: 'blue',
+    secondaryColorId: 'green',
     baseColorId: 'gray50',
     neutralFamilyId: 'gray',
     radiusPreset: 'default',
+    schemaVersion: PREFS_SCHEMA_VERSION,
 };
 
-const COLOR_IDS = new Set(DESIGN_SYSTEM_2_COLOR_CHOICES.map((a) => a.id));
+const COLOR_IDS = new Set<DesignSystem2ColorChoiceId>([
+    'green',
+    'blue',
+    'indigo',
+    'violet',
+    'orange',
+    'rose',
+    'teal',
+    'slate',
+]);
 
 const BASE_IDS = new Set<DesignSystem2BaseColorId>(['white', 'stone50', 'slate50', 'zinc50', 'gray50']);
 
@@ -96,8 +107,13 @@ function normalizePrefs(raw: LegacyPartial): DesignSystem2Prefs {
         m.baseColorId = bgMap[raw.background] ?? defaultPrefs.baseColorId;
     }
 
+    if (raw.schemaVersion !== PREFS_SCHEMA_VERSION && raw.secondaryColorId === 'blue') {
+        m.secondaryColorId = defaultPrefs.secondaryColorId;
+    }
+
     if (!COLOR_IDS.has(m.primaryColorId)) m.primaryColorId = defaultPrefs.primaryColorId;
     if (!COLOR_IDS.has(m.secondaryColorId)) m.secondaryColorId = defaultPrefs.secondaryColorId;
+    m.schemaVersion = PREFS_SCHEMA_VERSION;
     if (!BASE_IDS.has(m.baseColorId)) m.baseColorId = defaultPrefs.baseColorId;
     if (!NEUTRAL_IDS.has(m.neutralFamilyId)) m.neutralFamilyId = defaultPrefs.neutralFamilyId;
     if (!RADIUS_ALLOWED.includes(m.radiusPreset)) m.radiusPreset = defaultPrefs.radiusPreset;

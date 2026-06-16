@@ -11,22 +11,17 @@ import { ProductsProvider } from './contexts/ProductsContext';
 import './utils/debugDatabase';
 // Import test utilities for browser console access
 import './utils/testScript';
-// Import bootstrap loader for offline initialization
-import { loadBootstrapData } from './utils/bootstrapLoader';
+// Import startup seed loader for offline initialization
+import { prepareLocalStartupData } from './utils/startupSeed';
 
-// Initialize app with bootstrap support
+// Initialize app with local seed support
 async function initializeApp() {
-  try {
-    // Attempt to load bootstrap data (for offline initialization)
-    const bootstrapLoaded = await loadBootstrapData();
-    
-    if (bootstrapLoaded) {
-      console.log('🎉 App initialized with bootstrap data');
-    } else {
-      console.log('📱 App initialized normally');
-    }
-  } catch (error) {
-    console.warn('⚠️ Bootstrap loading failed, continuing with normal startup:', error);
+  const startupSeed = await prepareLocalStartupData();
+
+  if (startupSeed.bootstrapLoaded || startupSeed.localSeedLoaded) {
+    console.log('🎉 App initialized with local startup data');
+  } else {
+    console.log('📱 App initialized normally');
   }
 
   // Render the app

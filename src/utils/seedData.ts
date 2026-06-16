@@ -1,11 +1,7 @@
 import { YamlLoader } from './yamlLoader';
 import { generateUUID } from './uuid';
 import { hashPassword } from './hashUtils';
-import { CategoryService, ProductService } from '../services/productService';
-import { EmployeeService } from '../services/employeeService';
-import { syncManager } from '../services/syncManager';
-import { checkSupabaseConnection, isSupabaseConfigured, supabase } from '../lib/supabase';
-import { localDb } from '../lib/localDatabase';
+import { initializeLocalDatabase, localDb } from '../lib/localDatabase';
 import { LocalEmployee, LocalCategory, LocalProduct } from '../types/supabase';
 
 // Utility to convert string ID to deterministic UUID
@@ -16,7 +12,6 @@ function coerceToUuidOrDeterministic(value: any): string {
   if (uuidRegex.test(str)) return str;
   
   // Generate deterministic UUID from string
-  const crypto = window.crypto;
   const encoder = new TextEncoder();
   const data = encoder.encode(str);
   
@@ -45,6 +40,33 @@ function seedErrorMessage(error: unknown): string {
   }
 }
 
+function isStartupSystemAdmin(emp: { employee_number?: unknown; name?: unknown }): boolean {
+  const employeeNumber = String(emp.employee_number ?? '').toUpperCase();
+  const name = String(emp.name ?? '').toLowerCase();
+  return employeeNumber === 'ADMIN001' || name === 'system administrator';
+}
+
+function startupCredentialDefaults(emp: { employee_number?: unknown; name?: unknown; role?: unknown }): {
+  password: string | null;
+  pin: string | null;
+} {
+  if (isStartupSystemAdmin(emp)) {
+    return { password: 'password', pin: null };
+  }
+
+  switch (emp.role) {
+    case 'admin':
+      return { password: '0099', pin: null };
+    case 'manager':
+      return { password: null, pin: '2222' };
+    case 'cashier':
+    case 'trainee':
+      return { password: null, pin: '1111' };
+    default:
+      return { password: null, pin: '1111' };
+  }
+}
+
 export interface SeedResult {
   success: boolean;
   message: string;
@@ -60,9 +82,78 @@ export interface SeedResult {
 }
 
 export class SeedDataService {
-  private categoryService = new CategoryService();
-  private productService = new ProductService();
-  private employeeService = new EmployeeService();
+  // Fast local-only seed for app startup. No Supabase health checks, cloud writes, or sync.
+  async seedLocalFromYaml(): Promise<SeedResult> {
+    try {
+      console.log('🌱 Starting local YAML seeding...');
+
+      await initializeLocalDatabase();
+
+      try {
+        YamlLoader.clearCache();
+      } catch {
+        // Cache clearing is best-effort; loading fresh files below can still proceed.
+      }
+      const yamlFiles = await YamlLoader.loadMultipleYamlFiles([
+        'employees.yml',
+        'categories.yml',
+        'products.yml'
+      ]);
+
+      let employeesCount = 0;
+      let categoriesCount = 0;
+      let productsCount = 0;
+
+      if (yamlFiles.categories?.categories) {
+        const categories = this.normalizeCategories(yamlFiles.categories.categories);
+        await this.seedCategories(categories);
+        categoriesCount = categories.length;
+      }
+
+      if (yamlFiles.products?.products) {
+        const products = this.normalizeProducts(yamlFiles.products.products);
+        await this.seedProducts(products);
+        productsCount = products.length;
+      }
+
+      if (yamlFiles.employees?.employees) {
+        const employees = await this.normalizeEmployees(yamlFiles.employees.employees, {
+          applyStartupCredentialDefaults: true,
+        });
+        await this.seedEmployees(employees, { updateExistingCredentials: true });
+        employeesCount = employees.length;
+      }
+
+      return {
+        success: true,
+        message: 'Local YAML seeding completed successfully!',
+        details: {
+          employeesCount,
+          categoriesCount,
+          productsCount,
+          customersCount: 0,
+          transactionsCount: 0,
+          cashierTestsCount: 0,
+          cashDrawerLogsCount: 0
+        }
+      };
+    } catch (error) {
+      console.error('❌ Local YAML seeding failed:', seedErrorMessage(error), error);
+      return {
+        success: false,
+        message: `Local YAML seeding failed: ${seedErrorMessage(error)}`,
+        details: {
+          employeesCount: 0,
+          categoriesCount: 0,
+          productsCount: 0,
+          customersCount: 0,
+          transactionsCount: 0,
+          cashierTestsCount: 0,
+          cashDrawerLogsCount: 0
+        }
+      };
+    }
+  }
 
   // Main seeding function
   async seedFromYaml(): Promise<SeedResult> {
@@ -71,7 +162,11 @@ export class SeedDataService {
 
       // Load all YAML files
       // Ensure we don't use stale cached YAML during development
-      try { YamlLoader.clearCache(); } catch {}
+      try {
+        YamlLoader.clearCache();
+      } catch {
+        // Cache clearing is best-effort; loading fresh files below can still proceed.
+      }
       const yamlFiles = await YamlLoader.loadMultipleYamlFiles([
         'employees.yml',
         'categories.yml',
@@ -83,8 +178,9 @@ export class SeedDataService {
         'cash-drawer-logs.yml'
       ]);
 
+      const supabaseApi = await import('../lib/supabase');
       const supabaseOnline =
-        isSupabaseConfigured() && (await checkSupabaseConnection());
+        supabaseApi.isSupabaseConfigured() && (await supabaseApi.checkSupabaseConnection());
 
       let employeesCount = 0;
       let categoriesCount = 0;
@@ -168,7 +264,7 @@ export class SeedDataService {
         // Fetch canonical UUIDs for those employee_numbers
         const employeeNumberToId = new Map<string, string>();
         if (employeeNumbers.length > 0) {
-          const { data: rows, error: mapErr } = await supabase
+          const { data: rows, error: mapErr } = await supabaseApi.supabase
             .from('employees')
             .select('id, employee_number')
             .in('employee_number', employeeNumbers as string[]);
@@ -221,6 +317,7 @@ export class SeedDataService {
       // 8. Trigger sync to push local changes to Supabase
       if (supabaseOnline) {
         console.log('🔄 Triggering sync to Supabase...');
+        const { syncManager } = await import('../services/syncManager');
         await syncManager.fullSync();
       } else {
         console.warn('⚠️ Skipping full sync — Supabase not reachable.');
@@ -238,7 +335,7 @@ export class SeedDataService {
 
       const successMessage = supabaseOnline
         ? 'YAML seeding completed successfully!'
-        : !isSupabaseConfigured()
+        : !supabaseApi.isSupabaseConfigured()
           ? 'YAML seeding completed locally. Supabase env vars are missing (VITE_SUPABASE_URL / VITE_SUPABASE_ANON); cloud seed and sync were skipped.'
           : 'YAML seeding completed locally. Cannot reach Supabase (network/DNS/offline); skipped cloud upserts and sync. Fix connectivity and run again or wait for background sync.';
 
@@ -276,7 +373,10 @@ export class SeedDataService {
   }
 
   // Normalize employees data
-  private async normalizeEmployees(employees: any[]): Promise<LocalEmployee[]> {
+  private async normalizeEmployees(
+    employees: any[],
+    options?: { applyStartupCredentialDefaults?: boolean }
+  ): Promise<LocalEmployee[]> {
     const normalizedEmployees: LocalEmployee[] = [];
 
     for (const emp of employees) {
@@ -284,15 +384,21 @@ export class SeedDataService {
       let passwordHash: string | null = null;
       let pinHash: string | null = null;
 
-      if (emp.password_hash && !emp.password_hash.startsWith('$2')) {
-        // If it's not already hashed, hash it
-        passwordHash = await hashPassword(emp.password_hash);
+      if (options?.applyStartupCredentialDefaults) {
+        const credentials = startupCredentialDefaults(emp);
+        passwordHash = credentials.password ? await hashPassword(credentials.password) : null;
+        pinHash = credentials.pin ? await hashPassword(credentials.pin) : null;
       } else {
-        passwordHash = emp.password_hash || null;
-      }
+        if (emp.password_hash && !emp.password_hash.startsWith('$2')) {
+          // If it's not already hashed, hash it
+          passwordHash = await hashPassword(emp.password_hash);
+        } else {
+          passwordHash = emp.password_hash || null;
+        }
 
-      if (emp.pin) {
-        pinHash = await hashPassword(emp.pin);
+        if (emp.pin) {
+          pinHash = await hashPassword(emp.pin);
+        }
       }
 
       const normalized: LocalEmployee = {
@@ -553,30 +659,41 @@ export class SeedDataService {
     });
   }
 
-  // Seed employees into local database
-  private async seedEmployees(employees: LocalEmployee[]): Promise<void> {
-    for (const employee of employees) {
-      try {
-        // Check if employee already exists
-        const existing = await this.employeeService.getEmployeeByNumber(employee.employee_number);
-        if (!existing) {
-          // Convert LocalEmployee to EmployeeFormData format
-          await this.employeeService.createEmployee({
-            employee_number: employee.employee_number,
-            name: employee.name,
-            phone: employee.phone || '',
-            role: employee.role as any,
-            access_levels: employee.access_levels as any[],
-            is_active: employee.is_active,
-            hire_date: employee.hire_date,
-            password: null, // Don't re-hash if already hashed
-            pin: employee.pin || '1234' // Default PIN if not provided
-          });
+  // Seed employees into local database while preserving deterministic IDs and already-normalized credential hashes.
+  private async seedEmployees(
+    employees: LocalEmployee[],
+    options?: { updateExistingCredentials?: boolean }
+  ): Promise<void> {
+    await localDb.transaction('rw', [localDb.employees], async () => {
+      for (const employee of employees) {
+        try {
+          // Include soft-deleted rows in the lookup so startup seeding does not resurrect a user delete.
+          const existing = await localDb.employees
+            .where('employee_number')
+            .equals(employee.employee_number)
+            .first();
+
+          if (!existing) {
+            await localDb.employees.put(employee);
+            console.log(`   ✅ Seeded employee: ${employee.name} (${employee.employee_number})`);
+          } else {
+            if (
+              options?.updateExistingCredentials &&
+              (existing.password_hash !== employee.password_hash || existing.pin !== employee.pin)
+            ) {
+              await localDb.employees.update(existing.id, {
+                password_hash: employee.password_hash,
+                pin: employee.pin,
+                updated_at: new Date(),
+              });
+            }
+            console.log(`   ⏭️  Employee already exists: ${employee.name}`);
+          }
+        } catch (error) {
+          console.error(`Failed to seed employee ${employee.name}:`, error);
         }
-      } catch (error) {
-        console.error(`Failed to seed employee ${employee.name}:`, error);
       }
-    }
+    });
   }
 
   // Seed customers directly to Supabase
@@ -584,6 +701,7 @@ export class SeedDataService {
     if (customers.length === 0) return;
 
     try {
+      const { supabase } = await import('../lib/supabase');
       const { error } = await supabase
         .from('customers')
         .upsert(customers, { onConflict: 'id' });
@@ -603,6 +721,7 @@ export class SeedDataService {
     if (transactions.length === 0) return;
 
     try {
+      const { supabase } = await import('../lib/supabase');
       const { error } = await supabase
         .from('transactions')
         .upsert(transactions, { onConflict: 'id' });
@@ -621,6 +740,7 @@ export class SeedDataService {
   private async seedTransactionItems(items: any[]): Promise<void> {
     if (items.length === 0) return;
     try {
+      const { supabase } = await import('../lib/supabase');
       // Fetch product and transaction mappings to ensure FK integrity
       const [productsRes, transactionsRes] = await Promise.all([
         supabase.from('products').select('id, sku, name').limit(5000),
@@ -752,6 +872,7 @@ export class SeedDataService {
   private async seedEmployeesServer(employees: LocalEmployee[]): Promise<void> {
     if (!employees || employees.length === 0) return;
     try {
+      const { supabase } = await import('../lib/supabase');
       // Fetch existing employees by employee_number to preserve canonical ids
       const employeeNumbers = employees.map((e) => e.employee_number);
       const { data: existingRows, error: fetchErr } = await supabase
@@ -811,6 +932,7 @@ export class SeedDataService {
     if (tests.length === 0) return;
 
     try {
+      const { supabase } = await import('../lib/supabase');
       const { error } = await supabase
         .from('cashier_tests')
         .upsert(tests, { onConflict: 'id' });
@@ -830,6 +952,7 @@ export class SeedDataService {
     if (logs.length === 0) return;
 
     try {
+      const { supabase } = await import('../lib/supabase');
       const { error } = await supabase
         .from('cash_drawer_logs')
         .upsert(logs, { onConflict: 'id' });

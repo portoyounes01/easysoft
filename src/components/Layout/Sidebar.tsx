@@ -17,7 +17,6 @@ import {
   ClipboardList,
   Contact,
   Palette,
-  Layers,
 } from "lucide-react";
 import { useSupabaseAuth } from "../../contexts/SupabaseAuthContext";
 import { useDesignSystem2Customization } from "../../contexts/DesignSystem2CustomizationContext";
@@ -26,6 +25,7 @@ import "../../styles/design-system-2-scope.css";
 
 interface SidebarProps {
   isCollapsed: boolean;
+  onToggleCollapse: () => void;
   /** Called after a nav link is chosen (e.g. close POS overlay drawer) */
   onNavigate?: () => void;
 }
@@ -41,7 +41,7 @@ const sidebarNavClass = (isActive: boolean, isCollapsed: boolean): string => {
   return `${base} ${isActive ? active : idle} ${collapsed}`.trim();
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavigate }) => {
   const { employee, signOut, hasPermission } = useSupabaseAuth();
   const { t } = useTranslation();
   const { visualStyle, prefs } = useDesignSystem2Customization();
@@ -110,12 +110,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
         labelKey: "sidebar.menu.appearances",
         permission: "settings",
       },
-      {
-        path: "/design-system",
-        icon: Layers,
-        labelKey: "sidebar.menu.designSystem",
-        permission: "settings",
-      },
     ],
     [],
   );
@@ -133,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
     setShowLogoutConfirm(false);
   };
 
-  const widthClass = isCollapsed ? "w-14" : "w-[320px]";
+  const widthClass = isCollapsed ? "w-20" : "w-[320px]";
 
   return (
     <>
@@ -142,9 +136,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
         style={visualStyle}
         data-ds2-neutral={prefs.neutralFamilyId}
       >
-        <div className="flex flex-shrink-0 items-center border-b border-[#dedede] px-5" style={{ height: 80 }}>
-          <div className="flex min-w-0 items-center gap-5">
-            <Menu className="h-[20px] w-[20px] flex-shrink-0 text-[#727272]" />
+        <div className={`flex flex-shrink-0 items-center border-b border-[#dedede] ${isCollapsed ? "justify-center px-2" : "px-5"}`} style={{ height: 80 }}>
+          <div className={`flex min-w-0 items-center ${isCollapsed ? "justify-center" : "gap-5"}`}>
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="flex min-h-touch-xs min-w-[2.75rem] items-center justify-center rounded-xl text-[#727272] transition-colors duration-200 hover:bg-white hover:text-[#171717]"
+              aria-label={isCollapsed ? t("sidebar.expand", { defaultValue: "Expand sidebar" }) : t("sidebar.collapse", { defaultValue: "Collapse sidebar" })}
+              aria-expanded={!isCollapsed}
+            >
+              <Menu className="h-[20px] w-[20px] flex-shrink-0" />
+            </button>
             {!isCollapsed && (
               <div className="flex min-w-0 items-center gap-2.5">
                 <Zap className="h-[32px] w-[32px] flex-shrink-0 fill-emerald-500 text-emerald-500" />
@@ -158,7 +160,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onNavigate }) => {
           </div>
         </div>
 
-        <nav className="flex-1 px-6 py-5">
+        <nav className={`flex-1 py-5 ${isCollapsed ? "px-3" : "px-6"}`}>
           <ul className="space-y-4">
             {menuItems.map((item) => {
               if (!hasPermission(item.permission)) return null;

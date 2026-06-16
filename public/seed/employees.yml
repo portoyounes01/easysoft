@@ -35,7 +35,7 @@ employees:
     name: "Carlos Silva"
     email: "carlos.silva@pos.com"
     phone: "+351 912 345 678"
-    password_hash: "$2b$10$dummy_hash_for_password"  # This should be properly hashed 'admin123'
+    password_hash: "0099"
     role: "admin"
     access_levels: ["all"]
     is_active: true
@@ -52,7 +52,7 @@ employees:
     name: "Maria Santos"
     email: "maria.santos@kebabhouse.com"
     phone: "+351 913 456 789"
-    password_hash: "$2b$10$dummy_hash_for_owner"  # This should be properly hashed 'owner123'
+    password_hash: "0099"
     role: "admin"
     access_levels: ["sales", "inventory", "reports", "dashboard", "employees", "settings", "transactions", "all"]
     is_active: true
@@ -69,7 +69,7 @@ employees:
     name: "João Pereira"
     email: "joao.pereira@kebabhouse.com"
     phone: "+351 914 567 890"
-    pin: "1234"
+    pin: "2222"
     role: "manager"
     access_levels: ["sales", "inventory", "reports", "dashboard", "employees", "transactions"]
     is_active: true
@@ -86,7 +86,7 @@ employees:
     name: "Ana Costa"
     email: "ana.costa@kebabhouse.com"
     phone: "+351 915 678 901"
-    pin: "5678"
+    pin: "1111"
     role: "cashier"
     access_levels: ["sales"]
     is_active: true
@@ -103,7 +103,7 @@ employees:
     name: "Pedro Oliveira"
     email: "pedro.oliveira@kebabhouse.com"
     phone: "+351 916 789 012"
-    pin: "9012"
+    pin: "1111"
     role: "cashier"
     access_levels: ["sales"]
     is_active: true

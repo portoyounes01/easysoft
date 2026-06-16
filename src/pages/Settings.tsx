@@ -24,7 +24,6 @@ import {
     Save,
     Settings as SettingsIcon,
     Shield,
-    Sparkles,
     Store,
     Wifi,
     type LucideIcon,
@@ -1675,34 +1674,14 @@ const Settings: React.FC = () => {
 
     return (
         <div
-            className="ds2-visual-scope relative min-h-full overflow-hidden bg-[#f5f5f7] pb-8"
+            className="ds2-visual-scope relative min-h-full overflow-hidden bg-[#f7f7f7] pb-8"
             style={visualStyle}
             data-ds2-neutral={prefs.neutralFamilyId}
         >
-            <div className="pointer-events-none absolute inset-0">
-                <div className="absolute -left-24 top-0 h-80 w-80 rounded-full bg-blue-200/40 blur-3xl" />
-                <div className="absolute right-10 top-20 h-96 w-96 rounded-full bg-emerald-200/30 blur-3xl" />
-                <div className="absolute bottom-0 left-1/2 h-80 w-80 rounded-full bg-slate-300/30 blur-3xl" />
-            </div>
-
             <div className={`relative z-10 mx-auto max-w-[1500px] space-y-6 pt-6 ${layoutClasses.contentInsetX}`}>
                 <header className={`${glassCard} overflow-hidden`}>
-                    <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:p-8">
-                        <div>
-                            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white">
-                                <Sparkles className="h-3.5 w-3.5" />
-                                Control Center
-                            </div>
-                            <h1 className="text-4xl font-semibold tracking-tight text-slate-950 md:text-5xl">
-                                Settings that behave like an appliance.
-                            </h1>
-                            <p className="mt-4 max-w-3xl text-base leading-7 text-slate-500 md:text-lg">
-                                Critical fiscal, POS, device, and interface controls are grouped by intent,
-                                with safe defaults and clear live-state indicators.
-                            </p>
-                        </div>
-
-                        <div className="grid gap-3 sm:grid-cols-3 lg:w-[520px]">
+                    <div className="p-6 lg:p-8">
+                        <div className="grid gap-3 sm:grid-cols-3">
                             <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
                                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Fiscal issuer</p>
                                 <p className="mt-2 text-lg font-semibold text-slate-950">{fiscalIssuerLabel}</p>

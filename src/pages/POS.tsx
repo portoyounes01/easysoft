@@ -437,10 +437,10 @@ const POSInner: React.FC = () => {
             <button
               type="button"
               onClick={toggleNavSidebar}
-              className="flex min-h-touch min-w-[3.75rem] shrink-0 items-center justify-center rounded-xl border-2 border-gray-200 bg-white text-gray-700 shadow-sm transition-all duration-200 hover:bg-gray-50 active:scale-95"
+              className="flex min-h-touch-xs min-w-[2.75rem] shrink-0 items-center justify-center rounded-xl text-[#727272] transition-colors duration-200 hover:bg-neutral-100 hover:text-[#171717]"
               aria-label={t('pos.openMenu')}
             >
-              <Menu className="h-6 w-6" strokeWidth={2.25} aria-hidden />
+              <Menu className="h-[20px] w-[20px]" aria-hidden />
             </button>
             <div className="flex min-w-0 flex-1 justify-center">
               <div className="relative w-full max-w-md">

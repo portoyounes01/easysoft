@@ -71,7 +71,7 @@ const PALETTE: Record<DesignSystem2ColorChoiceId, CssVarMap> = {
         '--ds2-brand-to': '#1d4ed8',
         '--ds2-brand-solid': '#2563eb',
         '--ds2-brand-text-900': '#1e3a8a',
-        /* Admin chrome: brighter blue-500 → blue-600 (matches legacy DS2 “green + blue” pairing) */
+        /* Blue option for explicit secondary/admin chrome selection. */
         '--ds2-ui-from': '#3b82f6',
         '--ds2-ui-to': '#2563eb',
         '--ds2-ui-from-hover': '#2563eb',
@@ -256,14 +256,14 @@ export function getPrimaryCssVars(id: DesignSystem2ColorChoiceId): CssVarMap {
 }
 
 export function getSecondaryCssVars(id: DesignSystem2ColorChoiceId): CssVarMap {
-    const row = PALETTE[id] ?? PALETTE.blue;
+    const row = PALETTE[id] ?? PALETTE.green;
     return pickKeys(row, SECONDARY_KEYS);
 }
 
 /** Pairing gradient: primary solid → secondary solid */
 export function getPairingCssVars(primaryId: DesignSystem2ColorChoiceId, secondaryId: DesignSystem2ColorChoiceId): CssVarMap {
     const p = PALETTE[primaryId] ?? PALETTE.green;
-    const s = PALETTE[secondaryId] ?? PALETTE.blue;
+    const s = PALETTE[secondaryId] ?? PALETTE.green;
     return {
         '--ds2-pair-from': p['--ds2-brand-solid'],
         '--ds2-pair-to': s['--ds2-brand-solid'],

@@ -130,6 +130,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <Sidebar
               isCollapsed={!isPosRoute && !isMobile && isSidebarCollapsed}
+              onToggleCollapse={toggleNavSidebar}
               onNavigate={isPosRoute ? closeNavSidebar : undefined}
             />
           </div>
