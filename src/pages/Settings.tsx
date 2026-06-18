@@ -39,6 +39,7 @@ import { checkVendusFiscalHealth, fetchVendusSaftXml } from '../fiscal/vendusFis
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import { IVA_RATES } from '../types/supabase';
+import { isSystemAdministrator } from '../utils/systemAdmin';
 import { generateUUID } from '../utils/uuid';
 import type { ReceiptLanguage } from '../utils/receiptLanguage';
 import { PrinterSettingsPanel, type HardwareSettingsTool } from './PrinterTestPage';
@@ -98,8 +99,11 @@ interface SettingsRowProps {
 }
 
 const SettingsRow: React.FC<SettingsRowProps> = ({ title, description, icon: Icon, children }) => (
-    <div className="grid gap-4 border-b border-slate-200/70 px-1 py-5 last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] md:items-center">
-        <div className="flex min-w-0 gap-3">
+    <div
+        className="flex flex-col gap-4 border-b border-slate-200/70 px-1 py-5 last:border-b-0 md:flex-row md:flex-wrap md:items-center"
+        data-settings-row-title={title}
+    >
+        <div className="flex min-w-0 gap-3 md:min-w-56 md:flex-[1_1_16rem]">
             {Icon && (
                 <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
                     <Icon className="h-5 w-5" />
@@ -110,7 +114,7 @@ const SettingsRow: React.FC<SettingsRowProps> = ({ title, description, icon: Ico
                 {description && <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>}
             </div>
         </div>
-        <div>{children}</div>
+        <div className="min-w-0 md:ml-auto md:flex-[1_1_17.5rem] md:max-w-[26.25rem]">{children}</div>
     </div>
 );
 
@@ -227,6 +231,7 @@ const ReadinessList: React.FC<{ items: ReadinessItem[] }> = ({ items }) => (
 const Settings: React.FC = () => {
     const { settings, updateSettings, resetToDefaults, isLoading } = useSettings();
     const { employee } = useSupabaseAuth();
+    const isSystemAdmin = isSystemAdministrator(employee);
     const { t } = useTranslation();
     const [searchParams] = useSearchParams();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
@@ -608,7 +613,11 @@ const Settings: React.FC = () => {
                 const [startYear, startMonth] = saftStart.split('-').map(Number);
                 const [endYear, endMonth] = saftEnd.split('-').map(Number);
                 if (startYear !== endYear || startMonth !== endMonth) {
-                    throw new Error('A exportação SAF-T Vendus deve ser mensal. Escolha datas dentro do mesmo mês.');
+                    throw new Error(
+                        isSystemAdmin
+                            ? 'A exportação SAF-T Vendus deve ser mensal. Escolha datas dentro do mesmo mês.'
+                            : 'A exportação SAF-T deve ser mensal. Escolha datas dentro do mesmo mês.'
+                    );
                 }
                 const xml = await fetchVendusSaftXml({
                     settings,
@@ -619,10 +628,16 @@ const Settings: React.FC = () => {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `SAFT_VENDUS_${startYear}_${String(startMonth).padStart(2, '0')}.xml`;
+                a.download = isSystemAdmin
+                    ? `SAFT_VENDUS_${startYear}_${String(startMonth).padStart(2, '0')}.xml`
+                    : `SAFT_${startYear}_${String(startMonth).padStart(2, '0')}.xml`;
                 a.click();
                 URL.revokeObjectURL(url);
-                setSaftMessage('SAF-T Vendus descarregado. A cópia local não foi marcada como exportada.');
+                setSaftMessage(
+                    isSystemAdmin
+                        ? 'SAF-T Vendus descarregado. A cópia local não foi marcada como exportada.'
+                        : 'SAF-T descarregado. A cópia local não foi marcada como exportada.'
+                );
                 return;
             }
 
@@ -630,7 +645,11 @@ const Settings: React.FC = () => {
                 const [startYear, startMonth] = saftStart.split('-').map(Number);
                 const [endYear, endMonth] = saftEnd.split('-').map(Number);
                 if (startYear !== endYear || startMonth !== endMonth) {
-                    throw new Error('A exportação SAF-T do emissor cloud deve ser mensal. Escolha datas dentro do mesmo mês.');
+                    throw new Error(
+                        isSystemAdmin
+                            ? 'A exportação SAF-T do emissor cloud deve ser mensal. Escolha datas dentro do mesmo mês.'
+                            : 'A exportação SAF-T deve ser mensal. Escolha datas dentro do mesmo mês.'
+                    );
                 }
                 const xml =
                     settings.fiscal.issuer === 'invoicexpress'
@@ -648,10 +667,16 @@ const Settings: React.FC = () => {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `SAFT_${settings.fiscal.issuer.toUpperCase()}_${startYear}_${String(startMonth).padStart(2, '0')}.xml`;
+                a.download = isSystemAdmin
+                    ? `SAFT_${settings.fiscal.issuer.toUpperCase()}_${startYear}_${String(startMonth).padStart(2, '0')}.xml`
+                    : `SAFT_${startYear}_${String(startMonth).padStart(2, '0')}.xml`;
                 a.click();
                 URL.revokeObjectURL(url);
-                setSaftMessage(`SAF-T ${fiscalIssuerLabel} descarregado. A cópia local não foi marcada como exportada.`);
+                setSaftMessage(
+                    isSystemAdmin
+                        ? `SAF-T ${fiscalIssuerLabel} descarregado. A cópia local não foi marcada como exportada.`
+                        : 'SAF-T descarregado. A cópia local não foi marcada como exportada.'
+                );
                 return;
             }
 
@@ -695,7 +720,7 @@ const Settings: React.FC = () => {
         } finally {
             setSaftBusy(false);
         }
-    }, [fiscalIssuerLabel, isExternalIssuer, saftEnd, saftStart, settings, t]);
+    }, [fiscalIssuerLabel, isExternalIssuer, isSystemAdmin, saftEnd, saftStart, settings, t]);
 
     const renderSaveLabel = () => {
         if (saveStatus === 'saving') return 'Saving';
@@ -775,7 +800,7 @@ const Settings: React.FC = () => {
 
     const renderPos = () => (
         <div className="space-y-6">
-            <div className="grid gap-6 xl:grid-cols-2">
+            <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(min(100%,32rem),1fr))]">
                 <SettingCard
                     title="Money and VAT"
                     description="Defaults used by the sales screen and new products."
@@ -941,7 +966,7 @@ const Settings: React.FC = () => {
                     icon={Printer}
                     accent="from-blue-700 to-cyan-500"
                 >
-                    <div className="grid gap-3 md:grid-cols-4">
+                    <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr))]">
                         {tools.map(tool => {
                             const Icon = tool.icon;
                             const active = hardwareTool === tool.id;
@@ -952,7 +977,7 @@ const Settings: React.FC = () => {
                                     onClick={() => setHardwareTool(tool.id)}
                                     className={`min-h-touch rounded-3xl border p-4 text-left transition-all duration-200 ${
                                         active
-                                            ? 'border-slate-300 bg-slate-950 text-white shadow-xl'
+                                            ? 'border-blue-400 bg-gradient-primary text-white shadow-xl'
                                             : 'border-slate-200 bg-white/80 text-slate-600 hover:bg-white hover:text-slate-950'
                                     }`}
                                 >
@@ -1204,23 +1229,29 @@ const Settings: React.FC = () => {
 
     const renderFiscalIssuer = () => (
         <SettingCard
-            title="Fiscal issuer"
-            description="Choose exactly one production fiscal authority. Local AT stays untouched; Vendus can temporarily own issuance."
+            title="Fiscal controls"
+            description={
+                isSystemAdmin
+                    ? 'Choose exactly one production fiscal authority. Local AT stays untouched; Vendus can temporarily own issuance.'
+                    : 'Training mode uses a separate local database. Fiscal issuer details are managed by the system administrator.'
+            }
             icon={BadgeCheck}
             accent="from-slate-950 to-blue-700"
         >
-            <SettingsRow title="Active issuer" description="This controls checkout behavior. Vendus mode blocks checkout when offline.">
-                <SegmentedControl
-                    value={settings.fiscal.issuer}
-                    onChange={handleFiscalIssuerChange}
-                    options={[
-                        { value: 'local_at', label: 'Local AT', description: 'Offline-first local chain' },
-                        { value: 'vendus', label: 'Vendus', description: 'Certified external issuer' },
-                        { value: 'invoicexpress', label: 'InvoiceXpress', description: 'Certified cloud issuer' },
-                        { value: 'fiskaly', label: 'Fiskaly', description: 'SIGN PT cloud issuer' },
-                    ]}
-                />
-            </SettingsRow>
+            {isSystemAdmin && (
+                <SettingsRow title="Active issuer" description="This controls checkout behavior. Vendus mode blocks checkout when offline.">
+                    <SegmentedControl
+                        value={settings.fiscal.issuer}
+                        onChange={handleFiscalIssuerChange}
+                        options={[
+                            { value: 'local_at', label: 'Local AT', description: 'Offline-first local chain' },
+                            { value: 'vendus', label: 'Vendus', description: 'Certified external issuer' },
+                            { value: 'invoicexpress', label: 'InvoiceXpress', description: 'Certified cloud issuer' },
+                            { value: 'fiskaly', label: 'Fiskaly', description: 'SIGN PT cloud issuer' },
+                        ]}
+                    />
+                </SettingsRow>
+            )}
 
             <SettingsRow title="Training mode" description="Uses the training IndexedDB slot and marks issued local documents as training.">
                 <div className="flex justify-end">
@@ -1232,35 +1263,37 @@ const Settings: React.FC = () => {
                 </div>
             </SettingsRow>
 
-            <div
-                className={`mt-5 rounded-[1.75rem] border p-5 ${
-                    settings.fiscal.issuer === 'local_at'
-                        ? 'border-emerald-200 bg-emerald-50/80'
-                        : 'border-blue-200 bg-blue-50/80'
-                }`}
-            >
-                <div className="flex flex-wrap items-center gap-3">
-                    <StatusPill
-                        label={`Active: ${fiscalIssuerLabel}`}
-                        tone={settings.fiscal.issuer === 'local_at' ? 'green' : 'blue'}
-                    />
-                    <StatusPill
-                        label={settings.fiscal.trainingMode ? 'Training database' : 'Production database'}
-                        tone={settings.fiscal.trainingMode ? 'amber' : 'slate'}
-                    />
-                    {settings.fiscal.issuer === 'vendus' && (
+            {isSystemAdmin && (
+                <div
+                    className={`mt-5 rounded-[1.75rem] border p-5 ${
+                        settings.fiscal.issuer === 'local_at'
+                            ? 'border-emerald-200 bg-emerald-50/80'
+                            : 'border-blue-200 bg-blue-50/80'
+                    }`}
+                >
+                    <div className="flex flex-wrap items-center gap-3">
                         <StatusPill
-                            label={`${vendusReadyCount}/${vendusReadiness.length} setup checks`}
-                            tone={vendusReadyCount === vendusReadiness.length ? 'green' : 'amber'}
+                            label={`Active: ${fiscalIssuerLabel}`}
+                            tone={settings.fiscal.issuer === 'local_at' ? 'green' : 'blue'}
                         />
-                    )}
+                        <StatusPill
+                            label={settings.fiscal.trainingMode ? 'Training database' : 'Production database'}
+                            tone={settings.fiscal.trainingMode ? 'amber' : 'slate'}
+                        />
+                        {settings.fiscal.issuer === 'vendus' && (
+                            <StatusPill
+                                label={`${vendusReadyCount}/${vendusReadiness.length} setup checks`}
+                                tone={vendusReadyCount === vendusReadiness.length ? 'green' : 'amber'}
+                            />
+                        )}
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {settings.fiscal.issuer === 'local_at'
+                            ? 'Local AT owns document number, ATCUD, hash chain, QR code, and local SAF-T export.'
+                            : `${fiscalIssuerLabel} owns document number, ATCUD, hash, QR code, and SAF-T for this period.`}
+                    </p>
                 </div>
-                <p className="mt-3 text-sm leading-6 text-slate-600">
-                    {settings.fiscal.issuer === 'local_at'
-                        ? 'Local AT owns document number, ATCUD, hash chain, QR code, and local SAF-T export.'
-                        : `${fiscalIssuerLabel} owns document number, ATCUD, hash, QR code, and SAF-T for this period.`}
-                </p>
-            </div>
+            )}
         </SettingCard>
     );
 
@@ -1602,9 +1635,13 @@ const Settings: React.FC = () => {
         <SettingCard
             title="SAF-T export"
             description={
-                settings.fiscal.issuer === 'vendus'
-                    ? 'Vendus periods use Vendus monthly SAF-T. Choose dates inside the same month.'
-                    : 'Local AT periods use local immutable fiscal rows.'
+                isSystemAdmin
+                    ? settings.fiscal.issuer === 'vendus'
+                        ? 'Vendus periods use Vendus monthly SAF-T. Choose dates inside the same month.'
+                        : settings.fiscal.issuer === 'local_at'
+                            ? 'Local AT periods use local immutable fiscal rows.'
+                            : `${fiscalIssuerLabel} periods use monthly SAF-T. Choose dates inside the same month.`
+                    : 'Export fiscal audit data for the selected period.'
             }
             icon={FileDown}
             accent="from-green-600 to-emerald-500"
@@ -1626,7 +1663,9 @@ const Settings: React.FC = () => {
                 >
                     {saftBusy
                         ? 'Exporting...'
-                        : settings.fiscal.issuer === 'local_at'
+                        : !isSystemAdmin
+                            ? 'Download SAF-T'
+                            : settings.fiscal.issuer === 'local_at'
                             ? 'Download local SAF-T'
                             : `Download ${fiscalIssuerLabel} SAF-T`}
                 </button>
@@ -1640,11 +1679,12 @@ const Settings: React.FC = () => {
             {renderCompanyIdentity()}
             {renderReceiptBasics()}
             {renderFiscalIssuer()}
-            {settings.fiscal.issuer === 'local_at'
-                ? renderLocalAtSeries()
-                : settings.fiscal.issuer === 'vendus'
-                    ? renderVendusSetup()
-                    : renderExternalIssuerSetup()}
+            {isSystemAdmin &&
+                (settings.fiscal.issuer === 'local_at'
+                    ? renderLocalAtSeries()
+                    : settings.fiscal.issuer === 'vendus'
+                        ? renderVendusSetup()
+                        : renderExternalIssuerSetup())}
             {renderSaftExport()}
         </div>
     );
@@ -1679,28 +1719,30 @@ const Settings: React.FC = () => {
             data-ds2-neutral={prefs.neutralFamilyId}
         >
             <div className={`relative z-10 mx-auto max-w-[1500px] space-y-6 pt-6 ${layoutClasses.contentInsetX}`}>
-                <header className={`${glassCard} overflow-hidden`}>
-                    <div className="p-6 lg:p-8">
-                        <div className="grid gap-3 sm:grid-cols-3">
-                            <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Fiscal issuer</p>
-                                <p className="mt-2 text-lg font-semibold text-slate-950">{fiscalIssuerLabel}</p>
-                            </div>
-                            <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Database</p>
-                                <p className="mt-2 text-lg font-semibold text-slate-950">
-                                    {settings.fiscal.trainingMode ? 'Training' : 'Production'}
-                                </p>
-                            </div>
-                            <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Save state</p>
-                                <p className="mt-2 text-lg font-semibold text-slate-950">
-                                    {pendingChanges ? 'Unsaved' : saveStatus === 'saved' ? 'Saved' : 'Clean'}
-                                </p>
+                {isSystemAdmin && (
+                    <header className={`${glassCard} overflow-hidden`}>
+                        <div className="p-6 lg:p-8">
+                            <div className="grid gap-3 sm:grid-cols-3">
+                                <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Fiscal issuer</p>
+                                    <p className="mt-2 text-lg font-semibold text-slate-950">{fiscalIssuerLabel}</p>
+                                </div>
+                                <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Database</p>
+                                    <p className="mt-2 text-lg font-semibold text-slate-950">
+                                        {settings.fiscal.trainingMode ? 'Training' : 'Production'}
+                                    </p>
+                                </div>
+                                <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Save state</p>
+                                    <p className="mt-2 text-lg font-semibold text-slate-950">
+                                        {pendingChanges ? 'Unsaved' : saveStatus === 'saved' ? 'Saved' : 'Clean'}
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </header>
+                    </header>
+                )}
 
                 <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
                     <aside className="xl:sticky xl:top-6 xl:self-start">
@@ -1719,7 +1761,7 @@ const Settings: React.FC = () => {
                                             onClick={() => setActiveTab(tab.id)}
                                             className={`group flex min-h-touch w-full items-center gap-3 rounded-3xl px-4 py-3 text-left transition-all duration-200 ${
                                                 active
-                                                    ? 'bg-slate-950 text-white shadow-xl'
+                                                    ? 'bg-gradient-primary text-white shadow-xl'
                                                     : 'text-slate-600 hover:bg-white hover:text-slate-950'
                                             }`}
                                         >

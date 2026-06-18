@@ -19,6 +19,7 @@ body,
     --login2-stack-gap: clamp(1.25rem, 1.2vw, 1.375rem);
     --login2-selected-gap: clamp(1.55rem, 1.7vw, 1.75rem);
     --login2-summary-h: clamp(7.25rem, 9.1vw, 9.45rem);
+    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     overflow: hidden;
 }
 
@@ -160,26 +161,24 @@ body,
     gap: clamp(2.5rem, 2.6vw, 2.75rem);
 }
 
-.login2-selected-summary p:first-child {
-    font-size: clamp(1.45rem, 1.62vw, 1.75rem);
-    line-height: 1.15;
-}
-
-.login2-selected-summary p:last-child {
-    font-size: clamp(1.2rem, 1.45vw, 1.5rem);
-    line-height: 1.2;
-}
-
 .login2-credential-card {
     justify-content: flex-start;
     padding: clamp(2rem, 3vw, 2.5rem) clamp(2rem, 3.6vw, 3.125rem);
     padding-right: clamp(2.65rem, 4.45vw, 3.875rem);
 }
 
-.login2-credential-card label {
+.login2-credential-title {
+    font-family: inherit;
+    font-size: clamp(1.125rem, 1.18vw, 1.25rem);
+    line-height: 1.35;
+}
+
+.login2-credential-card .login2-field-label {
     margin-bottom: 0.625rem;
     color: rgb(15, 23, 42);
-    font-size: clamp(0.95rem, 1.35vw, 1.25rem);
+    font-family: inherit;
+    font-size: clamp(0.9375rem, 0.98vw, 1rem);
+    line-height: 1.35;
 }
 
 .login2-credential-card input {
@@ -190,13 +189,22 @@ body,
     background: rgba(255, 255, 255, 0.72);
     padding: 0 clamp(1rem, 1.5vw, 1.25rem);
     color: rgb(15, 23, 42);
-    font-size: clamp(1rem, 1.55vw, 1.35rem);
+    font-family: inherit;
+    font-size: clamp(1rem, 1.05vw, 1.125rem);
+    line-height: 1.5;
+}
+
+.login2-credential-card input::placeholder {
+    color: rgb(148, 163, 184);
+    font-family: inherit;
 }
 
 .login2-input-helper {
     margin-top: clamp(0.875rem, 1.25vw, 1.25rem);
     color: rgb(100, 116, 139);
-    font-size: clamp(0.875rem, 1.25vw, 1.125rem);
+    font-family: inherit;
+    font-size: clamp(0.8125rem, 0.9vw, 0.875rem);
+    line-height: 1.35;
     font-weight: 500;
 }
 

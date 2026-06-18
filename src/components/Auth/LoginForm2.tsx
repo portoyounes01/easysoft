@@ -538,10 +538,10 @@ const LoginForm2Inner: React.FC = () => {
                         <RoundAvatar role={selectedEmployee.role} sizeClass="login2-selected-avatar" iconClass="login2-selected-avatar-icon" />
                       ) : null}
                       <div className="min-w-0">
-                        <p className="truncate text-base font-bold text-neutral-900 md:text-lg">
+                        <p className="truncate text-lg font-bold leading-tight text-neutral-900 md:text-xl">
                           {isOtherEmployee ? t('login2.otherEmployee') : selectedEmployee?.name}
                         </p>
-                        <p className="truncate text-sm font-medium capitalize text-neutral-500">
+                        <p className="mt-1 truncate text-sm font-medium capitalize text-neutral-500 md:text-base">
                           {isOtherEmployee ? t('login2.customId') : selectedEmployee?.role}
                         </p>
                       </div>
@@ -561,7 +561,7 @@ const LoginForm2Inner: React.FC = () => {
                         <div>
                           <label
                             htmlFor="login2-custom-id"
-                            className="mb-1 block text-sm font-semibold text-neutral-700"
+                            className="login2-field-label mb-1 block font-semibold text-neutral-700"
                           >
                             {t('login2.employeeIdLabel')}
                           </label>
@@ -583,7 +583,7 @@ const LoginForm2Inner: React.FC = () => {
                         <div>
                           <label
                             htmlFor="login2-custom-pin"
-                            className="mb-1 block text-sm font-semibold text-neutral-700"
+                            className="login2-field-label mb-1 block font-semibold text-neutral-700"
                           >
                             {t('login.credentialPin')}
                           </label>
@@ -604,7 +604,7 @@ const LoginForm2Inner: React.FC = () => {
                       </div>
                     ) : selectedEmployee ? (
                       <div className="flex flex-col items-center justify-center text-center">
-                        <p className="mb-4 text-xl font-semibold text-neutral-800 md:text-2xl">
+                        <p className="login2-credential-title mb-4 font-semibold text-neutral-800">
                           {t('login.enterPin')}
                         </p>
 

@@ -132,7 +132,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
   return (
     <>
       <div
-        className={`ds2-visual-scope flex h-screen flex-col overflow-y-auto bg-[#f7f7f7] text-[#171717] transition-[width] duration-300 ${widthClass}`}
+        className={`ds2-visual-scope flex h-screen flex-col overflow-hidden bg-[#f7f7f7] text-[#171717] transition-[width] duration-300 ${widthClass}`}
         style={visualStyle}
         data-ds2-neutral={prefs.neutralFamilyId}
       >
@@ -160,7 +160,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
           </div>
         </div>
 
-        <nav className={`flex-1 py-5 ${isCollapsed ? "px-3" : "px-6"}`}>
+        <nav className={`min-h-0 flex-1 overflow-y-auto py-5 ${isCollapsed ? "px-3" : "px-6"}`}>
           <ul className="space-y-4">
             {menuItems.map((item) => {
               if (!hasPermission(item.permission)) return null;
@@ -197,7 +197,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
           </ul>
         </nav>
 
-        <div className="p-3">
+        <div className="flex-shrink-0 p-3">
           <div
             className={`mb-2 flex min-h-touch-xs items-center rounded-md px-2.5 py-2 ${isCollapsed ? "justify-center space-x-0" : "space-x-2.5"}`}
           >

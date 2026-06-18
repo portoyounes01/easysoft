@@ -4,6 +4,21 @@ const Typography: React.FC = () => {
     return (
         <div className="space-y-12">
             <section>
+                <h3 className="text-lg font-semibold text-neutral-900 mb-6 border-b pb-2">Font Family</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                    <div className="text-sm text-neutral-500 font-mono pt-1">font-sans</div>
+                    <div className="md:col-span-2">
+                        <p className="text-lg font-medium text-neutral-900">
+                            System UI sans
+                        </p>
+                        <p className="mt-1 text-sm text-neutral-500">
+                            ui-sans-serif, system-ui, sans-serif
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <section>
                 <h3 className="text-lg font-semibold text-neutral-900 mb-6 border-b pb-2">Headings</h3>
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
