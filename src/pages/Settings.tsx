@@ -1126,8 +1126,7 @@ const Settings: React.FC = () => {
         const prof = settings.receipt.seriesProfiles[docKey];
         return (
             <SettingCard
-                title="Local AT series"
-                description="Used only when the local AT issuer is active. Vendus owns numbering while Vendus is selected."
+                title="AT series"
                 icon={KeyRound}
                 accent="from-emerald-600 to-green-500"
             >

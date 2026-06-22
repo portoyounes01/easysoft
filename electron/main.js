@@ -1,6 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, net, protocol, shell } = require('electron');
+const fs = require('fs');
 const path = require('path');
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+const { pathToFileURL } = require('url');
+const { resolveRendererConfig } = require('./rendererConfig');
+const rendererConfig = resolveRendererConfig({ dirname: __dirname });
+const isDev = rendererConfig.mode === 'development';
 
 // Import our hardware controllers
 const HardwareController = require('./hardware/hardwareController');
@@ -9,7 +13,138 @@ const { registerFiscalSigningIpc } = require('./fiscalSigning');
 let mainWindow;
 let hardwareController;
 
-function createWindow() {
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
+
+function buildContentSecurityPolicy() {
+  const devOrigin = isDev ? new URL(rendererConfig.url).origin : null;
+  const devWsOrigin = devOrigin?.replace(/^http/, 'ws');
+  const scriptSources = ["'self'", ...(isDev ? ["'unsafe-inline'"] : [])];
+  const connectSources = [
+    "'self'",
+    'https:',
+    'wss:',
+    ...(devOrigin ? [devOrigin] : []),
+    ...(devWsOrigin ? [devWsOrigin] : []),
+  ];
+
+  return [
+    "default-src 'self'",
+    `script-src ${scriptSources.join(' ')}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https: file:",
+    "font-src 'self' data:",
+    `connect-src ${connectSources.join(' ')}`,
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ');
+}
+
+function registerContentSecurityPolicy() {
+  const csp = buildContentSecurityPolicy();
+
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      },
+    });
+  });
+}
+
+function resolveAppProtocolPath(requestUrl) {
+  const url = new URL(requestUrl);
+  let pathname = decodeURIComponent(url.pathname);
+
+  if (!pathname || pathname === '/' || !path.extname(pathname)) {
+    pathname = '/index.html';
+  }
+
+  const root = rendererConfig.root;
+  const filePath = path.normalize(path.join(root, pathname));
+  const rootWithSeparator = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+
+  if (filePath !== root && !filePath.startsWith(rootWithSeparator)) {
+    return null;
+  }
+
+  return filePath;
+}
+
+function registerProductionProtocol() {
+  if (rendererConfig.mode !== 'production') {
+    return;
+  }
+
+  const csp = buildContentSecurityPolicy();
+
+  protocol.handle('app', async (request) => {
+    const filePath = resolveAppProtocolPath(request.url);
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      return new Response('Not found', { status: 404 });
+    }
+
+    const response = await net.fetch(pathToFileURL(filePath).toString());
+    const headers = new Headers(response.headers);
+    headers.set('Content-Security-Policy', csp);
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  });
+}
+
+async function loadRenderer() {
+  try {
+    console.log('Renderer mode:', rendererConfig.mode, 'NODE_ENV:', process.env.NODE_ENV, 'isPackaged:', app.isPackaged);
+
+    if (rendererConfig.mode === 'development') {
+      console.log('Loading development URL:', rendererConfig.url);
+      await mainWindow.loadURL(rendererConfig.url);
+      mainWindow.webContents.openDevTools();
+      return;
+    }
+
+    if (!fs.existsSync(rendererConfig.file)) {
+      const message = `Missing renderer build at ${rendererConfig.file}. Run "npm run build" before launching Electron.`;
+      console.error(message);
+      dialog.showErrorBox('Renderer build not found', message);
+      app.quit();
+      return;
+    }
+
+    console.log('Loading production URL:', rendererConfig.url, 'from:', rendererConfig.file);
+    await mainWindow.loadURL(rendererConfig.url);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Failed to load renderer:', error);
+    dialog.showErrorBox('Unable to load renderer', message);
+    app.quit();
+  }
+}
+
+async function createWindow() {
   // Create the browser window
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -28,17 +163,7 @@ function createWindow() {
   hardwareController = new HardwareController();
   console.log('🛠️ hardwareController methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(hardwareController)));
 
-  // Load the app
-  console.log('🔍 isDev:', isDev, 'NODE_ENV:', process.env.NODE_ENV, 'isPackaged:', app.isPackaged);
-  if (isDev) {
-    console.log('📡 Loading development URL: http://localhost:5173');
-    mainWindow.loadURL('http://localhost:5173');
-    // Open DevTools in development
-    mainWindow.webContents.openDevTools();
-  } else {
-    console.log('📁 Loading production file:', path.join(__dirname, '../dist/index.html'));
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
+  registerContentSecurityPolicy();
 
   // Show window when ready to prevent visual flash
   mainWindow.once('ready-to-show', () => {
@@ -58,17 +183,31 @@ function createWindow() {
     shell.openExternal(url);
     return { action: 'deny' };
   });
+
+  await loadRenderer();
 }
 
 // App event handlers
-app.whenReady().then(() => {
-  createWindow();
+app.whenReady().then(async () => {
+  registerProductionProtocol();
+  await createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
+});
+
+app.on('second-instance', () => {
+  if (!mainWindow) {
+    return;
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.focus();
 });
 
 app.on('window-all-closed', () => {

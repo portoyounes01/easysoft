@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SupabaseAuthProvider, useSupabaseAuth } from './contexts/SupabaseAuthContext';
 import { POSProvider } from './contexts/POSContext';
@@ -21,6 +21,8 @@ import DevicePairing from './pages/DevicePairing';
 import Appearances from './pages/Appearances';
 import DesignSystem2 from './pages/DesignSystem2';
 import FiscalAudit from './pages/FiscalAudit';
+
+const Router = ['app:', 'file:'].includes(window.location.protocol) ? HashRouter : BrowserRouter;
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useSupabaseAuth();
