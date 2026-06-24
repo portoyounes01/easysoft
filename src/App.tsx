@@ -14,6 +14,7 @@ import Categories from './pages/Categories';
 import Employees from './pages/Employees';
 import Transactions from './pages/Transactions';
 import Reports from './pages/Reports';
+import ProfitCosts from './pages/ProfitCosts';
 import Settings from './pages/Settings';
 import DataSetup from './components/DataSetup';
 import ReceiptDemoPage from './pages/ReceiptDemo';
@@ -182,6 +183,14 @@ const AppContent: React.FC = () => {
                     element={
                       <PermissionRoute permission="reports">
                         <Reports />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/profit-costs"
+                    element={
+                      <PermissionRoute permission="reports">
+                        <ProfitCosts />
                       </PermissionRoute>
                     }
                   />

@@ -9,6 +9,7 @@ import {
   Users,
   Settings,
   BarChart3,
+  Calculator,
   CreditCard,
   UserCircle,
   LogOut,
@@ -84,6 +85,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         path: "/reports",
         icon: BarChart3,
         labelKey: "sidebar.menu.reports",
+        permission: "reports",
+      },
+      {
+        path: "/profit-costs",
+        icon: Calculator,
+        labelKey: "sidebar.menu.profitCosts",
         permission: "reports",
       },
       {
