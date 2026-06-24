@@ -3,6 +3,7 @@ import { generateUUID } from './uuid';
 import { hashPassword } from './hashUtils';
 import { initializeLocalDatabase, localDb } from '../lib/localDatabase';
 import { LocalEmployee, LocalCategory, LocalProduct } from '../types/supabase';
+import { setStartupSeedDisabled } from './startupSeedPreference';
 
 // Utility to convert string ID to deterministic UUID
 function coerceToUuidOrDeterministic(value: any): string {
@@ -79,6 +80,15 @@ export interface SeedResult {
     cashierTestsCount: number;
     cashDrawerLogsCount: number;
   };
+}
+
+export interface ClearSeedDataResult {
+  success: boolean;
+  message: string;
+  preservedSystemAdmins: number;
+  preservedFiscalIssueAttempts: number;
+  preservedFiscalDocuments: number;
+  preservedFiscalTransactions: number;
 }
 
 interface StartupSeedJson {
@@ -374,6 +384,8 @@ export class SeedDataService {
           ? 'YAML seeding completed locally. Supabase env vars are missing (VITE_SUPABASE_URL / VITE_SUPABASE_ANON); cloud seed and sync were skipped.'
           : 'YAML seeding completed locally. Cannot reach Supabase (network/DNS/offline); skipped cloud upserts and sync. Fix connectivity and run again or wait for background sync.';
 
+      setStartupSeedDisabled(false);
+
       return {
         success: true,
         message: successMessage,
@@ -405,6 +417,20 @@ export class SeedDataService {
         }
       };
     }
+  }
+
+  async clearLocalData(): Promise<ClearSeedDataResult> {
+    const { clearLocalDatabasePreservingRecovery } = await import('./clearLocalDatabase');
+
+    const preserved = await clearLocalDatabasePreservingRecovery();
+    setStartupSeedDisabled(true);
+    YamlLoader.clearCache();
+
+    return {
+      success: true,
+      message: 'The active local IndexedDB database was cleared.',
+      ...preserved,
+    };
   }
 
   // Normalize employees data

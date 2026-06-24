@@ -401,11 +401,15 @@ export const AccessLevels = [
     'all',
     'sales',        // POS operations only
     'inventory',    // Product and category management (merged products + inventory)
+    'customers',    // Customer management
     'reports',      // Business reports and analytics
     'dashboard',    // Main dashboard access
     'employees',    // Employee management
     'settings',     // System configuration
-    'transactions'  // Transaction history (separate from sales)
+    'transactions', // Transaction history (separate from sales)
+    'profit_costs', // Profit and cost reporting
+    'orders',       // POS and platform order management
+    'clear_data'    // Clear non-fiscal local IndexedDB data
 ] as const;
 export type AccessLevel = typeof AccessLevels[number];
 

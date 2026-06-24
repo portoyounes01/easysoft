@@ -15,11 +15,14 @@ import {
     TestTube,
     Archive,
     RefreshCw,
-    Info
+    Info,
+    ShieldAlert,
+    Trash2,
 } from 'lucide-react';
 import { seedDataService, SeedResult } from '../utils/seedData';
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useProducts } from '../contexts/ProductsContext';
+import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -41,6 +44,8 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
     const { refreshEmployees } = useEmployees();
     const { refreshData: refreshProducts } = useProducts();
+    const { employee, hasPermission } = useSupabaseAuth();
+    const canClearLocalData = hasPermission('clear_data');
     const [seedStatus, setSeedStatus] = useState<SeedStatus>({
         isRunning: false,
         success: null,
@@ -51,6 +56,8 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
         available: string[];
         missing: string[];
     }>({ available: [], missing: [] });
+    const [showClearDialog, setShowClearDialog] = useState(false);
+    const [clearConfirmation, setClearConfirmation] = useState('');
 
     const panelInnerClass = embedded
         ? 'w-full max-w-full space-y-6'
@@ -130,6 +137,53 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
             });
         }
     }, [refreshEmployees, refreshProducts, t]);
+
+    const handleClearLocalData = useCallback(async () => {
+        if (!canClearLocalData || !employee || clearConfirmation !== 'CLEAR LOCAL DATA') {
+            return;
+        }
+
+        setSeedStatus({
+            isRunning: true,
+            success: null,
+            message: t('seedManagement.clear.running'),
+            details: []
+        });
+
+        try {
+            const result = await seedDataService.clearLocalData();
+            setSeedStatus({
+                isRunning: false,
+                success: result.success,
+                message: t('seedManagement.clear.success'),
+                details: [
+                    t('seedManagement.clear.localCleared'),
+                    t('seedManagement.clear.adminsKept', { count: result.preservedSystemAdmins }),
+                    t('seedManagement.clear.issueAttemptsKept', {
+                        count: result.preservedFiscalIssueAttempts,
+                    }),
+                    t('seedManagement.clear.fiscalEvidenceKept', {
+                        documents: result.preservedFiscalDocuments,
+                        transactions: result.preservedFiscalTransactions,
+                    }),
+                    t('seedManagement.clear.settingsKept'),
+                    t('seedManagement.clear.otherSlotKept'),
+                    t('seedManagement.clear.startupSeedDisabled'),
+                ]
+            });
+            setShowClearDialog(false);
+            setClearConfirmation('');
+        } catch (error) {
+            setSeedStatus({
+                isRunning: false,
+                success: false,
+                message: t('seedManagement.clear.failure', {
+                    message: error instanceof Error ? error.message : t('seedManagement.unknownError'),
+                }),
+                details: [t('seedManagement.clear.failureHint')]
+            });
+        }
+    }, [canClearLocalData, clearConfirmation, employee, t]);
 
     const seedFiles = useMemo(
         () =>
@@ -253,6 +307,34 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                                 </button>
                             </div>
                         </div>
+
+                        {canClearLocalData && (
+                            <div className="min-w-0 border border-red-200 bg-red-50 p-6 shadow-lg ds2-control-radius-lg">
+                                <div className="flex min-w-0 items-start gap-3">
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-red-100">
+                                        <ShieldAlert className="h-6 w-6 text-red-700" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <h2 className="text-xl font-semibold text-red-950">
+                                            {t('seedManagement.clear.title')}
+                                        </h2>
+                                        <p className="mt-1 text-sm leading-6 text-red-800">
+                                            {t('seedManagement.clear.description')}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowClearDialog(true)}
+                                    disabled={seedStatus.isRunning}
+                                    className="mt-5 flex min-h-touch w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-6 py-3 font-semibold text-white transition-colors duration-200 hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    data-testid="clear-local-database-button"
+                                >
+                                    <Trash2 className="h-5 w-5" />
+                                    <span>{t('seedManagement.clear.button')}</span>
+                                </button>
+                            </div>
+                        )}
 
                         {/* Status Display */}
                         {seedStatus.message && (
@@ -407,6 +489,79 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                     </div>
                 </div>
             </div>
+
+            {showClearDialog && canClearLocalData && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+                    role="presentation"
+                    onMouseDown={event => {
+                        if (event.target === event.currentTarget && !seedStatus.isRunning) {
+                            setShowClearDialog(false);
+                            setClearConfirmation('');
+                        }
+                    }}
+                >
+                    <div
+                        className="w-full max-w-lg rounded-lg bg-white p-6 shadow-2xl"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="clear-local-database-title"
+                    >
+                        <div className="flex items-start gap-3">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-red-100">
+                                <ShieldAlert className="h-7 w-7 text-red-700" />
+                            </div>
+                            <div className="min-w-0">
+                                <h2 id="clear-local-database-title" className="text-xl font-semibold text-gray-950">
+                                    {t('seedManagement.clear.dialogTitle')}
+                                </h2>
+                                <p className="mt-2 text-sm leading-6 text-gray-600">
+                                    {t('seedManagement.clear.dialogDescription')}
+                                </p>
+                            </div>
+                        </div>
+
+                        <label htmlFor="clear-local-database-confirmation" className="mt-6 block text-sm font-semibold text-gray-800">
+                            {t('seedManagement.clear.confirmLabel')}
+                        </label>
+                        <input
+                            id="clear-local-database-confirmation"
+                            type="text"
+                            value={clearConfirmation}
+                            onChange={event => setClearConfirmation(event.target.value)}
+                            autoComplete="off"
+                            className="mt-2 min-h-touch w-full rounded-lg border-2 border-gray-200 bg-gray-50 px-4 text-base font-semibold text-gray-950 outline-none transition-colors focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                        />
+
+                        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowClearDialog(false);
+                                    setClearConfirmation('');
+                                }}
+                                disabled={seedStatus.isRunning}
+                                className="min-h-touch rounded-lg border border-gray-300 bg-white px-5 font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                {t('seedManagement.clear.cancel')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleClearLocalData}
+                                disabled={seedStatus.isRunning || clearConfirmation !== 'CLEAR LOCAL DATA'}
+                                className="flex min-h-touch items-center justify-center gap-2 rounded-lg bg-red-600 px-5 font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                {seedStatus.isRunning ? (
+                                    <RefreshCw className="h-5 w-5 animate-spin" />
+                                ) : (
+                                    <Trash2 className="h-5 w-5" />
+                                )}
+                                <span>{t('seedManagement.clear.confirmButton')}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

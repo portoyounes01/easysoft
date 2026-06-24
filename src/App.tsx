@@ -166,7 +166,7 @@ const AppContent: React.FC = () => {
                   <Route
                     path="/customers"
                     element={
-                      <PermissionRoute permission="inventory">
+                      <PermissionRoute permission="customers">
                         <Customers />
                       </PermissionRoute>
                     }
@@ -190,7 +190,7 @@ const AppContent: React.FC = () => {
                   <Route
                     path="/profit-costs"
                     element={
-                      <PermissionRoute permission="reports">
+                      <PermissionRoute permission="profit_costs">
                         <ProfitCosts />
                       </PermissionRoute>
                     }
@@ -206,7 +206,7 @@ const AppContent: React.FC = () => {
                   <Route
                     path="/orders"
                     element={
-                      <PermissionRoute permission="transactions">
+                      <PermissionRoute permission="orders">
                         <DeliveryOrders />
                       </PermissionRoute>
                     }

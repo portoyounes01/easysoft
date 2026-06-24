@@ -312,6 +312,24 @@ test.describe('Settings POS layout', () => {
             await page.setViewportSize({ width: viewport.width, height: viewport.height });
             await openSeedTools(page);
             await expectSeedToolsDoNotOverflow(page, viewport.name);
+            await expect(page.getByTestId('clear-local-database-button')).toHaveCount(0);
         }
+    });
+
+    test('shows guarded local-database clear controls only to the system administrator', async ({ page }) => {
+        await signInAsSystemAdmin(page);
+        await openSeedTools(page);
+
+        const clearButton = page.getByTestId('clear-local-database-button');
+        await expect(clearButton).toBeVisible();
+        await clearButton.click();
+
+        const dialog = page.getByRole('dialog', { name: 'Clear local database?' });
+        await expect(dialog).toBeVisible();
+
+        const confirmButton = dialog.getByRole('button', { name: 'Delete local data' });
+        await expect(confirmButton).toBeDisabled();
+        await dialog.getByLabel('Type CLEAR LOCAL DATA').fill('CLEAR LOCAL DATA');
+        await expect(confirmButton).toBeEnabled();
     });
 });

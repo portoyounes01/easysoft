@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, connectionStatus, isSupabaseConfigured } from '../lib/supabase';
 import { Employee } from '../types/supabase';
+import { hasEmployeePermission } from '../utils/accessPermissions';
 
 interface AuthState {
   user: User | null;
@@ -345,9 +346,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Check permissions
   const hasPermission = (permission: string): boolean => {
-    if (!state.employee) return false;
-    if (state.employee.role === 'admin') return true;
-    return state.employee.access_levels.includes(permission) || state.employee.access_levels.includes('all');
+    return hasEmployeePermission(state.employee, permission);
   };
 
   // Refresh employee session timestamp (keep session alive)

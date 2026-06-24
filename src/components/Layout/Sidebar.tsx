@@ -74,7 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         path: "/customers",
         icon: Contact,
         labelKey: "sidebar.menu.customers",
-        permission: "inventory",
+        permission: "customers",
       },
       {
         path: "/employees",
@@ -92,7 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         path: "/profit-costs",
         icon: Calculator,
         labelKey: "sidebar.menu.profitCosts",
-        permission: "reports",
+        permission: "profit_costs",
       },
       {
         path: "/transactions",
@@ -104,7 +104,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         path: "/orders",
         icon: ShoppingBag,
         labelKey: "sidebar.menu.orders",
-        permission: "transactions",
+        permission: "orders",
       },
       {
         path: "/fiscal-audit",

@@ -1,4 +1,12 @@
 import { localDb } from '../lib/localDatabase';
+import { isSystemAdministrator } from './systemAdmin';
+
+export interface LocalDatabaseClearResult {
+    preservedSystemAdmins: number;
+    preservedFiscalIssueAttempts: number;
+    preservedFiscalDocuments: number;
+    preservedFiscalTransactions: number;
+}
 
 /**
  * Clear and reinitialize the local database
@@ -22,6 +30,115 @@ export const clearAndReinitializeDatabase = async (): Promise<void> => {
         console.error('Failed to clear and reinitialize database:', error);
         throw error;
     }
+};
+
+/**
+ * Clear the active IndexedDB slot while retaining login recovery and external
+ * fiscal issuance reconciliation records.
+ */
+export const clearLocalDatabasePreservingRecovery = async (): Promise<LocalDatabaseClearResult> => {
+    if (!localDb.isOpen()) {
+        await localDb.open();
+    }
+
+    const [
+        employees,
+        customers,
+        transactions,
+        transactionItems,
+        fiscalDocuments,
+        fiscalAuditEvents,
+        fiscalIssueAttempts,
+        transactionSyncQueue,
+        syncMetadata,
+    ] = await Promise.all([
+        localDb.employees.toArray(),
+        localDb.customers.toArray(),
+        localDb.transactions.toArray(),
+        localDb.transactionItems.toArray(),
+        localDb.fiscalDocuments.toArray(),
+        localDb.fiscalAuditEvents.toArray(),
+        localDb.vendusIssueAttempts.toArray(),
+        localDb.transactionSyncQueue.toArray(),
+        localDb.syncMetadata.toArray(),
+    ]);
+
+    const fiscalTransactionIds = new Set(
+        fiscalDocuments
+            .map(document => document.transaction_id)
+            .filter((transactionId): transactionId is string => Boolean(transactionId))
+    );
+    for (const transaction of transactions) {
+        if (transaction.fiscal_document_id) {
+            fiscalTransactionIds.add(transaction.id);
+        }
+    }
+
+    const fiscalTransactions = transactions.filter(transaction => fiscalTransactionIds.has(transaction.id));
+    const fiscalTransactionItems = transactionItems.filter(item => fiscalTransactionIds.has(item.transaction_id));
+    const referencedEmployeeIds = new Set([
+        ...fiscalTransactions.map(transaction => transaction.employee_id),
+        ...fiscalAuditEvents
+            .map(event => event.employee_id)
+            .filter((employeeId): employeeId is string => Boolean(employeeId)),
+    ]);
+    const referencedCustomerIds = new Set(
+        fiscalTransactions
+            .map(transaction => transaction.customer_id)
+            .filter((customerId): customerId is string => Boolean(customerId))
+    );
+    const preservedEmployees = employees.filter(
+        employee => isSystemAdministrator(employee) || referencedEmployeeIds.has(employee.id)
+    );
+    const preservedCustomers = customers.filter(customer => referencedCustomerIds.has(customer.id));
+    const preservedTransactionQueue = transactionSyncQueue.filter(operation =>
+        fiscalTransactionIds.has(operation.transactionId)
+    );
+    const preservedTransactionSyncMetadata = syncMetadata
+        .filter(metadata => metadata.id === 'transactions')
+        .map(metadata => ({
+            ...metadata,
+            pendingOperations: preservedTransactionQueue.length,
+        }));
+    const systemAdmins = preservedEmployees.filter(employee => isSystemAdministrator(employee));
+    if (systemAdmins.length === 0) {
+        throw new Error('No local system administrator account was found. The database was not cleared.');
+    }
+
+    await clearAndReinitializeDatabase();
+
+    await localDb.transaction(
+        'rw',
+        [
+            localDb.employees,
+            localDb.customers,
+            localDb.transactions,
+            localDb.transactionItems,
+            localDb.fiscalDocuments,
+            localDb.fiscalAuditEvents,
+            localDb.vendusIssueAttempts,
+            localDb.transactionSyncQueue,
+            localDb.syncMetadata,
+        ],
+        async () => {
+            await localDb.employees.bulkPut(preservedEmployees);
+            await localDb.customers.bulkPut(preservedCustomers);
+            await localDb.transactions.bulkPut(fiscalTransactions);
+            await localDb.transactionItems.bulkPut(fiscalTransactionItems);
+            await localDb.fiscalDocuments.bulkPut(fiscalDocuments);
+            await localDb.fiscalAuditEvents.bulkPut(fiscalAuditEvents);
+            await localDb.vendusIssueAttempts.bulkPut(fiscalIssueAttempts);
+            await localDb.transactionSyncQueue.bulkPut(preservedTransactionQueue);
+            await localDb.syncMetadata.bulkPut(preservedTransactionSyncMetadata);
+        }
+    );
+
+    return {
+        preservedSystemAdmins: systemAdmins.length,
+        preservedFiscalIssueAttempts: fiscalIssueAttempts.length,
+        preservedFiscalDocuments: fiscalDocuments.length,
+        preservedFiscalTransactions: fiscalTransactions.length,
+    };
 };
 
 /**
@@ -75,4 +192,4 @@ if (typeof window === 'undefined' && import.meta.url) {
                 process.exit(1);
             });
     }
-} 
+}

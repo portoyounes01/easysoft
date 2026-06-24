@@ -1,5 +1,6 @@
 import { loadBootstrapData } from './bootstrapLoader';
 import { seedDataService } from './seedData';
+import { isStartupSeedDisabled } from './startupSeedPreference';
 
 export interface StartupSeedResult {
   bootstrapLoaded: boolean;
@@ -15,6 +16,11 @@ export async function prepareLocalStartupData(): Promise<StartupSeedResult> {
     bootstrapLoaded: false,
     localSeedLoaded: false,
   };
+
+  if (isStartupSeedDisabled()) {
+    console.info('Startup seed is disabled after an explicit data clear.');
+    return result;
+  }
 
   try {
     result.bootstrapLoaded = await loadBootstrapData();

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { Employee } from '../types/supabase';
 import { useEmployees } from './EmployeesContext';
 import { hashPassword } from '../utils/hashUtils';
+import { hasEmployeePermission } from '../utils/accessPermissions';
 
 interface AuthState {
   user: Employee | null;
@@ -117,9 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const hasPermission = (permission: string): boolean => {
-    if (!state.user) return false;
-    if (state.user.role === 'admin') return true;
-    return state.user.access_levels.includes(permission) || state.user.access_levels.includes('all');
+    return hasEmployeePermission(state.user, permission);
   };
 
   useEffect(() => {

@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
-import { EmployeeFormData, EmployeeRole, AccessLevel, Employee, AccessLevels } from '../types/supabase';
+import { EmployeeFormData, EmployeeRole, AccessLevel, Employee } from '../types/supabase';
 import DatabaseReset from '../components/DatabaseReset';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -31,6 +31,11 @@ import { BaseDialog } from '../components/ui/BaseDialog';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
+import {
+    isRestrictedAccessLevel,
+    RestrictedAccessLevels,
+} from '../utils/accessPermissions';
+import { isSystemAdministrator } from '../utils/systemAdmin';
 import '../styles/design-system-2-scope.css';
 
 const EmployeesInner: React.FC = () => {
@@ -49,6 +54,7 @@ const EmployeesInner: React.FC = () => {
     } = useEmployees();
 
     const { employee: currentUser } = useSupabaseAuth();
+    const isCurrentSystemAdmin = isSystemAdministrator(currentUser);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedRole, setSelectedRole] = useState('all');
@@ -124,16 +130,31 @@ const EmployeesInner: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
 
     // Available access levels
-    const accessLevels: { value: AccessLevel; label: string; description: string }[] = [
-        { value: 'all', label: t('employees.accessLevels.all.label'), description: t('employees.accessLevels.all.description') },
-        { value: 'sales', label: t('employees.accessLevels.sales.label'), description: t('employees.accessLevels.sales.description') },
-        { value: 'inventory', label: t('employees.accessLevels.inventory.label'), description: t('employees.accessLevels.inventory.description') },
-        { value: 'reports', label: t('employees.accessLevels.reports.label'), description: t('employees.accessLevels.reports.description') },
-        { value: 'dashboard', label: t('employees.accessLevels.dashboard.label'), description: t('employees.accessLevels.dashboard.description') },
-        { value: 'employees', label: t('employees.accessLevels.employees.label'), description: t('employees.accessLevels.employees.description') },
-        { value: 'settings', label: t('employees.accessLevels.settings.label'), description: t('employees.accessLevels.settings.description') },
-        { value: 'transactions', label: t('employees.accessLevels.transactions.label'), description: t('employees.accessLevels.transactions.description') }
-    ];
+    const accessLevels = useMemo(() => {
+        const ordinaryLevels: AccessLevel[] = [
+            'all',
+            'sales',
+            'inventory',
+            'customers',
+            'employees',
+            'settings',
+            'transactions',
+        ];
+        const visibleLevels = isCurrentSystemAdmin
+            ? [...ordinaryLevels, ...RestrictedAccessLevels]
+            : ordinaryLevels;
+
+        return visibleLevels.map(value => ({
+            value,
+            label: t(`employees.accessLevels.${value}.label`),
+            description: t(`employees.accessLevels.${value}.description`),
+        }));
+    }, [isCurrentSystemAdmin, t]);
+
+    const editableAccessLevelValues = useMemo(
+        () => accessLevels.map(level => level.value),
+        [accessLevels]
+    );
 
     // Memo-compute filtered list to avoid re-render churn
     const filteredEmployees = useMemo(() => {
@@ -200,14 +221,14 @@ const EmployeesInner: React.FC = () => {
                         newData.phone = '';
                     }
                     // Set default access levels for managers
-                    newData.access_levels = ['sales', 'inventory', 'reports', 'dashboard', 'employees', 'settings', 'transactions'];
+                    newData.access_levels = ['sales', 'inventory', 'customers', 'employees', 'settings', 'transactions'];
                 } else if (roleValue === 'admin') {
                     // Initialize phone for admins
                     if (prev.role === 'cashier') {
                         newData.phone = '';
                     }
-                    // Admins get all access levels automatically
-                    newData.access_levels = [...AccessLevels];
+                    // Restricted permissions remain explicit and system-admin managed.
+                    newData.access_levels = ['all'];
                 }
             }
 
@@ -229,40 +250,62 @@ const EmployeesInner: React.FC = () => {
     const handleAccessLevelToggle = (level: AccessLevel) => {
         setFormData(prev => {
             const currentLevels = prev.access_levels;
-            const isCurrentlySelected = currentLevels.includes(level);
+            const hiddenLevels = currentLevels.filter(
+                currentLevel =>
+                    currentLevel !== 'all' &&
+                    !editableAccessLevelValues.includes(currentLevel)
+            );
+            const visibleNonAllLevels = editableAccessLevelValues.filter(
+                editableLevel => editableLevel !== 'all'
+            );
+            const selectedVisibleLevels = visibleNonAllLevels.filter(
+                editableLevel =>
+                    currentLevels.includes(editableLevel) ||
+                    (currentLevels.includes('all') && !isRestrictedAccessLevel(editableLevel))
+            );
+            const isCurrentlySelected =
+                level === 'all'
+                    ? currentLevels.includes('all')
+                    : selectedVisibleLevels.includes(level);
 
             if (level === 'all') {
                 if (isCurrentlySelected) {
-                    // Deselecting "all" - remove all permissions
-                    return { ...prev, access_levels: [] };
+                    return { ...prev, access_levels: hiddenLevels };
                 } else {
-                    // Selecting "all" - add all permissions
-                    return { ...prev, access_levels: [...AccessLevels] };
+                    return {
+                        ...prev,
+                        access_levels: Array.from(new Set([
+                            ...hiddenLevels,
+                            'all' as AccessLevel,
+                            ...(isCurrentSystemAdmin ? visibleNonAllLevels : []),
+                        ])),
+                    };
                 }
             } else {
-                // Toggling individual permission
-                let newLevels: AccessLevel[];
-
-                if (isCurrentlySelected) {
-                    // Removing permission - also remove "all" if it was selected
-                    newLevels = currentLevels.filter(l => l !== level && l !== 'all');
-                } else {
-                    // Adding permission
-                    newLevels = [...currentLevels.filter(l => l !== 'all'), level];
-
-                    // Check if all non-"all" permissions are now selected
-                    const nonAllPermissions = AccessLevels.filter((l: AccessLevel) => l !== 'all');
-                    const hasAllNonAllPermissions = nonAllPermissions.every((p: AccessLevel) => newLevels.includes(p));
-
-                    if (hasAllNonAllPermissions) {
-                        // Auto-select "all" if all other permissions are selected
-                        newLevels = [...AccessLevels];
-                    }
-                }
-
-                return { ...prev, access_levels: newLevels };
+                const nextVisibleLevels = isCurrentlySelected
+                    ? selectedVisibleLevels.filter(currentLevel => currentLevel !== level)
+                    : [...selectedVisibleLevels, level];
+                const hasAllVisiblePermissions = visibleNonAllLevels.every(permission =>
+                    nextVisibleLevels.includes(permission)
+                );
+                return {
+                    ...prev,
+                    access_levels: Array.from(new Set([
+                        ...hiddenLevels,
+                        ...nextVisibleLevels,
+                        ...(hasAllVisiblePermissions ? ['all' as AccessLevel] : []),
+                    ])),
+                };
             }
         });
+    };
+
+    const isAccessLevelSelected = (level: AccessLevel): boolean => {
+        if (level === 'all') return formData.access_levels.includes('all');
+        return (
+            formData.access_levels.includes(level) ||
+            (formData.access_levels.includes('all') && !isRestrictedAccessLevel(level))
+        );
     };
 
     // Validate form
@@ -308,8 +351,7 @@ const EmployeesInner: React.FC = () => {
             errors.hire_date = 'Hire date is required';
         }
 
-        // Access levels validation (not needed for admins - they get all automatically)
-        if (formData.role !== 'admin' && formData.access_levels.length === 0) {
+        if (!isSystemAdministrator(editingEmployee) && formData.access_levels.length === 0) {
             errors.access_levels = 'At least one access level is required';
         }
 
@@ -342,9 +384,22 @@ const EmployeesInner: React.FC = () => {
 
         setIsSubmitting(true);
         try {
+            const existingRestrictedAccessLevels = (editingEmployee?.access_levels ?? [])
+                .filter(level => isRestrictedAccessLevel(level as AccessLevel)) as AccessLevel[];
+            const submittedAccessLevels = isCurrentSystemAdmin
+                ? formData.access_levels
+                : Array.from(new Set([
+                    ...formData.access_levels.filter(level => !isRestrictedAccessLevel(level)),
+                    ...existingRestrictedAccessLevels,
+                ]));
+            const submittedFormData = {
+                ...formData,
+                access_levels: submittedAccessLevels,
+            };
+
             if (editingEmployee) {
                 // Update existing employee
-                const updateData: Partial<EmployeeFormData> = { ...formData };
+                const updateData: Partial<EmployeeFormData> = { ...submittedFormData };
                 if (!updateData.password?.trim()) {
                     delete updateData.password; // Don't update password if empty
                 }
@@ -358,7 +413,7 @@ const EmployeesInner: React.FC = () => {
                 }
             } else {
                 // Create new employee
-                await createEmployee(formData);
+                await createEmployee(submittedFormData);
             }
 
             handleCloseForm();
@@ -389,6 +444,11 @@ const EmployeesInner: React.FC = () => {
 
     // Handle opening form for editing
     const handleEditEmployee = (employee: Employee) => {
+        if (isSystemAdministrator(employee) && !isCurrentSystemAdmin) {
+            console.warn('Only a system administrator can edit another system administrator');
+            return;
+        }
+
         // Prevent non-admins from editing admin employees
         if (employee.role === 'admin' && currentUser?.role !== 'admin') {
             console.warn('Non-admin user attempted to edit admin employee');
@@ -433,6 +493,12 @@ const EmployeesInner: React.FC = () => {
     const handleDeleteEmployee = async () => {
         if (!showDeleteConfirm) return;
 
+        if (isSystemAdministrator(showDeleteConfirm)) {
+            console.error('The configured system administrator cannot be deleted');
+            setShowDeleteConfirm(null);
+            return;
+        }
+
         // Prevent non-admins from deleting admin employees
         if (showDeleteConfirm.role === 'admin' && currentUser?.role !== 'admin') {
             console.error('Security violation: Non-admin attempted to delete admin employee');
@@ -455,6 +521,12 @@ const EmployeesInner: React.FC = () => {
 
     // Handle activate/deactivate employee
     const handleToggleEmployeeStatus = async (employee: Employee) => {
+        if (isSystemAdministrator(employee)) {
+            console.warn('The configured system administrator cannot be deactivated');
+            setOpenDropdown(null);
+            return;
+        }
+
         try {
             await updateEmployee(employee.id, { is_active: !employee.is_active });
             setOpenDropdown(null);
@@ -609,9 +681,20 @@ const EmployeesInner: React.FC = () => {
                 {filteredEmployees.map((employee) => {
                     // Calculate days worked (assuming 8 hours = 1 day)
                     const daysWorked = Math.max(1, Math.round(employee.hours_worked / 8));
+                    const canEditEmployee =
+                        employee.role !== 'admin' ||
+                        (currentUser?.role === 'admin' &&
+                            (isCurrentSystemAdmin || !isSystemAdministrator(employee)));
+                    const canDeleteEmployee =
+                        !isSystemAdministrator(employee) &&
+                        (currentUser?.role === 'admin' || employee.role !== 'admin');
 
                     return (
-                        <div key={employee.id} className={`bg-white rounded-xl shadow-lg p-6 border ${employee.is_active ? 'border-gray-100' : 'border-gray-200'}`}>
+                        <div
+                            key={employee.id}
+                            className={`bg-white rounded-xl shadow-lg p-6 border ${employee.is_active ? 'border-gray-100' : 'border-gray-200'}`}
+                            data-testid={`employee-card-${employee.employee_number}`}
+                        >
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center space-x-4">
                                     <div className={`w-12 h-12 rounded-full flex items-center justify-center ${employee.is_active ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-gray-300'}`}>
@@ -668,35 +751,39 @@ const EmployeesInner: React.FC = () => {
                                                     <span>{t('employees.actions.copyNumber')}</span>
                                                 </button>
 
-                                                <button
-                                                    onClick={() => handleToggleEmployeeStatus(employee)}
-                                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-                                                >
-                                                    {employee.is_active ? (
-                                                        <>
-                                                            <UserX className="w-4 h-4" />
-                                                            <span>{t('employees.actions.deactivate')}</span>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <UserCheck className="w-4 h-4" />
-                                                            <span>{t('employees.actions.reactivate')}</span>
-                                                        </>
-                                                    )}
-                                                </button>
+                                                {!isSystemAdministrator(employee) && (
+                                                    <button
+                                                        onClick={() => handleToggleEmployeeStatus(employee)}
+                                                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                                                    >
+                                                        {employee.is_active ? (
+                                                            <>
+                                                                <UserX className="w-4 h-4" />
+                                                                <span>{t('employees.actions.deactivate')}</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <UserCheck className="w-4 h-4" />
+                                                                <span>{t('employees.actions.reactivate')}</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                )}
 
                                                 <div className="border-t border-gray-100 my-1"></div>
 
-                                                <button
-                                                    onClick={() => {
-                                                        setShowDeleteConfirm(employee);
-                                                        setOpenDropdown(null);
-                                                    }}
-                                                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                    <span>{t('employees.actions.delete')}</span>
-                                                </button>
+                                                {canDeleteEmployee && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowDeleteConfirm(employee);
+                                                            setOpenDropdown(null);
+                                                        }}
+                                                        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                        <span>{t('employees.actions.delete')}</span>
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -734,11 +821,12 @@ const EmployeesInner: React.FC = () => {
                                 </span>
                                 <div className="flex items-center space-x-2">
                                     {/* Only admins can edit other admins */}
-                                    {(currentUser?.role === 'admin' || employee.role !== 'admin') ? (
+                                    {canEditEmployee ? (
                                         <button
                                             onClick={() => handleEditEmployee(employee)}
                                             className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-500 hover:bg-gray-100'}`}
                                             title={t('employees.actions.edit')}
+                                            aria-label={`${t('employees.actions.edit')} ${employee.name}`}
                                         >
                                             <Edit className="w-4 h-4" />
                                         </button>
@@ -747,13 +835,14 @@ const EmployeesInner: React.FC = () => {
                                             disabled
                                             className="p-2 text-gray-400 cursor-not-allowed rounded-lg"
                                             title={t('employees.actions.onlyAdminsEditAdmins')}
+                                            aria-label={`${t('employees.actions.onlyAdminsEditAdmins')} ${employee.name}`}
                                         >
                                             <Edit className="w-4 h-4" />
                                         </button>
                                     )}
 
                                     {/* Only admins can delete other admins */}
-                                    {(currentUser?.role === 'admin' || employee.role !== 'admin') ? (
+                                    {canDeleteEmployee ? (
                                         <button
                                             onClick={() => setShowDeleteConfirm(employee)}
                                             className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-red-600 hover:bg-red-50' : 'text-gray-500 hover:bg-gray-100'}`}
@@ -957,9 +1046,7 @@ const EmployeesInner: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {/* Access Levels - Hidden for admins (they get all access automatically) */}
-                                    {formData.role !== 'admin' && (
-                                        <div>
+                                    <div>
                                             <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.accessLevels')}</h3>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 {accessLevels.map((level) => (
@@ -969,7 +1056,7 @@ const EmployeesInner: React.FC = () => {
                                                     >
                                                         <input
                                                             type="checkbox"
-                                                            checked={formData.access_levels.includes(level.value)}
+                                                            checked={isAccessLevelSelected(level.value)}
                                                             onChange={() => handleAccessLevelToggle(level.value)}
                                                             className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                                                         />
@@ -987,7 +1074,6 @@ const EmployeesInner: React.FC = () => {
                                                 </p>
                                             )}
                                         </div>
-                                    )}
 
                                     {/* Status */}
                                     <div>
