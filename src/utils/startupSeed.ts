@@ -1,4 +1,5 @@
 import { loadBootstrapData } from './bootstrapLoader';
+import { seedDataService } from './seedData';
 import { isStartupSeedDisabled } from './startupSeedPreference';
 
 export interface StartupSeedResult {
@@ -27,9 +28,22 @@ export async function prepareLocalStartupData(): Promise<StartupSeedResult> {
     console.warn('⚠️ Bootstrap loading failed, continuing startup:', error);
   }
 
-  // Local YAML demo seeding stays disabled on startup.
-  // We still bootstrap employee accounts on fresh installs/incognito, but we
-  // do not auto-populate the rest of the demo dataset before the app renders.
+  try {
+    const seedResult = await seedDataService.seedLocalFromYaml();
+    const localSeedRowCount =
+      seedResult.details.employeesCount + seedResult.details.categoriesCount + seedResult.details.productsCount;
+    result.localSeedLoaded = seedResult.success && localSeedRowCount > 0;
+
+    if (result.localSeedLoaded) {
+      console.log('🎉 Local startup seed ready', seedResult.details);
+    } else if (seedResult.success) {
+      console.warn('⚠️ Local startup seed had no rows to load:', seedResult.details);
+    } else {
+      console.warn('⚠️ Local startup seed skipped or failed:', seedResult.message);
+    }
+  } catch (error) {
+    console.warn('⚠️ Local startup seed failed, continuing startup:', error);
+  }
 
   return result;
 }
