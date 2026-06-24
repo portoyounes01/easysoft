@@ -4,6 +4,6 @@ dist-electron
 electron-cache
 .git
 *.log
-seed
+/seed
 tests
 public/images
