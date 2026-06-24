@@ -91,6 +91,10 @@ export interface ClearSeedDataResult {
   preservedFiscalTransactions: number;
 }
 
+export interface LocalYamlSeedOptions {
+  useStartupJson?: boolean;
+}
+
 interface StartupSeedJson {
   employees?: unknown[];
   categories?: unknown[];
@@ -118,16 +122,15 @@ async function loadStartupSeedJson(): Promise<StartupSeedJson | null> {
 
 export class SeedDataService {
   // Fast local-only seed for app startup. No Supabase health checks, cloud writes, or sync.
-  async seedLocalFromYaml(): Promise<SeedResult> {
+  async seedLocalFromYaml(options: LocalYamlSeedOptions = {}): Promise<SeedResult> {
     try {
       console.log('🌱 Starting local YAML seeding...');
 
       await initializeLocalDatabase();
 
-      const startupSeed = await loadStartupSeedJson();
+      const useStartupJson = options.useStartupJson !== false;
+      const startupSeed = useStartupJson ? await loadStartupSeedJson() : null;
       let seedEmployees = startupSeed?.employees;
-      let seedCategories = startupSeed?.categories;
-      let seedProducts = startupSeed?.products;
 
       if (!startupSeed) {
         try {
@@ -135,31 +138,13 @@ export class SeedDataService {
         } catch {
           // Cache clearing is best-effort; loading fresh files below can still proceed.
         }
-        const yamlFiles = await YamlLoader.loadMultipleYamlFiles([
-          'employees.yml',
-          'categories.yml',
-          'products.yml'
-        ]);
+        const yamlFiles = await YamlLoader.loadMultipleYamlFiles(['employees.yml']);
         seedEmployees = yamlFiles.employees?.employees;
-        seedCategories = yamlFiles.categories?.categories;
-        seedProducts = yamlFiles.products?.products;
       }
 
       let employeesCount = 0;
-      let categoriesCount = 0;
-      let productsCount = 0;
-
-      if (Array.isArray(seedCategories)) {
-        const categories = this.normalizeCategories(seedCategories);
-        await this.seedCategories(categories);
-        categoriesCount = categories.length;
-      }
-
-      if (Array.isArray(seedProducts)) {
-        const products = this.normalizeProducts(seedProducts);
-        await this.seedProducts(products);
-        productsCount = products.length;
-      }
+      // Startup intentionally stops at the employee roster.
+      // Categories, products, and the rest of the demo dataset stay out of the boot path.
 
       if (Array.isArray(seedEmployees)) {
         const employees = await this.normalizeEmployees(seedEmployees, {
@@ -174,8 +159,8 @@ export class SeedDataService {
         message: 'Local YAML seeding completed successfully!',
         details: {
           employeesCount,
-          categoriesCount,
-          productsCount,
+          categoriesCount: 0,
+          productsCount: 0,
           customersCount: 0,
           transactionsCount: 0,
           cashierTestsCount: 0,

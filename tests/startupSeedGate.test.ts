@@ -56,6 +56,6 @@ describe('prepareLocalStartupData', () => {
       localSeedLoaded: true,
     });
     expect(loadBootstrapDataMock).toHaveBeenCalledTimes(1);
-    expect(seedLocalFromYamlMock).toHaveBeenCalledTimes(1);
+    expect(seedLocalFromYamlMock).toHaveBeenCalledWith({ useStartupJson: false });
   });
 });

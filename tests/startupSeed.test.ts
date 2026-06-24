@@ -3,8 +3,6 @@ import { initializeLocalDatabase, localDb } from '../src/lib/localDatabase';
 import { seedDataService } from '../src/utils/seedData';
 import { hashPassword, verifyPasswordHash } from '../src/utils/hashUtils';
 
-const categoryId = '11111111-1111-4111-8111-111111111111';
-const productId = '22222222-2222-4222-8222-222222222222';
 const cashierId = '33333333-3333-4333-8333-333333333333';
 const managerId = '44444444-4444-4444-8444-444444444444';
 const mariaAdminId = '55555555-5555-4555-8555-555555555555';
@@ -14,8 +12,6 @@ const systemAdminId = '77777777-7777-4777-8777-777777777777';
 function stubSeedFetch() {
   const files: Record<string, string> = {
     'employees.yml': `employees:\n  - id: "${cashierId}"\n    employee_number: "CSH001"\n    name: "Ana Costa"\n    phone: "+351 915 678 901"\n    pin: "9999"\n    role: "cashier"\n    access_levels: ["sales"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${managerId}"\n    employee_number: "MGR001"\n    name: "João Pereira"\n    pin: "9999"\n    role: "manager"\n    access_levels: ["sales", "inventory"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${mariaAdminId}"\n    employee_number: "ADM001"\n    name: "Maria Santos"\n    password_hash: "wrong-admin-default"\n    role: "admin"\n    access_levels: ["all"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${carlosAdminId}"\n    employee_number: "SYS001"\n    name: "Carlos Silva"\n    password_hash: "wrong-carlos-default"\n    role: "admin"\n    access_levels: ["all"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${systemAdminId}"\n    employee_number: "ADMIN001"\n    name: "System Administrator"\n    password_hash: "wrong-system-admin-default"\n    role: "admin"\n    access_levels: ["all"]\n    is_active: true\n    hire_date: "2024-01-15"\n`,
-    'categories.yml': `categories:\n  - id: "${categoryId}"\n    name: "Kebabs"\n    display_order: 1\n    is_active: true\n`,
-    'products.yml': `products:\n  - id: "${productId}"\n    name: "Pita Kebab"\n    sku: "PITA-001"\n    category_id: "${categoryId}"\n    category_name: "Kebabs"\n    price: 7.5\n    stock: 20\n    display_order: 1\n`,
   };
 
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
@@ -46,30 +42,24 @@ describe('startup local seed', () => {
     await localDb.productSyncQueue.clear();
   });
 
-  it('loads YAML employees and catalog into IndexedDB before login providers read them', async () => {
+  it('loads YAML employees into IndexedDB before login providers read them', async () => {
     const fetchMock = stubSeedFetch();
 
-    const result = await seedDataService.seedLocalFromYaml();
+    const result = await seedDataService.seedLocalFromYaml({ useStartupJson: false });
 
     expect(result.success).toBe(true);
     expect(result.details.employeesCount).toBe(5);
-    expect(result.details.categoriesCount).toBe(1);
-    expect(result.details.productsCount).toBe(1);
+    expect(result.details.categoriesCount).toBe(0);
+    expect(result.details.productsCount).toBe(0);
 
-    const [cashier, category, product] = await Promise.all([
-      localDb.employees.where('employee_number').equals('CSH001').first(),
-      localDb.categories.get(categoryId),
-      localDb.products.get(productId),
-    ]);
-
+    const cashier = await localDb.employees.where('employee_number').equals('CSH001').first();
     expect(cashier?.name).toBe('Ana Costa');
     expect(cashier?.id).toBe(cashierId);
     expect(cashier?.pin).toBeTruthy();
     expect(await verifyPasswordHash('1111', cashier?.pin ?? '')).toBe(true);
-    expect(category?.name).toBe('Kebabs');
-    expect(product?.name).toBe('Pita Kebab');
-    expect(product?.category_id).toBe(categoryId);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(await localDb.categories.count()).toBe(0);
+    expect(await localDb.products.count()).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('uses startup-seed.json when available so production does not depend on YAML serving', async () => {
@@ -99,6 +89,8 @@ describe('startup local seed', () => {
     const employee = await localDb.employees.where('employee_number').equals('JSON001').first();
 
     expect(result.details.employeesCount).toBe(1);
+    expect(result.details.categoriesCount).toBe(0);
+    expect(result.details.productsCount).toBe(0);
     expect(employee?.id).toBe(jsonEmployeeId);
     expect(await verifyPasswordHash('1111', employee?.pin ?? '')).toBe(true);
   });

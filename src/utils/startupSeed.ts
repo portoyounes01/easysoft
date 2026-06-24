@@ -29,7 +29,9 @@ export async function prepareLocalStartupData(): Promise<StartupSeedResult> {
   }
 
   try {
-    const seedResult = await seedDataService.seedLocalFromYaml();
+    const seedResult = await seedDataService.seedLocalFromYaml({
+      useStartupJson: false,
+    });
     const localSeedRowCount =
       seedResult.details.employeesCount + seedResult.details.categoriesCount + seedResult.details.productsCount;
     result.localSeedLoaded = seedResult.success && localSeedRowCount > 0;
