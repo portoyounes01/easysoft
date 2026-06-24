@@ -11,15 +11,32 @@ import { ProductsProvider } from './contexts/ProductsContext';
 import './utils/debugDatabase';
 // Import test utilities for browser console access
 import './utils/testScript';
+// Import startup seed loader for offline initialization
+import { prepareLocalStartupData } from './utils/startupSeed';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <LanguageProvider>
-      <EmployeesProvider>
-        <ProductsProvider>
-          <App />
-        </ProductsProvider>
-      </EmployeesProvider>
-    </LanguageProvider>
-  </StrictMode>
-);
+// Initialize app with local seed support
+async function initializeApp() {
+  const startupSeed = await prepareLocalStartupData();
+
+  if (startupSeed.bootstrapLoaded || startupSeed.localSeedLoaded) {
+    console.log('🎉 App initialized with local startup data');
+  } else {
+    console.log('📱 App initialized normally');
+  }
+
+  // Render the app
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <LanguageProvider>
+        <EmployeesProvider>
+          <ProductsProvider>
+            <App />
+          </ProductsProvider>
+        </EmployeesProvider>
+      </LanguageProvider>
+    </StrictMode>
+  );
+}
+
+// Start the app
+initializeApp();
