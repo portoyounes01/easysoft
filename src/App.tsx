@@ -13,6 +13,7 @@ import Customers from './pages/Customers';
 import Categories from './pages/Categories';
 import Employees from './pages/Employees';
 import Transactions from './pages/Transactions';
+import DeliveryOrders from './pages/DeliveryOrders';
 import Reports from './pages/Reports';
 import ProfitCosts from './pages/ProfitCosts';
 import Settings from './pages/Settings';
@@ -202,6 +203,15 @@ const AppContent: React.FC = () => {
                       </PermissionRoute>
                     }
                   />
+                  <Route
+                    path="/orders"
+                    element={
+                      <PermissionRoute permission="transactions">
+                        <DeliveryOrders />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route path="/delivery-orders" element={<Navigate to="/orders" replace />} />
                   <Route
                     path="/fiscal-audit"
                     element={

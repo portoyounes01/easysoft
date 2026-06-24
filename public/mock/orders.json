@@ -1,0 +1,343 @@
+[
+  {
+    "id": "#UE-1042",
+    "source": "uber_eats",
+    "orderType": "delivery",
+    "status": "open",
+    "orderTime": "2026-06-22T11:42:00",
+    "promisedTime": "12:05",
+    "customerName": "Joao Santos",
+    "paymentMethod": "Platform",
+    "cashier": "Uber Eats",
+    "subtotal": 31.5,
+    "tax": 3,
+    "voucher": 0,
+    "platformFees": 6.56,
+    "total": 34.5,
+    "payoutNet": 27.94,
+    "fiscalDocument": {
+      "type": "platform_invoice",
+      "number": "UE-INV-2026-1042",
+      "date": "2026-06-22T11:42:00",
+      "pdfAvailable": true,
+      "payoutStatus": "pending"
+    },
+    "items": [
+      { "id": "i-1", "name": "Classic Crispyburger", "note": "Sem cebola", "quantity": 1, "price": 9.5, "station": "Kitchen" },
+      { "id": "i-2", "name": "Batatas Fritas (Dose)", "quantity": 1, "price": 3.45, "station": "Kitchen" },
+      { "id": "i-3", "name": "Coca Cola 330ml", "quantity": 1, "price": 3, "station": "Bar" }
+    ]
+  },
+  {
+    "id": "#GL-8831",
+    "source": "glovo",
+    "orderType": "delivery",
+    "status": "open",
+    "orderTime": "2026-06-22T11:32:00",
+    "promisedTime": "11:58",
+    "customerName": "Consumidor Final",
+    "paymentMethod": "Platform",
+    "cashier": "Glovo",
+    "subtotal": 16.3,
+    "tax": 2.45,
+    "voucher": 0,
+    "platformFees": 3.87,
+    "total": 18.75,
+    "payoutNet": 14.88,
+    "fiscalDocument": {
+      "type": "platform_invoice",
+      "number": "GL-FT-2026-8831",
+      "date": "2026-06-22T11:32:00",
+      "pdfAvailable": true,
+      "payoutStatus": "pending"
+    },
+    "items": [
+      { "id": "i-4", "name": "Box Falafel", "quantity": 1, "price": 8.1, "station": "Kitchen" },
+      { "id": "i-5", "name": "Agua 0,50cl", "quantity": 1, "price": 2.2, "station": "Bar" }
+    ]
+  },
+  {
+    "id": "#POS-2102",
+    "source": "pos",
+    "orderType": "take_away",
+    "status": "open",
+    "orderTime": "2026-06-22T11:28:00",
+    "promisedTime": "11:50",
+    "customerName": "Sofia Ramos",
+    "paymentMethod": "MB Way",
+    "cashier": "Ana Costa",
+    "subtotal": 22.4,
+    "tax": 1.55,
+    "voucher": 0,
+    "platformFees": 0,
+    "total": 23.95,
+    "payoutNet": 23.95,
+    "fiscalDocument": {
+      "type": "pos_receipt",
+      "number": "FS A/2102",
+      "date": "2026-06-22T11:28:00",
+      "pdfAvailable": true,
+      "payoutStatus": "settled"
+    },
+    "items": [
+      { "id": "i-6", "name": "BR Mix", "quantity": 1, "price": 9.95, "station": "Kitchen" },
+      { "id": "i-7", "name": "Aros de Cebola (x8)", "quantity": 1, "price": 1.9, "station": "Kitchen" },
+      { "id": "i-8", "name": "Coca Cola 330ml", "quantity": 2, "price": 6, "station": "Bar" }
+    ]
+  },
+  {
+    "id": "#UE-1041",
+    "source": "uber_eats",
+    "orderType": "delivery",
+    "status": "in_progress",
+    "orderTime": "2026-06-22T11:17:00",
+    "promisedTime": "11:45",
+    "customerName": "Mariana Ferreira",
+    "paymentMethod": "Platform",
+    "cashier": "Uber Eats",
+    "subtotal": 41.85,
+    "tax": 3.45,
+    "voucher": 0,
+    "platformFees": 9.26,
+    "total": 45.3,
+    "payoutNet": 36.04,
+    "fiscalDocument": {
+      "type": "platform_invoice",
+      "number": "UE-INV-2026-1041",
+      "date": "2026-06-22T11:17:00",
+      "pdfAvailable": true,
+      "payoutStatus": "pending"
+    },
+    "items": [
+      { "id": "i-9", "name": "Classic Crispyburger", "note": "Sem cebola", "quantity": 2, "price": 19, "station": "Kitchen" },
+      { "id": "i-10", "name": "Batatas Fritas (Dose)", "quantity": 1, "price": 3.45, "station": "Kitchen" },
+      { "id": "i-11", "name": "Coca Cola 330ml", "quantity": 2, "price": 6, "station": "Bar" },
+      { "id": "i-12", "name": "Molho Maionese", "note": "Extra", "quantity": 1, "price": 0.9, "station": "Packaging" }
+    ]
+  },
+  {
+    "id": "#POS-2101",
+    "source": "pos",
+    "orderType": "dine_in",
+    "status": "in_progress",
+    "orderTime": "2026-06-22T11:04:00",
+    "promisedTime": "Table 8",
+    "customerName": "Mesa 8",
+    "paymentMethod": "Cash",
+    "cashier": "Brian Susanto",
+    "subtotal": 52.4,
+    "tax": 4.8,
+    "voucher": 0,
+    "platformFees": 0,
+    "total": 57.2,
+    "payoutNet": 57.2,
+    "fiscalDocument": {
+      "type": "pos_receipt",
+      "number": "FT A/2101",
+      "date": "2026-06-22T11:04:00",
+      "pdfAvailable": true,
+      "payoutStatus": "settled"
+    },
+    "items": [
+      { "id": "i-13", "name": "Asas de Frango Fritas (x5)", "quantity": 2, "price": 9.8, "station": "Kitchen" },
+      { "id": "i-14", "name": "BR Mix", "quantity": 1, "price": 9.95, "station": "Kitchen" },
+      { "id": "i-15", "name": "Agua 0,50cl", "quantity": 2, "price": 4.4, "station": "Bar" }
+    ]
+  },
+  {
+    "id": "#GL-8830",
+    "source": "glovo",
+    "orderType": "delivery",
+    "status": "in_progress",
+    "orderTime": "2026-06-22T10:54:00",
+    "promisedTime": "11:22",
+    "customerName": "Ricardo Almeida",
+    "paymentMethod": "Platform",
+    "cashier": "Glovo",
+    "subtotal": 52.05,
+    "tax": 5.15,
+    "voucher": 0,
+    "platformFees": 11.62,
+    "total": 57.2,
+    "payoutNet": 45.58,
+    "fiscalDocument": {
+      "type": "platform_invoice",
+      "number": "GL-FT-2026-8830",
+      "date": "2026-06-22T10:54:00",
+      "pdfAvailable": true,
+      "payoutStatus": "scheduled"
+    },
+    "items": [
+      { "id": "i-16", "name": "Box Falafel", "quantity": 2, "price": 16.2, "station": "Kitchen" },
+      { "id": "i-17", "name": "Batatas Fritas (Dose)", "quantity": 2, "price": 6.9, "station": "Kitchen" },
+      { "id": "i-18", "name": "Coca Cola 330ml", "quantity": 2, "price": 6, "station": "Bar" }
+    ]
+  },
+  {
+    "id": "#UE-1039",
+    "source": "uber_eats",
+    "orderType": "delivery",
+    "status": "needs_review",
+    "orderTime": "2026-06-22T09:58:00",
+    "promisedTime": "10:24",
+    "customerName": "Consumidor Final",
+    "paymentMethod": "Platform",
+    "cashier": "Uber Eats",
+    "subtotal": 58.2,
+    "tax": 5.6,
+    "voucher": 0,
+    "platformFees": 12.99,
+    "total": 63.8,
+    "payoutNet": 50.81,
+    "attention": "Item unavailable: +1 Falafel",
+    "fiscalDocument": {
+      "type": "platform_invoice",
+      "number": "UE-INV-2026-1039",
+      "date": "2026-06-22T09:58:00",
+      "pdfAvailable": true,
+      "payoutStatus": "pending"
+    },
+    "items": [
+      { "id": "i-19", "name": "Box Falafel", "note": "Mapping review", "quantity": 3, "price": 24.3, "station": "Kitchen" },
+      { "id": "i-20", "name": "Agua 0,50cl", "quantity": 3, "price": 6.6, "station": "Bar" }
+    ]
+  },
+  {
+    "id": "#POS-2099",
+    "source": "pos",
+    "orderType": "take_away",
+    "status": "cancelled",
+    "orderTime": "2026-06-22T09:37:00",
+    "promisedTime": "10:00",
+    "customerName": "Diana Rocha",
+    "paymentMethod": "Card",
+    "cashier": "Pedro Oliveira",
+    "subtotal": 10.25,
+    "tax": 0.75,
+    "voucher": 0,
+    "platformFees": 0,
+    "total": 11,
+    "payoutNet": 11,
+    "fiscalDocument": {
+      "type": "pos_receipt",
+      "number": "FS A/2099",
+      "date": "2026-06-22T09:37:00",
+      "pdfAvailable": true,
+      "payoutStatus": "settled"
+    },
+    "items": [
+      { "id": "i-21", "name": "Classic Crispyburger", "quantity": 1, "price": 9.5, "station": "Kitchen" }
+    ]
+  },
+  {
+    "id": "#GL-8829",
+    "source": "glovo",
+    "orderType": "delivery",
+    "status": "completed",
+    "orderTime": "2026-06-22T09:21:00",
+    "promisedTime": "09:48",
+    "customerName": "Tiago Mendes",
+    "paymentMethod": "Platform",
+    "cashier": "Glovo",
+    "subtotal": 20.2,
+    "tax": 1.9,
+    "voucher": 0,
+    "platformFees": 4.32,
+    "total": 22.1,
+    "payoutNet": 17.78,
+    "fiscalDocument": {
+      "type": "platform_invoice",
+      "number": "GL-FT-2026-8829",
+      "date": "2026-06-22T09:21:00",
+      "pdfAvailable": true,
+      "payoutStatus": "settled"
+    },
+    "items": [
+      { "id": "i-22", "name": "Aros de Cebola (x8)", "quantity": 1, "price": 1.9, "station": "Kitchen" },
+      { "id": "i-23", "name": "Agua 0,50cl", "quantity": 1, "price": 2.2, "station": "Bar" }
+    ]
+  },
+  {
+    "id": "#POS-2098",
+    "source": "pos",
+    "orderType": "dine_in",
+    "status": "completed",
+    "orderTime": "2026-06-22T08:55:00",
+    "promisedTime": "Table 4",
+    "customerName": "Mesa 4",
+    "paymentMethod": "Cash",
+    "cashier": "Ana Costa",
+    "subtotal": 42.9,
+    "tax": 2.4,
+    "voucher": 0,
+    "platformFees": 0,
+    "total": 45.3,
+    "payoutNet": 45.3,
+    "fiscalDocument": {
+      "type": "pos_receipt",
+      "number": "FT A/2098",
+      "date": "2026-06-22T08:55:00",
+      "pdfAvailable": true,
+      "payoutStatus": "settled"
+    },
+    "items": [
+      { "id": "i-24", "name": "Classic Crispyburger", "quantity": 2, "price": 19, "station": "Kitchen" },
+      { "id": "i-25", "name": "Coca Cola 330ml", "quantity": 2, "price": 6, "station": "Bar" }
+    ]
+  },
+  {
+    "id": "#UE-1038",
+    "source": "uber_eats",
+    "orderType": "delivery",
+    "status": "completed",
+    "orderTime": "2026-06-22T08:45:00",
+    "promisedTime": "09:12",
+    "customerName": "Consumidor Final",
+    "paymentMethod": "Platform",
+    "cashier": "Uber Eats",
+    "subtotal": 10.25,
+    "tax": 0.75,
+    "voucher": 0,
+    "platformFees": 2.15,
+    "total": 11,
+    "payoutNet": 8.85,
+    "fiscalDocument": {
+      "type": "platform_invoice",
+      "number": "UE-INV-2026-1038",
+      "date": "2026-06-22T08:45:00",
+      "pdfAvailable": true,
+      "payoutStatus": "settled"
+    },
+    "items": [
+      { "id": "i-26", "name": "Classic Crispyburger", "quantity": 1, "price": 9.5, "station": "Kitchen" }
+    ]
+  },
+  {
+    "id": "#GL-8827",
+    "source": "glovo",
+    "orderType": "delivery",
+    "status": "completed",
+    "orderTime": "2026-06-22T08:10:00",
+    "promisedTime": "08:38",
+    "customerName": "Beatriz Lima",
+    "paymentMethod": "Platform",
+    "cashier": "Glovo",
+    "subtotal": 35.4,
+    "tax": 2.2,
+    "voucher": 0,
+    "platformFees": 7.56,
+    "total": 37.6,
+    "payoutNet": 30.04,
+    "fiscalDocument": {
+      "type": "platform_invoice",
+      "number": "GL-FT-2026-8827",
+      "date": "2026-06-22T08:10:00",
+      "pdfAvailable": true,
+      "payoutStatus": "settled"
+    },
+    "items": [
+      { "id": "i-27", "name": "BR Mix", "quantity": 2, "price": 19.9, "station": "Kitchen" },
+      { "id": "i-28", "name": "Coca Cola 330ml", "quantity": 2, "price": 6, "station": "Bar" }
+    ]
+  }
+]

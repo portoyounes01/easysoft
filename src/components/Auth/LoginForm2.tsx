@@ -121,8 +121,6 @@ const LoginForm2Inner: React.FC = () => {
   const [error, setError] = useState('');
   const [employeeList, setEmployeeList] = useState<EmployeeDisplay[]>([]);
   const [compactSelectedLayout, setCompactSelectedLayout] = useState(false);
-  const [employeeGridEmployeeLimit, setEmployeeGridEmployeeLimit] = useState(7);
-  const employeeGridRef = useRef<HTMLDivElement>(null);
   const submittingRef = useRef(false);
 
   const { signInWithEmployeeCredentials, isLoading } = useSupabaseAuth();
@@ -182,23 +180,6 @@ const LoginForm2Inner: React.FC = () => {
     query.addEventListener('change', sync);
     return () => query.removeEventListener('change', sync);
   }, []);
-
-  useEffect(() => {
-    const node = employeeGridRef.current;
-    if (!node) return;
-
-    const sync = () => {
-      const cardWidth = 160;
-      const gap = 12;
-      const columns = Math.max(1, Math.floor((node.clientWidth + gap) / (cardWidth + gap)));
-      setEmployeeGridEmployeeLimit(Math.max(1, columns * 2 - 1));
-    };
-
-    sync();
-    const observer = new ResizeObserver(sync);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [employeesContext.isLoading, employeesContext.loadError, hasSelection]);
 
   const runSignIn = useCallback(
     async (employeeNumber: string, credential: string) => {
@@ -318,11 +299,6 @@ const LoginForm2Inner: React.FC = () => {
   const canSubmitCredentials = isOtherEmployee
     ? customEmployeeId.trim().length > 0 && customPin.length > 0
     : selectedEmployee !== null && pin.length === PIN_LENGTH;
-  const visibleEmployeeList = useMemo(
-    () => employeeList.slice(0, employeeGridEmployeeLimit),
-    [employeeGridEmployeeLimit, employeeList]
-  );
-
   const pagePadding = layoutClasses.contentInsetX;
 
   const scopeRoot = (children: React.ReactNode, extraClass = '') => (
@@ -475,12 +451,11 @@ const LoginForm2Inner: React.FC = () => {
                   )}
 
                   <div
-                    ref={employeeGridRef}
                     className="login2-employee-grid w-full gap-3 overflow-hidden px-1 py-3 transition-all duration-300"
                     role="listbox"
                     aria-label={t('login.selectEmployee')}
                   >
-                    {visibleEmployeeList.map((employee) => {
+                    {employeeList.map((employee) => {
                       const isSelected =
                         !isOtherEmployee && selectedEmployee?.employeeNumber === employee.employeeNumber;
                       return (

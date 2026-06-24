@@ -157,7 +157,7 @@ async function expectSeedToolsDoNotOverflow(page: Page, viewportName: string): P
 }
 
 test.describe('Settings POS layout', () => {
-    test('hides fiscal status and issuer setup from non-system admins', async ({ page }) => {
+    test('hides fiscal status and issuer selection from non-system admins while showing default Local AT setup', async ({ page }) => {
         await signInAsSeedAdmin(page);
         await page.goto('/settings');
 
@@ -169,7 +169,7 @@ test.describe('Settings POS layout', () => {
 
         await expect(page.getByRole('heading', { level: 2, name: 'Fiscal controls' })).toBeVisible();
         await expect(page.getByRole('heading', { level: 3, name: 'Active issuer' })).toHaveCount(0);
-        await expect(page.getByRole('heading', { level: 2, name: 'Local AT series' })).toHaveCount(0);
+        await expect(page.getByRole('heading', { level: 2, name: 'AT series', exact: true })).toBeVisible();
         await expect(page.getByText('Export fiscal audit data for the selected period.')).toBeVisible();
         await expect(page.getByRole('button', { name: 'Download SAF-T' })).toBeVisible();
         await expect(page.getByText('Local AT periods use local immutable fiscal rows.')).toHaveCount(0);
@@ -191,6 +191,30 @@ test.describe('Settings POS layout', () => {
         await expect(trainingMode).toHaveAttribute('aria-checked', originalChecked);
     });
 
+    test('hides Local AT setup from non-system admins when a different issuer is saved', async ({ page }) => {
+        await page.addInitScript(() => {
+            localStorage.setItem(
+                'pos_system_settings',
+                JSON.stringify({
+                    fiscal: {
+                        issuer: 'vendus',
+                        vendus: {
+                            enabled: true,
+                        },
+                    },
+                })
+            );
+        });
+
+        await signInAsSeedAdmin(page);
+        await openCompanyFiscalSettings(page);
+
+        await expect(page.getByRole('heading', { level: 3, name: 'Active issuer' })).toHaveCount(0);
+        await expect(page.getByRole('heading', { level: 2, name: 'AT series', exact: true })).toHaveCount(0);
+        await expect(page.getByRole('heading', { level: 2, name: 'Vendus setup' })).toHaveCount(0);
+        await expect(page.getByRole('switch', { name: 'Training mode' })).toBeVisible();
+    });
+
     test('shows fiscal status and issuer setup to the system administrator', async ({ page }) => {
         await signInAsSystemAdmin(page);
         await page.goto('/settings');
@@ -204,7 +228,7 @@ test.describe('Settings POS layout', () => {
         await expect(page.getByRole('heading', { level: 2, name: 'Fiscal controls' })).toBeVisible();
         await expect(page.getByRole('heading', { level: 3, name: 'Active issuer' })).toBeVisible();
         await expect(page.getByRole('heading', { level: 3, name: 'Training mode' })).toBeVisible();
-        await expect(page.getByRole('heading', { level: 2, name: 'Local AT series' })).toBeVisible();
+        await expect(page.getByRole('heading', { level: 2, name: 'AT series', exact: true })).toBeVisible();
         await expect(page.getByText('Local AT periods use local immutable fiscal rows.')).toBeVisible();
         await expect(page.getByRole('button', { name: 'Download local SAF-T' })).toBeVisible();
     });

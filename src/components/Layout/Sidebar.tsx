@@ -11,6 +11,7 @@ import {
   BarChart3,
   Calculator,
   CreditCard,
+  ShoppingBag,
   UserCircle,
   LogOut,
   Zap,
@@ -97,6 +98,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         path: "/transactions",
         icon: CreditCard,
         labelKey: "sidebar.menu.transactions",
+        permission: "transactions",
+      },
+      {
+        path: "/orders",
+        icon: ShoppingBag,
+        labelKey: "sidebar.menu.orders",
         permission: "transactions",
       },
       {

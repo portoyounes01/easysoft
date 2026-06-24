@@ -1678,12 +1678,13 @@ const Settings: React.FC = () => {
             {renderCompanyIdentity()}
             {renderReceiptBasics()}
             {renderFiscalIssuer()}
-            {isSystemAdmin &&
-                (settings.fiscal.issuer === 'local_at'
-                    ? renderLocalAtSeries()
-                    : settings.fiscal.issuer === 'vendus'
+            {settings.fiscal.issuer === 'local_at'
+                ? renderLocalAtSeries()
+                : isSystemAdmin
+                    ? settings.fiscal.issuer === 'vendus'
                         ? renderVendusSetup()
-                        : renderExternalIssuerSetup())}
+                        : renderExternalIssuerSetup()
+                    : null}
             {renderSaftExport()}
         </div>
     );
