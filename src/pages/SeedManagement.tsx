@@ -173,6 +173,9 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
             });
             setShowClearDialog(false);
             setClearConfirmation('');
+            window.setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         } catch (error) {
             setSeedStatus({
                 isRunning: false,
