@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { usePOS } from '../contexts/POSContext';
 import { syncManager } from '../services/syncManager';
+import { queueTicketService } from '../services/queueTicketService';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useProducts } from '../contexts/ProductsContext';
@@ -146,6 +147,10 @@ const POSInner: React.FC = () => {
   const [showPayment, setShowPayment] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [discount, setDiscount] = useState({ type: 'none' as 'none' | 'percentage' | 'fixed', value: 0 });
+  const [pointsRedemption, setPointsRedemption] = useState<{
+    customerId: string;
+    points: number;
+  } | null>(null);
   const [showDiscountDialog, setShowDiscountDialog] = useState(false);
 
   const [cashReceived, setCashReceived] = useState(0);
@@ -288,11 +293,12 @@ const POSInner: React.FC = () => {
 
 
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const discountAmount = discount.type === 'percentage'
+  const requestedDiscountAmount = discount.type === 'percentage'
     ? (subtotal * discount.value / 100)
     : discount.type === 'fixed'
       ? discount.value
       : 0;
+  const discountAmount = Math.min(subtotal, Math.max(0, requestedDiscountAmount));
 
   const discountedSubtotal = subtotal - discountAmount;
 
@@ -317,6 +323,12 @@ const POSInner: React.FC = () => {
   const finalTax = finalTaxAfterDiscount * (finalSubtotal / discountedSubtotal);
   const adjustedFinalTax = isNaN(finalTax) ? 0 : finalTax;
   const finalTotal = finalSubtotal;
+  const actualPointsRedeemed = pointsRedemption
+    ? Math.min(
+        pointsRedemption.points,
+        Math.floor(discountAmount * settings.loyalty.pointsPerEuroRedeemed)
+      )
+    : 0;
   const changeAmount = cashReceived > finalTotal ? cashReceived - finalTotal : 0;
 
   // (category selection handled inline where used)
@@ -328,6 +340,7 @@ const POSInner: React.FC = () => {
   const handleClearAll = () => {
     clearCart();
     setDiscount({ type: 'none', value: 0 });
+    setPointsRedemption(null);
   };
 
   const handleCustomerSelect = (customer: LocalCustomer) => {
@@ -686,6 +699,9 @@ const POSInner: React.FC = () => {
       <DiscountDialog
         open={showDiscountDialog}
         onClose={() => setShowDiscountDialog(false)}
+        customers={customers}
+        loyalty={settings.loyalty}
+        saleTotal={subtotal}
         presets={[
           { id: 'p10', name: 'Promo 10%', type: 'percentage', value: 10, description: 'Seasonal discount' },
           { id: 'p15', name: 'Promo 15%', type: 'percentage', value: 15 },
@@ -694,6 +710,15 @@ const POSInner: React.FC = () => {
         ]}
         onApply={(res) => {
           setDiscount({ type: res.type, value: res.value });
+          if (res.source === 'loyalty' && res.customer && res.pointsRedeemed) {
+            selectCustomer(res.customer);
+            setPointsRedemption({
+              customerId: res.customer.id,
+              points: res.pointsRedeemed,
+            });
+          } else {
+            setPointsRedemption(null);
+          }
           setShowDiscountDialog(false);
         }}
       />
@@ -740,7 +765,7 @@ const POSInner: React.FC = () => {
             const employeeName = employee?.name || 'Employee';
 
             try {
-              const { fiscal } = await processTransaction(
+              const { fiscal, receiptNumber } = await processTransaction(
                 {
                   paymentMethod,
                   amountPaid: cashReceived > 0 ? cashReceived : undefined,
@@ -750,14 +775,38 @@ const POSInner: React.FC = () => {
                 },
                 () => {
                   setDiscount({ type: 'none', value: 0 });
+                  setPointsRedemption(null);
                 },
                 {
                   type: discount.type,
                   value: discount.value,
                   amount: discountAmount + customerDiscountAmount,
                 },
-                { settings, updateSettings }
+                { settings, updateSettings },
+                {
+                  enabled: settings.loyalty.enabled,
+                  pointsPerEuroEarned: settings.loyalty.pointsPerEuroEarned,
+                  pointsRedeemed: actualPointsRedeemed,
+                  customerId: pointsRedemption?.customerId,
+                }
               );
+
+              let queueTicketNumber: string | undefined;
+              if (settings.orderQueue.enabled) {
+                try {
+                  const queueTicket = await queueTicketService.issueTicket(
+                    fiscal?.invoiceNo || receiptNumber,
+                    {
+                      prefix: settings.orderQueue.prefix,
+                      startNumber: settings.orderQueue.startNumber,
+                      padding: settings.orderQueue.padding,
+                    }
+                  );
+                  queueTicketNumber = queueTicket.display_number;
+                } catch (queueError) {
+                  console.error('Sale completed, but the order ticket could not be created', queueError);
+                }
+              }
 
               if (isSupabaseConfigured() && await checkSupabaseConnection()) {
                 try {
@@ -777,6 +826,7 @@ const POSInner: React.FC = () => {
                   : 'FATURA',
                 date: new Date(),
                 counter: settings.receipt.counterLabel,
+                ticketNumber: queueTicketNumber,
                 verificationCode: fiscal?.atcudBody || '',
                 documentNumber: fiscal?.invoiceNo || '',
                 documentHash: fiscal?.hashBase64,

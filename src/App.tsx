@@ -23,6 +23,8 @@ import DevicePairing from './pages/DevicePairing';
 import Appearances from './pages/Appearances';
 import DesignSystem2 from './pages/DesignSystem2';
 import FiscalAudit from './pages/FiscalAudit';
+import OrderQueue from './pages/OrderQueue';
+import OrderStatusDisplay from './pages/OrderStatusDisplay';
 
 const Router = ['app:', 'file:'].includes(window.location.protocol) ? HashRouter : BrowserRouter;
 
@@ -122,6 +124,7 @@ const AppContent: React.FC = () => {
           )
         }
       />
+      <Route path="/order-status" element={<OrderStatusDisplay />} />
 
       {/* App routes — shared Layout + Sidebar (including POS) */}
       <Route
@@ -208,6 +211,14 @@ const AppContent: React.FC = () => {
                     element={
                       <PermissionRoute permission="orders">
                         <DeliveryOrders />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/queue"
+                    element={
+                      <PermissionRoute permission="sales">
+                        <OrderQueue />
                       </PermissionRoute>
                     }
                   />

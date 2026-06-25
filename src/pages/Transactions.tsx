@@ -26,6 +26,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import ReceiptDialog from '../components/ReceiptDialog';
 import type { ReceiptProps } from '../components/ThermalReceipt';
+import { queueTicketService } from '../services/queueTicketService';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import {
     useDesignSystem2Customization,
@@ -391,11 +392,14 @@ const TransactionsInner: React.FC = () => {
                 )
                 : null;
 
+        const documentNumber = fiscal?.invoice_no ?? header.receipt_number ?? header.transaction_number;
+        const queueTicket = await queueTicketService.getByReceiptReference(documentNumber);
         const receipt: ReceiptProps = {
-            documentNumber: fiscal?.invoice_no ?? header.receipt_number ?? header.transaction_number,
+            documentNumber,
             documentType,
             date,
             counter: settings.receipt.counterLabel,
+            ticketNumber: queueTicket?.display_number,
             verificationCode,
             documentHash: fiscal?.hash_base64 ?? undefined,
             hashFourChars: fiscal?.hash_four_chars ?? meta?.hashFourChars,

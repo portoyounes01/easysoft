@@ -19,6 +19,9 @@ vi.mock('../src/lib/localDatabase', () => ({
     updateCustomer: vi.fn(() => Promise.resolve()),
     createCustomer: vi.fn(() => Promise.resolve('')),
   },
+  transactionLocalService: {
+    getLatestPurchaseDatesByCustomer: vi.fn(() => Promise.resolve({})),
+  },
 }));
 
 const renderCustomers = async (lang: string) => {
@@ -45,6 +48,9 @@ describe('Customers page', () => {
       screen.getByPlaceholderText('Search name, tax ID, email, phone…')
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add customer/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Points' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Enrolled' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Last purchase' })).toBeInTheDocument();
   });
 
   test('shows translated title and toolbar in PT', async () => {
@@ -54,5 +60,8 @@ describe('Customers page', () => {
       screen.getByPlaceholderText('Pesquisar nome, NIF, email, telefone…')
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /adicionar cliente/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Pontos' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Adesão' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Última compra' })).toBeInTheDocument();
   });
 });

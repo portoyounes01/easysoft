@@ -1,10 +1,12 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { LoyaltyVoucher, SystemSettings } from '../contexts/SettingsContext';
+import type { LocalCustomer } from '../types/supabase';
 import QuickNumpad from './QuickNumpad';
 import { ActionButton } from './ui/ActionButton';
 import { BaseDialog } from './ui/BaseDialog';
-import { TabToggle, TabToggleOption } from './ui/TabToggle';
 import { InputField } from './ui/InputField';
+import { TabToggle, type TabToggleOption } from './ui/TabToggle';
 
 interface CouponPreset {
     id: string;
@@ -15,11 +17,13 @@ interface CouponPreset {
     description?: string;
 }
 
-interface DiscountDialogResult {
+export interface DiscountDialogResult {
     type: 'percentage' | 'fixed';
     value: number;
-    source: 'preset' | 'percentage' | 'fixed' | 'new';
+    source: 'preset' | 'percentage' | 'fixed' | 'voucher' | 'loyalty';
     code?: string;
+    customer?: LocalCustomer;
+    pointsRedeemed?: number;
 }
 
 interface DiscountDialogProps {
@@ -27,71 +31,170 @@ interface DiscountDialogProps {
     onClose: () => void;
     onApply: (result: DiscountDialogResult) => void;
     presets?: CouponPreset[];
+    customers: LocalCustomer[];
+    loyalty: SystemSettings['loyalty'];
+    saleTotal: number;
 }
 
-type DiscountTab = 'new' | 'preset' | 'percentage' | 'fixed';
+type DiscountTab = 'redeem' | 'preset' | 'percentage' | 'fixed';
+type RedeemMode = 'voucher' | 'points';
 
-const DiscountDialog: React.FC<DiscountDialogProps> = ({ open, onClose, onApply, presets = [] }) => {
-    // 1. Hooks
+const normalizePhone = (value: string): string => {
+    const digits = value.replace(/\D/g, '');
+    return digits.length === 12 && digits.startsWith('351') ? digits.slice(3) : digits;
+};
+
+const DiscountDialog: React.FC<DiscountDialogProps> = ({
+    open,
+    onClose,
+    onApply,
+    presets = [],
+    customers,
+    loyalty,
+    saleTotal,
+}) => {
     const { t } = useTranslation();
-    const [activeTab, setActiveTab] = useState<DiscountTab>('preset');
-    const [selectedPresetId, setSelectedPresetId] = useState<string>('');
-    const [inputValue, setInputValue] = useState<string>('');
-    const [newCode, setNewCode] = useState<string>('');
+    const [activeTab, setActiveTab] = useState<DiscountTab>('redeem');
+    const [redeemMode, setRedeemMode] = useState<RedeemMode>('voucher');
+    const [selectedPresetId, setSelectedPresetId] = useState('');
+    const [inputValue, setInputValue] = useState('');
+    const [voucherCode, setVoucherCode] = useState('');
+    const [phoneNumber, setPhoneNumber] = useState('');
+    const [pointsInput, setPointsInput] = useState('');
 
-    // 2. Event handlers
-    const handleSetTab = useCallback((tab: DiscountTab) => {
-        setActiveTab(tab);
+    const selectedVoucher = useMemo<LoyaltyVoucher | undefined>(() => {
+        const normalizedCode = voucherCode.trim().toUpperCase();
+        if (!loyalty.vouchersEnabled || !normalizedCode) return undefined;
+        return loyalty.vouchers.find(
+            voucher => voucher.enabled && voucher.code.trim().toUpperCase() === normalizedCode
+        );
+    }, [loyalty.vouchers, loyalty.vouchersEnabled, voucherCode]);
+
+    const matchedCustomer = useMemo(() => {
+        const phone = normalizePhone(phoneNumber);
+        if (!loyalty.enabled || !phone) return undefined;
+        return customers.find(customer => normalizePhone(customer.phone ?? '') === phone);
+    }, [customers, loyalty.enabled, phoneNumber]);
+
+    const requestedPoints = useMemo(
+        () => Math.max(0, Math.floor(Number(pointsInput) || 0)),
+        [pointsInput]
+    );
+    const maxRedeemablePoints = useMemo(() => {
+        if (!matchedCustomer || saleTotal <= 0) return 0;
+        const saleCap = Math.floor(saleTotal * loyalty.pointsPerEuroRedeemed);
+        return Math.min(matchedCustomer.loyalty_points, saleCap);
+    }, [loyalty.pointsPerEuroRedeemed, matchedCustomer, saleTotal]);
+    const pointsDiscount = useMemo(
+        () => requestedPoints / Math.max(1, loyalty.pointsPerEuroRedeemed),
+        [loyalty.pointsPerEuroRedeemed, requestedPoints]
+    );
+    const parsedNumber = useMemo(
+        () => parseFloat(inputValue.replace(',', '.')),
+        [inputValue]
+    );
+    const isNumericValid = useMemo(() => {
+        if (activeTab === 'percentage') {
+            return Number.isFinite(parsedNumber) && parsedNumber > 0 && parsedNumber <= 100;
+        }
+        return Number.isFinite(parsedNumber) && parsedNumber > 0;
+    }, [activeTab, parsedNumber]);
+    const canApply = useMemo(() => {
+        if (activeTab === 'preset') return Boolean(selectedPresetId);
+        if (activeTab === 'percentage' || activeTab === 'fixed') return isNumericValid;
+        if (redeemMode === 'voucher') return Boolean(selectedVoucher);
+        return Boolean(
+            matchedCustomer &&
+            requestedPoints > 0 &&
+            requestedPoints <= maxRedeemablePoints
+        );
+    }, [
+        activeTab,
+        isNumericValid,
+        matchedCustomer,
+        maxRedeemablePoints,
+        redeemMode,
+        requestedPoints,
+        selectedPresetId,
+        selectedVoucher,
+    ]);
+
+    const resetInputs = useCallback(() => {
         setInputValue('');
         setSelectedPresetId('');
-        setNewCode('');
+        setVoucherCode('');
+        setPhoneNumber('');
+        setPointsInput('');
     }, []);
 
+    const handleSetTab = useCallback((tab: DiscountTab) => {
+        setActiveTab(tab);
+        resetInputs();
+    }, [resetInputs]);
+
     const handleApply = useCallback(() => {
-        if (activeTab === 'new') {
-            onApply({ type: 'percentage', value: 0, source: 'new', code: newCode || undefined });
+        if (activeTab === 'redeem' && redeemMode === 'voucher' && selectedVoucher) {
+            onApply({
+                type: selectedVoucher.type,
+                value: selectedVoucher.value,
+                source: 'voucher',
+                code: selectedVoucher.code,
+            });
+            onClose();
+            return;
+        }
+        if (activeTab === 'redeem' && redeemMode === 'points' && matchedCustomer) {
+            onApply({
+                type: 'fixed',
+                value: Number(pointsDiscount.toFixed(2)),
+                source: 'loyalty',
+                customer: matchedCustomer,
+                pointsRedeemed: requestedPoints,
+            });
             onClose();
             return;
         }
         if (activeTab === 'preset') {
-            const preset = presets.find(p => p.id === selectedPresetId);
+            const preset = presets.find(item => item.id === selectedPresetId);
             if (!preset) return;
-            onApply({ type: preset.type, value: preset.value, source: 'preset', code: preset.code });
+            onApply({
+                type: preset.type,
+                value: preset.value,
+                source: 'preset',
+                code: preset.code,
+            });
             onClose();
             return;
         }
-
-        const numeric = parseFloat(inputValue.replace(',', '.'));
-        if (isNaN(numeric) || numeric <= 0) return;
-
-        const type: 'percentage' | 'fixed' = activeTab === 'fixed' ? 'fixed' : 'percentage';
-        const source: DiscountDialogResult['source'] = activeTab as 'percentage' | 'fixed';
-        onApply({ type, value: numeric, source, code: newCode || undefined });
+        if (!isNumericValid) return;
+        onApply({
+            type: activeTab === 'fixed' ? 'fixed' : 'percentage',
+            value: parsedNumber,
+            source: activeTab === 'fixed' ? 'fixed' : 'percentage',
+        });
         onClose();
-    }, [activeTab, inputValue, newCode, onApply, onClose, presets, selectedPresetId]);
+    }, [
+        activeTab,
+        isNumericValid,
+        matchedCustomer,
+        onApply,
+        onClose,
+        parsedNumber,
+        pointsDiscount,
+        presets,
+        redeemMode,
+        requestedPoints,
+        selectedPresetId,
+        selectedVoucher,
+    ]);
 
-    // 3. Computed values
-    const parsedNumber = useMemo(() => parseFloat(inputValue.replace(',', '.')), [inputValue]);
-    const isNumericValid = useMemo(() => {
-        if (activeTab === 'percentage') {
-            return !isNaN(parsedNumber) && parsedNumber > 0 && parsedNumber <= 100;
-        }
-        return !isNaN(parsedNumber) && parsedNumber > 0;
-    }, [parsedNumber, activeTab]);
-    const canApply = useMemo(() => {
-        if (activeTab === 'preset') return Boolean(selectedPresetId);
-        if (activeTab === 'new') return newCode.trim().length > 0;
-        return isNumericValid;
-    }, [activeTab, selectedPresetId, newCode, isNumericValid]);
-
-    // 5. Render
     return (
         <BaseDialog
             open={open}
             onClose={onClose}
             title={t('pos.discountDialog.title')}
-            width="29vw"
-            height="70vh"
+            width="36vw"
+            height="76vh"
             footer={
                 <div className="flex space-x-4">
                     <ActionButton
@@ -104,93 +207,175 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({ open, onClose, onApply,
                     <ActionButton
                         disabled={!canApply}
                         onClick={handleApply}
-                        label={(activeTab === 'percentage' || activeTab === 'fixed') ? t('pos.discountDialog.buttons.add') : t('pos.discountDialog.buttons.apply')}
-                        className={`flex-1 rounded-2xl ${canApply ? '' : 'bg-gray-300 cursor-not-allowed'}`}
+                        label={t('pos.discountDialog.buttons.apply')}
+                        className={`flex-1 rounded-2xl ${canApply ? '' : 'cursor-not-allowed bg-gray-300'}`}
                         style={{ height: '5vh', fontSize: '1.6vh' }}
                     />
                 </div>
             }
         >
-            <div className="flex-1 flex flex-col bg-gray-100" style={{ padding: '2vh', paddingLeft: '4vh', paddingRight: '4vh', paddingTop: '3vh' }}>
-                {/* Tabs */}
+            <div className="flex flex-1 flex-col bg-gray-100 px-8 pb-5 pt-6">
                 <div className="mb-5">
                     <TabToggle
                         options={[
+                            { value: 'redeem', label: t('pos.discountDialog.tabs.redeem') },
                             { value: 'preset', label: t('pos.discountDialog.tabs.preset') },
                             { value: 'percentage', label: t('pos.discountDialog.tabs.percentage') },
-                            { value: 'fixed', label: t('pos.discountDialog.tabs.fixed') }
+                            { value: 'fixed', label: t('pos.discountDialog.tabs.fixed') },
                         ] as TabToggleOption<DiscountTab>[]}
                         value={activeTab}
                         onChange={handleSetTab}
                     />
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-visible">
-                    {activeTab === 'preset' ? (
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                    {activeTab === 'redeem' && (
+                        <div className="space-y-5">
+                            <TabToggle
+                                options={[
+                                    { value: 'voucher', label: t('pos.discountDialog.redeem.voucher') },
+                                    { value: 'points', label: t('pos.discountDialog.redeem.points') },
+                                ] as TabToggleOption<RedeemMode>[]}
+                                value={redeemMode}
+                                onChange={mode => {
+                                    setRedeemMode(mode);
+                                    setVoucherCode('');
+                                    setPhoneNumber('');
+                                    setPointsInput('');
+                                }}
+                            />
+
+                            {redeemMode === 'voucher' ? (
+                                <div className="space-y-4">
+                                    <InputField
+                                        label={t('pos.discountDialog.redeem.voucherCode')}
+                                        value={voucherCode}
+                                        onChange={event => setVoucherCode(event.target.value.toUpperCase())}
+                                        placeholder="SUMMER10"
+                                    />
+                                    {voucherCode && (
+                                        <div className={`rounded-2xl p-4 text-sm ${selectedVoucher ? 'bg-emerald-50 text-emerald-900' : 'bg-rose-50 text-rose-800'}`}>
+                                            {selectedVoucher
+                                                ? `${selectedVoucher.description || selectedVoucher.code}: ${
+                                                    selectedVoucher.type === 'percentage'
+                                                        ? `${selectedVoucher.value}%`
+                                                        : `€${selectedVoucher.value.toFixed(2)}`
+                                                }`
+                                                : t('pos.discountDialog.redeem.invalidVoucher')}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <InputField
+                                        label={t('pos.discountDialog.redeem.phone')}
+                                        value={phoneNumber}
+                                        onChange={event => setPhoneNumber(event.target.value)}
+                                        placeholder="+351 912 345 678"
+                                    />
+                                    {matchedCustomer ? (
+                                        <>
+                                            <div className="rounded-2xl bg-emerald-50 p-4 text-emerald-900">
+                                                <p className="font-semibold">{matchedCustomer.name}</p>
+                                                <p className="mt-1 text-sm">
+                                                    {matchedCustomer.loyalty_points.toLocaleString()} points available
+                                                </p>
+                                            </div>
+                                            <InputField
+                                                label={t('pos.discountDialog.redeem.pointsToRedeem')}
+                                                value={pointsInput}
+                                                onChange={event =>
+                                                    setPointsInput(event.target.value.replace(/\D/g, ''))
+                                                }
+                                                placeholder={String(maxRedeemablePoints)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setPointsInput(String(maxRedeemablePoints))}
+                                                className="min-h-touch-sm w-full rounded-xl border border-emerald-200 bg-white px-4 font-semibold text-emerald-800 hover:bg-emerald-50"
+                                            >
+                                                {t('pos.discountDialog.redeem.useMaximum')} ({maxRedeemablePoints})
+                                            </button>
+                                            {requestedPoints > 0 && (
+                                                <div className="rounded-2xl bg-white p-4 text-sm text-gray-700">
+                                                    {requestedPoints.toLocaleString()} points = €{pointsDiscount.toFixed(2)}
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        phoneNumber && (
+                                            <div className="rounded-2xl bg-rose-50 p-4 text-sm text-rose-800">
+                                                {t('pos.discountDialog.redeem.customerNotFound')}
+                                            </div>
+                                        )
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === 'preset' && (
                         <div className="h-full overflow-y-auto">
                             {presets.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-gray-500" style={{ fontSize: '1.5vh' }}>{t('pos.discountDialog.noPresets')}</div>
+                                <div className="flex h-full items-center justify-center text-gray-500">
+                                    {t('pos.discountDialog.noPresets')}
+                                </div>
                             ) : (
                                 <ul className="divide-y divide-gray-200">
-                                    {presets.map((p) => (
-                                        <li key={p.id}>
+                                    {presets.map(preset => (
+                                        <li key={preset.id}>
                                             <button
-                                                onClick={() => setSelectedPresetId(p.id)}
-                                                className={`w-full text-left rounded-xs transition-all ${selectedPresetId === p.id ? 'bg-green-100' : 'hover:bg-gray-50'}`}
-                                                style={{ padding: '1.2vh 2vh' }}
+                                                type="button"
+                                                onClick={() => setSelectedPresetId(preset.id)}
+                                                className={`w-full px-5 py-4 text-left transition-all ${selectedPresetId === preset.id ? 'bg-green-100' : 'hover:bg-gray-50'}`}
                                             >
                                                 <div className="flex items-center justify-between">
-                                                    <span className="text-gray-900 font-semibold" style={{ fontSize: '1.6vh' }}>{p.name}</span>
-                                                    <span className="text-red-500 font-semibold" style={{ fontSize: '1.6vh' }}>{p.type === 'percentage' ? `-${p.value}%` : `- ${p.value.toFixed(2)}`}</span>
+                                                    <span className="font-semibold text-gray-900">{preset.name}</span>
+                                                    <span className="font-semibold text-red-500">
+                                                        {preset.type === 'percentage'
+                                                            ? `-${preset.value}%`
+                                                            : `- ${preset.value.toFixed(2)}`}
+                                                    </span>
                                                 </div>
-                                                {p.description && <div className="text-gray-600 mt-1" style={{ fontSize: '1.4vh' }}>{p.description}</div>}
+                                                {preset.description && (
+                                                    <div className="mt-1 text-sm text-gray-600">{preset.description}</div>
+                                                )}
                                             </button>
                                         </li>
                                     ))}
                                 </ul>
                             )}
                         </div>
-                    ) : (
-                        <div className="h-full flex flex-col">
-                            {activeTab === 'new' && (
-                                <div className="mb-4">
-                                    <InputField
-                                        label={t('pos.discountDialog.labels.discountCode') || 'Discount Code'}
-                                        value={newCode}
-                                        onChange={(e) => setNewCode(e.target.value.slice(0, 32))}
-                                        placeholder=""
-                                        maxLength={32}
-                                    />
-                                </div>
-                            )}
-                            {(activeTab === 'percentage' || activeTab === 'fixed') && (
-                                <div className="flex-1 flex flex-col min-h-0">
-                                    <InputField
-                                        label={activeTab === 'fixed' ? t('pos.discountDialog.labels.price') || 'Price' : t('pos.discountDialog.labels.percentage') || 'Percentage'}
-                                        value={inputValue}
-                                        onChange={(e) => setInputValue(e.target.value.replace(/[^0-9.,]/g, ''))}
-                                        className={inputValue && !isNumericValid ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'focus:ring-green-500 focus:border-green-500'}
-                                        placeholder={activeTab === 'fixed' ? '5.00' : '15'}
-                                    // We can't easily put the suffix inside InputField without modifying it to accept a string node for rightIcon or a suffix prop.
-                                    // For now, let's use a workaround or just accept it doesn't have the suffix inside the input in the same way, OR add suffix support to InputField.
-                                    // Adding suffix support to InputField is better.
-                                    />
-                                    {/* Suffix workaround or update InputField */}
-                                    <div className="absolute top-[34px] right-4 text-gray-500 font-semibold pointer-events-none" style={{ fontSize: '1.6vh' }}>{activeTab === 'fixed' ? '€' : '%'}</div>
+                    )}
 
-                                    {/* Quick Numpad */}
-                                    <div className="mt-4 flex-1 min-h-0" style={{ marginBottom: '2vh' }}>
-                                        <QuickNumpad
-                                            value={inputValue}
-                                            onChange={(v) => setInputValue(v)}
-                                            allowDecimal={activeTab === 'fixed'}
-                                            quickValues={[100, 50, 20, 10]}
-                                            className="h-full"
-                                        />
-                                    </div>
-                                </div>
-                            )}
+                    {(activeTab === 'percentage' || activeTab === 'fixed') && (
+                        <div className="flex h-full min-h-0 flex-col">
+                            <InputField
+                                label={
+                                    activeTab === 'fixed'
+                                        ? t('pos.discountDialog.labels.price')
+                                        : t('pos.discountDialog.labels.percentage')
+                                }
+                                value={inputValue}
+                                onChange={event =>
+                                    setInputValue(event.target.value.replace(/[^0-9.,]/g, ''))
+                                }
+                                className={
+                                    inputValue && !isNumericValid
+                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                                        : 'focus:border-green-500 focus:ring-green-500'
+                                }
+                                placeholder={activeTab === 'fixed' ? '5.00' : '15'}
+                            />
+                            <div className="mt-4 min-h-0 flex-1 pb-4">
+                                <QuickNumpad
+                                    value={inputValue}
+                                    onChange={setInputValue}
+                                    allowDecimal={activeTab === 'fixed'}
+                                    quickValues={[100, 50, 20, 10]}
+                                    className="h-full"
+                                />
+                            </div>
                         </div>
                     )}
                 </div>
@@ -200,5 +385,3 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({ open, onClose, onApply,
 };
 
 export default React.memo(DiscountDialog);
-
-

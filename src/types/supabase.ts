@@ -1102,6 +1102,21 @@ export interface LocalCustomer extends Omit<CustomerRow, 'created_at' | 'updated
     is_conflicted: boolean;
 }
 
+export type QueueTicketStatus = 'preparing' | 'ready' | 'collected';
+
+export interface LocalQueueTicket {
+    id: string;
+    receipt_reference: string;
+    service_date: string;
+    sequence: number;
+    display_number: string;
+    status: QueueTicketStatus;
+    created_at: Date;
+    updated_at: Date;
+    ready_at: Date | null;
+    collected_at: Date | null;
+}
+
 // Local database interfaces for transactions
 export interface LocalTransaction extends Omit<TransactionRow, 'created_at' | 'updated_at' | 'last_synced_at' | 'deleted_at'> {
     // Local specific fields

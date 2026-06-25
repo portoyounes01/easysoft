@@ -14,10 +14,12 @@ import {
     DollarSign,
     FileDown,
     FileText,
+    Gift,
     KeyRound,
     Languages,
     Monitor,
     PackageCheck,
+    Plus,
     Printer,
     Receipt,
     RotateCcw,
@@ -25,13 +27,15 @@ import {
     Settings as SettingsIcon,
     Shield,
     Store,
+    Ticket,
+    Trash2,
     Wifi,
     type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
-import type { SystemSettings } from '../contexts/SettingsContext';
+import type { LoyaltyVoucher, SystemSettings } from '../contexts/SettingsContext';
 import { cloneSettingsSnapshot, logCommittedSettingsChanges } from '../fiscal/fiscalAuditLog';
 import { buildSaftAuditFileXml } from '../fiscal/saft/exportSaft';
 import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
@@ -49,7 +53,7 @@ import { ElectronTestingPanel } from './ElectronCashierTesting';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 
-type SettingsTabId = 'security' | 'pos' | 'display' | 'hardware' | 'company';
+type SettingsTabId = 'security' | 'pos' | 'loyalty' | 'display' | 'hardware' | 'company';
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 type VendusCheckStatus = 'idle' | 'checking' | 'ok' | 'error';
 
@@ -279,6 +283,12 @@ const Settings: React.FC = () => {
                 description: 'Currency, tax, stock, and cart behavior.',
             },
             {
+                id: 'loyalty' as const,
+                label: 'Loyalty & Vouchers',
+                icon: Gift,
+                description: 'Points earning, redemption, and voucher codes.',
+            },
+            {
                 id: 'display' as const,
                 label: 'Display',
                 icon: Monitor,
@@ -414,6 +424,39 @@ const Settings: React.FC = () => {
             markChanged();
         },
         [markChanged, updateSettings]
+    );
+
+    const updateVouchers = useCallback(
+        (vouchers: LoyaltyVoucher[]) => {
+            updateSettings({ loyalty: { vouchers } });
+            markChanged();
+        },
+        [markChanged, updateSettings]
+    );
+
+    const handleAddVoucher = useCallback(() => {
+        updateVouchers([
+            ...settings.loyalty.vouchers,
+            {
+                id: generateUUID(),
+                code: '',
+                description: '',
+                type: 'fixed',
+                value: 0,
+                enabled: true,
+            },
+        ]);
+    }, [settings.loyalty.vouchers, updateVouchers]);
+
+    const handleVoucherChange = useCallback(
+        (id: string, patch: Partial<LoyaltyVoucher>) => {
+            updateVouchers(
+                settings.loyalty.vouchers.map(voucher =>
+                    voucher.id === id ? { ...voucher, ...patch } : voucher
+                )
+            );
+        },
+        [settings.loyalty.vouchers, updateVouchers]
     );
 
     const handleTrainingModeChange = useCallback(
@@ -904,6 +947,271 @@ const Settings: React.FC = () => {
                         ))}
                     </select>
                 </SettingsRow>
+            </SettingCard>
+
+            <SettingCard
+                title="Customer ticket numbers"
+                description="Issue a collection number after payment and show it on the order-status screen."
+                icon={Ticket}
+                accent="from-cyan-600 to-blue-500"
+            >
+                <SettingsRow title="Enable ticket numbering" description="Create a ticket for each completed POS sale.">
+                    <div className="flex justify-end">
+                        <ToggleSwitch
+                            checked={settings.orderQueue.enabled}
+                            onChange={checked => handleSettingsChange('orderQueue', 'enabled', checked)}
+                            label="Enable ticket numbering"
+                        />
+                    </div>
+                </SettingsRow>
+                <SettingsRow title="Ticket prefix" description="Optional letters shown before the number, for example A001.">
+                    <input
+                        value={settings.orderQueue.prefix}
+                        onChange={event =>
+                            handleSettingsChange(
+                                'orderQueue',
+                                'prefix',
+                                event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4)
+                            )
+                        }
+                        placeholder="A"
+                        className={fieldClass}
+                        disabled={!settings.orderQueue.enabled}
+                    />
+                </SettingsRow>
+                <SettingsRow title="First number each day" description="The sequence resets automatically at the start of each day.">
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={settings.orderQueue.startNumber}
+                        onChange={event =>
+                            handleSettingsChange(
+                                'orderQueue',
+                                'startNumber',
+                                Math.max(0, Math.floor(Number(event.target.value) || 0))
+                            )
+                        }
+                        className={fieldClass}
+                        disabled={!settings.orderQueue.enabled}
+                    />
+                </SettingsRow>
+                <SettingsRow title="Number length" description="Pads the numeric portion with leading zeroes.">
+                    <select
+                        value={settings.orderQueue.padding}
+                        onChange={event =>
+                            handleSettingsChange('orderQueue', 'padding', Number(event.target.value))
+                        }
+                        className={fieldClass}
+                        disabled={!settings.orderQueue.enabled}
+                    >
+                        <option value={2}>2 digits — 01</option>
+                        <option value={3}>3 digits — 001</option>
+                        <option value={4}>4 digits — 0001</option>
+                    </select>
+                </SettingsRow>
+                <SettingsRow title="Keep ready tickets visible" description="Ready tickets disappear automatically after this period.">
+                    <select
+                        value={settings.orderQueue.readyRetentionMinutes}
+                        onChange={event =>
+                            handleSettingsChange(
+                                'orderQueue',
+                                'readyRetentionMinutes',
+                                Number(event.target.value)
+                            )
+                        }
+                        className={fieldClass}
+                        disabled={!settings.orderQueue.enabled}
+                    >
+                        {[5, 10, 15, 20, 30, 60].map(minutes => (
+                            <option key={minutes} value={minutes}>{minutes} minutes</option>
+                        ))}
+                    </select>
+                </SettingsRow>
+                <div className="rounded-2xl bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
+                    Preview: {settings.orderQueue.prefix.toUpperCase()}
+                    {String(settings.orderQueue.startNumber).padStart(settings.orderQueue.padding, '0')}
+                    {' · '}Customer display: /order-status
+                </div>
+            </SettingCard>
+        </div>
+    );
+
+    const renderLoyalty = () => (
+        <div className="space-y-6">
+            <SettingCard
+                title="Loyalty points"
+                description="Customers earn points on the amount actually paid in money, including IVA."
+                icon={Gift}
+                accent="from-emerald-600 to-green-500"
+            >
+                <SettingsRow
+                    title="Enable loyalty"
+                    description="Allow phone-number customers to earn and redeem points."
+                >
+                    <div className="flex justify-end">
+                        <ToggleSwitch
+                            checked={settings.loyalty.enabled}
+                            onChange={checked => handleSettingsChange('loyalty', 'enabled', checked)}
+                            label="Enable loyalty"
+                        />
+                    </div>
+                </SettingsRow>
+                <SettingsRow title="Program name" description="Internal and customer-facing loyalty name.">
+                    <input
+                        value={settings.loyalty.programName}
+                        onChange={event => handleSettingsChange('loyalty', 'programName', event.target.value)}
+                        className={fieldClass}
+                        disabled={!settings.loyalty.enabled}
+                    />
+                </SettingsRow>
+                <SettingsRow
+                    title="Points earned per €1 paid"
+                    description="Calculated after promotions, discounts, vouchers, and redeemed points."
+                >
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={settings.loyalty.pointsPerEuroEarned}
+                        onChange={event =>
+                            handleSettingsChange(
+                                'loyalty',
+                                'pointsPerEuroEarned',
+                                Math.max(0, Number(event.target.value))
+                            )
+                        }
+                        className={fieldClass}
+                        disabled={!settings.loyalty.enabled}
+                    />
+                </SettingsRow>
+                <SettingsRow
+                    title="Points required for €1"
+                    description="There is no minimum redemption and points may reduce a sale to €0.00."
+                >
+                    <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={settings.loyalty.pointsPerEuroRedeemed}
+                        onChange={event =>
+                            handleSettingsChange(
+                                'loyalty',
+                                'pointsPerEuroRedeemed',
+                                Math.max(1, Math.floor(Number(event.target.value) || 1))
+                            )
+                        }
+                        className={fieldClass}
+                        disabled={!settings.loyalty.enabled}
+                    />
+                </SettingsRow>
+                <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+                    Points become available immediately and never expire. Promotions and redeemed value do not earn points.
+                </div>
+            </SettingCard>
+
+            <SettingCard
+                title="Vouchers"
+                description="Create codes that cashiers can redeem from the Discount dialog."
+                icon={Ticket}
+                accent="from-orange-500 to-amber-500"
+            >
+                <SettingsRow title="Enable vouchers" description="Allow configured voucher codes at checkout.">
+                    <div className="flex justify-end">
+                        <ToggleSwitch
+                            checked={settings.loyalty.vouchersEnabled}
+                            onChange={checked => handleSettingsChange('loyalty', 'vouchersEnabled', checked)}
+                            label="Enable vouchers"
+                        />
+                    </div>
+                </SettingsRow>
+
+                <div className="space-y-3 pt-4">
+                    {settings.loyalty.vouchers.map(voucher => (
+                        <div
+                            key={voucher.id}
+                            className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 lg:grid-cols-[1.1fr_1.5fr_0.8fr_0.8fr_auto_auto]"
+                        >
+                            <input
+                                aria-label="Voucher code"
+                                value={voucher.code}
+                                onChange={event =>
+                                    handleVoucherChange(voucher.id, {
+                                        code: event.target.value.toUpperCase().replace(/\s/g, ''),
+                                    })
+                                }
+                                placeholder="CODE"
+                                className={subtleFieldClass}
+                            />
+                            <input
+                                aria-label="Voucher description"
+                                value={voucher.description}
+                                onChange={event =>
+                                    handleVoucherChange(voucher.id, { description: event.target.value })
+                                }
+                                placeholder="Description"
+                                className={subtleFieldClass}
+                            />
+                            <select
+                                aria-label="Voucher type"
+                                value={voucher.type}
+                                onChange={event =>
+                                    handleVoucherChange(voucher.id, {
+                                        type: event.target.value as LoyaltyVoucher['type'],
+                                    })
+                                }
+                                className={subtleFieldClass}
+                            >
+                                <option value="fixed">Fixed €</option>
+                                <option value="percentage">Percentage</option>
+                            </select>
+                            <input
+                                aria-label="Voucher value"
+                                type="number"
+                                min="0"
+                                max={voucher.type === 'percentage' ? 100 : undefined}
+                                step={voucher.type === 'percentage' ? 1 : 0.01}
+                                value={voucher.value}
+                                onChange={event =>
+                                    handleVoucherChange(voucher.id, {
+                                        value: Math.max(0, Number(event.target.value)),
+                                    })
+                                }
+                                className={subtleFieldClass}
+                            />
+                            <ToggleSwitch
+                                checked={voucher.enabled}
+                                onChange={enabled => handleVoucherChange(voucher.id, { enabled })}
+                                label={`Enable voucher ${voucher.code || voucher.id}`}
+                            />
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    updateVouchers(
+                                        settings.loyalty.vouchers.filter(item => item.id !== voucher.id)
+                                    )
+                                }
+                                className="flex min-h-touch-sm min-w-touch-sm items-center justify-center rounded-2xl bg-rose-50 text-rose-700 hover:bg-rose-100"
+                                aria-label="Delete voucher"
+                            >
+                                <Trash2 className="h-5 w-5" />
+                            </button>
+                        </div>
+                    ))}
+                    {settings.loyalty.vouchers.length === 0 && (
+                        <p className="rounded-2xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                            No vouchers configured.
+                        </p>
+                    )}
+                    <button
+                        type="button"
+                        onClick={handleAddVoucher}
+                        className="inline-flex min-h-touch-sm items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 font-semibold text-white hover:bg-slate-800"
+                    >
+                        <Plus className="h-4 w-4" />
+                        Add voucher
+                    </button>
+                </div>
             </SettingCard>
         </div>
     );
@@ -1692,6 +2000,7 @@ const Settings: React.FC = () => {
     const renderContent = () => {
         if (activeTab === 'security') return renderSecurity();
         if (activeTab === 'pos') return renderPos();
+        if (activeTab === 'loyalty') return renderLoyalty();
         if (activeTab === 'display') return renderDisplay();
         if (activeTab === 'hardware') return renderHardware();
         return renderCompany();

@@ -13,6 +13,11 @@ const SettingsProbe = () => {
       <span data-testid="vendus-enabled">{String(settings.fiscal.vendus.enabled)}</span>
       <span data-testid="invoicexpress-enabled">{String(settings.fiscal.invoicexpress.enabled)}</span>
       <span data-testid="fiskaly-enabled">{String(settings.fiscal.fiskaly.enabled)}</span>
+      <span data-testid="loyalty-enabled">{String(settings.loyalty.enabled)}</span>
+      <span data-testid="points-earned">{settings.loyalty.pointsPerEuroEarned}</span>
+      <span data-testid="points-redeemed">{settings.loyalty.pointsPerEuroRedeemed}</span>
+      <span data-testid="queue-enabled">{String(settings.orderQueue.enabled)}</span>
+      <span data-testid="queue-start">{settings.orderQueue.startNumber}</span>
     </div>
   );
 };
@@ -39,6 +44,11 @@ describe('settings defaults', () => {
     expect(screen.getByTestId('vendus-enabled')).toHaveTextContent('false');
     expect(screen.getByTestId('invoicexpress-enabled')).toHaveTextContent('false');
     expect(screen.getByTestId('fiskaly-enabled')).toHaveTextContent('false');
+    expect(screen.getByTestId('loyalty-enabled')).toHaveTextContent('false');
+    expect(screen.getByTestId('points-earned')).toHaveTextContent('1');
+    expect(screen.getByTestId('points-redeemed')).toHaveTextContent('100');
+    expect(screen.getByTestId('queue-enabled')).toHaveTextContent('true');
+    expect(screen.getByTestId('queue-start')).toHaveTextContent('1');
   });
 
   it('keeps local AT selected when migrating stored settings without an issuer field', async () => {

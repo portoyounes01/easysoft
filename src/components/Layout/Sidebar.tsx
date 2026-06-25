@@ -17,6 +17,7 @@ import {
   Zap,
   Tag,
   ClipboardList,
+  ListOrdered,
   Contact,
   Palette,
 } from "lucide-react";
@@ -105,6 +106,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         icon: ShoppingBag,
         labelKey: "sidebar.menu.orders",
         permission: "orders",
+      },
+      {
+        path: "/queue",
+        icon: ListOrdered,
+        labelKey: "sidebar.menu.queue",
+        permission: "sales",
       },
       {
         path: "/fiscal-audit",

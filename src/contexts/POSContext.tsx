@@ -43,6 +43,12 @@ interface POSContextType extends POSState {
     fiscalContext?: {
       settings: SystemSettings;
       updateSettings: (patch: DeepPartial<SystemSettings>) => void;
+    },
+    loyaltyContext?: {
+      enabled: boolean;
+      pointsPerEuroEarned: number;
+      pointsRedeemed?: number;
+      customerId?: string;
     }
   ) => Promise<{ receiptNumber: string; fiscal?: FiscalCheckoutResult }>;
 }
@@ -198,6 +204,12 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fiscalContext?: {
       settings: SystemSettings;
       updateSettings: (patch: DeepPartial<SystemSettings>) => void;
+    },
+    loyaltyContext?: {
+      enabled: boolean;
+      pointsPerEuroEarned: number;
+      pointsRedeemed?: number;
+      customerId?: string;
     }
   ): Promise<{ receiptNumber: string; fiscal?: FiscalCheckoutResult }> => {
     try {
@@ -268,9 +280,20 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const customerAfterFiscal = stateRef.current.selectedCustomer;
         if (customerAfterFiscal) {
+          const pointsRedeemed =
+            loyaltyContext?.customerId === customerAfterFiscal.id
+              ? Math.max(0, loyaltyContext.pointsRedeemed || 0)
+              : 0;
+          const pointsEarned = loyaltyContext?.enabled
+            ? Math.floor(Math.max(0, fiscalRes.grossTotal) * loyaltyContext.pointsPerEuroEarned)
+            : 0;
           await customerLocalService.updateCustomer(customerAfterFiscal.id, {
             total_spent: (customerAfterFiscal.total_spent || 0) + fiscalRes.grossTotal,
             transaction_count: (customerAfterFiscal.transaction_count || 0) + 1,
+            loyalty_points: Math.max(
+              0,
+              (customerAfterFiscal.loyalty_points || 0) - pointsRedeemed + pointsEarned
+            ),
           });
         }
 
@@ -462,9 +485,20 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Update customer totals if customer selected
       const customerForTotals = stateRef.current.selectedCustomer;
       if (customerForTotals) {
+        const pointsRedeemed =
+          loyaltyContext?.customerId === customerForTotals.id
+            ? Math.max(0, loyaltyContext.pointsRedeemed || 0)
+            : 0;
+        const pointsEarned = loyaltyContext?.enabled
+          ? Math.floor(Math.max(0, total) * loyaltyContext.pointsPerEuroEarned)
+          : 0;
         await customerLocalService.updateCustomer(customerForTotals.id, {
           total_spent: (customerForTotals.total_spent || 0) + total,
           transaction_count: (customerForTotals.transaction_count || 0) + 1,
+          loyalty_points: Math.max(
+            0,
+            (customerForTotals.loyalty_points || 0) - pointsRedeemed + pointsEarned
+          ),
         });
       }
 

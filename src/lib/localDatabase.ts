@@ -6,6 +6,7 @@ import {
     LocalCategory,
     LocalProduct,
     LocalCustomer,
+    LocalQueueTicket,
     LocalTransaction,
     LocalTransactionItem,
     LocalDailySalesSummary,
@@ -51,6 +52,7 @@ export class LocalPOSDatabase extends Dexie {
     categories!: Table<LocalCategory>;
     products!: Table<LocalProduct>;
     customers!: Table<LocalCustomer>;
+    queueTickets!: Table<LocalQueueTicket>;
     transactions!: Table<LocalTransaction>;
     transactionItems!: Table<LocalTransactionItem>;
     fiscalDocuments!: Table<LocalFiscalDocument>;
@@ -230,6 +232,16 @@ export class LocalPOSDatabase extends Dexie {
 
         this.version(10).stores(schemaV10).upgrade(async () => {
             console.log('Upgrading database to version 10 - Vendus issue attempt log');
+        });
+
+        const schemaV11 = {
+            ...schemaV10,
+            queueTickets:
+                'id, &receipt_reference, service_date, status, sequence, created_at, updated_at',
+        } as const;
+
+        this.version(11).stores(schemaV11).upgrade(async () => {
+            console.log('Upgrading database to version 11 - customer order queue tickets');
         });
 
         // Add hooks for auto-updating sync flags
@@ -1110,6 +1122,29 @@ export class TransactionLocalService {
             .toArray();
         list.sort((a, b) => (b.created_at as Date).getTime() - (a.created_at as Date).getTime());
         return list;
+    }
+
+    async getLatestPurchaseDatesByCustomer(): Promise<Record<string, Date>> {
+        const transactions = await localDb.transactions
+            .filter(
+                transaction =>
+                    transaction.customer_id !== null &&
+                    transaction.status === 'completed' &&
+                    transaction.deleted_at === null
+            )
+            .toArray();
+        const latest: Record<string, Date> = {};
+        for (const transaction of transactions) {
+            if (!transaction.customer_id) continue;
+            const purchasedAt = new Date(
+                `${transaction.transaction_date}T${transaction.transaction_time || '00:00:00'}`
+            );
+            const current = latest[transaction.customer_id];
+            if (!current || purchasedAt.getTime() > current.getTime()) {
+                latest[transaction.customer_id] = purchasedAt;
+            }
+        }
+        return latest;
     }
 
     // Get transactions by date range

@@ -223,6 +223,21 @@ export interface SystemSettings {
         showEmployeePhotos: boolean;
         compactMode: boolean;
     };
+    loyalty: {
+        enabled: boolean;
+        programName: string;
+        pointsPerEuroEarned: number;
+        pointsPerEuroRedeemed: number;
+        vouchersEnabled: boolean;
+        vouchers: LoyaltyVoucher[];
+    };
+    orderQueue: {
+        enabled: boolean;
+        prefix: string;
+        startNumber: number;
+        padding: number;
+        readyRetentionMinutes: number;
+    };
     company: {
         name: string;
         address: string;
@@ -259,6 +274,15 @@ export interface SystemSettings {
         invoicexpress: InvoiceXpressFiscalSettings;
         fiskaly: FiskalyFiscalSettings;
     };
+}
+
+export interface LoyaltyVoucher {
+    id: string;
+    code: string;
+    description: string;
+    type: 'percentage' | 'fixed';
+    value: number;
+    enabled: boolean;
 }
 
 export interface VendusFiscalSettings {
@@ -373,6 +397,21 @@ const defaultSettings: SystemSettings = {
         showEmployeePhotos: true,
         compactMode: false,
     },
+    loyalty: {
+        enabled: false,
+        programName: 'Loyalty',
+        pointsPerEuroEarned: 1,
+        pointsPerEuroRedeemed: 100,
+        vouchersEnabled: true,
+        vouchers: [],
+    },
+    orderQueue: {
+        enabled: true,
+        prefix: '',
+        startNumber: 1,
+        padding: 3,
+        readyRetentionMinutes: 10,
+    },
     company: {
         name: 'Nome da Empresa',
         address: 'Morada',
@@ -440,6 +479,18 @@ const settingsReducer = (state: SettingsState, action: SettingsAction): Settings
                         ...state.settings.display,
                         ...(action.payload.display || {}),
                     },
+                    loyalty: {
+                        ...state.settings.loyalty,
+                        ...(action.payload.loyalty || {}),
+                        vouchers:
+                            action.payload.loyalty?.vouchers === undefined
+                                ? state.settings.loyalty.vouchers
+                                : (action.payload.loyalty.vouchers as LoyaltyVoucher[]),
+                    },
+                    orderQueue: {
+                        ...state.settings.orderQueue,
+                        ...(action.payload.orderQueue || {}),
+                    },
                     company: {
                         ...state.settings.company,
                         ...(action.payload.company || {}),
@@ -499,6 +550,18 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 ...state.settings.display,
                 ...(patch.display || {}),
             },
+            loyalty: {
+                ...state.settings.loyalty,
+                ...(patch.loyalty || {}),
+                vouchers:
+                    patch.loyalty?.vouchers === undefined
+                        ? state.settings.loyalty.vouchers
+                        : (patch.loyalty.vouchers as LoyaltyVoucher[]),
+            },
+            orderQueue: {
+                ...state.settings.orderQueue,
+                ...(patch.orderQueue || {}),
+            },
             company: {
                 ...state.settings.company,
                 ...(patch.company || {}),
@@ -545,6 +608,17 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                         display: {
                             ...defaultSettings.display,
                             ...(parsedSettings.display || {}),
+                        },
+                        loyalty: {
+                            ...defaultSettings.loyalty,
+                            ...(parsedSettings.loyalty || {}),
+                            vouchers: Array.isArray(parsedSettings.loyalty?.vouchers)
+                                ? parsedSettings.loyalty.vouchers
+                                : defaultSettings.loyalty.vouchers,
+                        },
+                        orderQueue: {
+                            ...defaultSettings.orderQueue,
+                            ...(parsedSettings.orderQueue || {}),
                         },
                         company: {
                             ...defaultSettings.company,

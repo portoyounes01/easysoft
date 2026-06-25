@@ -50,6 +50,7 @@ export interface ReceiptProps {
   documentType: 'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO';
   date: Date;
   counter: string;
+  ticketNumber?: string;
   verificationCode: string; // ATCUD body (e.g. CSDF7T5H-0001); printed as ATCUD: …
   documentHash?: string; // Base64 RSA-SHA1 fiscal hash (optional / debug)
   /** Four signature chars (positions 1,11,21,31 of Base64 hash) */
@@ -94,6 +95,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   documentType,
   date,
   counter,
+  ticketNumber,
   verificationCode,
   documentHash,
   hashFourChars,
@@ -430,6 +432,14 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       <div className="center">
         {t('thermalReceipt.dateLabel')} {formatDate(date)} {counter}
       </div>
+      {ticketNumber && (
+        <div className="ticket-number">
+          <div className="center bold">PEDIDO / ORDER</div>
+          <div className="center bold" style={{ fontSize: '28px', lineHeight: 1.2 }}>
+            {ticketNumber}
+          </div>
+        </div>
+      )}
 
       {/* Credit Note Specific Info */}
       {documentType === 'NOTA_CREDITO' && originalInvoice && (
