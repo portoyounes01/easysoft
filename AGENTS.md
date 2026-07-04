@@ -275,6 +275,10 @@ Before implementing features, reference:
 
 ## Git Conventions
 
+### Never commit working artifacts
+
+`artifacts/` and `.scratch/` are gitignored **on purpose** (screenshots, debug output, design references, temp notes). Do not commit them, do not remove them from `.gitignore`, and do not `git add -f` files inside them. If something in there turns out to be a real deliverable, move it to `docs/` first.
+
 ```
 feat: add new feature
 fix: resolve bug
