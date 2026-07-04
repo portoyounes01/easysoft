@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import QuickNumpad from './QuickNumpad';
-import { Banknote, CreditCard } from 'lucide-react';
+import { Banknote, CreditCard, Percent, UserSquare } from 'lucide-react';
 import { PaymentMethodButton } from './ui/PaymentMethodButton';
 import { ActionButton } from './ui/ActionButton';
 import { BaseDialog } from './ui/BaseDialog';
@@ -16,9 +16,17 @@ interface PaymentDialogProps {
     onChangeCash: (next: number) => void;
     onClose: () => void;
     onConfirm: () => void;
+    /** Opens the discount dialog from within the payment screen. */
+    onDiscount?: () => void;
+    /** Opens the customer / NIF dialog from within the payment screen. */
+    onNif?: () => void;
+    /** Currently applied discount amount (€), shown on the discount button when > 0. */
+    discountAmount?: number;
+    /** Currently selected customer tax number (NIF), shown on the NIF button when set. */
+    nif?: string;
 }
 
-const PaymentDialog: React.FC<PaymentDialogProps> = ({ open, total, cashReceived, onChangeCash, onClose, onConfirm }) => {
+const PaymentDialog: React.FC<PaymentDialogProps> = ({ open, total, cashReceived, onChangeCash, onClose, onConfirm, onDiscount, onNif, discountAmount = 0, nif }) => {
     // 1. Hooks
     const { t } = useTranslation();
     const [method, setMethod] = useState<PaymentMethod>('cash');
@@ -74,6 +82,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({ open, total, cashReceived
             title={t('pos.processPayment')}
             width="50vw"
             height="60vh"
+            overlayClassName="z-40"
         >
             {/* Body */}
             <div className="flex-1 flex flex-row bg-gray-100">
@@ -142,6 +151,34 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({ open, total, cashReceived
                             </span>
                         </div>
                     </div>
+
+                    {/* Quick actions: discount + NIF */}
+                    {(onDiscount || onNif) && (
+                        <div className="grid grid-cols-2 gap-3" style={{ marginTop: '1.5vh' }}>
+                            {onDiscount && (
+                                <button
+                                    type="button"
+                                    onClick={onDiscount}
+                                    className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white font-semibold text-gray-700 hover:bg-gray-50"
+                                    style={{ height: '5.5vh', fontSize: '1.5vh' }}
+                                >
+                                    <Percent style={{ width: '2vh', height: '2vh' }} />
+                                    {discountAmount > 0 ? `−€${discountAmount.toFixed(2)}` : t('pos.discountLabel')}
+                                </button>
+                            )}
+                            {onNif && (
+                                <button
+                                    type="button"
+                                    onClick={onNif}
+                                    className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white font-semibold text-gray-700 hover:bg-gray-50"
+                                    style={{ height: '5.5vh', fontSize: '1.5vh' }}
+                                >
+                                    <UserSquare style={{ width: '2vh', height: '2vh' }} />
+                                    {nif ? `NIF ${nif}` : 'NIF'}
+                                </button>
+                            )}
+                        </div>
+                    )}
 
                     {/* Confirm button at bottom */}
                     <div style={{ marginTop: '1.5vh' }}>

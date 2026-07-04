@@ -15,7 +15,8 @@ import {
   RefreshCw,
   Monitor,
   Usb,
-  Laptop
+  Laptop,
+  CircleDot
 } from 'lucide-react';
 import {
     useDesignSystem2Customization,
@@ -211,6 +212,15 @@ export const ElectronTestingPanel: React.FC<ElectronTestingPanelProps> = ({ embe
     }
   };
 
+  const testCashDrawerStatus = async () => {
+    try {
+      setIsLoading(true);
+      await electronHardwareService.getDrawerStatus();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const getHardwareStatus = async () => {
     try {
       if (hardwareMode.type === 'electron') {
@@ -310,7 +320,7 @@ Web Hardware Status:
         Quick Hardware Tests
       </h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <button
           type="button"
           onClick={testPrinter}
@@ -334,6 +344,19 @@ Web Hardware Status:
           <div className="text-left">
             <div className="font-medium">Test Cash Drawer</div>
             <div className="text-sm font-normal opacity-90">Open cash drawer</div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={testCashDrawerStatus}
+          disabled={hardwareMode.type !== 'electron' || !hardwareMode.initialized || isLoading}
+          className={DS2_TEST_TILE}
+        >
+          <CircleDot className="h-5 w-5 shrink-0 text-white" />
+          <div className="text-left">
+            <div className="font-medium">Test Drawer State</div>
+            <div className="text-sm font-normal opacity-90">Print state in terminal</div>
           </div>
         </button>
       </div>

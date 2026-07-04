@@ -39,3 +39,8 @@ electron-cache/
 /test-results/
 /blob-report/
 /playwright/.cache/
+.gstack/
+
+# Scratch / working artifacts (screenshots, debug output, design references)
+.scratch/
+artifacts/

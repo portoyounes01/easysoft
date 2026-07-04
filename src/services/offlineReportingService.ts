@@ -13,6 +13,23 @@ import {
     OverviewMetrics
 } from '../types/supabase';
 
+// Keep only transactions whose start hour falls within an inclusive hour-of-day
+// range. A missing/unparseable time is kept so it is never silently dropped.
+export function filterByHour<T extends { transaction_time?: string }>(
+    transactions: T[],
+    hourRange?: ReportFilters['hourRange']
+): T[] {
+    if (!hourRange) return transactions;
+    const { start, end } = hourRange;
+    return transactions.filter(transaction => {
+        const raw = (transaction.transaction_time ?? '').trim();
+        // Keep rows with a missing/malformed time rather than treating them as 00:00.
+        if (!/^\d{1,2}/.test(raw)) return true;
+        const hour = Number(raw.slice(0, 2));
+        return hour >= start && hour <= end;
+    });
+}
+
 // Service for offline-first reporting using local data with server fallback
 export class OfflineReportingService {
 
@@ -35,7 +52,9 @@ export class OfflineReportingService {
 
     // Get transactions for reporting (offline-first)
     async getTransactionsForReporting(filters: ReportFilters): Promise<ReportTransaction[]> {
-        const useOffline = await this.shouldUseOfflineData();
+        // The hour-of-day filter needs row-level data; server aggregates can't honour
+        // it, so force the local path whenever an hour range is set.
+        const useOffline = (await this.shouldUseOfflineData()) || Boolean(filters.hourRange);
         
         if (useOffline) {
             console.log('OfflineReporting: Using local transaction data');
@@ -54,14 +73,17 @@ export class OfflineReportingService {
     // Get local transactions formatted for reporting
     private async getLocalTransactionsForReporting(filters: ReportFilters): Promise<ReportTransaction[]> {
         try {
-            // Get transactions in date range
-            const transactions = await transactionLocalService.getTransactionsByDateRange(
-                filters.dateRange.start,
-                filters.dateRange.end
+            // Get transactions in date range, narrowed to the hour-of-day range
+            const transactions = filterByHour(
+                await transactionLocalService.getTransactionsByDateRange(
+                    filters.dateRange.start,
+                    filters.dateRange.end
+                ),
+                filters.hourRange
             );
 
             // Filter by employee if specified
-            const filteredTransactions = filters.employeeId 
+            const filteredTransactions = filters.employeeId
                 ? transactions.filter(t => t.employee_id === filters.employeeId)
                 : transactions;
 
@@ -129,7 +151,9 @@ export class OfflineReportingService {
 
     // Get employee performance metrics (offline-first)
     async getEmployeePerformance(filters: ReportFilters): Promise<EmployeePerformance[]> {
-        const useOffline = await this.shouldUseOfflineData();
+        // The hour-of-day filter needs row-level data; server aggregates can't honour
+        // it, so force the local path whenever an hour range is set.
+        const useOffline = (await this.shouldUseOfflineData()) || Boolean(filters.hourRange);
         
         if (useOffline) {
             console.log('OfflineReporting: Using local employee performance data');
@@ -148,10 +172,13 @@ export class OfflineReportingService {
     // Get local employee performance
     private async getLocalEmployeePerformance(filters: ReportFilters): Promise<EmployeePerformance[]> {
         try {
-            // Get transactions in date range
-            const transactions = await transactionLocalService.getTransactionsByDateRange(
-                filters.dateRange.start,
-                filters.dateRange.end
+            // Get transactions in date range, narrowed to the hour-of-day range
+            const transactions = filterByHour(
+                await transactionLocalService.getTransactionsByDateRange(
+                    filters.dateRange.start,
+                    filters.dateRange.end
+                ),
+                filters.hourRange
             );
 
             // Filter completed transactions only
@@ -197,7 +224,9 @@ export class OfflineReportingService {
 
     // Get product performance metrics (offline-first)
     async getProductPerformance(filters: ReportFilters): Promise<ProductPerformance[]> {
-        const useOffline = await this.shouldUseOfflineData();
+        // The hour-of-day filter needs row-level data; server aggregates can't honour
+        // it, so force the local path whenever an hour range is set.
+        const useOffline = (await this.shouldUseOfflineData()) || Boolean(filters.hourRange);
         
         if (useOffline) {
             console.log('OfflineReporting: Using local product performance data');
@@ -216,10 +245,13 @@ export class OfflineReportingService {
     // Get local product performance
     private async getLocalProductPerformance(filters: ReportFilters): Promise<ProductPerformance[]> {
         try {
-            // Get transactions in date range
-            const transactions = await transactionLocalService.getTransactionsByDateRange(
-                filters.dateRange.start,
-                filters.dateRange.end
+            // Get transactions in date range, narrowed to the hour-of-day range
+            const transactions = filterByHour(
+                await transactionLocalService.getTransactionsByDateRange(
+                    filters.dateRange.start,
+                    filters.dateRange.end
+                ),
+                filters.hourRange
             );
 
             // Filter completed transactions only
@@ -268,7 +300,9 @@ export class OfflineReportingService {
 
     // Get overview metrics (offline-first)
     async getOverviewMetrics(filters: ReportFilters): Promise<OverviewMetrics> {
-        const useOffline = await this.shouldUseOfflineData();
+        // The hour-of-day filter needs row-level data; server aggregates can't honour
+        // it, so force the local path whenever an hour range is set.
+        const useOffline = (await this.shouldUseOfflineData()) || Boolean(filters.hourRange);
         
         if (useOffline) {
             console.log('OfflineReporting: Using local overview metrics');
@@ -287,10 +321,13 @@ export class OfflineReportingService {
     // Get local overview metrics
     private async getLocalOverviewMetrics(filters: ReportFilters): Promise<OverviewMetrics> {
         try {
-            // Get transactions in date range
-            const transactions = await transactionLocalService.getTransactionsByDateRange(
-                filters.dateRange.start,
-                filters.dateRange.end
+            // Get transactions in date range, narrowed to the hour-of-day range
+            const transactions = filterByHour(
+                await transactionLocalService.getTransactionsByDateRange(
+                    filters.dateRange.start,
+                    filters.dateRange.end
+                ),
+                filters.hourRange
             );
 
             // Filter completed transactions only

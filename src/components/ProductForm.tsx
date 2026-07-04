@@ -29,6 +29,7 @@ import {
 } from '../utils/moneyInput';
 import { BaseDialog } from './ui/BaseDialog';
 import { ActionButton } from './ui/ActionButton';
+import RecipeEditor from './RecipeEditor';
 
 interface ProductFormProps {
     isOpen: boolean;
@@ -616,6 +617,12 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     </p>
                                 )}
                             </div>
+                        </div>
+
+                        {/* Recipe / Fiche technique */}
+                        <div className="space-y-4">
+                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('products.recipe.title')}</h3>
+                            <RecipeEditor productId={product?.id ?? null} />
                         </div>
 
                         {/* AGENTS: Do not delete the block below (false && …) — stock/inventory form fields preserved for re-enable. Remove only if explicitly requested by a human. */}

@@ -13,10 +13,12 @@ import {
     Database,
     DollarSign,
     FileDown,
+    Mail,
     FileText,
     Gift,
     KeyRound,
     Languages,
+    CalendarDays,
     Monitor,
     PackageCheck,
     Plus,
@@ -53,7 +55,7 @@ import { ElectronTestingPanel } from './ElectronCashierTesting';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 
-type SettingsTabId = 'security' | 'pos' | 'loyalty' | 'display' | 'hardware' | 'company';
+type SettingsTabId = 'security' | 'pos' | 'loyalty' | 'hr' | 'display' | 'hardware' | 'company';
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 type VendusCheckStatus = 'idle' | 'checking' | 'ok' | 'error';
 
@@ -63,6 +65,16 @@ const fieldClass =
     'min-h-touch-sm w-full rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-base font-medium text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-200';
 const subtleFieldClass =
     'min-h-touch-sm w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-base font-medium text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:ring-4 focus:ring-slate-200';
+
+// Editable starting points for the monthly holiday accrual rate (days/month),
+// roughly aligned with the statutory annual minimum in each country. These are
+// convenience presets, not legal advice — managers adjust the rate to match the
+// applicable collective agreement.
+const HOLIDAY_ACCRUAL_PRESETS = [
+    { id: 'portugal', label: 'Portugal (~22 days/year)', rate: 1.83 },
+    { id: 'spain', label: 'Spain (~30 days/year)', rate: 2.5 },
+    { id: 'belgium', label: 'Belgium (~20 days/year)', rate: 1.67 },
+] as const;
 
 interface SettingCardProps {
     title: string;
@@ -272,77 +284,83 @@ const Settings: React.FC = () => {
         () => [
             {
                 id: 'security' as const,
-                label: 'Security',
+                label: t('settings.tabSecurityLabel'),
                 icon: Shield,
-                description: 'Session timeout and active-sale protection.',
+                description: t('settings.tabSecurityDesc'),
             },
             {
                 id: 'pos' as const,
-                label: 'POS',
+                label: t('settings.tabPosLabel'),
                 icon: DollarSign,
-                description: 'Currency, tax, stock, and cart behavior.',
+                description: t('settings.tabPosDesc'),
             },
             {
                 id: 'loyalty' as const,
-                label: 'Loyalty & Vouchers',
+                label: t('settings.tabLoyaltyLabel'),
                 icon: Gift,
-                description: 'Points earning, redemption, and voucher codes.',
+                description: t('settings.tabLoyaltyDesc'),
+            },
+            {
+                id: 'hr' as const,
+                label: t('settings.tabHrLabel'),
+                icon: CalendarDays,
+                description: t('settings.tabHrDesc'),
             },
             {
                 id: 'display' as const,
-                label: 'Display',
+                label: t('settings.tabDisplayLabel'),
                 icon: Monitor,
-                description: 'Density and employee interface preferences.',
+                description: t('settings.tabDisplayDesc'),
             },
             {
                 id: 'hardware' as const,
-                label: 'Hardware',
+                label: t('settings.tabHardwareLabel'),
                 icon: Printer,
-                description: 'Printers, seed tools, and device tests.',
+                description: t('settings.tabHardwareDesc'),
             },
             {
                 id: 'company' as const,
-                label: 'Company & Fiscal',
+                label: t('settings.tabCompanyLabel'),
                 icon: SettingsIcon,
-                description: 'Company identity, receipts, Local AT, and Vendus.',
+                description: t('settings.tabCompanyDesc'),
             },
         ],
-        []
+        [t]
     );
 
     const vendusReadiness = useMemo<ReadinessItem[]>(
         () => [
             {
-                label: 'Register selected',
+                label: t('settings.vendusReadyRegisterLabel'),
                 ok: Boolean(settings.fiscal.vendus.registerId.trim()),
                 detail: settings.fiscal.vendus.registerId.trim()
-                    ? `Register ${settings.fiscal.vendus.registerId.trim()}`
-                    : 'Required before Vendus can issue documents.',
+                    ? t('settings.vendusReadyRegisterDetailSet', { id: settings.fiscal.vendus.registerId.trim() })
+                    : t('settings.vendusReadyRegisterDetailUnset'),
             },
             {
-                label: 'Payment methods mapped',
+                label: t('settings.vendusReadyPaymentLabel'),
                 ok: Boolean(
                     settings.fiscal.vendus.paymentMethodIds.cash?.trim() &&
                         settings.fiscal.vendus.paymentMethodIds.card?.trim() &&
                         settings.fiscal.vendus.paymentMethodIds.mixed?.trim()
                 ),
-                detail: 'Cash, card, and mixed payments need Vendus payment method IDs.',
+                detail: t('settings.vendusReadyPaymentDetail'),
             },
             {
-                label: 'Official output chosen',
+                label: t('settings.vendusReadyOutputLabel'),
                 ok: Boolean(settings.fiscal.vendus.output),
-                detail: `${settings.fiscal.vendus.output.toUpperCase()} is used as the official customer receipt output.`,
+                detail: t('settings.vendusReadyOutputDetail', { output: settings.fiscal.vendus.output.toUpperCase() }),
             },
             {
-                label: 'Environment is explicit',
+                label: t('settings.vendusReadyEnvLabel'),
                 ok: true,
                 detail:
                     settings.fiscal.vendus.mode === 'normal'
-                        ? 'Normal mode will issue fiscal documents in Vendus.'
-                        : 'Tests mode avoids production fiscal issuance.',
+                        ? t('settings.vendusReadyEnvNormal')
+                        : t('settings.vendusReadyEnvTests'),
             },
         ],
-        [settings.fiscal.vendus]
+        [settings.fiscal.vendus, t]
     );
 
     const vendusReadyCount = vendusReadiness.filter(item => item.ok).length;
@@ -523,7 +541,7 @@ const Settings: React.FC = () => {
     );
 
     const handleExternalHealthCheck = useCallback(async () => {
-        setExternalCheck({ status: 'checking', message: 'A contactar o emissor fiscal...' });
+        setExternalCheck({ status: 'checking', message: t('settings.extCheckContacting') });
         try {
             if (settings.fiscal.issuer === 'invoicexpress') {
                 const { checkInvoiceXpressFiscalHealth } = await import('../fiscal/invoicexpressFiscalIssuer');
@@ -531,8 +549,8 @@ const Settings: React.FC = () => {
                 setExternalCheck({
                     status: result.ok ? 'ok' : 'error',
                     message: result.ok
-                        ? 'InvoiceXpress respondeu. Conta e séries acessíveis.'
-                        : 'InvoiceXpress respondeu mas não confirmou prontidão.',
+                        ? t('settings.extCheckIxOk')
+                        : t('settings.extCheckIxNotReady'),
                 });
             } else if (settings.fiscal.issuer === 'fiskaly') {
                 const { checkFiskalyFiscalHealth } = await import('../fiscal/fiskalyFiscalIssuer');
@@ -540,17 +558,17 @@ const Settings: React.FC = () => {
                 setExternalCheck({
                     status: result.ok ? 'ok' : 'error',
                     message: result.ok
-                        ? 'Fiskaly respondeu. Organização e sistema acessíveis.'
-                        : 'Fiskaly respondeu mas não confirmou prontidão.',
+                        ? t('settings.extCheckFkOk')
+                        : t('settings.extCheckFkNotReady'),
                 });
             }
         } catch (error) {
             setExternalCheck({
                 status: 'error',
-                message: error instanceof Error ? error.message : 'Health check falhou.',
+                message: error instanceof Error ? error.message : t('settings.extCheckFail'),
             });
         }
-    }, [settings]);
+    }, [settings, t]);
 
     const handleVendusSettingChange = useCallback(
         <K extends keyof SystemSettings['fiscal']['vendus']>(
@@ -604,22 +622,22 @@ const Settings: React.FC = () => {
     );
 
     const handleVendusHealthCheck = useCallback(async () => {
-        setVendusCheck({ status: 'checking', message: 'Checking Vendus account, taxes, and payment methods...' });
+        setVendusCheck({ status: 'checking', message: t('settings.vendusCheckChecking') });
         try {
             const result = await checkVendusFiscalHealth(settings);
             setVendusCheck({
                 status: result.ok ? 'ok' : 'error',
                 message: result.ok
-                    ? 'Vendus responded successfully. Account, taxes, and payment methods are reachable.'
-                    : 'Vendus responded, but the health check did not confirm readiness.',
+                    ? t('settings.vendusCheckOk')
+                    : t('settings.vendusCheckNotReady'),
             });
         } catch (error) {
             setVendusCheck({
                 status: 'error',
-                message: error instanceof Error ? error.message : 'Vendus health check failed.',
+                message: error instanceof Error ? error.message : t('settings.vendusCheckFail'),
             });
         }
-    }, [settings]);
+    }, [settings, t]);
 
     const handleSave = useCallback(async () => {
         setSaveStatus('saving');
@@ -658,8 +676,8 @@ const Settings: React.FC = () => {
                 if (startYear !== endYear || startMonth !== endMonth) {
                     throw new Error(
                         isSystemAdmin
-                            ? 'A exportação SAF-T Vendus deve ser mensal. Escolha datas dentro do mesmo mês.'
-                            : 'A exportação SAF-T deve ser mensal. Escolha datas dentro do mesmo mês.'
+                            ? t('settings.saftMonthlyAdminVendus')
+                            : t('settings.saftMonthly')
                     );
                 }
                 const xml = await fetchVendusSaftXml({
@@ -678,8 +696,8 @@ const Settings: React.FC = () => {
                 URL.revokeObjectURL(url);
                 setSaftMessage(
                     isSystemAdmin
-                        ? 'SAF-T Vendus descarregado. A cópia local não foi marcada como exportada.'
-                        : 'SAF-T descarregado. A cópia local não foi marcada como exportada.'
+                        ? t('settings.saftVendusDownloadedAdmin')
+                        : t('settings.saftDownloadedNonAdmin')
                 );
                 return;
             }
@@ -690,8 +708,8 @@ const Settings: React.FC = () => {
                 if (startYear !== endYear || startMonth !== endMonth) {
                     throw new Error(
                         isSystemAdmin
-                            ? 'A exportação SAF-T do emissor cloud deve ser mensal. Escolha datas dentro do mesmo mês.'
-                            : 'A exportação SAF-T deve ser mensal. Escolha datas dentro do mesmo mês.'
+                            ? t('settings.saftMonthlyAdminCloud')
+                            : t('settings.saftMonthly')
                     );
                 }
                 const xml =
@@ -717,8 +735,8 @@ const Settings: React.FC = () => {
                 URL.revokeObjectURL(url);
                 setSaftMessage(
                     isSystemAdmin
-                        ? `SAF-T ${fiscalIssuerLabel} descarregado. A cópia local não foi marcada como exportada.`
-                        : 'SAF-T descarregado. A cópia local não foi marcada como exportada.'
+                        ? t('settings.saftCloudDownloadedAdmin', { issuer: fiscalIssuerLabel })
+                        : t('settings.saftDownloadedNonAdmin')
                 );
                 return;
             }
@@ -766,35 +784,35 @@ const Settings: React.FC = () => {
     }, [fiscalIssuerLabel, isExternalIssuer, isSystemAdmin, saftEnd, saftStart, settings, t]);
 
     const renderSaveLabel = () => {
-        if (saveStatus === 'saving') return 'Saving';
-        if (saveStatus === 'saved') return 'Saved';
-        if (saveStatus === 'error') return 'Retry save';
-        return 'Save changes';
+        if (saveStatus === 'saving') return t('settings.saveSaving');
+        if (saveStatus === 'saved') return t('settings.saveSaved');
+        if (saveStatus === 'error') return t('settings.saveRetry');
+        return t('settings.saveChangesLabel');
     };
 
     const renderSecurity = () => (
         <div className="space-y-6">
             <SettingCard
-                title="Session protection"
-                description="Keep tills secure without punishing active sales."
+                title={t('settings.securityCardTitle')}
+                description={t('settings.securityCardDesc')}
                 icon={Shield}
                 accent="from-blue-600 to-sky-500"
             >
                 <SettingsRow
-                    title="Auto-lock this terminal"
-                    description="Sign the cashier out after a period without activity."
+                    title={t('settings.autoLockTitle')}
+                    description={t('settings.autoLockDesc')}
                     icon={Clock}
                 >
                     <div className="flex justify-end">
                         <ToggleSwitch
                             checked={settings.autoLogout.enabled}
                             onChange={checked => handleSettingsChange('autoLogout', 'enabled', checked)}
-                            label="Toggle auto-lock"
+                            label={t('settings.autoLockToggleAria')}
                         />
                     </div>
                 </SettingsRow>
 
-                <SettingsRow title="Lock after" description="Choose the inactivity window before logout begins." icon={Bell}>
+                <SettingsRow title={t('settings.lockAfterTitle')} description={t('settings.lockAfterDesc')} icon={Bell}>
                     <select
                         value={settings.autoLogout.timeoutMinutes}
                         onChange={event => handleSettingsChange('autoLogout', 'timeoutMinutes', parseInt(event.target.value, 10))}
@@ -803,13 +821,17 @@ const Settings: React.FC = () => {
                     >
                         {[1, 5, 10, 15, 20, 30, 45, 60, 120].map(minutes => (
                             <option key={minutes} value={minutes}>
-                                {minutes < 60 ? `${minutes} minutes` : `${minutes / 60} hour${minutes === 60 ? '' : 's'}`}
+                                {minutes < 60
+                                    ? t('settings.minutesOption', { count: minutes })
+                                    : minutes === 60
+                                        ? t('settings.oneHour')
+                                        : t('settings.hoursOption', { count: minutes / 60 })}
                             </option>
                         ))}
                     </select>
                 </SettingsRow>
 
-                <SettingsRow title="Warn before locking" description="Give the operator time to extend the session." icon={AlertTriangle}>
+                <SettingsRow title={t('settings.warnBeforeTitle')} description={t('settings.warnBeforeDesc')} icon={AlertTriangle}>
                     <select
                         value={settings.autoLogout.warningSeconds}
                         onChange={event => handleSettingsChange('autoLogout', 'warningSeconds', parseInt(event.target.value, 10))}
@@ -818,22 +840,22 @@ const Settings: React.FC = () => {
                     >
                         {[10, 15, 30, 45, 60, 90, 120].map(seconds => (
                             <option key={seconds} value={seconds}>
-                                {seconds} seconds
+                                {t('settings.secondsOption', { count: seconds })}
                             </option>
                         ))}
                     </select>
                 </SettingsRow>
 
                 <SettingsRow
-                    title="Protect sales in progress"
-                    description="Do not auto-lock when the cart has items."
+                    title={t('settings.protectSalesTitle')}
+                    description={t('settings.protectSalesDesc')}
                     icon={PackageCheck}
                 >
                     <div className="flex justify-end">
                         <ToggleSwitch
                             checked={settings.autoLogout.protectWhenCartHasItems}
                             onChange={checked => handleSettingsChange('autoLogout', 'protectWhenCartHasItems', checked)}
-                            label="Protect active sales"
+                            label={t('settings.protectSalesAria')}
                         />
                     </div>
                 </SettingsRow>
@@ -845,24 +867,24 @@ const Settings: React.FC = () => {
         <div className="space-y-6">
             <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(min(100%,32rem),1fr))]">
                 <SettingCard
-                    title="Money and VAT"
-                    description="Defaults used by the sales screen and new products."
+                    title={t('settings.moneyVatTitle')}
+                    description={t('settings.moneyVatDesc')}
                     icon={DollarSign}
                     accent="from-emerald-600 to-teal-500"
                 >
-                    <SettingsRow title="Currency symbol" description="Shown on POS totals and reports.">
+                    <SettingsRow title={t('settings.currencySymbolTitle')} description={t('settings.currencySymbolDesc')}>
                         <select
                             value={settings.pos.currencySymbol}
                             onChange={event => handleSettingsChange('pos', 'currencySymbol', event.target.value)}
                             className={fieldClass}
                         >
-                            <option value="€">Euro - EUR</option>
-                            <option value="$">Dollar - USD</option>
-                            <option value="£">Pound - GBP</option>
-                            <option value="¥">Yen - JPY</option>
+                            <option value="€">{t('settings.currencyEuro')}</option>
+                            <option value="$">{t('settings.currencyDollar')}</option>
+                            <option value="£">{t('settings.currencyPound')}</option>
+                            <option value="¥">{t('settings.currencyYen')}</option>
                         </select>
                     </SettingsRow>
-                    <SettingsRow title="Default IVA rate" description="Used when a product does not override tax.">
+                    <SettingsRow title={t('settings.defaultIvaTitle')} description={t('settings.defaultIvaDesc')}>
                         <select
                             value={settings.pos.taxRate}
                             onChange={event => handleSettingsChange('pos', 'taxRate', parseFloat(event.target.value))}
@@ -878,26 +900,26 @@ const Settings: React.FC = () => {
                 </SettingCard>
 
                 <SettingCard
-                    title="Inventory"
-                    description="Controls how sales affect stock on this till."
+                    title={t('settings.inventoryTitle')}
+                    description={t('settings.inventoryDesc')}
                     icon={Database}
                     accent="from-orange-500 to-amber-500"
                 >
-                    <SettingsRow title="Track inventory" description="When off, sales do not decrement product stock.">
+                    <SettingsRow title={t('settings.pos.trackInventory')} description={t('settings.trackInventoryDesc')}>
                         <div className="flex justify-end">
                             <ToggleSwitch
                                 checked={settings.pos.trackInventory}
                                 onChange={checked => handleSettingsChange('pos', 'trackInventory', checked)}
-                                label="Track inventory"
+                                label={t('settings.pos.trackInventory')}
                             />
                         </div>
                     </SettingsRow>
-                    <SettingsRow title="Allow negative stock" description="Let cashiers sell even when stock reaches zero.">
+                    <SettingsRow title={t('settings.allowNegativeStockTitle')} description={t('settings.allowNegativeStockDesc')}>
                         <div className="flex justify-end">
                             <ToggleSwitch
                                 checked={settings.pos.allowNegativeStock}
                                 onChange={checked => handleSettingsChange('pos', 'allowNegativeStock', checked)}
-                                label="Allow negative stock"
+                                label={t('settings.allowNegativeStockTitle')}
                             />
                         </div>
                     </SettingsRow>
@@ -909,12 +931,12 @@ const Settings: React.FC = () => {
             </div>
 
             <SettingCard
-                title="Cart behavior"
-                description="Reduce abandoned carts without disrupting real sales."
+                title={t('settings.cartBehaviorTitle')}
+                description={t('settings.cartBehaviorDesc')}
                 icon={Clock}
                 accent="from-yellow-500 to-orange-500"
             >
-                <SettingsRow title="Auto-clear inactive cart" description="Clear unpaid carts after a chosen idle period.">
+                <SettingsRow title={t('settings.autoClearTitle')} description={t('settings.autoClearDesc')}>
                     <div className="flex justify-end">
                         <ToggleSwitch
                             checked={settings.pos.autoClearCart.enabled}
@@ -924,11 +946,11 @@ const Settings: React.FC = () => {
                                     enabled: checked,
                                 })
                             }
-                            label="Auto-clear cart"
+                            label={t('settings.autoClearAria')}
                         />
                     </div>
                 </SettingsRow>
-                <SettingsRow title="Clear after" description="Set to never for restaurants that keep orders open.">
+                <SettingsRow title={t('settings.clearAfterTitle')} description={t('settings.clearAfterDesc')}>
                     <select
                         value={settings.pos.autoClearCart.timeoutMinutes}
                         onChange={event =>
@@ -942,7 +964,7 @@ const Settings: React.FC = () => {
                     >
                         {[0, 1, 2, 5, 10, 15, 30, 60].map(minutes => (
                             <option key={minutes} value={minutes}>
-                                {minutes === 0 ? 'Never' : `${minutes} minutes`}
+                                {minutes === 0 ? t('settings.pos.never') : t('settings.minutesOption', { count: minutes })}
                             </option>
                         ))}
                     </select>
@@ -950,21 +972,21 @@ const Settings: React.FC = () => {
             </SettingCard>
 
             <SettingCard
-                title="Customer ticket numbers"
-                description="Issue a collection number after payment and show it on the order-status screen."
+                title={t('settings.ticketTitle')}
+                description={t('settings.ticketDesc')}
                 icon={Ticket}
                 accent="from-cyan-600 to-blue-500"
             >
-                <SettingsRow title="Enable ticket numbering" description="Create a ticket for each completed POS sale.">
+                <SettingsRow title={t('settings.ticketEnableTitle')} description={t('settings.ticketEnableDesc')}>
                     <div className="flex justify-end">
                         <ToggleSwitch
                             checked={settings.orderQueue.enabled}
                             onChange={checked => handleSettingsChange('orderQueue', 'enabled', checked)}
-                            label="Enable ticket numbering"
+                            label={t('settings.ticketEnableTitle')}
                         />
                     </div>
                 </SettingsRow>
-                <SettingsRow title="Ticket prefix" description="Optional letters shown before the number, for example A001.">
+                <SettingsRow title={t('settings.ticketPrefixTitle')} description={t('settings.ticketPrefixDesc')}>
                     <input
                         value={settings.orderQueue.prefix}
                         onChange={event =>
@@ -979,7 +1001,7 @@ const Settings: React.FC = () => {
                         disabled={!settings.orderQueue.enabled}
                     />
                 </SettingsRow>
-                <SettingsRow title="First number each day" description="The sequence resets automatically at the start of each day.">
+                <SettingsRow title={t('settings.ticketFirstNumberTitle')} description={t('settings.ticketFirstNumberDesc')}>
                     <input
                         type="number"
                         min="0"
@@ -996,7 +1018,7 @@ const Settings: React.FC = () => {
                         disabled={!settings.orderQueue.enabled}
                     />
                 </SettingsRow>
-                <SettingsRow title="Number length" description="Pads the numeric portion with leading zeroes.">
+                <SettingsRow title={t('settings.ticketNumberLengthTitle')} description={t('settings.ticketNumberLengthDesc')}>
                     <select
                         value={settings.orderQueue.padding}
                         onChange={event =>
@@ -1005,12 +1027,12 @@ const Settings: React.FC = () => {
                         className={fieldClass}
                         disabled={!settings.orderQueue.enabled}
                     >
-                        <option value={2}>2 digits — 01</option>
-                        <option value={3}>3 digits — 001</option>
-                        <option value={4}>4 digits — 0001</option>
+                        <option value={2}>{t('settings.ticketDigits2')}</option>
+                        <option value={3}>{t('settings.ticketDigits3')}</option>
+                        <option value={4}>{t('settings.ticketDigits4')}</option>
                     </select>
                 </SettingsRow>
-                <SettingsRow title="Keep ready tickets visible" description="Ready tickets disappear automatically after this period.">
+                <SettingsRow title={t('settings.ticketReadyTitle')} description={t('settings.ticketReadyDesc')}>
                     <select
                         value={settings.orderQueue.readyRetentionMinutes}
                         onChange={event =>
@@ -1024,14 +1046,14 @@ const Settings: React.FC = () => {
                         disabled={!settings.orderQueue.enabled}
                     >
                         {[5, 10, 15, 20, 30, 60].map(minutes => (
-                            <option key={minutes} value={minutes}>{minutes} minutes</option>
+                            <option key={minutes} value={minutes}>{t('settings.minutesOption', { count: minutes })}</option>
                         ))}
                     </select>
                 </SettingsRow>
                 <div className="rounded-2xl bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
-                    Preview: {settings.orderQueue.prefix.toUpperCase()}
-                    {String(settings.orderQueue.startNumber).padStart(settings.orderQueue.padding, '0')}
-                    {' · '}Customer display: /order-status
+                    {t('settings.ticketPreview', {
+                        code: `${settings.orderQueue.prefix.toUpperCase()}${String(settings.orderQueue.startNumber).padStart(settings.orderQueue.padding, '0')}`,
+                    })}
                 </div>
             </SettingCard>
         </div>
@@ -1040,24 +1062,24 @@ const Settings: React.FC = () => {
     const renderLoyalty = () => (
         <div className="space-y-6">
             <SettingCard
-                title="Loyalty points"
-                description="Customers earn points on the amount actually paid in money, including IVA."
+                title={t('settings.loyaltyPointsTitle')}
+                description={t('settings.loyaltyPointsDesc')}
                 icon={Gift}
                 accent="from-emerald-600 to-green-500"
             >
                 <SettingsRow
-                    title="Enable loyalty"
-                    description="Allow phone-number customers to earn and redeem points."
+                    title={t('settings.loyaltyEnableTitle')}
+                    description={t('settings.loyaltyEnableDesc')}
                 >
                     <div className="flex justify-end">
                         <ToggleSwitch
                             checked={settings.loyalty.enabled}
                             onChange={checked => handleSettingsChange('loyalty', 'enabled', checked)}
-                            label="Enable loyalty"
+                            label={t('settings.loyaltyEnableTitle')}
                         />
                     </div>
                 </SettingsRow>
-                <SettingsRow title="Program name" description="Internal and customer-facing loyalty name.">
+                <SettingsRow title={t('settings.loyaltyProgramNameTitle')} description={t('settings.loyaltyProgramNameDesc')}>
                     <input
                         value={settings.loyalty.programName}
                         onChange={event => handleSettingsChange('loyalty', 'programName', event.target.value)}
@@ -1066,8 +1088,8 @@ const Settings: React.FC = () => {
                     />
                 </SettingsRow>
                 <SettingsRow
-                    title="Points earned per €1 paid"
-                    description="Calculated after promotions, discounts, vouchers, and redeemed points."
+                    title={t('settings.loyaltyEarnTitle')}
+                    description={t('settings.loyaltyEarnDesc')}
                 >
                     <input
                         type="number"
@@ -1086,8 +1108,8 @@ const Settings: React.FC = () => {
                     />
                 </SettingsRow>
                 <SettingsRow
-                    title="Points required for €1"
-                    description="There is no minimum redemption and points may reduce a sale to €0.00."
+                    title={t('settings.loyaltyRedeemTitle')}
+                    description={t('settings.loyaltyRedeemDesc')}
                 >
                     <input
                         type="number"
@@ -1106,22 +1128,22 @@ const Settings: React.FC = () => {
                     />
                 </SettingsRow>
                 <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
-                    Points become available immediately and never expire. Promotions and redeemed value do not earn points.
+                    {t('settings.loyaltyPointsInfo')}
                 </div>
             </SettingCard>
 
             <SettingCard
-                title="Vouchers"
-                description="Create codes that cashiers can redeem from the Discount dialog."
+                title={t('settings.vouchersTitle')}
+                description={t('settings.vouchersDesc')}
                 icon={Ticket}
                 accent="from-orange-500 to-amber-500"
             >
-                <SettingsRow title="Enable vouchers" description="Allow configured voucher codes at checkout.">
+                <SettingsRow title={t('settings.vouchersEnableTitle')} description={t('settings.vouchersEnableDesc')}>
                     <div className="flex justify-end">
                         <ToggleSwitch
                             checked={settings.loyalty.vouchersEnabled}
                             onChange={checked => handleSettingsChange('loyalty', 'vouchersEnabled', checked)}
-                            label="Enable vouchers"
+                            label={t('settings.vouchersEnableTitle')}
                         />
                     </div>
                 </SettingsRow>
@@ -1133,27 +1155,27 @@ const Settings: React.FC = () => {
                             className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 lg:grid-cols-[1.1fr_1.5fr_0.8fr_0.8fr_auto_auto]"
                         >
                             <input
-                                aria-label="Voucher code"
+                                aria-label={t('settings.voucherCodeAria')}
                                 value={voucher.code}
                                 onChange={event =>
                                     handleVoucherChange(voucher.id, {
                                         code: event.target.value.toUpperCase().replace(/\s/g, ''),
                                     })
                                 }
-                                placeholder="CODE"
+                                placeholder={t('settings.voucherCodePlaceholder')}
                                 className={subtleFieldClass}
                             />
                             <input
-                                aria-label="Voucher description"
+                                aria-label={t('settings.voucherDescAria')}
                                 value={voucher.description}
                                 onChange={event =>
                                     handleVoucherChange(voucher.id, { description: event.target.value })
                                 }
-                                placeholder="Description"
+                                placeholder={t('settings.voucherDescPlaceholder')}
                                 className={subtleFieldClass}
                             />
                             <select
-                                aria-label="Voucher type"
+                                aria-label={t('settings.voucherTypeAria')}
                                 value={voucher.type}
                                 onChange={event =>
                                     handleVoucherChange(voucher.id, {
@@ -1162,11 +1184,11 @@ const Settings: React.FC = () => {
                                 }
                                 className={subtleFieldClass}
                             >
-                                <option value="fixed">Fixed €</option>
-                                <option value="percentage">Percentage</option>
+                                <option value="fixed">{t('settings.voucherTypeFixed')}</option>
+                                <option value="percentage">{t('settings.voucherTypePercentage')}</option>
                             </select>
                             <input
-                                aria-label="Voucher value"
+                                aria-label={t('settings.voucherValueAria')}
                                 type="number"
                                 min="0"
                                 max={voucher.type === 'percentage' ? 100 : undefined}
@@ -1182,7 +1204,7 @@ const Settings: React.FC = () => {
                             <ToggleSwitch
                                 checked={voucher.enabled}
                                 onChange={enabled => handleVoucherChange(voucher.id, { enabled })}
-                                label={`Enable voucher ${voucher.code || voucher.id}`}
+                                label={t('settings.voucherEnableAria', { name: voucher.code || voucher.id })}
                             />
                             <button
                                 type="button"
@@ -1192,7 +1214,7 @@ const Settings: React.FC = () => {
                                     )
                                 }
                                 className="flex min-h-touch-sm min-w-touch-sm items-center justify-center rounded-2xl bg-rose-50 text-rose-700 hover:bg-rose-100"
-                                aria-label="Delete voucher"
+                                aria-label={t('settings.voucherDeleteAria')}
                             >
                                 <Trash2 className="h-5 w-5" />
                             </button>
@@ -1200,7 +1222,7 @@ const Settings: React.FC = () => {
                     ))}
                     {settings.loyalty.vouchers.length === 0 && (
                         <p className="rounded-2xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                            No vouchers configured.
+                            {t('settings.noVouchers')}
                         </p>
                     )}
                     <button
@@ -1209,22 +1231,119 @@ const Settings: React.FC = () => {
                         className="inline-flex min-h-touch-sm items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 font-semibold text-white hover:bg-slate-800"
                     >
                         <Plus className="h-4 w-4" />
-                        Add voucher
+                        {t('settings.addVoucher')}
                     </button>
                 </div>
             </SettingCard>
         </div>
     );
 
+    const renderHr = () => {
+        const holidayPresetLabels: Record<string, string> = {
+            portugal: t('settings.holidayPresetPortugal'),
+            spain: t('settings.holidayPresetSpain'),
+            belgium: t('settings.holidayPresetBelgium'),
+        };
+        return (
+        <div className="space-y-6">
+            <SettingCard
+                title={t('settings.attendanceSecTitle')}
+                description={t('settings.attendanceSecDesc')}
+                icon={KeyRound}
+                accent="from-blue-600 to-indigo-500"
+            >
+                <SettingsRow
+                    title={t('settings.pinRequiredTitle')}
+                    description={t('settings.pinRequiredDesc')}
+                >
+                    <div className="flex justify-end">
+                        <ToggleSwitch
+                            checked
+                            onChange={() => undefined}
+                            label={t('settings.pinRequiredAria')}
+                        />
+                    </div>
+                </SettingsRow>
+            </SettingCard>
+
+            <SettingCard
+                title={t('settings.employmentDefaultsTitle')}
+                description={t('settings.employmentDefaultsDesc')}
+                icon={CalendarDays}
+                accent="from-emerald-600 to-teal-500"
+            >
+                <SettingsRow
+                    title={t('settings.holidayPresetTitle')}
+                    description={t('settings.holidayPresetDesc')}
+                >
+                    <select
+                        value={HOLIDAY_ACCRUAL_PRESETS.find(
+                            preset => preset.rate === settings.hr.monthlyHolidayAccrualRate
+                        )?.id ?? 'custom'}
+                        onChange={event => {
+                            const preset = HOLIDAY_ACCRUAL_PRESETS.find(item => item.id === event.target.value);
+                            if (preset) handleSettingsChange('hr', 'monthlyHolidayAccrualRate', preset.rate);
+                        }}
+                        className={fieldClass}
+                    >
+                        {HOLIDAY_ACCRUAL_PRESETS.map(preset => (
+                            <option key={preset.id} value={preset.id}>{holidayPresetLabels[preset.id] ?? preset.label}</option>
+                        ))}
+                        <option value="custom">{t('settings.holidayPresetCustom')}</option>
+                    </select>
+                </SettingsRow>
+                <SettingsRow
+                    title={t('settings.holidayRateTitle')}
+                    description={t('settings.holidayRateDesc')}
+                >
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={settings.hr.monthlyHolidayAccrualRate}
+                        onChange={event =>
+                            handleSettingsChange(
+                                'hr',
+                                'monthlyHolidayAccrualRate',
+                                Math.max(0, Number(event.target.value) || 0)
+                            )
+                        }
+                        className={fieldClass}
+                    />
+                </SettingsRow>
+                <SettingsRow
+                    title={t('settings.contractExpiryTitle')}
+                    description={t('settings.contractExpiryDesc')}
+                >
+                    <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={settings.hr.contractExpiryWarningDays}
+                        onChange={event =>
+                            handleSettingsChange(
+                                'hr',
+                                'contractExpiryWarningDays',
+                                Math.max(1, Math.floor(Number(event.target.value) || 1))
+                            )
+                        }
+                        className={fieldClass}
+                    />
+                </SettingsRow>
+            </SettingCard>
+        </div>
+        );
+    };
+
     const renderDisplay = () => (
         <div className="space-y-6">
             <SettingCard
-                title="Interface"
-                description="Tune screen density for the operator and device size."
+                title={t('settings.interfaceTitle')}
+                description={t('settings.interfaceDesc')}
                 icon={Monitor}
                 accent="from-violet-600 to-fuchsia-500"
             >
-                <SettingsRow title="Items per page" description="Controls list pages outside the main POS grid.">
+                <SettingsRow title={t('settings.itemsPerPageTitle')} description={t('settings.itemsPerPageDesc')}>
                     <select
                         value={settings.display.itemsPerPage}
                         onChange={event => handleSettingsChange('display', 'itemsPerPage', parseInt(event.target.value, 10))}
@@ -1232,26 +1351,26 @@ const Settings: React.FC = () => {
                     >
                         {[10, 20, 50, 100].map(count => (
                             <option key={count} value={count}>
-                                {count} items
+                                {t('settings.display.itemsOption', { count })}
                             </option>
                         ))}
                     </select>
                 </SettingsRow>
-                <SettingsRow title="Compact mode" description="Fit more content on screen with tighter spacing.">
+                <SettingsRow title={t('settings.compactModeTitle')} description={t('settings.compactModeDesc')}>
                     <div className="flex justify-end">
                         <ToggleSwitch
                             checked={settings.display.compactMode}
                             onChange={checked => handleSettingsChange('display', 'compactMode', checked)}
-                            label="Compact mode"
+                            label={t('settings.compactModeTitle')}
                         />
                     </div>
                 </SettingsRow>
-                <SettingsRow title="Show employee photos" description="Display employee avatars where available.">
+                <SettingsRow title={t('settings.showPhotosTitle')} description={t('settings.showPhotosDesc')}>
                     <div className="flex justify-end">
                         <ToggleSwitch
                             checked={settings.display.showEmployeePhotos}
                             onChange={checked => handleSettingsChange('display', 'showEmployeePhotos', checked)}
-                            label="Show employee photos"
+                            label={t('settings.showPhotosTitle')}
                         />
                     </div>
                 </SettingsRow>
@@ -1261,16 +1380,16 @@ const Settings: React.FC = () => {
 
     const renderHardware = () => {
         const tools: Array<{ id: HardwareSettingsTool; label: string; description: string; icon: LucideIcon }> = [
-            { id: 'printer', label: 'Printers', description: 'Receipts and routing', icon: Printer },
-            { id: 'seed', label: 'Seed tools', description: 'Data setup', icon: Database },
-            { id: 'cashier', label: 'Cashier tests', description: 'Auth and workflows', icon: BadgeCheck },
-            { id: 'electron', label: 'Electron', description: 'Desktop hardware', icon: Monitor },
+            { id: 'printer', label: t('settings.hwPrintersLabel'), description: t('settings.hwPrintersDesc'), icon: Printer },
+            { id: 'seed', label: t('settings.hwSeedLabel'), description: t('settings.hwSeedDesc'), icon: Database },
+            { id: 'cashier', label: t('settings.hwCashierLabel'), description: t('settings.hwCashierDesc'), icon: BadgeCheck },
+            { id: 'electron', label: 'Electron', description: t('settings.hwElectronDesc'), icon: Monitor },
         ];
         return (
             <div className="space-y-6">
                 <SettingCard
-                    title="Hardware and operations"
-                    description="Operational tools stay grouped here so production settings remain calm."
+                    title={t('settings.hwCardTitle')}
+                    description={t('settings.hwCardDesc')}
                     icon={Printer}
                     accent="from-blue-700 to-cyan-500"
                 >
@@ -1310,14 +1429,14 @@ const Settings: React.FC = () => {
 
     const renderCompanyIdentity = () => (
         <SettingCard
-            title="Company identity"
-            description="Printed on receipts, SAF-T exports, and customer documents."
+            title={t('settings.companyIdentityTitle')}
+            description={t('settings.companyIdentityDesc')}
             icon={Building2}
             accent="from-slate-900 to-slate-600"
         >
             <div className="grid gap-4 lg:grid-cols-2">
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Company name</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.companyNameLabel')}</label>
                     <input
                         type="text"
                         value={settings.company.name}
@@ -1326,7 +1445,7 @@ const Settings: React.FC = () => {
                     />
                 </div>
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Tax number</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.taxNumberLabel')}</label>
                     <input
                         type="text"
                         value={settings.company.taxNumber}
@@ -1335,7 +1454,7 @@ const Settings: React.FC = () => {
                     />
                 </div>
                 <div className="lg:col-span-2">
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Address</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.company.address')}</label>
                     <input
                         type="text"
                         value={settings.company.address}
@@ -1344,7 +1463,7 @@ const Settings: React.FC = () => {
                     />
                 </div>
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Postal code</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.postalCodeLabel')}</label>
                     <input
                         type="text"
                         value={settings.company.postalCode}
@@ -1353,7 +1472,7 @@ const Settings: React.FC = () => {
                     />
                 </div>
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">City</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.company.city')}</label>
                     <input
                         type="text"
                         value={settings.company.city}
@@ -1362,7 +1481,7 @@ const Settings: React.FC = () => {
                     />
                 </div>
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Phone</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.company.phone')}</label>
                     <input
                         type="text"
                         value={settings.company.phone || ''}
@@ -1371,7 +1490,7 @@ const Settings: React.FC = () => {
                     />
                 </div>
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Email</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.company.email')}</label>
                     <input
                         type="email"
                         value={settings.company.email || ''}
@@ -1380,7 +1499,7 @@ const Settings: React.FC = () => {
                     />
                 </div>
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Receipt slogan</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.receiptSloganLabel')}</label>
                     <input
                         type="text"
                         value={settings.company.slogan || ''}
@@ -1389,7 +1508,7 @@ const Settings: React.FC = () => {
                     />
                 </div>
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">Software line</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.softwareLineLabel')}</label>
                     <input
                         type="text"
                         value={settings.company.softwareInfo || ''}
@@ -1403,22 +1522,22 @@ const Settings: React.FC = () => {
 
     const renderReceiptBasics = () => (
         <SettingCard
-            title="Receipt basics"
-            description="Customer-facing receipt preferences that apply to both fiscal issuers."
+            title={t('settings.receiptBasicsTitle')}
+            description={t('settings.receiptBasicsDesc')}
             icon={Receipt}
             accent="from-indigo-600 to-blue-500"
         >
-            <SettingsRow title="Receipt language" description="Independent from the app language." icon={Languages}>
+            <SettingsRow title={t('settings.company.receiptLanguage')} description={t('settings.receiptLanguageIndependentDesc')} icon={Languages}>
                 <select
                     value={settings.receipt.receiptLanguage}
                     onChange={event => handleSettingsChange('receipt', 'receiptLanguage', event.target.value as ReceiptLanguage)}
                     className={fieldClass}
                 >
-                    <option value="pt">Portuguese</option>
-                    <option value="en">English</option>
+                    <option value="pt">{t('settings.company.receiptLanguagePt')}</option>
+                    <option value="en">{t('settings.company.receiptLanguageEn')}</option>
                 </select>
             </SettingsRow>
-            <SettingsRow title="Counter label" description="Printed as the till/counter identifier." icon={Store}>
+            <SettingsRow title={t('settings.counterLabelTitle')} description={t('settings.counterLabelDesc')} icon={Store}>
                 <input
                     type="text"
                     value={settings.receipt.counterLabel}
@@ -1434,21 +1553,21 @@ const Settings: React.FC = () => {
         const prof = settings.receipt.seriesProfiles[docKey];
         return (
             <SettingCard
-                title="AT series"
+                title={t('settings.atSeriesCardTitle')}
                 icon={KeyRound}
                 accent="from-emerald-600 to-green-500"
             >
-                <SettingsRow title="Document family" description="FT is for sales. NC is for credit notes.">
+                <SettingsRow title={t('settings.docFamilyTitle')} description={t('settings.docFamilyDesc')}>
                     <SegmentedControl
                         value={seriesEditorKey}
                         onChange={setSeriesEditorKey}
                         options={[
-                            { value: 'FT', label: 'Fatura - FT', description: 'Default sale document' },
-                            { value: 'NC', label: 'Nota de credito - NC', description: 'Reversal document' },
+                            { value: 'FT', label: t('settings.segFtLabel'), description: t('settings.segFtDesc') },
+                            { value: 'NC', label: t('settings.segNcLabel'), description: t('settings.segNcDesc') },
                         ]}
                     />
                 </SettingsRow>
-                <SettingsRow title="AT series" description="The series name communicated to AT.">
+                <SettingsRow title={t('settings.atSeriesCardTitle')} description={t('settings.atSeriesRowDesc')}>
                     <input
                         type="text"
                         value={prof.series}
@@ -1456,7 +1575,7 @@ const Settings: React.FC = () => {
                         className={fieldClass}
                     />
                 </SettingsRow>
-                <SettingsRow title="Series description" description="Human label for backoffice/admin clarity.">
+                <SettingsRow title={t('settings.seriesDescTitle')} description={t('settings.seriesDescDesc')}>
                     <input
                         type="text"
                         value={prof.seriesDescription ?? ''}
@@ -1465,7 +1584,7 @@ const Settings: React.FC = () => {
                     />
                 </SettingsRow>
                 <div className="grid gap-4 md:grid-cols-2">
-                    <SettingsRow title="Number width" description="Padding used in invoice numbers.">
+                    <SettingsRow title={t('settings.numberWidthTitle')} description={t('settings.numberWidthDesc')}>
                         <input
                             type="number"
                             min={1}
@@ -1476,7 +1595,7 @@ const Settings: React.FC = () => {
                             className={fieldClass}
                         />
                     </SettingsRow>
-                    <SettingsRow title="Current number" description="Last issued number in this local series.">
+                    <SettingsRow title={t('settings.currentNumberTitle')} description={t('settings.currentNumberDesc')}>
                         <input
                             type="number"
                             min={0}
@@ -1491,7 +1610,7 @@ const Settings: React.FC = () => {
                     </SettingsRow>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
-                    <SettingsRow title="Start date" description="Optional series validity start.">
+                    <SettingsRow title={t('settings.startDateTitle')} description={t('settings.startDateDesc')}>
                         <input
                             type="date"
                             value={prof.seriesStartDate?.trim() || ''}
@@ -1501,7 +1620,7 @@ const Settings: React.FC = () => {
                             className={fieldClass}
                         />
                     </SettingsRow>
-                    <SettingsRow title="End date" description="Optional series validity end.">
+                    <SettingsRow title={t('settings.endDateTitle')} description={t('settings.endDateDesc')}>
                         <input
                             type="date"
                             value={prof.seriesEndDate?.trim() || ''}
@@ -1512,7 +1631,7 @@ const Settings: React.FC = () => {
                         />
                     </SettingsRow>
                 </div>
-                <SettingsRow title="AT validation code" description="Required for Local AT issuing.">
+                <SettingsRow title={t('settings.atValidationTitle')} description={t('settings.atValidationDesc')}>
                     <input
                         type="text"
                         value={prof.atValidationCode}
@@ -1522,12 +1641,12 @@ const Settings: React.FC = () => {
                 </SettingsRow>
                 <div className="mt-4 grid gap-3 rounded-3xl bg-emerald-50 p-4 text-sm md:grid-cols-2">
                     <div>
-                        <p className="font-semibold text-emerald-900">Last series key</p>
-                        <p className="mt-1 text-emerald-700">{prof.lastSeriesKey || 'Not issued yet'}</p>
+                        <p className="font-semibold text-emerald-900">{t('settings.lastSeriesKeyLabel')}</p>
+                        <p className="mt-1 text-emerald-700">{prof.lastSeriesKey || t('settings.notIssuedYet')}</p>
                     </div>
                     <div>
-                        <p className="font-semibold text-emerald-900">Last document in chain</p>
-                        <p className="mt-1 text-emerald-700">{chainTips[docKey] ?? 'Not issued yet'}</p>
+                        <p className="font-semibold text-emerald-900">{t('settings.lastDocInChainLabel')}</p>
+                        <p className="mt-1 text-emerald-700">{chainTips[docKey] ?? t('settings.notIssuedYet')}</p>
                     </div>
                 </div>
             </SettingCard>
@@ -1536,36 +1655,36 @@ const Settings: React.FC = () => {
 
     const renderFiscalIssuer = () => (
         <SettingCard
-            title="Fiscal controls"
+            title={t('settings.fiscalControlsTitle')}
             description={
                 isSystemAdmin
-                    ? 'Choose exactly one production fiscal authority. Local AT stays untouched; Vendus can temporarily own issuance.'
-                    : 'Training mode uses a separate local database. Fiscal issuer details are managed by the system administrator.'
+                    ? t('settings.fiscalControlsDescAdmin')
+                    : t('settings.fiscalControlsDescUser')
             }
             icon={BadgeCheck}
             accent="from-slate-950 to-blue-700"
         >
             {isSystemAdmin && (
-                <SettingsRow title="Active issuer" description="This controls checkout behavior. Vendus mode blocks checkout when offline.">
+                <SettingsRow title={t('settings.activeIssuerTitle')} description={t('settings.activeIssuerDesc')}>
                     <SegmentedControl
                         value={settings.fiscal.issuer}
                         onChange={handleFiscalIssuerChange}
                         options={[
-                            { value: 'local_at', label: 'Local AT', description: 'Offline-first local chain' },
-                            { value: 'vendus', label: 'Vendus', description: 'Certified external issuer' },
-                            { value: 'invoicexpress', label: 'InvoiceXpress', description: 'Certified cloud issuer' },
-                            { value: 'fiskaly', label: 'Fiskaly', description: 'SIGN PT cloud issuer' },
+                            { value: 'local_at', label: 'Local AT', description: t('settings.issuerLocalAtDesc') },
+                            { value: 'vendus', label: 'Vendus', description: t('settings.issuerVendusDesc') },
+                            { value: 'invoicexpress', label: 'InvoiceXpress', description: t('settings.issuerIxDesc') },
+                            { value: 'fiskaly', label: 'Fiskaly', description: t('settings.issuerFiskalyDesc') },
                         ]}
                     />
                 </SettingsRow>
             )}
 
-            <SettingsRow title="Training mode" description="Uses the training IndexedDB slot and marks issued local documents as training.">
+            <SettingsRow title={t('settings.fiscalAT.trainingTitle')} description={t('settings.trainingModeDesc')}>
                 <div className="flex justify-end">
                     <ToggleSwitch
                         checked={settings.fiscal.trainingMode}
                         onChange={handleTrainingModeChange}
-                        label="Training mode"
+                        label={t('settings.fiscalAT.trainingTitle')}
                     />
                 </div>
             </SettingsRow>
@@ -1580,24 +1699,24 @@ const Settings: React.FC = () => {
                 >
                     <div className="flex flex-wrap items-center gap-3">
                         <StatusPill
-                            label={`Active: ${fiscalIssuerLabel}`}
+                            label={t('settings.activeIssuerPill', { issuer: fiscalIssuerLabel })}
                             tone={settings.fiscal.issuer === 'local_at' ? 'green' : 'blue'}
                         />
                         <StatusPill
-                            label={settings.fiscal.trainingMode ? 'Training database' : 'Production database'}
+                            label={settings.fiscal.trainingMode ? t('settings.trainingDbPill') : t('settings.productionDbPill')}
                             tone={settings.fiscal.trainingMode ? 'amber' : 'slate'}
                         />
                         {settings.fiscal.issuer === 'vendus' && (
                             <StatusPill
-                                label={`${vendusReadyCount}/${vendusReadiness.length} setup checks`}
+                                label={t('settings.setupChecksPill', { done: vendusReadyCount, total: vendusReadiness.length })}
                                 tone={vendusReadyCount === vendusReadiness.length ? 'green' : 'amber'}
                             />
                         )}
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-600">
                         {settings.fiscal.issuer === 'local_at'
-                            ? 'Local AT owns document number, ATCUD, hash chain, QR code, and local SAF-T export.'
-                            : `${fiscalIssuerLabel} owns document number, ATCUD, hash, QR code, and SAF-T for this period.`}
+                            ? t('settings.fiscalOwnsLocalAt')
+                            : t('settings.fiscalOwnsExternal', { issuer: fiscalIssuerLabel })}
                     </p>
                 </div>
             )}
@@ -1610,15 +1729,15 @@ const Settings: React.FC = () => {
         const isIx = settings.fiscal.issuer === 'invoicexpress';
         return (
             <SettingCard
-                title={`${fiscalIssuerLabel} setup`}
-                description="Routing config for the certified cloud issuer. API keys live in the edge-function environment, not here."
+                title={t('settings.externalSetupTitle', { issuer: fiscalIssuerLabel })}
+                description={t('settings.externalSetupDesc')}
                 icon={Cloud}
                 accent="from-indigo-600 to-blue-500"
             >
                 <div className="space-y-5">
                     {isIx ? (
                         <>
-                            <SettingsRow title="Account name" description="Subdomain in {account}.app.invoicexpress.com.">
+                            <SettingsRow title={t('settings.accountNameTitle')} description={t('settings.accountNameDesc')}>
                                 <input
                                     type="text"
                                     value={ix.accountName}
@@ -1627,36 +1746,36 @@ const Settings: React.FC = () => {
                                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                 />
                             </SettingsRow>
-                            <SettingsRow title="Document type" description="Maps to the InvoiceXpress endpoint and SAF-T type.">
+                            <SettingsRow title={t('settings.documentTypeTitle')} description={t('settings.ixDocTypeDesc')}>
                                 <SegmentedControl
                                     value={ix.documentType}
                                     onChange={v => handleInvoiceXpressSettingChange('documentType', v)}
                                     options={[
-                                        { value: 'invoice_receipt', label: 'Fatura-Recibo (FR)', description: 'Paga na emissão' },
-                                        { value: 'simplified_invoice', label: 'Fatura Simplificada (FS)', description: 'Consumidor final' },
-                                        { value: 'invoice', label: 'Fatura (FT)', description: 'Com NIF' },
+                                        { value: 'invoice_receipt', label: t('settings.docFrLabel'), description: t('settings.docPaidOnIssue') },
+                                        { value: 'simplified_invoice', label: t('settings.docFsLabel'), description: t('settings.docFinalConsumer') },
+                                        { value: 'invoice', label: t('settings.docFtLabel'), description: t('settings.docWithNif') },
                                     ]}
                                 />
                             </SettingsRow>
-                            <SettingsRow title="Série (sequence id)" description="Opcional — vazio usa a série predefinida da conta.">
+                            <SettingsRow title={t('settings.ixSeriesTitle')} description={t('settings.ixSeriesDesc')}>
                                 <input
                                     type="text"
                                     value={ix.sequenceId ?? ''}
                                     onChange={e => handleInvoiceXpressSettingChange('sequenceId', e.target.value)}
-                                    placeholder="(predefinida)"
+                                    placeholder={t('settings.defaultPlaceholder')}
                                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                 />
                             </SettingsRow>
-                            <SettingsRow title="Finalizar na emissão" description="Muda o estado para finalized para atribuir ATCUD/hash.">
+                            <SettingsRow title={t('settings.ixFinalizeTitle')} description={t('settings.ixFinalizeDesc')}>
                                 <div className="flex justify-end">
                                     <ToggleSwitch
                                         checked={ix.finalizeOnIssue}
                                         onChange={v => handleInvoiceXpressSettingChange('finalizeOnIssue', v)}
-                                        label="Finalizar"
+                                        label={t('settings.finalizeAria')}
                                     />
                                 </div>
                             </SettingsRow>
-                            <SettingsRow title="Código de isenção" description="Aplicado a linhas isentas (ex.: M99).">
+                            <SettingsRow title={t('settings.exemptCodeTitle')} description={t('settings.ixExemptDesc')}>
                                 <input
                                     type="text"
                                     value={ix.exemptTax.code ?? ''}
@@ -1670,28 +1789,28 @@ const Settings: React.FC = () => {
                         </>
                     ) : (
                         <>
-                            <SettingsRow title="Environment" description="Test usa test.api.fiskaly.com; Live emite documentos reais.">
+                            <SettingsRow title={t('settings.environmentTitle')} description={t('settings.fkEnvDesc')}>
                                 <SegmentedControl
                                     value={fk.environment}
                                     onChange={v => handleFiskalySettingChange('environment', v)}
                                     options={[
-                                        { value: 'test', label: 'Test', description: 'Sandbox' },
-                                        { value: 'live', label: 'Live', description: 'Produção' },
+                                        { value: 'test', label: t('settings.fkEnvTestLabel'), description: t('settings.sandbox') },
+                                        { value: 'live', label: t('settings.fkEnvLiveLabel'), description: t('settings.production') },
                                     ]}
                                 />
                             </SettingsRow>
-                            <SettingsRow title="Document type" description="Tipo SAF-T do documento de venda.">
+                            <SettingsRow title={t('settings.documentTypeTitle')} description={t('settings.fkDocTypeDesc')}>
                                 <SegmentedControl
                                     value={fk.documentType}
                                     onChange={v => handleFiskalySettingChange('documentType', v)}
                                     options={[
-                                        { value: 'FT', label: 'Fatura (FT)', description: 'Com NIF' },
-                                        { value: 'FS', label: 'Simplificada (FS)', description: 'Consumidor final' },
-                                        { value: 'FR', label: 'Fatura-Recibo (FR)', description: 'Paga na emissão' },
+                                        { value: 'FT', label: t('settings.docFtLabel'), description: t('settings.docWithNif') },
+                                        { value: 'FS', label: t('settings.docFsShortLabel'), description: t('settings.docFinalConsumer') },
+                                        { value: 'FR', label: t('settings.docFrLabel'), description: t('settings.docPaidOnIssue') },
                                     ]}
                                 />
                             </SettingsRow>
-                            <SettingsRow title="Taxpayer ID" description="Identificador do taxpayer Fiskaly.">
+                            <SettingsRow title={t('settings.fkTaxpayerTitle')} description={t('settings.fkTaxpayerDesc')}>
                                 <input
                                     type="text"
                                     value={fk.taxpayerId}
@@ -1699,7 +1818,7 @@ const Settings: React.FC = () => {
                                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                 />
                             </SettingsRow>
-                            <SettingsRow title="Location ID" description="Identificador da location Fiskaly.">
+                            <SettingsRow title={t('settings.fkLocationTitle')} description={t('settings.fkLocationDesc')}>
                                 <input
                                     type="text"
                                     value={fk.locationId}
@@ -1707,7 +1826,7 @@ const Settings: React.FC = () => {
                                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                 />
                             </SettingsRow>
-                            <SettingsRow title="System ID" description="Identificador do system (POS) Fiskaly.">
+                            <SettingsRow title={t('settings.fkSystemTitle')} description={t('settings.fkSystemDesc')}>
                                 <input
                                     type="text"
                                     value={fk.systemId}
@@ -1715,12 +1834,12 @@ const Settings: React.FC = () => {
                                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                 />
                             </SettingsRow>
-                            <SettingsRow title="Series ID" description="Opcional — série a usar para a numeração.">
+                            <SettingsRow title={t('settings.fkSeriesTitle')} description={t('settings.fkSeriesDesc')}>
                                 <input
                                     type="text"
                                     value={fk.seriesId ?? ''}
                                     onChange={e => handleFiskalySettingChange('seriesId', e.target.value)}
-                                    placeholder="(predefinida)"
+                                    placeholder={t('settings.defaultPlaceholder')}
                                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                 />
                             </SettingsRow>
@@ -1734,7 +1853,7 @@ const Settings: React.FC = () => {
                             disabled={externalCheck.status === 'checking'}
                             className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                         >
-                            {externalCheck.status === 'checking' ? 'A verificar...' : 'Verificar ligação'}
+                            {externalCheck.status === 'checking' ? t('settings.checking') : t('settings.checkConnection')}
                         </button>
                         {externalCheck.message && (
                             <StatusPill
@@ -1750,47 +1869,47 @@ const Settings: React.FC = () => {
 
     const renderVendusSetup = () => (
         <SettingCard
-            title="Vendus setup"
-            description="A guided path for temporary outsourced fiscal issuing."
+            title={t('settings.vendusSetupTitle')}
+            description={t('settings.vendusSetupDesc')}
             icon={Cloud}
             accent="from-blue-600 to-cyan-500"
         >
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
                 <div className="space-y-5">
-                    <SettingsRow title="Environment" description="Use tests until Vendus/accountant validates every scenario." icon={Wifi}>
+                    <SettingsRow title={t('settings.environmentTitle')} description={t('settings.vendusEnvDesc')} icon={Wifi}>
                         <SegmentedControl
                             value={settings.fiscal.vendus.mode}
                             onChange={value => handleVendusSettingChange('mode', value)}
                             options={[
-                                { value: 'tests', label: 'Tests', description: 'Safe validation' },
-                                { value: 'normal', label: 'Normal', description: 'Live fiscal issuing' },
+                                { value: 'tests', label: t('settings.vendusTestsLabel'), description: t('settings.vendusTestsDesc') },
+                                { value: 'normal', label: t('settings.vendusNormalLabel'), description: t('settings.vendusNormalDesc') },
                             ]}
                         />
                     </SettingsRow>
 
                     <div className="grid gap-4 md:grid-cols-2">
                         <div>
-                            <label className="mb-2 block text-sm font-semibold text-slate-700">Register ID</label>
+                            <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.registerIdLabel')}</label>
                             <input
                                 type="text"
                                 value={settings.fiscal.vendus.registerId}
                                 onChange={event => handleVendusSettingChange('registerId', event.target.value)}
                                 className={fieldClass}
-                                placeholder="Required"
+                                placeholder={t('settings.requiredPlaceholder')}
                             />
                         </div>
                         <div>
-                            <label className="mb-2 block text-sm font-semibold text-slate-700">Store ID</label>
+                            <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.storeIdLabel')}</label>
                             <input
                                 type="text"
                                 value={settings.fiscal.vendus.storeId || ''}
                                 onChange={event => handleVendusSettingChange('storeId', event.target.value)}
                                 className={fieldClass}
-                                placeholder="Optional"
+                                placeholder={t('settings.optionalPlaceholder')}
                             />
                         </div>
                         <div>
-                            <label className="mb-2 block text-sm font-semibold text-slate-700">Document type</label>
+                            <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.documentTypeTitle')}</label>
                             <select
                                 value={settings.fiscal.vendus.documentType}
                                 onChange={event =>
@@ -1801,13 +1920,13 @@ const Settings: React.FC = () => {
                                 }
                                 className={fieldClass}
                             >
-                                <option value="FT">FT - Fatura</option>
-                                <option value="FS">FS - Fatura Simplificada</option>
-                                <option value="FR">FR - Fatura Recibo</option>
+                                <option value="FT">{t('settings.vendusDocFt')}</option>
+                                <option value="FS">{t('settings.vendusDocFs')}</option>
+                                <option value="FR">{t('settings.vendusDocFr')}</option>
                             </select>
                         </div>
                         <div>
-                            <label className="mb-2 block text-sm font-semibold text-slate-700">Official receipt output</label>
+                            <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.officialOutputLabel')}</label>
                             <select
                                 value={settings.fiscal.vendus.output}
                                 onChange={event =>
@@ -1818,11 +1937,11 @@ const Settings: React.FC = () => {
                                 }
                                 className={fieldClass}
                             >
-                                <option value="html">HTML preview</option>
-                                <option value="pdf_url">PDF URL</option>
-                                <option value="pdf">PDF payload</option>
+                                <option value="html">{t('settings.outputHtml')}</option>
+                                <option value="pdf_url">{t('settings.outputPdfUrl')}</option>
+                                <option value="pdf">{t('settings.outputPdf')}</option>
                                 <option value="escpos">ESC/POS</option>
-                                <option value="auto">Auto</option>
+                                <option value="auto">{t('settings.outputAuto')}</option>
                             </select>
                         </div>
                     </div>
@@ -1830,20 +1949,24 @@ const Settings: React.FC = () => {
                     <div className="rounded-[1.75rem] bg-slate-50 p-4">
                         <div className="mb-3 flex items-center gap-2">
                             <CreditCard className="h-5 w-5 text-slate-500" />
-                            <h3 className="font-semibold text-slate-950">Payment method mapping</h3>
+                            <h3 className="font-semibold text-slate-950">{t('settings.paymentMappingTitle')}</h3>
                         </div>
                         <div className="grid gap-3 md:grid-cols-3">
                             {(['cash', 'card', 'mixed'] as const).map(method => (
                                 <div key={method}>
                                     <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        {method}
+                                        {method === 'cash'
+                                            ? t('settings.paymentCash')
+                                            : method === 'card'
+                                                ? t('settings.paymentCard')
+                                                : t('settings.paymentMixed')}
                                     </label>
                                     <input
                                         type="text"
                                         value={settings.fiscal.vendus.paymentMethodIds[method] || ''}
                                         onChange={event => handleVendusPaymentMethodChange(method, event.target.value)}
                                         className={subtleFieldClass}
-                                        placeholder="Vendus ID"
+                                        placeholder={t('settings.vendusIdPlaceholder')}
                                     />
                                 </div>
                             ))}
@@ -1853,12 +1976,12 @@ const Settings: React.FC = () => {
                     <div className="rounded-[1.75rem] bg-slate-50 p-4">
                         <div className="mb-3 flex items-center gap-2">
                             <FileText className="h-5 w-5 text-slate-500" />
-                            <h3 className="font-semibold text-slate-950">IVA exemption fallback</h3>
+                            <h3 className="font-semibold text-slate-950">{t('settings.ivaExemptTitle')}</h3>
                         </div>
                         <div className="grid gap-3 md:grid-cols-[160px_minmax(0,1fr)]">
                             <div>
                                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                    Code
+                                    {t('settings.codeLabel')}
                                 </label>
                                 <input
                                     type="text"
@@ -1870,14 +1993,14 @@ const Settings: React.FC = () => {
                             </div>
                             <div>
                                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                    Law or reason
+                                    {t('settings.lawOrReasonLabel')}
                                 </label>
                                 <input
                                     type="text"
                                     value={settings.fiscal.vendus.exemptTax.law || ''}
                                     onChange={event => handleVendusExemptTaxChange('law', event.target.value)}
                                     className={subtleFieldClass}
-                                    placeholder="Required if exempt products are sold"
+                                    placeholder={t('settings.lawPlaceholder')}
                                 />
                             </div>
                         </div>
@@ -1888,8 +2011,8 @@ const Settings: React.FC = () => {
                     <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-slate-200">
                         <div className="mb-4 flex items-center justify-between">
                             <div>
-                                <h3 className="font-semibold text-slate-950">Readiness</h3>
-                                <p className="text-xs text-slate-500">Before switching live.</p>
+                                <h3 className="font-semibold text-slate-950">{t('settings.readinessTitle')}</h3>
+                                <p className="text-xs text-slate-500">{t('settings.readinessDesc')}</p>
                             </div>
                             <StatusPill
                                 label={`${vendusReadyCount}/${vendusReadiness.length}`}
@@ -1905,9 +2028,9 @@ const Settings: React.FC = () => {
                                 <Wifi className="h-5 w-5" />
                             </div>
                             <div>
-                                <h3 className="font-semibold">Connection check</h3>
+                                <h3 className="font-semibold">{t('settings.connectionCheckTitle')}</h3>
                                 <p className="mt-1 text-sm leading-6 text-white/70">
-                                    Calls the Vendus Edge Function and verifies account, taxes, and payment method endpoints.
+                                    {t('settings.connectionCheckDesc')}
                                 </p>
                             </div>
                         </div>
@@ -1917,7 +2040,7 @@ const Settings: React.FC = () => {
                             disabled={vendusCheck.status === 'checking'}
                             className="mt-4 min-h-touch-sm w-full rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition-all hover:bg-slate-100 disabled:opacity-60"
                         >
-                            {vendusCheck.status === 'checking' ? 'Checking...' : 'Check Vendus'}
+                            {vendusCheck.status === 'checking' ? t('settings.checking') : t('settings.checkVendus')}
                         </button>
                         {vendusCheck.message && (
                             <p
@@ -1940,26 +2063,26 @@ const Settings: React.FC = () => {
 
     const renderSaftExport = () => (
         <SettingCard
-            title="SAF-T export"
+            title={t('settings.saftExportTitle')}
             description={
                 isSystemAdmin
                     ? settings.fiscal.issuer === 'vendus'
-                        ? 'Vendus periods use Vendus monthly SAF-T. Choose dates inside the same month.'
+                        ? t('settings.saftDescVendus')
                         : settings.fiscal.issuer === 'local_at'
-                            ? 'Local AT periods use local immutable fiscal rows.'
-                            : `${fiscalIssuerLabel} periods use monthly SAF-T. Choose dates inside the same month.`
-                    : 'Export fiscal audit data for the selected period.'
+                            ? t('settings.saftDescLocalAt')
+                            : t('settings.saftDescExternal', { issuer: fiscalIssuerLabel })
+                    : t('settings.saftDescUser')
             }
             icon={FileDown}
             accent="from-green-600 to-emerald-500"
         >
             <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">From</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.fiscalAT.dateFrom')}</label>
                     <input type="date" value={saftStart} onChange={event => setSaftStart(event.target.value)} className={fieldClass} />
                 </div>
                 <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700">To</label>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.fiscalAT.dateTo')}</label>
                     <input type="date" value={saftEnd} onChange={event => setSaftEnd(event.target.value)} className={fieldClass} />
                 </div>
                 <button
@@ -1969,15 +2092,71 @@ const Settings: React.FC = () => {
                     className="min-h-touch rounded-2xl bg-slate-950 px-6 py-3 font-semibold text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:translate-y-0 disabled:opacity-60"
                 >
                     {saftBusy
-                        ? 'Exporting...'
+                        ? t('settings.saftExportingBtn')
                         : !isSystemAdmin
-                            ? 'Download SAF-T'
+                            ? t('settings.fiscalAT.saftDownload')
                             : settings.fiscal.issuer === 'local_at'
-                            ? 'Download local SAF-T'
-                            : `Download ${fiscalIssuerLabel} SAF-T`}
+                            ? t('settings.saftDownloadLocal')
+                            : t('settings.saftDownloadExternal', { issuer: fiscalIssuerLabel })}
                 </button>
             </div>
             {saftMessage && <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">{saftMessage}</p>}
+
+            <div className="mt-6 border-t border-slate-200/70 pt-4">
+                <SettingsRow
+                    title={t('settings.saft.autoEmailTitle')}
+                    description={t('settings.saft.autoEmailDescription')}
+                    icon={Mail}
+                >
+                    <ToggleSwitch
+                        checked={settings.fiscal.accounting.autoEmailSaft}
+                        onChange={next => updateSettings({ fiscal: { accounting: { autoEmailSaft: next } } })}
+                        label={t('settings.saft.autoEmailTitle')}
+                    />
+                </SettingsRow>
+                {settings.fiscal.accounting.autoEmailSaft && (
+                    <div className="grid gap-4 px-1 pb-2 md:grid-cols-[1fr_auto] md:items-end">
+                        <div>
+                            <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                {t('settings.saft.accountantEmail')}
+                            </label>
+                            <input
+                                type="email"
+                                value={settings.fiscal.accounting.accountantEmail}
+                                onChange={event =>
+                                    updateSettings({ fiscal: { accounting: { accountantEmail: event.target.value } } })
+                                }
+                                placeholder="contabilista@exemplo.pt"
+                                className={fieldClass}
+                            />
+                        </div>
+                        <div>
+                            <label className="mb-2 block text-sm font-semibold text-slate-700">
+                                {t('settings.saft.frequency')}
+                            </label>
+                            <select
+                                value={settings.fiscal.accounting.frequency}
+                                onChange={event =>
+                                    updateSettings({
+                                        fiscal: {
+                                            accounting: {
+                                                frequency: event.target.value as 'monthly' | 'quarterly',
+                                            },
+                                        },
+                                    })
+                                }
+                                className={fieldClass}
+                            >
+                                <option value="monthly">{t('settings.saft.frequencyMonthly')}</option>
+                                <option value="quarterly">{t('settings.saft.frequencyQuarterly')}</option>
+                            </select>
+                        </div>
+                        <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700 md:col-span-2">
+                            {t('settings.saft.autoEmailNotConnected')}
+                        </p>
+                    </div>
+                )}
+            </div>
         </SettingCard>
     );
 
@@ -2001,6 +2180,7 @@ const Settings: React.FC = () => {
         if (activeTab === 'security') return renderSecurity();
         if (activeTab === 'pos') return renderPos();
         if (activeTab === 'loyalty') return renderLoyalty();
+        if (activeTab === 'hr') return renderHr();
         if (activeTab === 'display') return renderDisplay();
         if (activeTab === 'hardware') return renderHardware();
         return renderCompany();
@@ -2015,7 +2195,7 @@ const Settings: React.FC = () => {
             >
                 <div className={`${glassCard} px-10 py-8 text-center`}>
                     <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-slate-950" />
-                    <p className="font-semibold text-slate-700">Loading settings...</p>
+                    <p className="font-semibold text-slate-700">{t('settings.loading')}</p>
                 </div>
             </div>
         );
@@ -2033,19 +2213,19 @@ const Settings: React.FC = () => {
                         <div className="p-6 lg:p-8">
                             <div className="grid gap-3 sm:grid-cols-3">
                                 <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Fiscal issuer</p>
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('settings.statFiscalIssuer')}</p>
                                     <p className="mt-2 text-lg font-semibold text-slate-950">{fiscalIssuerLabel}</p>
                                 </div>
                                 <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Database</p>
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('settings.statDatabase')}</p>
                                     <p className="mt-2 text-lg font-semibold text-slate-950">
-                                        {settings.fiscal.trainingMode ? 'Training' : 'Production'}
+                                        {settings.fiscal.trainingMode ? t('settings.statTraining') : t('settings.statProduction')}
                                     </p>
                                 </div>
                                 <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Save state</p>
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('settings.statSaveState')}</p>
                                     <p className="mt-2 text-lg font-semibold text-slate-950">
-                                        {pendingChanges ? 'Unsaved' : saveStatus === 'saved' ? 'Saved' : 'Clean'}
+                                        {pendingChanges ? t('settings.statUnsaved') : saveStatus === 'saved' ? t('settings.statSaved') : t('settings.statClean')}
                                     </p>
                                 </div>
                             </div>
@@ -2057,7 +2237,7 @@ const Settings: React.FC = () => {
                     <aside className="xl:sticky xl:top-6 xl:self-start">
                         <div className={`${glassCard} p-3`}>
                             <div className="mb-3 px-3 py-2">
-                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Sections</p>
+                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t('settings.sectionsLabel')}</p>
                             </div>
                             <div className="space-y-2">
                                 {tabs.map(tab => {
@@ -2102,9 +2282,9 @@ const Settings: React.FC = () => {
                                 <h2 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{activeTabMeta.description}</h2>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                                {pendingChanges && <StatusPill label="Unsaved changes" tone="amber" />}
-                                {saveStatus === 'saved' && <StatusPill label="Saved" tone="green" />}
-                                {saveStatus === 'error' && <StatusPill label="Save failed" tone="red" />}
+                                {pendingChanges && <StatusPill label={t('settings.header.unsavedChanges')} tone="amber" />}
+                                {saveStatus === 'saved' && <StatusPill label={t('settings.statSaved')} tone="green" />}
+                                {saveStatus === 'error' && <StatusPill label={t('settings.saveFailed')} tone="red" />}
                             </div>
                         </div>
 
@@ -2116,9 +2296,9 @@ const Settings: React.FC = () => {
                     <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-[2rem] border border-white/70 bg-white/90 p-3 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur-xl">
                         <div className="hidden min-w-0 px-3 sm:block">
                             <p className="text-sm font-semibold text-slate-950">
-                                {pendingChanges ? 'You have unsaved settings.' : 'Settings are up to date.'}
+                                {pendingChanges ? t('settings.unsavedSettingsMsg') : t('settings.settingsUpToDateMsg')}
                             </p>
-                            <p className="text-xs text-slate-500">Save writes the audit event for fiscal settings changes.</p>
+                            <p className="text-xs text-slate-500">{t('settings.saveAuditNote')}</p>
                         </div>
                         <div className="ml-auto flex gap-2">
                             <button
@@ -2128,7 +2308,7 @@ const Settings: React.FC = () => {
                             >
                                 <span className="inline-flex items-center gap-2">
                                     <RotateCcw className="h-4 w-4" />
-                                    Reset
+                                    {t('settings.resetButton')}
                                 </span>
                             </button>
                             <button

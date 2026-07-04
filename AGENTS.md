@@ -1,5 +1,19 @@
 # AGENTS.md - POS System Development Guidelines
 
+## Agent skills
+
+### Issue tracker
+
+Ask the user which tracker to use for each workflow; local Markdown under `.scratch/` is supported. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the standard five-role triage vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository. See `docs/agents/domain.md`.
+
 ## Build, Lint, and Test Commands
 
 ### Development

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import { Users, Table, TicketPercent, Save, Minus, Plus } from 'lucide-react';
+import { Archive, Table, Save, Minus, Plus, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LocalProduct } from '../types/supabase';
 import { POSActionButton } from './ui/POSActionButton';
@@ -18,9 +18,10 @@ export interface OrderSummaryItem {
 export interface OrderSummaryPanelProps {
     items: OrderSummaryItem[];
     onClearAll: () => void;
-    onCustomer: () => void;
+    /** Opens the employee profile (clock in/out) dialog. */
+    onProfile?: () => void;
     onTables?: () => void;
-    onDiscount?: () => void;
+    onCashDrawer?: () => void;
     onSaveBill?: () => void;
     onProcess?: () => void;
     canSaveBill?: boolean;
@@ -51,9 +52,9 @@ type ServiceType = 'dine-in' | 'take-away';
 const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     items,
     onClearAll,
-    onCustomer,
+    onProfile,
     onTables,
-    onDiscount,
+    onCashDrawer,
     onSaveBill,
     onProcess,
     canSaveBill = false,
@@ -158,20 +159,20 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
         // <aside className={`w-[24.5vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[15.5%_58%_26.5%] h-screen overflow-hidden ${className}`}>
 
         <aside className={`w-[24.5vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[auto_1fr_26.5%] h-screen overflow-hidden ${className}`}>
-            {/* Top quick actions — auto height (was 15.5% for 2×2 grid; only Cliente + Desconto visible) */}
+            {/* Top quick actions — auto height (2-up grid: Cash Drawer + Profile) */}
             <div className="overflow-hidden relative shrink-0" style={{ paddingTop: '1.25vh', paddingBottom: '1.25vh', paddingLeft: '2vh', paddingRight: '2vh' }}>
                 <div className="grid grid-cols-2" style={{ gap: '0.8vh' }}>
                     <POSActionButton
-                        icon={Users}
-                        label={t('pos.customer')}
-                        onClick={onCustomer}
+                        icon={Archive}
+                        label={t('pos.cashDrawer')}
+                        onClick={onCashDrawer}
                         style={{ padding: '0.5vh', height: '6vh' }}
                         className="w-full"
                     />
                     <POSActionButton
-                        icon={TicketPercent}
-                        label={t('pos.discountHeader')}
-                        onClick={onDiscount}
+                        icon={UserRound}
+                        label={t('common.profile')}
+                        onClick={onProfile}
                         style={{ padding: '0.5vh', height: '6vh' }}
                         className="w-full"
                     />
@@ -347,7 +348,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden" style={{ padding: '1vh', height: 'calc(26.5vh - 8vh - 2vh)' }}>
                         {fiscalChainHint && (
                             <p className="text-gray-600 mb-1" style={{ fontSize: '1.25vh' }} title={t('pos.lastFiscalDocumentTooltip')}>
-                                Último doc.: <span className="font-semibold text-gray-800">{fiscalChainHint}</span>
+                                {t('pos.lastFiscalDocumentLabel')} <span className="font-semibold text-gray-800">{fiscalChainHint}</span>
                             </p>
                         )}
                         <div className="flex items-center justify-between" style={{ marginBottom: '0.5vh', paddingTop: '0.25vh' }}>
@@ -383,5 +384,4 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
 };
 
 export default React.memo(OrderSummaryPanel);
-
 

@@ -1,0 +1,51 @@
+// Raw materials (ingredients) and the recipe / fiche technique that links a
+// sellable catalogue product to the raw items it consumes per unit sold.
+//
+// Raw materials are deliberately kept separate from catalogue `products`: they
+// are stocked and costed but never sold directly, so they must not appear in the
+// POS grid or in sales. They are local-only (Dexie) for now — no Supabase sync.
+
+export type RawMaterialUnit = 'pcs' | 'unit' | 'kg' | 'g' | 'L' | 'mL';
+
+export const RAW_MATERIAL_UNITS: { value: RawMaterialUnit; label: string }[] = [
+    { value: 'pcs', label: 'pcs' },
+    { value: 'unit', label: 'unit' },
+    { value: 'kg', label: 'kg' },
+    { value: 'g', label: 'g' },
+    { value: 'L', label: 'L' },
+    { value: 'mL', label: 'mL' },
+];
+
+export interface LocalRawMaterial {
+    id: string;
+    name: string;
+    unit: RawMaterialUnit;
+    /** Current quantity on hand, expressed in `unit`. */
+    stock: number;
+    /** Cost per `unit`. */
+    cost: number;
+    /** Low-stock threshold; surfaced as a warning on the inventory page. */
+    min_stock: number;
+    supplier: string | null;
+    is_active: boolean;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/**
+ * One ingredient line of a product's recipe: how much of a raw material is
+ * consumed for each unit of the product sold (e.g. 0.03 kg of tomato per burger).
+ */
+export interface LocalRecipeLine {
+    id: string;
+    product_id: string;
+    raw_material_id: string;
+    quantity_per_unit: number;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** A recipe line joined with its raw material, for display. */
+export interface RecipeLineWithMaterial extends LocalRecipeLine {
+    material: LocalRawMaterial | undefined;
+}

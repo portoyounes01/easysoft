@@ -1,4 +1,10 @@
 const escpos = require('escpos');
+const usbModule = require('usb');
+
+if (typeof usbModule.on !== 'function' && usbModule.usb && typeof usbModule.usb.on === 'function') {
+  usbModule.on = usbModule.usb.on.bind(usbModule.usb);
+}
+
 const USB = require('escpos-usb');
 const fs = require('fs');
 const path = require('path');
@@ -6,6 +12,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const net = require('net');
 const dns = require('dns');
+const { parseCashDrawerStatus } = require('./cashDrawerStatus.js');
 
 // Import our discovery classes
 const NetworkPrinterDiscovery = require('../../discover-network-printers.js');
@@ -1041,15 +1048,43 @@ class HardwareController {
 
   async getDrawerStatus() {
     try {
-      // This would require the direct-usb-status.cjs logic
-      // For now, return unknown status
       console.log('📊 Checking drawer status...');
-      
-      return { 
-        success: true, 
-        status: 'unknown',
-        message: 'Drawer status detection not yet implemented in Electron version'
-      };
+
+      if (!this.isInitialized) {
+        return { success: false, status: 'unknown', error: 'Hardware not initialized' };
+      }
+
+      let result;
+
+      if (this.discoveryMode === 'network' && this.networkPrinter) {
+        result = await this.getDrawerStatusViaNetwork();
+      } else {
+        if (!this.device || !this.device.device) {
+          const initialization = await this.initializeUSBPrinter();
+          if (!initialization.success) {
+            return {
+              success: false,
+              status: 'unknown',
+              error: initialization.error || 'Could not establish a direct USB status connection',
+            };
+          }
+
+          this.discoveryMode = 'usb';
+        }
+
+        result = await this.getDrawerStatusViaUSB();
+      }
+
+      if (result.success) {
+        console.log(
+          `💵 Cash drawer state: ${result.status.toUpperCase()} ` +
+          `(signal: ${result.signal}, raw: ${result.rawStatus}, method: ${result.method})`
+        );
+      } else {
+        console.error(`Cash drawer state check failed: ${result.error}`);
+      }
+
+      return result;
 
     } catch (error) {
       console.error('Get drawer status error:', error);
@@ -1059,6 +1094,100 @@ class HardwareController {
         error: error.message 
       };
     }
+  }
+
+  async getDrawerStatusViaUSB() {
+    const rawDevice = this.device && this.device.device;
+    const inputEndpoint = rawDevice && rawDevice.interfaces
+      .flatMap((usbInterface) => usbInterface.endpoints || [])
+      .find((endpoint) => endpoint.direction === 'in');
+
+    if (!inputEndpoint) {
+      return {
+        success: false,
+        status: 'unknown',
+        error: 'USB printer does not expose a readable status endpoint',
+      };
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      inputEndpoint.timeout = 2000;
+
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolve(result);
+      };
+
+      const timeout = setTimeout(() => {
+        finish({
+          success: false,
+          status: 'unknown',
+          error: 'Timed out waiting for the cash drawer status byte',
+        });
+      }, 2500);
+
+      this.device.write(Buffer.from([0x10, 0x04, 0x01]), (writeError) => {
+        if (writeError) {
+          finish({ success: false, status: 'unknown', error: writeError.message });
+          return;
+        }
+
+        const readStatusByte = () => {
+          if (settled) return;
+
+          inputEndpoint.transfer(64, (readError, data) => {
+            if (readError) {
+              finish({ success: false, status: 'unknown', error: readError.message });
+              return;
+            }
+
+            if (!data || data.length === 0) {
+              readStatusByte();
+              return;
+            }
+
+            finish({ success: true, method: 'usb', ...parseCashDrawerStatus(data[0]) });
+          });
+        };
+
+        readStatusByte();
+      });
+    });
+  }
+
+  async getDrawerStatusViaNetwork() {
+    return new Promise((resolve) => {
+      const socket = new net.Socket();
+      let settled = false;
+
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        resolve(result);
+      };
+
+      socket.setTimeout(2000);
+      socket.once('connect', () => socket.write(Buffer.from([0x10, 0x04, 0x01])));
+      socket.once('data', (data) => {
+        if (!data || data.length === 0) {
+          finish({ success: false, status: 'unknown', error: 'Printer returned an empty status response' });
+          return;
+        }
+
+        finish({ success: true, method: 'network', ...parseCashDrawerStatus(data[0]) });
+      });
+      socket.once('timeout', () => {
+        finish({ success: false, status: 'unknown', error: 'Timed out waiting for the cash drawer status byte' });
+      });
+      socket.once('error', (error) => {
+        finish({ success: false, status: 'unknown', error: error.message });
+      });
+      socket.connect(this.networkPrinter.port, this.networkPrinter.ip);
+    });
   }
 
   async testPrinter() {

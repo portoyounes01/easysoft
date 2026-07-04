@@ -8,6 +8,7 @@ import Layout from './components/Layout/Layout';
 import LoginForm2 from './components/Auth/LoginForm2';
 import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
+import POS2 from './pages/POS2';
 import Products from './pages/Products';
 import Customers from './pages/Customers';
 import Categories from './pages/Categories';
@@ -25,6 +26,11 @@ import DesignSystem2 from './pages/DesignSystem2';
 import FiscalAudit from './pages/FiscalAudit';
 import OrderQueue from './pages/OrderQueue';
 import OrderStatusDisplay from './pages/OrderStatusDisplay';
+import HR from './pages/HR';
+import CashDrawerAudit from './pages/CashDrawerAudit';
+import PurchaseReceipts from './pages/PurchaseReceipts';
+import Inventory from './pages/Inventory';
+import StockProfitReport from './pages/StockProfitReport';
 
 const Router = ['app:', 'file:'].includes(window.location.protocol) ? HashRouter : BrowserRouter;
 
@@ -126,6 +132,9 @@ const AppContent: React.FC = () => {
       />
       <Route path="/order-status" element={<OrderStatusDisplay />} />
 
+      {/* Standalone UI-redesign preview — no auth, no shared Layout/Sidebar, isolated from the working app */}
+      <Route path="/pos2" element={<POS2 />} />
+
       {/* App routes — shared Layout + Sidebar (including POS) */}
       <Route
         path="/*"
@@ -159,6 +168,22 @@ const AppContent: React.FC = () => {
                     }
                   />
                   <Route
+                    path="/purchase-receipts"
+                    element={
+                      <PermissionRoute permission="inventory">
+                        <PurchaseReceipts />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/inventory"
+                    element={
+                      <PermissionRoute permission="inventory">
+                        <Inventory />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
                     path="/categories"
                     element={
                       <PermissionRoute permission="inventory">
@@ -183,6 +208,14 @@ const AppContent: React.FC = () => {
                     }
                   />
                   <Route
+                    path="/hr"
+                    element={
+                      <PermissionRoute permission="employees">
+                        <HR />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
                     path="/reports"
                     element={
                       <PermissionRoute permission="reports">
@@ -195,6 +228,14 @@ const AppContent: React.FC = () => {
                     element={
                       <PermissionRoute permission="profit_costs">
                         <ProfitCosts />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/stock-profit"
+                    element={
+                      <PermissionRoute permission="reports">
+                        <StockProfitReport />
                       </PermissionRoute>
                     }
                   />
@@ -219,6 +260,14 @@ const AppContent: React.FC = () => {
                     element={
                       <PermissionRoute permission="sales">
                         <OrderQueue />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/cash-drawer-audit"
+                    element={
+                      <PermissionRoute permission="transactions">
+                        <CashDrawerAudit />
                       </PermissionRoute>
                     }
                   />

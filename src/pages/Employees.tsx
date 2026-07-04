@@ -1108,8 +1108,8 @@ const EmployeesInner: React.FC = () => {
                                     <Trash2 className="w-5 h-5 text-red-600" />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-semibold text-gray-900">Delete Employee</h3>
-                                    <p className="text-sm text-gray-500">This action cannot be undone</p>
+                                    <h3 className="text-lg font-semibold text-gray-900">{t('employees.confirm.title')}</h3>
+                                    <p className="text-sm text-gray-500">{t('employees.confirm.subtitle')}</p>
                                 </div>
                             </div>
 

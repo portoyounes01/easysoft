@@ -32,6 +32,10 @@ vi.mock('../src/utils/qrCode', () => ({
     generateQRCodeImage: vi.fn().mockResolvedValue('data:image/png;base64,xx'),
 }));
 
+vi.mock('../src/contexts/POSContext', () => ({
+    usePOS: () => ({ processTransaction: vi.fn() }),
+}));
+
 vi.mock('../src/lib/localDatabase', () => ({
     initializeLocalDatabase: vi.fn().mockResolvedValue(undefined),
     customerLocalService: {

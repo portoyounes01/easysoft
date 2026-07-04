@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LoyaltyVoucher, SystemSettings } from '../contexts/SettingsContext';
+import { useSettings } from '../contexts/SettingsContext';
 import type { LocalCustomer } from '../types/supabase';
 import QuickNumpad from './QuickNumpad';
 import { ActionButton } from './ui/ActionButton';
@@ -54,6 +55,8 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
     saleTotal,
 }) => {
     const { t } = useTranslation();
+    const { settings } = useSettings();
+    const currencySymbol = settings.pos.currencySymbol;
     const [activeTab, setActiveTab] = useState<DiscountTab>('redeem');
     const [redeemMode, setRedeemMode] = useState<RedeemMode>('voucher');
     const [selectedPresetId, setSelectedPresetId] = useState('');
@@ -360,6 +363,8 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
                                 onChange={event =>
                                     setInputValue(event.target.value.replace(/[^0-9.,]/g, ''))
                                 }
+                                prefixText={activeTab === 'fixed' ? currencySymbol : undefined}
+                                suffixText={activeTab === 'percentage' ? '%' : undefined}
                                 className={
                                     inputValue && !isNumericValid
                                         ? 'border-red-500 focus:border-red-500 focus:ring-red-500'

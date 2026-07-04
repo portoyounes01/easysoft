@@ -38,11 +38,15 @@ import type { PostSalePrintAuditContext } from '../fiscal/fiscalAuditLog';
 // import ReceiptHistorySelector from '../components/ReceiptHistorySelector'; // AGENTS: do not delete — 2.ª via picker (commented until implemented)
 import { CustomerDialog } from '../components/CustomerDialog';
 import PaymentDialog from '../components/PaymentDialog';
+import CashDrawerDialog from '../components/CashDrawerDialog';
 import ReceiptDialog from '../components/ReceiptDialog';
 import { CategoryFilterButton } from '../components/ui/CategoryFilterButton';
 import { ProductCard } from '../components/ui/ProductCard';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import { useLayoutNav } from '../contexts/LayoutNavContext';
+import { OPEN_MY_PROFILE_EVENT } from '../components/HR/MyProfileDialog';
+import { cashDrawerAuditService } from '../services/cashDrawerAuditService';
+import { recipeService } from '../services/recipeService';
 import '../styles/design-system-2-scope.css';
 
 // Icon mapping for categories
@@ -90,8 +94,19 @@ const POSInner: React.FC = () => {
   const [postSalePrintAudit, setPostSalePrintAudit] = useState<PostSalePrintAuditContext | null>(null);
   const [lastFiscalInvoiceNo, setLastFiscalInvoiceNo] = useState<string | null>(null);
 
+  // Products that have a recipe (fiche technique). They are always sellable: a
+  // dish carries no meaningful product stock of its own — its raw ingredients
+  // are deducted (and clamped at zero) when sold.
+  const [recipeProductIds, setRecipeProductIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    void recipeService.getProductIdsWithRecipe().then(setRecipeProductIds).catch(() => { });
+  }, []);
+
   // Stock validation helper function
   const canAddToCart = (product: LocalProduct, requestedQuantity = 1): boolean => {
+    if (recipeProductIds.has(product.id)) {
+      return true;
+    }
     if (!settings.pos.trackInventory || !product.track_stock) {
       return true;
     }
@@ -122,7 +137,7 @@ const POSInner: React.FC = () => {
     (productId: string) => {
       const line = cart.find(item => item.product.id === productId);
       if (!line) return;
-      if (!settings.pos.trackInventory || !line.product.track_stock) {
+      if (recipeProductIds.has(line.product.id) || !settings.pos.trackInventory || !line.product.track_stock) {
         addToCart(line.product, 1);
         return;
       }
@@ -131,7 +146,7 @@ const POSInner: React.FC = () => {
       }
       addToCart(line.product, 1);
     },
-    [cart, addToCart, settings.pos.allowNegativeStock, settings.pos.trackInventory]
+    [cart, addToCart, settings.pos.allowNegativeStock, settings.pos.trackInventory, recipeProductIds]
   );
 
   const handleDecrementCartLine = useCallback(
@@ -154,6 +169,7 @@ const POSInner: React.FC = () => {
   const [showDiscountDialog, setShowDiscountDialog] = useState(false);
 
   const [cashReceived, setCashReceived] = useState(0);
+  const [showCashDrawer, setShowCashDrawer] = useState(false);
 
   // Auto-logout states
   const [showAutoLogoutWarning, setShowAutoLogoutWarning] = useState(false);
@@ -476,7 +492,7 @@ const POSInner: React.FC = () => {
             <div className="flex-1 overflow-y-auto" style={{ padding: '0 0.5vw', gap: '0.5vw', display: 'flex', flexDirection: 'column' }}>
               {/* All Menu Option */}
               <CategoryFilterButton
-                label="All Menu"
+                label={t('pos.allMenu')}
                 icon={Grid}
                 isSelected={!selectedCategoryId}
                 onClick={() => setSelectedCategoryId('')}
@@ -636,7 +652,14 @@ const POSInner: React.FC = () => {
         <div id="pos-status-bar" className="flex-none bg-white border-t border-gray-200 px-3 py-1">
           <div className="flex items-center justify-between max-w-7xl mx-auto">
             <div className="flex items-center space-x-3">
-              <p className="text-xs font-medium text-gray-800">{employee?.name} • <span className="capitalize text-gray-600">{employee?.role}</span></p>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new Event(OPEN_MY_PROFILE_EVENT))}
+                className="min-h-touch-xs rounded-xl px-2 text-left text-xs font-medium text-gray-800 transition-colors hover:bg-gray-100"
+              >
+                {employee?.name} • <span className="capitalize text-gray-600">{employee?.role}</span>
+                <span className="ml-2 text-emerald-700">{t('pos.myProfile')}</span>
+              </button>
               {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
                 <span className="text-green-600 text-xs font-medium">
                   {t('pos.saleInProgress')}
@@ -666,6 +689,7 @@ const POSInner: React.FC = () => {
           product: item.product,
           quantity: item.quantity,
           canIncrement:
+            recipeProductIds.has(item.product.id) ||
             !settings.pos.trackInventory ||
             !item.product.track_stock ||
             settings.pos.allowNegativeStock ||
@@ -679,8 +703,8 @@ const POSInner: React.FC = () => {
             ? { name: selectedCustomer.name, taxNumber: selectedCustomer.tax_number }
             : undefined
         }
-        onCustomer={() => setShowCustomerModal(true)}
-        onDiscount={handleDiscountClick}
+        onProfile={() => window.dispatchEvent(new Event(OPEN_MY_PROFILE_EVENT))}
+        onCashDrawer={() => setShowCashDrawer(true)}
         onProcess={() => setShowPayment(true)}
         totalsOverride={{
           subtotal: Number(subtotal.toFixed(2)),
@@ -754,6 +778,10 @@ const POSInner: React.FC = () => {
           total={finalTotal}
           cashReceived={cashReceived}
           onChangeCash={(n) => setCashReceived(isNaN(n) ? 0 : n)}
+          onDiscount={handleDiscountClick}
+          onNif={() => setShowCustomerModal(true)}
+          discountAmount={discountAmount + customerDiscountAmount}
+          nif={selectedCustomer?.tax_number || undefined}
           onClose={() => {
             setShowPayment(false);
             setCashReceived(0);
@@ -765,7 +793,7 @@ const POSInner: React.FC = () => {
             const employeeName = employee?.name || 'Employee';
 
             try {
-              const { fiscal, receiptNumber } = await processTransaction(
+              const { fiscal, receiptNumber, transactionId } = await processTransaction(
                 {
                   paymentMethod,
                   amountPaid: cashReceived > 0 ? cashReceived : undefined,
@@ -790,6 +818,27 @@ const POSInner: React.FC = () => {
                   customerId: pointsRedemption?.customerId,
                 }
               );
+
+              if (paymentMethod === 'cash' && employee) {
+                try {
+                  const drawerEvent = await cashDrawerAuditService.openForSale({
+                    operator: {
+                      id: employee.id,
+                      name: employee.name,
+                      employeeNumber: employee.employee_number,
+                    },
+                    terminal: { label: settings.receipt.counterLabel },
+                    transactionId: fiscal?.transactionId || transactionId,
+                    transactionReference: fiscal?.invoiceNo || receiptNumber,
+                    saleAmount: finalTotal,
+                  });
+                  if (!drawerEvent.success) {
+                    console.warn('Cash sale completed, but the drawer open command failed:', drawerEvent.error_message);
+                  }
+                } catch (drawerError) {
+                  console.error('Cash sale completed, but the drawer action could not be logged:', drawerError);
+                }
+              }
 
               let queueTicketNumber: string | undefined;
               if (settings.orderQueue.enabled) {
@@ -892,6 +941,19 @@ const POSInner: React.FC = () => {
               alert(e instanceof Error ? e.message : 'Pagamento falhou');
             }
           }}
+        />
+      )}
+
+      {employee && (
+        <CashDrawerDialog
+          open={showCashDrawer}
+          employee={{
+            id: employee.id,
+            name: employee.name,
+            employeeNumber: employee.employee_number,
+          }}
+          terminalLabel={settings.receipt.counterLabel}
+          onClose={() => setShowCashDrawer(false)}
         />
       )}
 

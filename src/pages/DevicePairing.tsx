@@ -28,8 +28,8 @@ const DevicePairing: React.FC<DevicePairingProps> = () => {
         <div className="min-h-screen bg-gray-50 py-10">
             <div className="max-w-4xl mx-auto px-6">
                 <div className="text-center mb-10">
-                    <h1 className="text-6xl font-bold text-gray-900 mb-3">Pair this terminal</h1>
-                    <p className="text-gray-600 text-lg">Bind this device to a restaurant (and optionally a location). This is a mock interface.</p>
+                    <h1 className="text-6xl font-bold text-gray-900 mb-3">{t('devicePairing.pairTitle')}</h1>
+                    <p className="text-gray-600 text-lg">{t('devicePairing.pairSubtitle')}</p>
                 </div>
 
                 <div className="bg-white rounded-3xl shadow-2xl p-8 space-y-8">

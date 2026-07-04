@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Sidebar from "./Sidebar";
+import MyProfileDialog from "../HR/MyProfileDialog";
 import { useSettings } from "../../contexts/SettingsContext";
 import { DesignSystem2CustomizationProvider } from "../../contexts/DesignSystem2CustomizationContext";
 import { LayoutNavProvider } from "../../contexts/LayoutNavContext";
@@ -164,6 +165,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {children}
             </main>
           </div>
+          <MyProfileDialog />
         </div>
       </LayoutNavProvider>
     </DesignSystem2CustomizationProvider>

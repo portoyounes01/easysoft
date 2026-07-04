@@ -9,6 +9,8 @@ interface BaseDialogProps {
     className?: string;
     width?: string;
     height?: string;
+    /** Overlay stacking class. Lower it (e.g. "z-40") when another dialog must open on top. */
+    overlayClassName?: string;
 }
 
 export const BaseDialog: React.FC<BaseDialogProps> = ({
@@ -20,11 +22,12 @@ export const BaseDialog: React.FC<BaseDialogProps> = ({
     className = '',
     width = '50vw',
     height = '60vh',
+    overlayClassName = 'z-50',
 }) => {
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+        <div className={`fixed inset-0 bg-black/50 flex items-center justify-center ${overlayClassName}`} onClick={onClose}>
             <div
                 className={`bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden ${className}`}
                 onClick={(e) => e.stopPropagation()}

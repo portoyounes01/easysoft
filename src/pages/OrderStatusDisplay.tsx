@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Clock3, PackageCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
 import { initializeLocalDatabase } from '../lib/localDatabase';
 import { queueTicketService } from '../services/queueTicketService';
@@ -29,6 +30,7 @@ const TicketGrid: React.FC<{ tickets: LocalQueueTicket[]; tone: 'preparing' | 'r
 };
 
 const OrderStatusDisplay: React.FC = () => {
+  const { t } = useTranslation();
   const { settings } = useSettings();
   const [tickets, setTickets] = useState<LocalQueueTicket[]>([]);
   const [clock, setClock] = useState(new Date());
@@ -61,7 +63,7 @@ const OrderStatusDisplay: React.FC = () => {
       <header className="mb-8 flex items-center justify-between rounded-3xl bg-white px-7 py-5 shadow-sm">
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-green-600">{settings.company.name}</p>
-          <h1 className="mt-1 text-3xl font-black">Order status</h1>
+          <h1 className="mt-1 text-3xl font-black">{t('orderStatusDisplay.title')}</h1>
         </div>
         <time className="text-2xl font-bold tabular-nums text-slate-500">
           {clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -72,19 +74,19 @@ const OrderStatusDisplay: React.FC = () => {
         <section className="rounded-[2rem] bg-slate-200/70 p-6">
           <div className="mb-6 flex items-center gap-3">
             <Clock3 className="h-8 w-8 text-slate-600" />
-            <h2 className="text-3xl font-black">Preparing</h2>
+            <h2 className="text-3xl font-black">{t('orderStatusDisplay.preparingTitle')}</h2>
           </div>
           <TicketGrid tickets={preparing} tone="preparing" />
-          {preparing.length === 0 && <p className="py-20 text-center text-xl text-slate-400">No current orders</p>}
+          {preparing.length === 0 && <p className="py-20 text-center text-xl text-slate-400">{t('orderStatusDisplay.noCurrentOrders')}</p>}
         </section>
 
         <section className="rounded-[2rem] bg-green-100 p-6">
           <div className="mb-6 flex items-center gap-3 text-green-900">
             <PackageCheck className="h-8 w-8" />
-            <h2 className="text-3xl font-black">Ready to collect</h2>
+            <h2 className="text-3xl font-black">{t('orderStatusDisplay.readyToCollect')}</h2>
           </div>
           <TicketGrid tickets={ready} tone="ready" />
-          {ready.length === 0 && <p className="py-20 text-center text-xl text-green-500">Waiting for the next order</p>}
+          {ready.length === 0 && <p className="py-20 text-center text-xl text-green-500">{t('orderStatusDisplay.waitingForNextOrder')}</p>}
         </section>
       </div>
     </main>

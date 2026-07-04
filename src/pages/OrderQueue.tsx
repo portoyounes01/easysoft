@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Check, Clock3, ExternalLink, Loader2, PackageCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
 import { initializeLocalDatabase } from '../lib/localDatabase';
 import { queueTicketService } from '../services/queueTicketService';
 import type { LocalQueueTicket } from '../types/supabase';
 
 const OrderQueue: React.FC = () => {
+  const { t } = useTranslation();
   const { settings } = useSettings();
   const [tickets, setTickets] = useState<LocalQueueTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,9 +53,9 @@ const OrderQueue: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">Service queue</p>
-          <h1 className="mt-1 text-3xl font-bold text-gray-950">Order tickets</h1>
-          <p className="mt-2 text-gray-500">Mark orders ready when customers can collect them.</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">{t('orderQueue.serviceQueueEyebrow')}</p>
+          <h1 className="mt-1 text-3xl font-bold text-gray-950">{t('orderQueue.title')}</h1>
+          <p className="mt-2 text-gray-500">{t('orderQueue.subtitle')}</p>
         </div>
         <button
           type="button"
@@ -61,7 +63,7 @@ const OrderQueue: React.FC = () => {
           className="inline-flex min-h-touch items-center justify-center gap-2 rounded-2xl bg-gray-950 px-6 py-3 font-semibold text-white hover:bg-gray-800"
         >
           <ExternalLink className="h-5 w-5" />
-          Open customer display
+          {t('orderQueue.openCustomerDisplay')}
         </button>
       </div>
 
@@ -74,7 +76,7 @@ const OrderQueue: React.FC = () => {
           <section className="overflow-hidden rounded-3xl border border-amber-200 bg-white shadow-sm">
             <div className="flex items-center gap-3 border-b border-amber-100 bg-amber-50 px-6 py-5">
               <Clock3 className="h-6 w-6 text-amber-700" />
-              <h2 className="text-xl font-bold text-amber-950">Preparing</h2>
+              <h2 className="text-xl font-bold text-amber-950">{t('orderQueue.preparingTitle')}</h2>
               <span className="ml-auto rounded-full bg-amber-200 px-3 py-1 text-sm font-bold text-amber-900">{preparing.length}</span>
             </div>
             <div className="grid gap-4 p-5 sm:grid-cols-2">
@@ -90,36 +92,36 @@ const OrderQueue: React.FC = () => {
                     className="mt-5 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-xl bg-green-500 px-4 font-bold text-white hover:bg-green-600"
                   >
                     <PackageCheck className="h-5 w-5" />
-                    Mark ready
+                    {t('orderQueue.markReady')}
                   </button>
                 </article>
               ))}
-              {preparing.length === 0 && <p className="col-span-full py-12 text-center text-gray-400">No orders preparing.</p>}
+              {preparing.length === 0 && <p className="col-span-full py-12 text-center text-gray-400">{t('orderQueue.noOrdersPreparing')}</p>}
             </div>
           </section>
 
           <section className="overflow-hidden rounded-3xl border border-green-200 bg-white shadow-sm">
             <div className="flex items-center gap-3 border-b border-green-100 bg-green-50 px-6 py-5">
               <PackageCheck className="h-6 w-6 text-green-700" />
-              <h2 className="text-xl font-bold text-green-950">Ready</h2>
+              <h2 className="text-xl font-bold text-green-950">{t('orderQueue.readyTitle')}</h2>
               <span className="ml-auto rounded-full bg-green-200 px-3 py-1 text-sm font-bold text-green-900">{ready.length}</span>
             </div>
             <div className="grid gap-4 p-5 sm:grid-cols-2">
               {ready.map(ticket => (
                 <article key={ticket.id} className="rounded-2xl border border-green-200 bg-green-50 p-5">
                   <p className="text-4xl font-black tracking-tight text-green-950">{ticket.display_number}</p>
-                  <p className="mt-2 text-sm text-green-700">Waiting for collection</p>
+                  <p className="mt-2 text-sm text-green-700">{t('orderQueue.waitingForCollection')}</p>
                   <button
                     type="button"
                     onClick={() => void handleStatus(ticket, 'collected')}
                     className="mt-5 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 font-bold text-white hover:bg-gray-800"
                   >
                     <Check className="h-5 w-5" />
-                    Collected
+                    {t('orderQueue.collected')}
                   </button>
                 </article>
               ))}
-              {ready.length === 0 && <p className="col-span-full py-12 text-center text-gray-400">No orders ready.</p>}
+              {ready.length === 0 && <p className="col-span-full py-12 text-center text-gray-400">{t('orderQueue.noOrdersReady')}</p>}
             </div>
           </section>
         </div>

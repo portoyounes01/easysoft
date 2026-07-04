@@ -12,18 +12,20 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  ScanLine,
 } from 'lucide-react';
 import { useProducts } from '../contexts/ProductsContext';
 import { LocalProduct, calculateStockStatus } from '../types/supabase';
 // import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage'; // AGENTS: do not delete — used with stock UI when re-enabled
 import ProductForm from '../components/ProductForm';
+import PurchaseReceiptImportDialog from '../components/PurchaseReceiptImportDialog';
 import { useTranslation } from 'react-i18next';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 
 const ProductsInner: React.FC = () => {
-  const { products, categories, isLoading, error, searchProducts, deleteProduct } = useProducts();
+  const { products, categories, isLoading, error, searchProducts, deleteProduct, refreshData } = useProducts();
   // AGENTS: Do not delete — stock catalog flag preserved for re-enable with stock table column.
   // const catalogTracksInventory = readPosTrackInventoryFromStorage();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
@@ -43,6 +45,7 @@ const ProductsInner: React.FC = () => {
   const [sortOption, setSortOption] = useState<'name_asc' | 'name_desc'>('name_asc');
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showPurchaseImport, setShowPurchaseImport] = useState(false);
 
   const categoryIdToName = useMemo(() => {
     const map = new Map<string, string>();
@@ -265,6 +268,14 @@ const ProductsInner: React.FC = () => {
             />
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <AdminActionButton
+              variant="outline"
+              type="button"
+              icon={ScanLine}
+              label={t('products.importPurchase')}
+              onClick={() => setShowPurchaseImport(true)}
+              className={toolbarBtn}
+            />
             <div className="relative">
               <AdminActionButton
                 variant="outline"
@@ -565,6 +576,12 @@ const ProductsInner: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <PurchaseReceiptImportDialog
+        open={showPurchaseImport}
+        onClose={() => setShowPurchaseImport(false)}
+        onApplied={refreshData}
+      />
 
       <ProductForm
         isOpen={showProductForm}

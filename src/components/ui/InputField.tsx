@@ -6,6 +6,10 @@ export interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElem
     error?: boolean | string;
     icon?: LucideIcon;
     rightIcon?: LucideIcon;
+    /** Short text shown inside the field on the left (e.g. a currency symbol). */
+    prefixText?: string;
+    /** Short text shown inside the field on the right (e.g. "%"). */
+    suffixText?: string;
     containerClassName?: string;
 }
 
@@ -14,6 +18,8 @@ export const InputField = forwardRef<HTMLInputElement, InputFieldProps>(({
     error,
     icon: Icon,
     rightIcon: RightIcon,
+    prefixText,
+    suffixText,
     className = '',
     containerClassName = '',
     disabled,
@@ -23,9 +29,9 @@ export const InputField = forwardRef<HTMLInputElement, InputFieldProps>(({
     const defaultBorderClasses = "border-gray-300 focus:ring-green-500 focus:border-green-500";
     const errorBorderClasses = "border-red-500 focus:ring-red-500 focus:border-red-500";
 
-    // Padding calculation based on icons
-    const paddingLeft = Icon ? 'pl-10' : 'pl-4';
-    const paddingRight = RightIcon ? 'pr-10' : 'pr-4';
+    // Padding calculation based on icons / text affixes
+    const paddingLeft = Icon ? 'pl-10' : prefixText ? 'pl-9' : 'pl-4';
+    const paddingRight = RightIcon ? 'pr-10' : suffixText ? 'pr-9' : 'pr-4';
 
     return (
         <div className={`flex flex-col ${containerClassName}`}>
@@ -40,13 +46,18 @@ export const InputField = forwardRef<HTMLInputElement, InputFieldProps>(({
                         <Icon className="w-5 h-5" />
                     </div>
                 )}
+                {!Icon && prefixText && (
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500 pointer-events-none">
+                        {prefixText}
+                    </div>
+                )}
                 <input
                     ref={ref}
                     disabled={disabled}
                     className={`
-                        ${baseInputClasses} 
-                        ${error ? errorBorderClasses : defaultBorderClasses} 
-                        ${paddingLeft} 
+                        ${baseInputClasses}
+                        ${error ? errorBorderClasses : defaultBorderClasses}
+                        ${paddingLeft}
                         ${paddingRight}
                         py-3
                         text-sm
@@ -57,6 +68,11 @@ export const InputField = forwardRef<HTMLInputElement, InputFieldProps>(({
                 {RightIcon && (
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
                         <RightIcon className="w-5 h-5" />
+                    </div>
+                )}
+                {!RightIcon && suffixText && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500 pointer-events-none">
+                        {suffixText}
                     </div>
                 )}
             </div>

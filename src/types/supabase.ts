@@ -966,6 +966,11 @@ export interface ReportFilters {
         start: string;
         end: string;
     };
+    /** Inclusive hour-of-day range (0–23) for time-of-day analysis. Omit for all hours. */
+    hourRange?: {
+        start: number;
+        end: number;
+    };
     employeeId?: string;
     categoryId?: string;
     paymentMethod?: string;

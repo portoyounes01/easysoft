@@ -54,7 +54,7 @@ const ReportsInner: React.FC = () => {
             end: new Date().toISOString().split('T')[0] // today
         }
     });
-    const [showFilters, setShowFilters] = useState(false);
+    const [showFilters, setShowFilters] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [reportData, setReportData] = useState<{
@@ -130,6 +130,25 @@ const ReportsInner: React.FC = () => {
     const handleFilterChange = (key: keyof ReportFilters, value: any) => {
         setFilters(prev => ({ ...prev, [key]: value }));
     };
+
+    // Hour-of-day filter: clearing either bound removes the filter; the range is
+    // kept valid (start <= end) by mirroring whichever bound the user just moved.
+    const handleHourChange = (part: 'start' | 'end', raw: string) => {
+        if (raw === '') {
+            handleFilterChange('hourRange', undefined);
+            return;
+        }
+        const value = Number(raw);
+        const current = filters.hourRange ?? { start: value, end: value };
+        const next = { ...current, [part]: value };
+        if (next.start > next.end) {
+            if (part === 'start') next.end = value;
+            else next.start = value;
+        }
+        handleFilterChange('hourRange', next);
+    };
+
+    const hourOptions = Array.from({ length: 24 }, (_, hour) => hour);
 
     // Handle export to Excel
     const handleExportExcel = async () => {
@@ -304,6 +323,36 @@ const ReportsInner: React.FC = () => {
                                 <option value="cash">{t('reports.filters.cash')}</option>
                                 <option value="card">{t('reports.filters.card')}</option>
                                 <option value="mixed">{t('reports.filters.mixed')}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('reports.filters.fromHour')}</label>
+                            <select
+                                value={filters.hourRange ? String(filters.hourRange.start) : ''}
+                                onChange={(e) => handleHourChange('start', e.target.value)}
+                                className="ds2-control-radius-lg box-border w-full border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">{t('reports.filters.allHours')}</option>
+                                {hourOptions.map(hour => (
+                                    <option key={hour} value={hour}>
+                                        {String(hour).padStart(2, '0')}:00
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">{t('reports.filters.toHour')}</label>
+                            <select
+                                value={filters.hourRange ? String(filters.hourRange.end) : ''}
+                                onChange={(e) => handleHourChange('end', e.target.value)}
+                                disabled={!filters.hourRange}
+                                className="ds2-control-radius-lg box-border w-full border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                            >
+                                {hourOptions.map(hour => (
+                                    <option key={hour} value={hour}>
+                                        {String(hour).padStart(2, '0')}:59
+                                    </option>
+                                ))}
                             </select>
                         </div>
                     </div>

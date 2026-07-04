@@ -2,12 +2,13 @@ import React, { createContext, useCallback, useContext, useReducer, useRef } fro
 import { Transaction, CashDrawer } from '../types';
 import { LocalProduct, LocalCustomer } from '../types/supabase';
 import { transactionLocalService, customerLocalService } from '../lib/localDatabase';
+import { recipeService } from '../services/recipeService';
 import { supabase } from '../lib/supabase';
 import { transactionService } from '../services/transactionService';
 import { connectionStatus } from '../lib/supabase';
 import { calculateTaxAmount, calculatePriceWithoutTax } from '../types/supabase';
 import type { SystemSettings, DeepPartial } from './SettingsContext';
-import { runFiscalCheckout, type FiscalCheckoutResult } from '../fiscal/checkoutOrchestrator';
+import { runFiscalCheckout, type FiscalCheckoutResult, type FiscalCartLine } from '../fiscal/checkoutOrchestrator';
 import { localTransactionToServerInsert, localTransactionItemsToServerInsert } from '../fiscal/pushServer';
 
 interface POSState {
@@ -49,8 +50,12 @@ interface POSContextType extends POSState {
       pointsPerEuroEarned: number;
       pointsRedeemed?: number;
       customerId?: string;
+    },
+    overrides?: {
+      cart: FiscalCartLine[];
+      customer: LocalCustomer | null;
     }
-  ) => Promise<{ receiptNumber: string; fiscal?: FiscalCheckoutResult }>;
+  ) => Promise<{ receiptNumber: string; transactionId?: string; fiscal?: FiscalCheckoutResult }>;
 }
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
@@ -210,18 +215,27 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       pointsPerEuroEarned: number;
       pointsRedeemed?: number;
       customerId?: string;
+    },
+    overrides?: {
+      cart: FiscalCartLine[];
+      customer: LocalCustomer | null;
     }
-  ): Promise<{ receiptNumber: string; fiscal?: FiscalCheckoutResult }> => {
+  ): Promise<{ receiptNumber: string; transactionId?: string; fiscal?: FiscalCheckoutResult }> => {
     try {
       if (fiscalContext) {
-        const { cart: cartSnapshot, selectedCustomer: customerSnapshot } = stateRef.current;
+        // A custom invoice supplies its own line items (synthetic products) and
+        // customer instead of using the live POS cart/selection.
+        const cartForSale: FiscalCartLine[] = overrides
+          ? overrides.cart
+          : stateRef.current.cart.map(ci => ({
+              product: ci.product,
+              quantity: ci.quantity,
+              discount: ci.discount,
+            }));
+        const customerSnapshot = overrides ? overrides.customer : stateRef.current.selectedCustomer;
         const fiscalRes = await runFiscalCheckout({
           settings: fiscalContext.settings,
-          cart: cartSnapshot.map(ci => ({
-            product: ci.product,
-            quantity: ci.quantity,
-            discount: ci.discount,
-          })),
+          cart: cartForSale,
           selectedCustomer: customerSnapshot,
           payment: paymentData,
           globalDiscount,
@@ -243,6 +257,16 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const loaded = await transactionLocalService.getTransactionById(fiscalRes.transactionId);
         if (loaded?.items?.length) {
           await transactionLocalService.updateProductStock(loaded.items);
+          // Fiche technique: deduct raw-material stock for any sold product that
+          // has a recipe (products without one are untouched here). Best-effort —
+          // the sale is already committed, so an inventory hiccup must not throw.
+          try {
+            await recipeService.deductForSoldItems(
+              loaded.items.map(item => ({ product_id: item.product_id, quantity: item.quantity }))
+            );
+          } catch (deductError) {
+            console.error('POS: raw-material deduction failed after sale', deductError);
+          }
         }
 
         const connectionState = connectionStatus.getStatus();
@@ -278,7 +302,9 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
-        const customerAfterFiscal = stateRef.current.selectedCustomer;
+        // Loyalty only applies to a real, persisted POS customer — skip it for
+        // custom invoices, whose customer (if any) is an ephemeral NIF holder.
+        const customerAfterFiscal = overrides ? null : stateRef.current.selectedCustomer;
         if (customerAfterFiscal) {
           const pointsRedeemed =
             loyaltyContext?.customerId === customerAfterFiscal.id
@@ -297,10 +323,15 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
 
-        clearCart();
+        // Don't wipe the live POS cart when issuing a custom invoice from elsewhere.
+        if (!overrides) clearCart();
         onTransactionComplete?.();
 
-        return { receiptNumber: fiscalRes.invoiceNo, fiscal: fiscalRes };
+        return {
+          receiptNumber: fiscalRes.invoiceNo,
+          transactionId: fiscalRes.transactionId,
+          fiscal: fiscalRes,
+        };
       }
 
       // Calculate transaction totals
@@ -398,6 +429,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Check if online and try server first
       const connectionState = connectionStatus.getStatus();
       let receiptNumber: string = transactionData.receipt_number;
+      let completedTransactionId: string | undefined;
       let localTransactionItems: any[] = [];
 
       if (connectionState.isOnline && connectionState.isSupabaseOnline) {
@@ -438,7 +470,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           // Try to process through server
           const result = await transactionService.createTransaction(serverTransactionData, transactionItems);
-          const transactionId = result.transaction.id;
+          completedTransactionId = result.transaction.id;
           receiptNumber = result.transaction.receipt_number || receiptNumber;
 
           console.log('POS: Transaction processed online successfully');
@@ -457,7 +489,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             is_conflicted: false,
           }));
 
-          const transactionId = await transactionLocalService.createTransaction(transactionData, localTransactionItems);
+          completedTransactionId = await transactionLocalService.createTransaction(transactionData, localTransactionItems);
         }
       } else {
         console.log('POS: Processing transaction offline...');
@@ -475,12 +507,19 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           is_conflicted: false,
         }));
 
-        const transactionId = await transactionLocalService.createTransaction(transactionData, localTransactionItems);
+        completedTransactionId = await transactionLocalService.createTransaction(transactionData, localTransactionItems);
       }
 
       // Update product stock levels locally - use transactionItems for online, localTransactionItems for offline
       const itemsForStockUpdate = connectionState.isOnline && connectionState.isSupabaseOnline ? transactionItems : localTransactionItems;
       await transactionLocalService.updateProductStock(itemsForStockUpdate);
+      try {
+        await recipeService.deductForSoldItems(
+          itemsForStockUpdate.map(item => ({ product_id: item.product_id, quantity: item.quantity }))
+        );
+      } catch (deductError) {
+        console.error('POS: raw-material deduction failed after sale', deductError);
+      }
 
       // Update customer totals if customer selected
       const customerForTotals = stateRef.current.selectedCustomer;
@@ -511,7 +550,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       console.log(`POS: Transaction ${transactionNumber} processed successfully`);
-      return { receiptNumber };
+      return { receiptNumber, transactionId: completedTransactionId };
 
     } catch (error) {
       console.error('POS: Transaction processing failed:', error);

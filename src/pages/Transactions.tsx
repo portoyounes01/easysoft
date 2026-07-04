@@ -17,6 +17,7 @@ import {
     ShoppingCart,
     Users,
     FileMinus,
+    FilePlus,
     Printer,
 } from 'lucide-react';
 import { transactionService } from '../services/transactionService';
@@ -25,8 +26,12 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import ReceiptDialog from '../components/ReceiptDialog';
+import CustomInvoiceDialog, { type CustomInvoicePayload } from '../components/CustomInvoiceDialog';
 import type { ReceiptProps } from '../components/ThermalReceipt';
-import { queueTicketService } from '../services/queueTicketService';
+import { usePOS } from '../contexts/POSContext';
+import type { FiscalCartLine } from '../fiscal/checkoutOrchestrator';
+import type { LocalCustomer, LocalProduct } from '../types/supabase';
+import { generateUUID } from '../utils/uuid';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import {
     useDesignSystem2Customization,
@@ -140,8 +145,9 @@ async function buildTransactionViewModel(dbTransaction: Record<string, unknown>)
 const TransactionsInner: React.FC = () => {
     const { t } = useTranslation();
     const { language } = useLanguage();
-    const { settings } = useSettings();
+    const { settings, updateSettings } = useSettings();
     const { employee } = useSupabaseAuth();
+    const { processTransaction } = usePOS();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
 
     const toolbarBtn =
@@ -165,6 +171,7 @@ const TransactionsInner: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [creditNoteBusyId, setCreditNoteBusyId] = useState<string | null>(null);
+    const [showCustomInvoice, setShowCustomInvoice] = useState(false);
 
     const loadTransactions = async () => {
         try {
@@ -393,13 +400,14 @@ const TransactionsInner: React.FC = () => {
                 : null;
 
         const documentNumber = fiscal?.invoice_no ?? header.receipt_number ?? header.transaction_number;
-        const queueTicket = await queueTicketService.getByReceiptReference(documentNumber);
+        // The order queue number is intentionally omitted on back-office reprints
+        // (view receipt / segunda via) — it only belongs on the receipt handed to
+        // the customer at the time of sale.
         const receipt: ReceiptProps = {
             documentNumber,
             documentType,
             date,
             counter: settings.receipt.counterLabel,
-            ticketNumber: queueTicket?.display_number,
             verificationCode,
             documentHash: fiscal?.hash_base64 ?? undefined,
             hashFourChars: fiscal?.hash_four_chars ?? meta?.hashFourChars,
@@ -531,6 +539,84 @@ const TransactionsInner: React.FC = () => {
         URL.revokeObjectURL(url);
     };
 
+    // Issue a fatura (FT) for free-text line items not tied to catalogue products.
+    // Reuses the real fiscal checkout via synthetic, non-tracked products so the
+    // document is signed, numbered and listed exactly like a POS sale.
+    const handleCreateCustomInvoice = async (payload: CustomInvoicePayload) => {
+        if (!employee) {
+            throw new Error(t('transactions.creditNote.needEmployee'));
+        }
+        const now = new Date();
+        const cart: FiscalCartLine[] = payload.lines.map(line => {
+            const id = generateUUID();
+            const product = {
+                id,
+                name: line.description,
+                description: null,
+                // Unique SKU per line: SAF-T MasterFiles keys products by sku, so a
+                // shared code would collapse distinct custom items into one (invalid)
+                // ProductCode with conflicting descriptions.
+                sku: `CUSTOM-${id}`,
+                barcode: null,
+                category_id: null,
+                category_name: null,
+                price: line.unitPrice,
+                cost: 0,
+                iva_rate: line.ivaRate,
+                stock: 0,
+                min_stock: 0,
+                track_stock: false,
+                image_url: null,
+                supplier: null,
+                location: null,
+                is_active: true,
+                display_order: 0,
+                created_at: now,
+                updated_at: now,
+                last_synced_at: null,
+                deleted_at: null,
+                needs_push: false,
+                is_conflicted: false,
+            } as LocalProduct;
+            return { product, quantity: line.quantity, discount: 0 };
+        });
+
+        // Ephemeral customer carries only the NIF/name onto the fiscal document;
+        // the empty id keeps customer_id null (no DB record is created).
+        const customer: LocalCustomer | null =
+            payload.customerNif || payload.customerName
+                ? ({
+                      id: '',
+                      name: payload.customerName,
+                      tax_number: payload.customerNif || null,
+                      country: 'PT',
+                      address: null,
+                  } as unknown as LocalCustomer)
+                : null;
+
+        const grossTotal = payload.lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+
+        const result = await processTransaction(
+            {
+                paymentMethod: payload.paymentMethod,
+                amountPaid: payload.paymentMethod === 'cash' ? grossTotal : undefined,
+                employeeId: employee.id,
+                employeeName: employee.name,
+                employeeNumber: employee.employee_number,
+            },
+            undefined,
+            undefined,
+            { settings, updateSettings },
+            undefined,
+            { cart, customer }
+        );
+
+        await loadTransactions();
+        if (result.transactionId) {
+            await handleViewReceipt(result.transactionId);
+        }
+    };
+
     return (
         <div
             className="ds2-visual-scope"
@@ -545,6 +631,13 @@ const TransactionsInner: React.FC = () => {
                         <p className="text-gray-600 mt-1">{t('transactions.header.subtitle')}</p>
                     </div>
                     <div className="mt-4 flex items-center space-x-3 sm:mt-0">
+                        <AdminActionButton
+                            variant="outline"
+                            label={t('transactions.customInvoice.button')}
+                            icon={FilePlus}
+                            onClick={() => setShowCustomInvoice(true)}
+                            className={toolbarBtn}
+                        />
                         <AdminActionButton
                             variant="primary"
                             label={t('transactions.header.export')}
@@ -656,7 +749,7 @@ const TransactionsInner: React.FC = () => {
                             />
                             <AdminActionButton
                                 variant="outline"
-                                label="Refresh"
+                                label={t('transactions.refresh')}
                                 icon={Receipt}
                                 onClick={() => void loadTransactions()}
                                 disabled={loading}
@@ -896,6 +989,11 @@ const TransactionsInner: React.FC = () => {
                         receipt={receiptPreviewData}
                     />
                 )}
+                <CustomInvoiceDialog
+                    open={showCustomInvoice}
+                    onClose={() => setShowCustomInvoice(false)}
+                    onSubmit={handleCreateCustomInvoice}
+                />
             </div>
         </div>
     );

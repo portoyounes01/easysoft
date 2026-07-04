@@ -27,6 +27,17 @@ import type {
     FiscalTransactionMetadata,
     VendusFiscalCheckoutPersistencePayload,
 } from '../fiscal/types';
+import type {
+    LocalAttendanceEntry,
+    LocalEmployeeHrProfile,
+    LocalLeaveRequest,
+} from '../types/hr';
+import type { LocalCashDrawerEvent } from '../types/cashDrawer';
+import type {
+    LocalPurchaseReceipt,
+    LocalPurchaseReceiptLine,
+} from '../types/purchaseReceipt';
+import type { LocalRawMaterial, LocalRecipeLine } from '../types/rawMaterial';
 import { buildHashPlaintext, extractQrHashFourChars } from '../fiscal/signing';
 import { buildAtQrPayloadString } from '../fiscal/qrPayload';
 import { assertInvoiceSeriesSegment, buildInvoiceNo, computeNextSequential, formatSequential, invoiceSeriesSegment } from '../fiscal/seriesUtils';
@@ -53,6 +64,14 @@ export class LocalPOSDatabase extends Dexie {
     products!: Table<LocalProduct>;
     customers!: Table<LocalCustomer>;
     queueTickets!: Table<LocalQueueTicket>;
+    attendanceEntries!: Table<LocalAttendanceEntry>;
+    employeeHrProfiles!: Table<LocalEmployeeHrProfile>;
+    leaveRequests!: Table<LocalLeaveRequest>;
+    cashDrawerEvents!: Table<LocalCashDrawerEvent>;
+    purchaseReceipts!: Table<LocalPurchaseReceipt>;
+    purchaseReceiptLines!: Table<LocalPurchaseReceiptLine>;
+    rawMaterials!: Table<LocalRawMaterial>;
+    recipeLines!: Table<LocalRecipeLine>;
     transactions!: Table<LocalTransaction>;
     transactionItems!: Table<LocalTransactionItem>;
     fiscalDocuments!: Table<LocalFiscalDocument>;
@@ -242,6 +261,52 @@ export class LocalPOSDatabase extends Dexie {
 
         this.version(11).stores(schemaV11).upgrade(async () => {
             console.log('Upgrading database to version 11 - customer order queue tickets');
+        });
+
+        const schemaV12 = {
+            ...schemaV11,
+            attendanceEntries:
+                'id, employee_id, status, clock_in, clock_out, [employee_id+status]',
+            employeeHrProfiles:
+                'employee_id, contract_type, contract_end_date, updated_at',
+            leaveRequests:
+                'id, employee_id, leave_type, status, start_date, end_date, [employee_id+status]',
+        } as const;
+
+        this.version(12).stores(schemaV12).upgrade(async () => {
+            console.log('Upgrading database to version 12 - HR attendance, contracts, and leave');
+        });
+
+        const schemaV13 = {
+            ...schemaV12,
+            cashDrawerEvents:
+                'id, employee_id, action, trigger, reason_code, terminal_id, timestamp, transaction_id, [terminal_id+timestamp]',
+        } as const;
+
+        this.version(13).stores(schemaV13).upgrade(async () => {
+            console.log('Upgrading database to version 13 - append-only cash drawer audit events');
+        });
+
+        const schemaV14 = {
+            ...schemaV13,
+            purchaseReceipts:
+                'id, status, supplier_name, document_number, purchase_date, created_at, applied_at',
+            purchaseReceiptLines:
+                'id, purchase_receipt_id, product_id, resolution, [purchase_receipt_id+resolution]',
+        } as const;
+
+        this.version(14).stores(schemaV14).upgrade(async () => {
+            console.log('Upgrading database to version 14 - purchase receipt stock imports');
+        });
+
+        const schemaV15 = {
+            ...schemaV14,
+            rawMaterials: 'id, name, is_active, updated_at',
+            recipeLines: 'id, product_id, raw_material_id, [product_id+raw_material_id]',
+        } as const;
+
+        this.version(15).stores(schemaV15).upgrade(async () => {
+            console.log('Upgrading database to version 15 - raw materials & recipes (fiche technique)');
         });
 
         // Add hooks for auto-updating sync flags

@@ -18,6 +18,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
+    "hardware:test-drawer": "electron scripts/test-cash-drawer.cjs",
     "seed": "node seed/run-seed.cjs",
     "electron": "npm run build && electron .",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",

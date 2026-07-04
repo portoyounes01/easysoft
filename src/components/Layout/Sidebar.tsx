@@ -20,10 +20,16 @@ import {
   ListOrdered,
   Contact,
   Palette,
+  Briefcase,
+  Archive,
+  FileCheck2,
+  Boxes,
+  LineChart,
 } from "lucide-react";
 import { useSupabaseAuth } from "../../contexts/SupabaseAuthContext";
 import { useDesignSystem2Customization } from "../../contexts/DesignSystem2CustomizationContext";
 import LanguageSwitcher from "../LanguageSwitcher";
+import { OPEN_MY_PROFILE_EVENT } from "../HR/MyProfileDialog";
 import "../../styles/design-system-2-scope.css";
 
 interface SidebarProps {
@@ -66,6 +72,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         permission: "inventory",
       },
       {
+        path: "/purchase-receipts",
+        icon: FileCheck2,
+        labelKey: "sidebar.menu.purchaseReceipts",
+        permission: "inventory",
+      },
+      {
+        path: "/inventory",
+        icon: Boxes,
+        labelKey: "sidebar.menu.inventory",
+        permission: "inventory",
+      },
+      {
         path: "/categories",
         icon: Tag,
         labelKey: "sidebar.menu.categories",
@@ -84,6 +102,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         permission: "employees",
       },
       {
+        path: "/hr",
+        icon: Briefcase,
+        labelKey: "sidebar.menu.hr",
+        permission: "employees",
+      },
+      {
         path: "/reports",
         icon: BarChart3,
         labelKey: "sidebar.menu.reports",
@@ -94,6 +118,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         icon: Calculator,
         labelKey: "sidebar.menu.profitCosts",
         permission: "profit_costs",
+      },
+      {
+        path: "/stock-profit",
+        icon: LineChart,
+        labelKey: "sidebar.menu.stockProfit",
+        permission: "reports",
       },
       {
         path: "/transactions",
@@ -112,6 +142,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         icon: ListOrdered,
         labelKey: "sidebar.menu.queue",
         permission: "sales",
+      },
+      {
+        path: "/cash-drawer-audit",
+        icon: Archive,
+        labelKey: "sidebar.menu.cashDrawerAudit",
+        permission: "transactions",
       },
       {
         path: "/fiscal-audit",
@@ -187,7 +223,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
               if (!hasPermission(item.permission)) return null;
 
               const Icon = item.icon;
-              const label = t(item.labelKey);
+              const label = t(item.labelKey, {
+                defaultValue:
+                  item.labelKey === "sidebar.menu.hr"
+                    ? "HR & Attendance"
+                    : item.labelKey === "sidebar.menu.cashDrawerAudit"
+                      ? "Cash Drawer Audit"
+                      : item.labelKey === "sidebar.menu.purchaseReceipts"
+                        ? "Purchase Imports"
+                      : item.labelKey === "sidebar.menu.inventory"
+                        ? "Inventory"
+                      : item.labelKey === "sidebar.menu.stockProfit"
+                        ? "Stock & Profit"
+                      : item.labelKey,
+              });
               return (
                 <li key={item.path}>
                   <NavLink
@@ -219,8 +268,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         </nav>
 
         <div className="flex-shrink-0 p-3">
-          <div
-            className={`mb-2 flex min-h-touch-xs items-center rounded-md px-2.5 py-2 ${isCollapsed ? "justify-center space-x-0" : "space-x-2.5"}`}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event(OPEN_MY_PROFILE_EVENT))}
+            className={`mb-2 flex min-h-touch-xs w-full items-center rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white ${isCollapsed ? "justify-center space-x-0" : "space-x-2.5"}`}
+            title={isCollapsed ? "My Profile" : undefined}
           >
             <div className="flex-shrink-0 rounded-full bg-gray-100 p-1.5">
               <UserCircle className="h-4 w-4 text-gray-500" />
@@ -235,7 +287,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
                 </p>
               </div>
             )}
-          </div>
+          </button>
 
           <LanguageSwitcher variant="sidebar" collapsed={isCollapsed} />
 

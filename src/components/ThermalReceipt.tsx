@@ -432,14 +432,6 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       <div className="center">
         {t('thermalReceipt.dateLabel')} {formatDate(date)} {counter}
       </div>
-      {ticketNumber && (
-        <div className="ticket-number">
-          <div className="center bold">PEDIDO / ORDER</div>
-          <div className="center bold" style={{ fontSize: '28px', lineHeight: 1.2 }}>
-            {ticketNumber}
-          </div>
-        </div>
-      )}
 
       {/* Credit Note Specific Info */}
       {documentType === 'NOTA_CREDITO' && originalInvoice && (
@@ -623,6 +615,20 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
           num: certificationNumberForReceiptDisplay(certificationNumber),
         })}
       </div>
+
+      {/* Order queue number — printed last, below a dashed separator. Only present
+          on the freshly issued receipt; the back-office reprint omits it. */}
+      {ticketNumber && (
+        <>
+          <div className="separator"></div>
+          <div className="ticket-number">
+            <div className="center bold">PEDIDO / ORDER</div>
+            <div className="center bold" style={{ fontSize: '28px', lineHeight: 1.2 }}>
+              {ticketNumber}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Extra space for cutting */}
       <div style={{ height: '20px' }}></div>

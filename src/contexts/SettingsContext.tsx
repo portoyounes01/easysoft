@@ -131,6 +131,10 @@ function mergeFiscalBranch(
                 ...(patch.fiskaly?.exemptTax || {}),
             },
         },
+        accounting: {
+            ...prev.accounting,
+            ...(patch.accounting || {}),
+        },
     };
 }
 
@@ -238,6 +242,13 @@ export interface SystemSettings {
         padding: number;
         readyRetentionMinutes: number;
     };
+    hr: {
+        defaultAnnualHolidayDays: number;
+        defaultWeeklyHours: number;
+        monthlyHolidayAccrualRate: number;
+        contractExpiryWarningDays: number;
+        requirePinForClocking: boolean;
+    };
     company: {
         name: string;
         address: string;
@@ -273,6 +284,16 @@ export interface SystemSettings {
         vendus: VendusFiscalSettings;
         invoicexpress: InvoiceXpressFiscalSettings;
         fiskaly: FiskalyFiscalSettings;
+        /**
+         * Automatic delivery of the periodic SAF-T file to the accountant by email.
+         * NOTE: only the configuration is wired today — no mail transport (SMTP /
+         * provider API) is connected yet, so nothing is actually sent.
+         */
+        accounting: {
+            autoEmailSaft: boolean;
+            accountantEmail: string;
+            frequency: 'monthly' | 'quarterly';
+        };
     };
 }
 
@@ -412,6 +433,13 @@ const defaultSettings: SystemSettings = {
         padding: 3,
         readyRetentionMinutes: 10,
     },
+    hr: {
+        defaultAnnualHolidayDays: 22,
+        defaultWeeklyHours: 40,
+        monthlyHolidayAccrualRate: 1.5,
+        contractExpiryWarningDays: 60,
+        requirePinForClocking: true,
+    },
     company: {
         name: 'Nome da Empresa',
         address: 'Morada',
@@ -439,6 +467,11 @@ const defaultSettings: SystemSettings = {
         vendus: defaultVendusSettings(),
         invoicexpress: defaultInvoiceXpressSettings(),
         fiskaly: defaultFiskalySettings(),
+        accounting: {
+            autoEmailSaft: false,
+            accountantEmail: '',
+            frequency: 'monthly',
+        },
     },
 };
 
@@ -490,6 +523,11 @@ const settingsReducer = (state: SettingsState, action: SettingsAction): Settings
                     orderQueue: {
                         ...state.settings.orderQueue,
                         ...(action.payload.orderQueue || {}),
+                    },
+                    hr: {
+                        ...state.settings.hr,
+                        ...(action.payload.hr || {}),
+                        requirePinForClocking: true,
                     },
                     company: {
                         ...state.settings.company,
@@ -562,6 +600,11 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 ...state.settings.orderQueue,
                 ...(patch.orderQueue || {}),
             },
+            hr: {
+                ...state.settings.hr,
+                ...(patch.hr || {}),
+                requirePinForClocking: true,
+            },
             company: {
                 ...state.settings.company,
                 ...(patch.company || {}),
@@ -619,6 +662,11 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                         orderQueue: {
                             ...defaultSettings.orderQueue,
                             ...(parsedSettings.orderQueue || {}),
+                        },
+                        hr: {
+                            ...defaultSettings.hr,
+                            ...(parsedSettings.hr || {}),
+                            requirePinForClocking: true,
                         },
                         company: {
                             ...defaultSettings.company,

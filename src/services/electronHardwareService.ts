@@ -115,7 +115,14 @@ class ElectronHardwareService {
   /**
    * Get cash drawer status
    */
-  async getDrawerStatus(): Promise<{ success: boolean; status: string; error?: string }> {
+  async getDrawerStatus(): Promise<{
+    success: boolean;
+    status: 'open' | 'closed' | 'unknown';
+    signal?: 'high' | 'low';
+    rawStatus?: number;
+    method?: 'usb' | 'network';
+    error?: string;
+  }> {
     if (!this.isElectron) {
       return { 
         success: false, 

@@ -1,0 +1,237 @@
+/*
+ * /pos2 — pixel-calibrated against docs/design/pos2-reference.png (1448x1086).
+ *
+ * Scale model: every dimension is expressed in *reference pixels* multiplied
+ * by one scale unit `--pos2-u = min(100vw/1448, 100vh/1086)`. The whole UI is
+ * therefore a uniform scale of the reference mock at any window size.
+ *
+ * Browser zoom (Cmd/Ctrl +/-) shrinks the CSS-pixel viewport while enlarging
+ * each CSS px by the same factor, so u-based sizes keep the exact same
+ * physical size and proportions at every zoom level — no JS compensation
+ * needed. No rem units anywhere: rem does not scale with the viewport and
+ * would distort the layout under zoom.
+ *
+ * Corner radii measured from the reference: buttons/pills r13 (rounded
+ * rects, NOT capsules), sidebar items r16, product cards r24, panel r28,
+ * "..." button 56x56 white squircle r18.
+ */
+
+.pos2-route-host {
+    --pos2-u: min(calc(100vw / 1448), calc(100vh / 1086));
+
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    background: #fbfbfc;
+    overflow: hidden;
+}
+
+/* ---- frame ---- */
+
+.pos2-statusbar {
+    height: calc(var(--pos2-u) * 70);
+    padding: calc(var(--pos2-u) * 12) calc(var(--pos2-u) * 22) 0;
+    font-size: calc(var(--pos2-u) * 16);
+}
+
+.pos2-statusbar-right {
+    gap: calc(var(--pos2-u) * 8);
+}
+
+.pos2-content-row {
+    padding: 0 calc(var(--pos2-u) * 22) calc(var(--pos2-u) * 64);
+    gap: calc(var(--pos2-u) * 24);
+}
+
+/* ---- sidebar ---- */
+
+.pos2-sidebar {
+    width: calc(var(--pos2-u) * 188);
+    flex: 0 0 calc(var(--pos2-u) * 188);
+    padding-top: calc(var(--pos2-u) * 21);
+    padding-bottom: calc(var(--pos2-u) * 28);
+}
+
+.pos2-sidebar nav {
+    gap: calc(var(--pos2-u) * 6);
+}
+
+.pos2-nav-item {
+    padding: calc(var(--pos2-u) * 23) calc(var(--pos2-u) * 22);
+    font-size: calc(var(--pos2-u) * 19);
+    line-height: 1.2;
+    border-radius: calc(var(--pos2-u) * 16);
+    gap: calc(var(--pos2-u) * 14);
+    border: 1px solid transparent;
+}
+
+.pos2-nav-item-active {
+    background: #f2f2f4;
+    border-color: #eaeaec;
+}
+
+.pos2-nav-icon {
+    width: calc(var(--pos2-u) * 21);
+    height: calc(var(--pos2-u) * 21);
+}
+
+/* ---- order panel ---- */
+
+.pos2-order-panel {
+    width: calc(var(--pos2-u) * 466);
+    flex: 0 0 calc(var(--pos2-u) * 466);
+    border-radius: calc(var(--pos2-u) * 28);
+    padding: calc(var(--pos2-u) * 29);
+}
+
+.pos2-order-title {
+    font-size: calc(var(--pos2-u) * 34);
+}
+
+.pos2-order-title-row {
+    gap: calc(var(--pos2-u) * 40);
+}
+
+.pos2-eat-in {
+    font-size: calc(var(--pos2-u) * 19);
+}
+
+.pos2-more-btn {
+    width: calc(var(--pos2-u) * 56);
+    height: calc(var(--pos2-u) * 56);
+    border-radius: calc(var(--pos2-u) * 18);
+    background: #ffffff;
+    border: 1px solid #f0f0f2;
+    box-shadow: 0 calc(var(--pos2-u) * 2) calc(var(--pos2-u) * 8) rgba(0, 0, 0, 0.07);
+}
+
+.pos2-more-btn:hover {
+    background: #f7f7f8;
+}
+
+.pos2-more-icon {
+    width: calc(var(--pos2-u) * 22);
+    height: calc(var(--pos2-u) * 22);
+}
+
+.pos2-order-list {
+    margin-top: calc(var(--pos2-u) * 32);
+    padding-top: calc(var(--pos2-u) * 11);
+}
+
+.pos2-order-line {
+    padding-top: calc(var(--pos2-u) * 20);
+    padding-bottom: calc(var(--pos2-u) * 20);
+    padding-left: calc(var(--pos2-u) * 16);
+    font-size: calc(var(--pos2-u) * 19);
+}
+
+.pos2-order-line-main {
+    gap: calc(var(--pos2-u) * 16);
+}
+
+.pos2-order-modifier {
+    font-size: calc(var(--pos2-u) * 16);
+    margin-top: calc(var(--pos2-u) * 3);
+}
+
+.pos2-totals {
+    border-top: 1px solid #f4f4f5;
+    padding-top: calc(var(--pos2-u) * 20);
+    gap: calc(var(--pos2-u) * 13);
+    font-size: calc(var(--pos2-u) * 19);
+}
+
+.pos2-total-row {
+    border-top: 1px solid #f4f4f5;
+    margin-top: calc(var(--pos2-u) * 6);
+    padding-top: calc(var(--pos2-u) * 12);
+    font-size: calc(var(--pos2-u) * 27);
+}
+
+.pos2-order-actions {
+    margin-top: calc(var(--pos2-u) * 103);
+    gap: calc(var(--pos2-u) * 14);
+}
+
+.pos2-order-action-btn {
+    font-weight: 400;
+    height: calc(var(--pos2-u) * 85);
+    border-radius: calc(var(--pos2-u) * 13);
+    font-size: calc(var(--pos2-u) * 20);
+}
+
+/* ---- menu column ---- */
+
+.pos2-menu-col {
+    padding-top: calc(var(--pos2-u) * 24);
+    padding-bottom: calc(var(--pos2-u) * 15);
+}
+
+.pos2-pill-row {
+    gap: calc(var(--pos2-u) * 13);
+}
+
+.pos2-category-pill {
+    font-weight: 400;
+    height: calc(var(--pos2-u) * 70);
+    padding: 0 calc(var(--pos2-u) * 14);
+    border-radius: calc(var(--pos2-u) * 13);
+    font-size: calc(var(--pos2-u) * 19);
+}
+
+.pos2-product-grid {
+    margin-top: calc(var(--pos2-u) * 31);
+    column-gap: calc(var(--pos2-u) * 14.5);
+    row-gap: calc(var(--pos2-u) * 26.5);
+}
+
+.pos2-product-card {
+    border-radius: calc(var(--pos2-u) * 24);
+    padding: calc(var(--pos2-u) * 13);
+}
+
+.pos2-product-thumb {
+    height: calc(var(--pos2-u) * 122);
+    border-radius: calc(var(--pos2-u) * 16);
+}
+
+.pos2-product-name {
+    font-size: calc(var(--pos2-u) * 17.5);
+    margin-top: calc(var(--pos2-u) * 12);
+}
+
+.pos2-product-price {
+    font-size: calc(var(--pos2-u) * 16);
+    margin-top: calc(var(--pos2-u) * 4);
+}
+
+.pos2-menu-actions {
+    margin-top: calc(var(--pos2-u) * 20);
+    gap: calc(var(--pos2-u) * 18);
+}
+
+.pos2-action-btn {
+    font-weight: 400;
+    height: calc(var(--pos2-u) * 72);
+    border-radius: calc(var(--pos2-u) * 13);
+    font-size: calc(var(--pos2-u) * 19.5);
+}
+
+/* ---- shared colors (sampled from reference) ---- */
+
+.pos2-btn-dark {
+    background: #121112;
+    color: #ffffff;
+}
+
+.pos2-btn-dark:hover {
+    background: #2b2a2c;
+}
+
+.pos2-btn-light {
+    background: #f2f2f4;
+    color: #171717;
+}
+
+.pos2-btn-light:hover {
+    background: #e9e9eb;
+}
