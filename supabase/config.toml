@@ -389,3 +389,12 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/import_map.json"
 entrypoint = "./functions/manage-devices/index.ts"
+
+[functions.pos-checkout]
+enabled = true
+# Server-side fiscal issuance. Only a paired till (device session) may check out,
+# so the gateway verifies the JWT; the function additionally re-checks the device
+# is still enrolled and derives tenant/store/device from the verified claims.
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/pos-checkout/index.ts"

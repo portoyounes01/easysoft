@@ -22,13 +22,13 @@ Out of scope: the multi-tenant data model, RLS/isolation, and fiskaly integratio
 
 ## 2. TL;DR — the policy in one screen
 
-1. **Rollout is never atomic.** A distributed till fleet runs mixed versions against one shared backend. Therefore every cross-component contract (till↔server RPCs, UI↔native-shell hardware API) is **versioned and backward-tolerant**, and every change is **expand → migrate → contract**, never a breaking change in one shot. [DECIDED]
-2. **Shrink the distributed surface.** Electron exists *only* to drive hardware. The UI is loaded from the network (like the future PWA), not shipped in the installer. This moves the fast-moving code (UI + business logic) back to a **centralized** deploy (Vercel) and leaves only a thin, rarely-changing **hardware shell** on each till. Updates to the UI then ship at web speed with no fleet visit. [DECIDED — direction; §6]
-3. **Keep the native hardware layer as-is.** Do **not** rewrite it in Tauri/Rust or replace it with WebUSB/WebSerial. It works and it's the finicky part. [DECIDED; §6.4]
-4. **Fail-closed on selling; loud on diagnosis.** After a power-cut or any unhealthy state, the till **must not sell** until all preconditions are green — but it must **boot to a visible red/green readiness screen**, never a blank/frozen one. A blank screen is the worst outcome for incident-minimization (undiagnosable). [DECIDED; §7]
-5. **The installed shell only changes for hardware/native reasons** — which is rare — and every such change is gated by a **minimum-shell-version handshake** so a newer UI can never silently drive an incompatible shell. [DECIDED; §8]
-6. **The backend is shared: a bad deploy is an all-tenant selling outage** (v1 is online-required) and **fiscal writes cannot be rolled back**. Backend deploys therefore require staging soak, restore points, tenant-scoped feature flags, and additive-only fiscal migrations. [DECIDED; §9]
-7. **The whole till migration rides one reversible config flag** (`renderer_source`), so every step is a flip, not a reinstall, and rollback is instant. [DECIDED; §10]
+1. **Rollout is never atomic.** A distributed till fleet runs mixed versions against one shared backend. Therefore every cross-component contract (till↔server RPCs, UI↔native-shell hardware API) is **versioned and backward-tolerant**, and every change is **expand → migrate → contract**, never a breaking change in one shot. [RECOMMENDED — constraint-derived]
+2. **Shrink the distributed surface.** Electron exists *only* to drive hardware. The UI is loaded from the network (like the future PWA), not shipped in the installer. This moves the fast-moving code (UI + business logic) back to a **centralized** deploy (Vercel) and leaves only a thin, rarely-changing **hardware shell** on each till. Updates to the UI then ship at web speed with no fleet visit. [USER-DECIDED — direction; §6]
+3. **Keep the native hardware layer as-is.** Do **not** rewrite it in Tauri/Rust or replace it with WebUSB/WebSerial. It works and it's the finicky part. [RECOMMENDED; §6.4]
+4. **Fail-closed on selling; loud on diagnosis.** After a power-cut or any unhealthy state, the till **must not sell** until all preconditions are green **[USER-DECIDED]** — and it must **boot to a visible red/green readiness screen**, never a blank/frozen one, because a blank screen is the worst outcome for incident-minimization (undiagnosable) **[RECOMMENDED — mechanism]**. [§7]
+5. **The installed shell only changes for hardware/native reasons** — which is rare — and every such change is gated by a **minimum-shell-version handshake** so a newer UI can never silently drive an incompatible shell. [RECOMMENDED; §8]
+6. **The backend is shared: a bad deploy is an all-tenant selling outage** (v1 is online-required) and **fiscal writes cannot be rolled back**. Backend deploys therefore require staging soak, restore points, tenant-scoped feature flags, and additive-only fiscal migrations. [RECOMMENDED; §9]
+7. **The whole till migration rides one reversible config flag** (`renderer_source`), so every step is a flip, not a reinstall, and rollback is instant. [RECOMMENDED; §10]
 
 ---
 
@@ -70,7 +70,7 @@ Out of scope: the multi-tenant data model, RLS/isolation, and fiskaly integratio
 
 ## 6. Target till architecture: thin hardware shell + network UI
 
-**Decision [DECIDED]:** the till = **(a)** a thin native Electron shell (hardware + safeStorage session + boot/gate) that changes rarely, **+ (b)** the UI/business logic loaded from the network (the same web build the future manager PWA uses), **+ (c)** a minimal cached gate shell for offline *diagnosis* (§7).
+**Decision [USER-DECIDED — direction; mechanics RECOMMENDED]:** the till = **(a)** a thin native Electron shell (hardware + safeStorage session + boot/gate) that changes rarely, **+ (b)** the UI/business logic loaded from the network (the same web build the future manager PWA uses), **+ (c)** a minimal cached gate shell for offline *diagnosis* (§7).
 
 Rationale: Electron is used **only** for hardware; the UI has no native dependency. Because v1 is already online-required (D1), loading the UI over the network adds **no new availability dependency** — the usual "offline" objection to remote UI does not apply here. Result: the fast-moving code stops being distributed, and the fleet-skew problem shrinks to the small hardware-API surface.
 
@@ -78,9 +78,9 @@ Rationale: Electron is used **only** for hardware; the UI has no native dependen
 
 **6.2 Session & pairing** stay in the native shell via `safeStorage` (plan A5/§6.2), exposed to the network UI through the preload — the *device* is the native install; the UI is just a view. This is cleaner than a browser session and aligns with "the device is the RLS principal."
 
-**6.3 One web build, two hosts.** The till UI becomes "the web app hosted in a hardware shell"; the future manager PWA is "the same web app in a browser." This collapses two codebases toward one and directly serves the plan's PWA-readiness goal (§8) and "one identity across POS and PWA."
+**6.3 One web build, two hosts.** The till UI becomes "the web app hosted in a hardware shell"; the future manager PWA is "the same web app in a browser." This collapses two codebases toward one and directly serves the plan's PWA-readiness goal (§8) and "one identity across POS and PWA." **Implication for the plan:** the shared build must **feature-detect the hardware bridge** — hardware/print/drawer paths guard on `window.electronAPI` being present and degrade cleanly in the browser host (a manager PWA session has no shell). The hardware API is a *capability*, not an assumption.
 
-**6.4 Do NOT rewrite the hardware layer. [DECIDED]**
+**6.4 Do NOT rewrite the hardware layer. [RECOMMENDED]**
 - **Tauri/Rust:** smaller binary + built-in updater, but forces a rewrite of the working `serialport`/`usb`/`escpos` layer and adds system-webview skew across OSes. Update win is obtainable from electron-updater instead. Not worth it.
 - **WebUSB/WebSerial/WebHID:** Chromium-only, per-device permission gestures (bad for unattended tills), secure-context limits, many network/USB-class printers unreachable, drawer usually kicked *through* the printer. Too flaky for production POS.
 - Keep Electron + the Node hardware modules; only repoint the UI.
@@ -89,7 +89,7 @@ Rationale: Electron is used **only** for hardware; the UI has no native dependen
 
 ## 7. Fail-closed boot & readiness gate
 
-**Decision [DECIDED]:** the till **must not sell** until healthy; but it **must boot to a loud diagnostic readiness gate**, not a blank screen.
+**Decision:** the till **must not sell** until healthy **[USER-DECIDED]**; but it **must boot to a loud diagnostic readiness gate**, not a blank screen **[RECOMMENDED — mechanism]**.
 
 **7.1 Why a cached gate shell is mandatory.** If the renderer loads purely from the network and the network is down at boot, Electron shows its default blank error page — the exact undiagnosable state to avoid. So ship a **minimal local gate bundle** (in the installer, served via `app://`) whose only jobs are: boot offline → run preflight → render the red/green checklist → hand off to the network UI once all-green. The cached shell is for **diagnosis, not operation**. (This is why we do **not** need a full offline PWA — see §12.)
 
@@ -97,7 +97,7 @@ Rationale: Electron is used **only** for hardware; the UI has no native dependen
 
 | Class | Effect | Candidate members (confirm) |
 |---|---|---|
-| **Blocking** | No sale until green | device enrolled + valid session; backend reachable; fiskaly reachable; checkout function healthy; **receipt printer online?** |
+| **Blocking** | No sale until green | **UI origin (`ui_origin`) reachable** (else the gate cannot hand off — distinct from backend reachability); device enrolled + valid session; backend reachable; fiskaly reachable; checkout function healthy; **receipt printer online?** |
 | **Tender-specific** | Blocks only the affected tender | cash drawer offline → block cash, allow card |
 | **Degraded** | Warn, keep selling | kitchen/secondary printer offline |
 | **Informational** | Nudge, never block | "update available" (unless it trips the min-version rule, §8) |
@@ -118,8 +118,8 @@ Open questions the plan must resolve: is a working **receipt printer legally blo
 
 ## 8. Version contracts (survive a mixed-version fleet)
 
-- **UI↔shell hardware API [DECIDED].** The `electronAPI.hardware.*` / `fiscal:*` preload surface (§3) is a **versioned public API**. The preload exposes `shellVersion` + a hardware-API version; the network UI declares the **minimum shell version** it requires; the **gate blocks** with "update the installer" if the installed shell is too old (a *blocking* precondition, §7.2). This is the single mechanism that lets the UI deploy continuously without silently driving an incompatible shell.
-- **Till↔server RPC/edge-function signatures [DECIDED].** Treat as a versioned API permanently. The plan already leans on "RPC signatures unchanged" for zero-client-redeploy cutovers (§9 rollback) — protect that property for all future changes (P1/P2).
+- **UI↔shell hardware API [RECOMMENDED].** The `electronAPI.hardware.*` / `fiscal:*` preload surface (§3) is a **versioned public API**. The preload exposes `shellVersion` + a hardware-API version; the network UI declares the **minimum shell version** it requires; the **gate blocks** with "update the installer" if the installed shell is too old (a *blocking* precondition, §7.2). This is the single mechanism that lets the UI deploy continuously without silently driving an incompatible shell.
+- **Till↔server RPC/edge-function signatures [RECOMMENDED].** Treat as a versioned API permanently. The plan already leans on "RPC signatures unchanged" for zero-client-redeploy cutovers (§9 rollback) — protect that property for all future changes (P1/P2).
 - **Forced vs lazy updates.** Routine updates roll out lazily; compliance-critical ones **raise the minimum version floor**, which the gate enforces as a hard block. This is the lever for a fiskaly-forced breaking change (§4).
 
 ---
