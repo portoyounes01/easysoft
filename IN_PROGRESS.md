@@ -288,9 +288,11 @@
 - Canonical plan: `docs/multi-tenant-plan.md`
 - Execution log: `docs/phase2-identity.md`
 - Completed/deployed: Phase 0 core hardening, Phase 1 tenant backbone/claim helpers, device provisioning, `pair-device`, pairing UI/session bootstrap, and `employee_pin_login` foundation.
-- Current slice: employee credential cutover implemented and locally verified; JWT-only `upload-image` deployed to EasySoft-staging.
-- Blocker: staging SQL apply requires a valid EasySoft-staging Postgres password. Production is unchanged and the credential-delta exposure remains open until the coordinated cutover.
-- Next: validate/apply the cutover on staging, then finish Dexie scoping, post-pair bootstrap, authenticated sync enforcement, and `ConnectivityGate`.
+- Current slice: staging identity cutover + tenant-admin Tills console verified end to end. The console uses admin PIN re-auth and JWT-protected `manage-devices`; no service-role credential enters the renderer.
+- Staging state: migrations current through `20260712000000`; `pair-device`, JWT-only `upload-image`, and `manage-devices` deployed. Pair → PIN login → reload → admin unlock → create text/QR code → copy → authorized revoke passed. Temporary test fixtures/auth users were fully removed.
+- Staging found/fixed: successful `employee_pin_login` SQLSTATE 42702 ambiguity; fresh-cache login fallback; reload restoration now uses tenant-derived `get_employee_profile` rather than forbidden direct table SELECT. Auth tests 6/6 pass.
+- Production is unchanged and the credential-delta exposure remains open until the coordinated production cutover.
+- Next: remaining staging auth checks (employee create/PIN reset, HR, image/purchase authorization, anon/cross-tenant negatives), then pair production till and promote migrations/functions/client in one maintenance window. Afterward finish post-pair bootstrap, authenticated sync enforcement, and `ConnectivityGate`.
 
 ---
 

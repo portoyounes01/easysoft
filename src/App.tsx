@@ -32,6 +32,7 @@ import CashDrawerAudit from './pages/CashDrawerAudit';
 import PurchaseReceipts from './pages/PurchaseReceipts';
 import Inventory from './pages/Inventory';
 import StockProfitReport from './pages/StockProfitReport';
+import Devices from './pages/Devices';
 
 const Router = ['app:', 'file:'].includes(window.location.protocol) ? HashRouter : BrowserRouter;
 
@@ -291,6 +292,14 @@ const AppContent: React.FC = () => {
                     element={
                       <PermissionRoute permission="settings">
                         <FiscalAudit />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/devices"
+                    element={
+                      <PermissionRoute permission="settings">
+                        <Devices />
                       </PermissionRoute>
                     }
                   />

@@ -381,3 +381,11 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/import_map.json"
 entrypoint = "./functions/pair-device/index.ts"
+
+[functions.manage-devices]
+enabled = true
+# Privileged device administration requires a valid device/human JWT. Device
+# callers additionally re-authenticate an administrator PIN inside the function.
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/manage-devices/index.ts"

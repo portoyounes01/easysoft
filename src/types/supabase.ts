@@ -52,6 +52,10 @@ export interface Database {
                 Args: { p_employee_number: string; p_secret: string };
                 Returns: EmployeeLoginResult[];
             };
+            get_employee_profile: {
+                Args: { p_employee_id: string };
+                Returns: EmployeeRow[];
+            };
             upsert_employees: {
                 Args: { employees_data: unknown };
                 Returns: { id: string; success: boolean; error: string }[];

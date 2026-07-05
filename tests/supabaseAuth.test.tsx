@@ -146,6 +146,58 @@ describe('SupabaseAuthContext employee PIN login', () => {
         expect(result.current.error).toBe('Invalid employee number or credentials.');
     });
 
+    it('surfaces a PostgREST RPC error message', async () => {
+        mocks.rpc.mockResolvedValue({
+            data: null,
+            error: { message: 'column reference employee_id is ambiguous' },
+        });
+        const { result } = renderHook(() => useSupabaseAuth(), { wrapper });
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        await act(async () => {
+            const login = await result.current.signInWithEmployeeCredentials('EMP001', '1234');
+            expect(login.success).toBe(false);
+        });
+
+        expect(result.current.error).toBe('column reference employee_id is ambiguous');
+    });
+
+    it('falls back to the server roster when the fresh local cache read fails', async () => {
+        mocks.rpc.mockImplementation((functionName: string) => {
+            if (functionName === 'get_employee_profile') {
+                return Promise.resolve({ data: [rosterEmployee], error: null });
+            }
+            return Promise.resolve({
+                data: [{
+                    employee_id: rosterEmployee.id,
+                    employee_number: rosterEmployee.employee_number,
+                    name: rosterEmployee.name,
+                    role: rosterEmployee.role,
+                    success: true,
+                    error: null,
+                }],
+                error: null,
+            });
+        });
+        mocks.getEmployeeById.mockRejectedValue(new Error('Dexie cache unavailable'));
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        const { result } = renderHook(() => useSupabaseAuth(), { wrapper });
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        await act(async () => {
+            const login = await result.current.signInWithEmployeeCredentials('EMP001', '1234');
+            expect(login.success).toBe(true);
+        });
+
+        expect(mocks.rpc).toHaveBeenCalledWith('get_employee_profile', {
+            p_employee_id: rosterEmployee.id,
+        });
+        expect(result.current.employee?.id).toBe(rosterEmployee.id);
+        expect(result.current.employee?.pin).toBeNull();
+        warn.mockRestore();
+    });
+
     it('refuses employee login without a paired device session', async () => {
         mocks.getSession.mockResolvedValue({ data: { session: null } });
         const { result } = renderHook(() => useSupabaseAuth(), { wrapper });

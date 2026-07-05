@@ -89,13 +89,6 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  const employeeSelect = [
-    'id', 'tenant_id', 'employee_number', 'name', 'email', 'phone', 'role',
-    'access_levels', 'is_active', 'hire_date', 'total_sales', 'transaction_count',
-    'average_transaction', 'hours_worked', 'auth_id', 'created_at', 'updated_at',
-    'last_synced_at', 'deleted_at',
-  ].join(',');
-
   const sanitizeEmployee = (employee: Employee): Employee => ({
     ...employee,
     password_hash: null,
@@ -106,19 +99,17 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const tenantId = session.user.app_metadata.tenant_id;
       if (typeof tenantId !== 'string' || !tenantId) return null;
-      const { data, error } = await supabase
-        .from('employees')
-        .select(employeeSelect)
-        .eq('tenant_id', tenantId)
-        .eq('id', employeeId)
-        .maybeSingle();
+      const { data, error } = await supabase.rpc('get_employee_profile', {
+        p_employee_id: employeeId,
+      });
 
       if (error) {
         console.error('Error fetching employee data:', error);
         return null;
       }
 
-      return data ? sanitizeEmployee(data as Employee) : null;
+      const employee = (data as Employee[] | null)?.[0];
+      return employee ? sanitizeEmployee(employee) : null;
     } catch (error) {
       console.error('Error fetching employee data:', error);
       return null;
@@ -136,6 +127,12 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const tenantId = session.user.app_metadata.tenant_id;
     if (typeof tenantId !== 'string' || !tenantId) return null;
     try {
+      const employeeSelect = [
+        'id', 'tenant_id', 'employee_number', 'name', 'email', 'phone', 'role',
+        'access_levels', 'is_active', 'hire_date', 'total_sales', 'transaction_count',
+        'average_transaction', 'hours_worked', 'auth_id', 'created_at', 'updated_at',
+        'last_synced_at', 'deleted_at',
+      ].join(',');
       const { data, error } = await supabase
         .from('employees')
         .select(employeeSelect)
@@ -202,7 +199,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         p_employee_number: employeeNumber,
         p_secret: password,
       });
-      if (error) throw error;
+      if (error) throw new Error(error.message || 'Employee credential verification failed.');
 
       const loginResult = (data as EmployeeLoginResult[] | null)?.[0];
       if (!loginResult?.success || !loginResult.employee_id) {
@@ -214,7 +211,15 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       const { employeeService } = await import('../services/employeeService');
-      const localEmployee = await employeeService.getEmployeeById(loginResult.employee_id);
+      // A freshly paired till may still be opening/hydrating its Dexie cache. A
+      // local read failure must not discard a credential result already verified
+      // by the server; fall back to the tenant-scoped roster row instead.
+      let localEmployee: Employee | null = null;
+      try {
+        localEmployee = await employeeService.getEmployeeById(loginResult.employee_id);
+      } catch (localError) {
+        console.warn('Local employee cache unavailable during login; using server roster.', localError);
+      }
       const employee = localEmployee
         ? sanitizeEmployee(localEmployee)
         : await fetchEmployeeDataForId(deviceSession, loginResult.employee_id);

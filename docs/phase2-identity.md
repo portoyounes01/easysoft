@@ -1,16 +1,17 @@
 # Phase 2 — Identity cutover execution log
 
-> Status: **implementation complete locally; staging SQL blocked; production unchanged** (2026-07-05). This is the execution record for `docs/multi-tenant-plan.md` §6 and §11 Phase 2. It records deployed state separately from repository state so an uncommitted or unapplied migration is never mistaken for a closed security issue.
+> Status: **staging identity cutover + till-management flow verified end to end; production unchanged** (2026-07-05). This is the execution record for `docs/multi-tenant-plan.md` §6 and §11 Phase 2. It records deployed state separately from repository state so an uncommitted or unapplied migration is never mistaken for a closed security issue.
 
 ## Current boundary
 
 | Surface | State | Evidence |
 |---|---|---|
 | `employee_credentials` + `employee_pin_login` foundation | Applied and previously verified on EasySoft | migrations `20260708000000` / `20260709000000`; commit `fc001f0` |
-| Pairing function, provisioning tool, pairing UI, device session bootstrap | Applied/deployed and previously browser-verified on EasySoft | commits `093b556`, `1443c55`, `b60b145` |
-| Credential cutover migration | Implemented, remote dry-run sees exactly one pending migration; **not applied anywhere** | `20260710000000_phase2_employee_credentials_cutover.sql` |
+| Pairing function, provisioning tool, pairing UI, device session bootstrap | Deployed to production previously; now also deployed and browser-verified on staging | commits `093b556`, `1443c55`, `b60b145`; staging E2E 2026-07-05 |
+| Credential cutover migration | **Applied and verified on staging; not applied to production** | `20260710000000_phase2_employee_credentials_cutover.sql` |
 | JWT-only `upload-image` | **Deployed to EasySoft-staging** (`mubdnwmbvdutqzzprjdp`); not deployed to production | Supabase CLI deployment, 2026-07-05 |
 | Client login/roster/HR/proof-hash changes | Implemented and tested locally; not deployed | files listed below |
+| Tenant-admin till management UI + `manage-devices` function | Function deployed to staging; UI browser-verified end to end; not deployed to production | `/devices`, `src/services/deviceManagementService.ts`, `supabase/functions/manage-devices/` |
 | EasySoft production (`kmojrkkjuehmpordueoe`) | **Unchanged by this slice** | linked migration command was dry-run only |
 
 The Phase 0 credential exposure therefore remains live in production until the coordinated cutover below is completed. Do not mark Shim R2 closed merely because the repository contains the migration.
@@ -50,6 +51,21 @@ The global `UNIQUE(employee_number)` remains intentionally in place until the Ph
 - `upload-image` is now configured with `verify_jwt=true`.
 - Image and purchase-import callers send the paired session token only; no reusable credential verifier is stored or replayed.
 
+### Till management interface
+
+- `/devices` is an authenticated, settings-permission route and is visible as **Tills** in the app sidebar.
+- Because employee PIN login is attribution under a device JWT, the page re-prompts for an administrator PIN before calling the privileged function. `manage-devices` independently verifies that PIN through `employee_pin_login` and requires the returned employee role to be `admin`; client-side role state is never treated as authorization.
+- `manage-devices` derives the tenant from the verified caller JWT and performs all service-role work server-side. The renderer never receives a service-role key and cannot choose a tenant.
+- The UI lists tenant tills/stores, creates a named provisioned till, renders its 160-bit single-use code once as text/QR, reissues an expired code only while the till is still unpaired, and revokes a till plus its auth user.
+- The raw pairing code is never stored. The existing `/pair-device` screen can now prefill a code from `?code=...` while preserving manual entry.
+- The first till for a new tenant still requires platform provisioning because no paired/admin till exists yet. The in-app console handles subsequent tills.
+
+### Staging-discovered auth fixes
+
+- `20260711000000_fix_employee_pin_login_ambiguity.sql` fixes successful PIN logins failing with SQLSTATE `42702`: the function's `RETURNS TABLE employee_id` output variable collided with `employee_credentials.employee_id` inside updates. Explicit target aliases remove the ambiguity.
+- `20260712000000_add_employee_profile_rpc.sql` adds the narrow, claims-derived `get_employee_profile(uuid)` RPC. Reload restoration previously queried `employees` directly, but authenticated device sessions deliberately have no direct table policy during the Phase 2→3 transition. The RPC revalidates the persisted operator without opening a temporary table policy.
+- A freshly paired till now tolerates a still-opening/failing Dexie employee lookup and falls back to the server profile RPC after credentials have already been verified. PostgREST RPC errors are converted to real `Error` messages instead of the unhelpful “Unknown error occurred.”
+
 ### Employee writes and seed tooling
 
 - Normal employee create/PIN reset continues through `upsert_employees`; local SHA-256 values are cleared after a successful push.
@@ -66,20 +82,21 @@ The global `UNIQUE(employee_number)` remains intentionally in place until the Ph
 - Repository-wide ESLint remains red on the existing baseline (227 errors / 41 warnings before this work is considered clean); this slice did not attempt an unrelated lint cleanup.
 - Supabase linked-project dry run — exactly `20260710000000_phase2_employee_credentials_cutover.sql` pending.
 - `upload-image` deployment to EasySoft-staging — success.
-- Staging SQL apply — blocked because the stored/provided staging Postgres password failed SASL authentication. Local Docker validation was also unavailable because Docker was not running.
+- Supabase CLI upgraded from 2.33.9 to 2.109.0. Staging database access works through the eu-central-1 pooler. Migration pushes must use session-mode port `5432`; transaction-mode port `6543` produced prepared-statement collision `42P05`. The direct database hostname is unavailable from this Mac and Docker remains stopped.
+- Staging migration history is current through `20260712000000`. The July 9/10 cutover plus the two staging-discovered auth fixes were applied successfully. Production received none of them.
+- Staging functions now include JWT-only `upload-image`, pre-auth `pair-device`, and JWT-protected `manage-devices`. An unauthenticated `manage-devices` request returns gateway HTTP 401.
+- Browser E2E passed on a staging-configured local build: bootstrap code prefill → pair device → server PIN login → operator reload restoration → `/devices` admin PIN re-auth → list devices/stores → create named till → render one-time text/QR → clipboard copy (39-character Crockford code) → authorized list/revoke API. All temporary employees, devices, pairing rows, notification rows, and auth users were deleted afterward; zero `Temporary*` devices and zero `UITESTADMIN` employees remain.
+- Till-management/auth slice: `npx tsc --noEmit`, focused ESLint (zero errors), production build, pairing-scope tests, and `tests/supabaseAuth.test.tsx` (6/6) pass.
 
 ## Coordinated deployment runbook
 
 This cutover is not safe as independent production deploys. Use one maintenance window:
 
-1. Restore/rotate the EasySoft-staging database password and link the CLI to `mubdnwmbvdutqzzprjdp`.
-2. Apply the migration to staging and run the SQL acceptance checks below.
-3. Deploy the paired client to staging; verify pairing → roster → PIN login → reload → employee logout without device unpairing.
-4. Verify employee create, PIN reset, HR clock-in/out, image upload/delete, and purchase-document authorization.
-5. Verify anon cannot execute `get_employees_delta`, authenticated cross-tenant claims return no roster rows, and `employees` has no credential columns.
-6. Pair the production till and confirm its device JWT claims before the database cutover.
-7. Deploy the JWT-only `upload-image` and the client build to production, then apply the migration in the same maintenance window.
-8. Run the production smoke checks; only then mark Shim R2 closed in `docs/multi-tenant-plan.md` and the Phase 0 exposure resolved.
+1. Complete the remaining staging checks: employee create/PIN reset, HR clock-in/out, image upload/delete, purchase-document authorization, anon delta denial, and a cross-tenant negative probe.
+2. Pair the production till and confirm its device JWT claims before the database cutover.
+3. Deploy the client, JWT-only functions, `manage-devices`, and migrations `20260709000000` through `20260712000000` to production in one maintenance window (session-mode pooler port `5432`).
+4. Verify production pairing → PIN login → reload → employee logout, then the Tills console create/code/revoke flow.
+5. Run the production smoke checks; only then mark Shim R2 closed in `docs/multi-tenant-plan.md` and the Phase 0 exposure resolved.
 
 Required SQL acceptance assertions:
 

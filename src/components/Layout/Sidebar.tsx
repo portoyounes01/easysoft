@@ -25,6 +25,7 @@ import {
   FileCheck2,
   Boxes,
   LineChart,
+  MonitorSmartphone,
 } from "lucide-react";
 import { useSupabaseAuth } from "../../contexts/SupabaseAuthContext";
 import { useDesignSystem2Customization } from "../../contexts/DesignSystem2CustomizationContext";
@@ -156,6 +157,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         permission: "settings",
       },
       {
+        path: "/devices",
+        icon: MonitorSmartphone,
+        labelKey: "sidebar.menu.devices",
+        permission: "settings",
+      },
+      {
         path: "/settings",
         icon: Settings,
         labelKey: "sidebar.menu.settings",
@@ -235,6 +242,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
                         ? "Inventory"
                       : item.labelKey === "sidebar.menu.stockProfit"
                         ? "Stock & Profit"
+                      : item.labelKey === "sidebar.menu.devices"
+                        ? "Tills"
                       : item.labelKey,
               });
               return (

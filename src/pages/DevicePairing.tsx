@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { QrCode, MonitorSmartphone, HelpCircle, Loader2, CheckCircle2, AlertCircle, KeyRound } from 'lucide-react';
 import { PairingButton } from '../components/ui/PairingButton';
 import { supabase } from '../lib/supabase';
@@ -21,7 +22,8 @@ function friendlyError(code: string): string {
 
 const DevicePairing: React.FC = () => {
   // 1. Hooks
-  const [code, setCode] = useState('');
+  const [searchParams] = useSearchParams();
+  const [code, setCode] = useState(() => searchParams.get('code')?.trim().toUpperCase() ?? '');
   const [deviceName, setDeviceName] = useState('');
   const [status, setStatus] = useState<PairStatus>('idle');
   const [error, setError] = useState<string | null>(null);
