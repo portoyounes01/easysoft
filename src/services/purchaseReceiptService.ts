@@ -20,7 +20,6 @@ interface ExtractRequest {
     documentType: PurchaseDocumentType;
     employeeId: string;
     employeeNumber: string;
-    proofHash: string | null | undefined;
 }
 
 interface ApplyRequest {
@@ -93,25 +92,25 @@ export const matchPurchaseLines = (
 
 class PurchaseReceiptService {
     async extract(request: ExtractRequest): Promise<PurchaseDocumentExtraction> {
-        if (!request.proofHash) {
-            throw new Error('Your sign-in session cannot authorize document extraction. Sign in again.');
-        }
         if (request.file.size > 10 * 1024 * 1024) {
             throw new Error('The document is larger than 10 MB. Compress or split it before uploading.');
         }
 
         const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-purchase-document`;
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session?.access_token) {
+            throw new Error('Your device session has expired. Pair or sign in again.');
+        }
         const response = await fetch(functionUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 apikey: import.meta.env.VITE_SUPABASE_ANON ?? '',
-                Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON ?? ''}`,
+                Authorization: `Bearer ${sessionData.session.access_token}`,
             },
             body: JSON.stringify({
                 employee_id: request.employeeId,
                 employee_number: request.employeeNumber,
-                proof_hash: request.proofHash,
                 file_name: request.file.name,
                 mime_type: request.file.type,
                 document_type: request.documentType,

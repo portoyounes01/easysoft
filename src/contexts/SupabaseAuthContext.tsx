@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase, connectionStatus, isSupabaseConfigured } from '../lib/supabase';
-import { Employee } from '../types/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { Employee, EmployeeLoginResult } from '../types/supabase';
 import { hasEmployeePermission } from '../utils/accessPermissions';
 
 interface AuthState {
@@ -11,7 +11,6 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  credentialHash?: string | null; // ephemeral hash of PIN/password for edge function proofs
 }
 
 interface AuthContextType extends AuthState {
@@ -33,13 +32,11 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     isAuthenticated: false,
     isLoading: true,
     error: null,
-    credentialHash: null,
   });
 
   // Session persistence keys
   const EMPLOYEE_SESSION_KEY = 'employee_session';
   const EMPLOYEE_SESSION_TIMESTAMP_KEY = 'employee_session_timestamp';
-  const EMPLOYEE_CREDENTIAL_HASH_KEY = 'employee_credential_hash';
   const SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
 
   // Save employee session to localStorage
@@ -49,19 +46,6 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       localStorage.setItem(EMPLOYEE_SESSION_TIMESTAMP_KEY, Date.now().toString());
     } catch (error) {
       console.error('Error saving employee session:', error);
-    }
-  };
-
-  // Save credential hash (PIN/password hash) for edge-function proofs (never store plaintext)
-  const saveCredentialHash = (hash: string | null) => {
-    try {
-      if (hash) {
-        localStorage.setItem(EMPLOYEE_CREDENTIAL_HASH_KEY, hash);
-      } else {
-        localStorage.removeItem(EMPLOYEE_CREDENTIAL_HASH_KEY);
-      }
-    } catch (error) {
-      console.error('Error saving credential hash:', error);
     }
   };
 
@@ -98,22 +82,35 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       localStorage.removeItem(EMPLOYEE_SESSION_KEY);
       localStorage.removeItem(EMPLOYEE_SESSION_TIMESTAMP_KEY);
-      localStorage.removeItem(EMPLOYEE_CREDENTIAL_HASH_KEY);
+      // Remove hashes persisted by pre-Phase-2 builds.
+      localStorage.removeItem('employee_credential_hash');
     } catch (error) {
       console.error('Error clearing employee session:', error);
     }
   };
 
-  // Fetch employee data based on authenticated user
-  const fetchEmployeeData = async (userId: string): Promise<Employee | null> => {
+  const employeeSelect = [
+    'id', 'tenant_id', 'employee_number', 'name', 'email', 'phone', 'role',
+    'access_levels', 'is_active', 'hire_date', 'total_sales', 'transaction_count',
+    'average_transaction', 'hours_worked', 'auth_id', 'created_at', 'updated_at',
+    'last_synced_at', 'deleted_at',
+  ].join(',');
+
+  const sanitizeEmployee = (employee: Employee): Employee => ({
+    ...employee,
+    password_hash: null,
+    pin: null,
+  });
+
+  const fetchEmployeeDataForId = async (session: Session, employeeId: string): Promise<Employee | null> => {
     try {
-      // maybeSingle (not single): a session whose user is NOT an employee — e.g. a bare
-      // device session between pairing and PIN login — legitimately matches 0 rows. single()
-      // would 406/PGRST116 and log a spurious error on that normal path.
+      const tenantId = session.user.app_metadata.tenant_id;
+      if (typeof tenantId !== 'string' || !tenantId) return null;
       const { data, error } = await supabase
         .from('employees')
-        .select('*')
-        .eq('id', userId)
+        .select(employeeSelect)
+        .eq('tenant_id', tenantId)
+        .eq('id', employeeId)
         .maybeSingle();
 
       if (error) {
@@ -121,7 +118,35 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return null;
       }
 
-      return data;
+      return data ? sanitizeEmployee(data as Employee) : null;
+    } catch (error) {
+      console.error('Error fetching employee data:', error);
+      return null;
+    }
+  };
+
+  // Resolve operator attribution under the authenticated tenant principal.
+  const fetchEmployeeData = async (session: Session): Promise<Employee | null> => {
+    const appRole = session.user.app_metadata.app_role;
+    if (appRole === 'device') {
+      const savedEmployee = loadEmployeeSession();
+      return savedEmployee ? fetchEmployeeDataForId(session, savedEmployee.id) : null;
+    }
+
+    const tenantId = session.user.app_metadata.tenant_id;
+    if (typeof tenantId !== 'string' || !tenantId) return null;
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select(employeeSelect)
+        .eq('tenant_id', tenantId)
+        .eq('auth_id', session.user.id)
+        .maybeSingle();
+      if (error) {
+        console.error('Error fetching employee data:', error);
+        return null;
+      }
+      return data ? sanitizeEmployee(data as Employee) : null;
     } catch (error) {
       console.error('Error fetching employee data:', error);
       return null;
@@ -158,167 +183,59 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  // Sign in with employee credentials (offline-first approach)
+  // Employee credentials are verified server-side under the paired device JWT.
   const signInWithEmployeeCredentials = async (employeeNumber: string, password: string) => {
-    console.log('🔍 signInWithEmployeeCredentials called with:', { employeeNumber, passwordLength: password.length });
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      // Use employeeService for offline-first employee lookup
-      console.log('🔎 Searching for employee using employeeService...');
+      if (!isSupabaseConfigured()) {
+        throw new Error('Supabase is not configured. Device pairing and online login are required.');
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const deviceSession = sessionData.session;
+      if (!deviceSession || deviceSession.user.app_metadata.app_role !== 'device') {
+        throw new Error('This till is not paired. Pair the device before employee login.');
+      }
+
+      const { data, error } = await supabase.rpc('employee_pin_login', {
+        p_employee_number: employeeNumber,
+        p_secret: password,
+      });
+      if (error) throw error;
+
+      const loginResult = (data as EmployeeLoginResult[] | null)?.[0];
+      if (!loginResult?.success || !loginResult.employee_id) {
+        const message = loginResult?.error === 'locked'
+          ? 'Too many failed attempts. Try again in 15 minutes.'
+          : 'Invalid employee number or credentials.';
+        setState(prev => ({ ...prev, isLoading: false, error: message }));
+        return { success: false, error: message };
+      }
+
       const { employeeService } = await import('../services/employeeService');
-      const employee = await employeeService.getEmployeeByNumber(employeeNumber);
-
-      console.log('👤 Employee query result:', { employee: !!employee });
-      if (employee) {
-        console.log('📋 Found employee:', { id: employee.id, number: employee.employee_number, role: employee.role });
-      }
-
+      const localEmployee = await employeeService.getEmployeeById(loginResult.employee_id);
+      const employee = localEmployee
+        ? sanitizeEmployee(localEmployee)
+        : await fetchEmployeeDataForId(deviceSession, loginResult.employee_id);
       if (!employee || !employee.is_active) {
-        console.log('❌ Employee not found or inactive');
-        setState(prev => ({ ...prev, isLoading: false, error: 'Invalid employee number or account inactive' }));
-        return { success: false, error: 'Invalid employee number or account inactive' };
-      }
-
-      // Verify credentials using proper hash comparison
-      console.log('🔐 Starting credential verification...');
-      console.log('Employee role:', employee.role);
-      console.log('Has password_hash:', !!employee.password_hash);
-      console.log('Has pin:', !!employee.pin);
-
-      let isValidCredentials = false;
-      const { verifyPasswordHash } = await import('../utils/hashUtils');
-
-      if (employee.role === 'admin') {
-        // Admins use password_hash only (form collects password, not PIN)
-        if (employee.password_hash) {
-          console.log('🔑 Verifying password hash for admin...');
-          isValidCredentials = await verifyPasswordHash(password, employee.password_hash);
-          console.log('Password verification result:', isValidCredentials);
-        } else {
-          console.log('❌ No password_hash found for admin');
-        }
-      } else if (employee.role === 'manager') {
-        // Managers: password if set; otherwise PIN (UI only collects PIN for non-admin roles)
-        if (employee.password_hash) {
-          console.log('🔑 Verifying password hash for manager...');
-          isValidCredentials = await verifyPasswordHash(password, employee.password_hash);
-          console.log('Password verification result:', isValidCredentials);
-        } else if (employee.pin) {
-          console.log('🔢 Verifying PIN for manager (no password_hash)...');
-          isValidCredentials = await verifyPasswordHash(password, employee.pin);
-          console.log('PIN verification result:', isValidCredentials);
-        } else {
-          console.log('❌ Manager has neither password_hash nor pin');
-        }
-      } else {
-        // Cashier / trainee / etc. — PIN
-        if (employee.pin) {
-          console.log('🔢 Verifying PIN for employee...');
-          isValidCredentials = await verifyPasswordHash(password, employee.pin);
-          console.log('PIN verification result:', isValidCredentials);
-        } else {
-          console.log('❌ No PIN found for employee');
-        }
-      }
-
-      if (!isValidCredentials) {
-        console.log('❌ Credential verification failed');
-        setState(prev => ({ ...prev, isLoading: false, error: 'Invalid credentials' }));
-        return { success: false, error: 'Invalid credentials' };
-      }
-
-      // 🌐 Ensure the employee record is synchronized with the server before proceeding.
-      //    This avoids foreign-key errors (e.g., when creating transactions) if the local
-      //    employee has not yet been pushed to Supabase.
-      if (connectionStatus.getStatus().isSupabaseOnline) {
-        try {
-          console.log('🔄 Performing employee forceSync to ensure server record…');
-          await employeeService.forceSync();
-        } catch (syncError) {
-          console.warn('⚠️  Employee sync failed (continuing anyway):', syncError);
-        }
-      }
-
-      console.log('✅ Credentials verified successfully!');
-
-      // If employee has inventory access and has a linked auth_id, also sign in with Supabase
-      let supabaseUser = null;
-      let supabaseSession = null;
-
-      if (employee.access_levels.includes('inventory') || employee.access_levels.includes('all')) {
-        console.log('📧 Employee has inventory access, checking for Supabase auth...');
-        const isOnline = connectionStatus.getStatus().isSupabaseOnline;
-        const isConfigured = isSupabaseConfigured();
-        const hasAuthLink = Boolean((employee as any).auth_id); // optional field
-
-        if (!isConfigured) {
-          console.log('ℹ️  Skipping Supabase auth: not configured');
-        } else if (!isOnline) {
-          console.log('ℹ️  Skipping Supabase auth: Supabase appears offline');
-        } else if (!hasAuthLink) {
-          console.log('ℹ️  Skipping Supabase auth: employee not provisioned (no auth_id)');
-        } else if (employee.email) {
-          try {
-            console.log('🔐 Attempting Supabase authentication...');
-            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-              email: employee.email,
-              password: password
-            });
-
-            if (!authError && authData.user) {
-              console.log('✅ Supabase authentication successful');
-              supabaseUser = authData.user;
-              supabaseSession = authData.session;
-            } else {
-              console.log('⚠️ Supabase authentication failed, but continuing with employee auth:', authError?.message);
-            }
-          } catch (supabaseError) {
-            console.log('⚠️ Supabase authentication error, continuing with employee auth:', supabaseError);
-          }
-        } else {
-          console.log('⚠️ Employee has inventory access but no email configured for Supabase auth');
-        }
-      }
-
-      // Create a session for employee login and save it
-      console.log('💾 Setting authentication state...');
-      // Compute credential hash equal to stored hash to avoid sending raw pin/password later
-      let credentialHash: string | null = null;
-      try {
-        const { hashPassword } = await import('../utils/hashUtils');
-        if (employee.role === 'admin') {
-          credentialHash = employee.password_hash ?? (await hashPassword(password));
-        } else if (employee.role === 'manager') {
-          credentialHash = employee.password_hash ?? employee.pin ?? (await hashPassword(password));
-        } else {
-          credentialHash = employee.pin ?? (await hashPassword(password));
-        }
-      } catch (e) {
-        console.warn('Failed to compute credential hash, proceeding without it');
+        throw new Error('Employee roster is out of date. Sync this till and try again.');
       }
 
       setState(prev => ({
         ...prev,
-        user: supabaseUser, // Include Supabase user if authenticated
+        user: deviceSession.user,
         employee,
-        session: supabaseSession, // Include Supabase session if available
+        session: deviceSession,
         isAuthenticated: true,
         isLoading: false,
         error: null,
-        credentialHash,
       }));
-
-      // Save session for persistence across page reloads
-      console.log('💾 Saving employee session to localStorage...');
       saveEmployeeSession(employee);
-      saveCredentialHash(credentialHash);
-      console.log('🎉 Login process completed successfully!');
 
       return { success: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      console.log('💥 Login exception:', error);
       setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
       return { success: false, error: errorMessage };
     }
@@ -328,8 +245,8 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const signOut = async () => {
     setState(prev => ({ ...prev, isLoading: true }));
 
-    // Sign out from Supabase if there's a session
-    if (state.session) {
+    const isDeviceSession = state.session?.user.app_metadata.app_role === 'device';
+    if (state.session && !isDeviceSession) {
       await supabase.auth.signOut();
     }
 
@@ -338,9 +255,9 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     // Clear local state
     setState({
-      user: null,
+      user: isDeviceSession ? state.session?.user ?? null : null,
       employee: null,
-      session: null,
+      session: isDeviceSession ? state.session : null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
@@ -354,8 +271,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Refresh employee session timestamp (keep session alive)
   const refreshEmployeeSession = () => {
-    if (state.employee && !state.session) {
-      // Only for employee sessions (not Supabase auth sessions)
+    if (state.employee) {
       saveEmployeeSession(state.employee);
     }
   };
@@ -384,7 +300,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         // employee yet) must leave the app on the login screen, not count as logged-in.
         setTimeout(async () => {
           if (!mounted) return;
-          const employee = await fetchEmployeeData(session.user.id);
+          const employee = await fetchEmployeeData(session);
           setState({
             user: session.user,
             employee,
@@ -392,7 +308,6 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
             isAuthenticated: !!employee,
             isLoading: false,
             error: null,
-            credentialHash: null,
           });
         }, 0);
       } else if (event === 'SIGNED_OUT') {
@@ -415,21 +330,15 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     // Periodic session validation for employee sessions
     const sessionValidationInterval = setInterval(() => {
-      if (state.employee && !state.session) {
-        // This is an employee session, check if it's still valid
-        const employeeSession = loadEmployeeSession();
-        if (!employeeSession) {
-          // Session expired, log out
-          setState({
-            user: null,
-            employee: null,
-            session: null,
-            isAuthenticated: false,
-            isLoading: false,
-            error: null,
-            credentialHash: null,
-          });
-        }
+      const employeeSession = loadEmployeeSession();
+      if (!employeeSession) {
+        setState(prev => prev.employee ? {
+          ...prev,
+          employee: null,
+          isAuthenticated: false,
+          isLoading: false,
+          error: null,
+        } : prev);
       }
     }, 60000); // Check every minute
 
@@ -439,7 +348,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session) {
-        const employee = await fetchEmployeeData(session.user.id);
+        const employee = await fetchEmployeeData(session);
         setState({
           user: session.user,
           employee,
@@ -448,32 +357,10 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           isAuthenticated: !!employee,
           isLoading: false,
           error: null,
-          credentialHash: null,
         });
       } else {
-        // Check for employee session in localStorage
-        const employeeSession = loadEmployeeSession();
-
-        if (employeeSession) {
-          // Load saved credential hash for PIN/password proof
-          let savedHash: string | null = null;
-          try {
-            savedHash = localStorage.getItem(EMPLOYEE_CREDENTIAL_HASH_KEY);
-          } catch (e) {
-            savedHash = null;
-          }
-          setState({
-            user: null,
-            employee: employeeSession,
-            session: null,
-            isAuthenticated: true,
-            isLoading: false,
-            error: null,
-            credentialHash: savedHash,
-          });
-        } else {
-          setState(prev => ({ ...prev, isLoading: false }));
-        }
+        clearEmployeeSession();
+        setState(prev => ({ ...prev, isLoading: false }));
       }
     };
 
@@ -484,7 +371,10 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       subscription.unsubscribe();
       clearInterval(sessionValidationInterval);
     };
-  }, [state.employee, state.session]); // Add dependencies
+    // Auth subscription owns subsequent session changes; recreating it on each
+    // employee state change races the post-PIN attribution update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const value: AuthContextType = {
     ...state,

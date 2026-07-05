@@ -677,9 +677,9 @@ export async function populateTransactionData() {
 
         // 2. Insert employees
         console.log('Inserting employees...');
-        const { error: employeesError } = await supabase
-            .from('employees')
-            .upsert(sampleEmployees, { onConflict: 'id' });
+        const { error: employeesError } = await supabase.rpc('upsert_employees', {
+            employees_data: sampleEmployees,
+        });
 
         if (employeesError) {
             console.error('Error inserting employees:', employeesError);

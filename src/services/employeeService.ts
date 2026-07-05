@@ -288,8 +288,6 @@ export class EmployeeService {
             name: localEmp.name,
             email: localEmp.email,
             phone: localEmp.phone,
-            password_hash: localEmp.password_hash,
-            pin: localEmp.pin,
             role: localEmp.role,
             access_levels: localEmp.access_levels,
             is_active: localEmp.is_active,

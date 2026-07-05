@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { EmployeesProvider, useEmployees } from '../src/contexts/EmployeesContext';
 import { Employee } from '../src/types/supabase';
 import React from 'react';
@@ -22,7 +21,6 @@ vi.mock('../src/services/employeeService', () => ({
 
 // Import the mocked service
 import { employeeService } from '../src/services/employeeService';
-import { sha256 } from 'js-sha256';
 
 // Mock employees data
 const mockEmployees: Employee[] = [
@@ -52,8 +50,7 @@ const mockEmployees: Employee[] = [
         employee_number: 'EMP003',
         name: 'Cashier',
         role: 'cashier',
-        pin: sha256('1234'), // SHA-256 hash of '1234'
-        // pin: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', // SHA-256 hash of '1234'
+        pin: null,
         password_hash: null,
         access_levels: ['sales'],
         email: null,
@@ -70,13 +67,6 @@ const mockEmployees: Employee[] = [
         last_synced_at: null,
     },
 ];
-
-// Mock EmployeesContext with in-memory employees
-const wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <EmployeesProvider>
-        <AuthProvider>{children}</AuthProvider>
-    </EmployeesProvider>
-);
 
 beforeEach(() => {
     // Reset all mocks
@@ -121,25 +111,5 @@ describe('EmployeesContext', () => {
         expect(result.current.employees[0].name).toBe('Admin User');
         expect(result.current.employees[1].name).toBe('Cashier');
         expect(result.current.isLoading).toBe(false);
-    });
-});
-
-describe('AuthContext', () => {
-    it('logs in cashier with correct PIN', async () => {
-        const { result } = renderHook(() => useAuth(), { wrapper });
-
-        // Wait for auth context to initialize
-        await act(async () => {
-            await new Promise(resolve => setTimeout(resolve, 100));
-        });
-
-        let success = false;
-        await act(async () => {
-            success = await result.current.login('EMP003', '1234');
-        });
-
-        expect(success).toBe(true);
-        expect(result.current.isAuthenticated).toBe(true);
-        expect(result.current.user?.role).toBe('cashier');
     });
 });

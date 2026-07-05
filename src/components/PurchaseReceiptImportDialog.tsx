@@ -43,7 +43,7 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
     onApplied,
 }) => {
     const { t } = useTranslation();
-    const { employee, credentialHash } = useSupabaseAuth();
+    const { employee } = useSupabaseAuth();
     const { products, categories } = useProducts();
     const uploadInputRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -127,7 +127,6 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                 documentType,
                 employeeId: employee.id,
                 employeeNumber: employee.employee_number,
-                proofHash: credentialHash,
             });
             setExtraction(result);
             setLines(matchPurchaseLines(result, products));

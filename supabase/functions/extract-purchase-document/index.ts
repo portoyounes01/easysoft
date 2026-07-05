@@ -29,7 +29,6 @@ type AzureAnalyzeResult = {
 interface RequestBody {
   employee_id?: string;
   employee_number?: string;
-  proof_hash?: string;
   file_name?: string;
   mime_type?: string;
   document_type?: DocumentType;
@@ -147,42 +146,48 @@ async function authorize(body: RequestBody, req: Request) {
   if (!supabaseUrl || !serviceKey) throw new Error('Missing Supabase configuration');
   const admin = createClient(supabaseUrl, serviceKey);
 
-  let employee: Record<string, unknown> | null = null;
-  let tokenAuthorized = false;
   const authHeader = req.headers.get('Authorization') ?? '';
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const userResult = await admin.auth.getUser(token);
-    const user = userResult.data.user;
-    if (user) {
-      const byAuth = await admin
-        .from('employees')
-        .select('id,is_active,role,access_levels,pin,password_hash,employee_number')
-        .or(`auth_id.eq.${user.id},id.eq.${user.id}`)
-        .maybeSingle();
-      if (byAuth.data) {
-        employee = byAuth.data;
-        tokenAuthorized = true;
-      }
-    }
+  if (!authHeader.startsWith('Bearer ')) {
+    return { error: jsonResponse({ error: 'Bearer session required' }, 401) };
+  }
+  const userResult = await admin.auth.getUser(authHeader.slice(7));
+  const user = userResult.data.user;
+  if (!user) return { error: jsonResponse({ error: 'Invalid session' }, 401) };
+
+  const tenantId = user.app_metadata.tenant_id;
+  const appRole = user.app_metadata.app_role;
+  if (typeof tenantId !== 'string' || !tenantId) {
+    return { error: jsonResponse({ error: 'Tenant claim required' }, 403) };
   }
 
-  if (!employee && body.employee_id) {
-    const byId = await admin
-      .from('employees')
-      .select('id,is_active,role,access_levels,pin,password_hash,employee_number')
-      .eq('id', body.employee_id)
+  if (appRole === 'device') {
+    const deviceId = user.app_metadata.device_id;
+    if (typeof deviceId !== 'string' || !deviceId) {
+      return { error: jsonResponse({ error: 'Device claim required' }, 403) };
+    }
+    const { data: device } = await admin
+      .from('devices')
+      .select('id')
+      .eq('id', deviceId)
+      .eq('tenant_id', tenantId)
+      .eq('auth_user_id', user.id)
+      .eq('status', 'enrolled')
       .maybeSingle();
-    employee = byId.data;
+    if (!device) return { error: jsonResponse({ error: 'Device is not enrolled' }, 403) };
   }
-  if (!employee && body.employee_number) {
-    const byNumber = await admin
-      .from('employees')
-      .select('id,is_active,role,access_levels,pin,password_hash,employee_number')
-      .eq('employee_number', body.employee_number)
-      .maybeSingle();
-    employee = byNumber.data;
+
+  let employeeQuery = admin
+    .from('employees')
+    .select('id,is_active,role,access_levels,employee_number')
+    .eq('tenant_id', tenantId);
+  if (appRole === 'device') {
+    employeeQuery = body.employee_id
+      ? employeeQuery.eq('id', body.employee_id)
+      : employeeQuery.eq('employee_number', body.employee_number ?? '');
+  } else {
+    employeeQuery = employeeQuery.eq('auth_id', user.id);
   }
+  const { data: employee } = await employeeQuery.maybeSingle();
 
   if (!employee) return { error: jsonResponse({ error: 'Employee not found' }, 401) };
   if (!employee.is_active) return { error: jsonResponse({ error: 'Employee inactive' }, 403) };
@@ -191,12 +196,6 @@ async function authorize(body: RequestBody, req: Request) {
     Array.isArray(employee.access_levels) ? employee.access_levels.map(String) : [],
   )) {
     return { error: jsonResponse({ error: 'Missing inventory permission' }, 403) };
-  }
-  if (!tokenAuthorized) {
-    const proof = body.proof_hash ?? '';
-    if (!proof || (proof !== employee.pin && proof !== employee.password_hash)) {
-      return { error: jsonResponse({ error: 'Invalid credentials proof' }, 401) };
-    }
   }
   return { employee };
 }

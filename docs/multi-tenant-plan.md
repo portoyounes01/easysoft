@@ -837,6 +837,9 @@ Shim registry (every transitional allowance is named with a removal point; “Ex
 - **Exit: a merged PR runs lint/tests; a merged migration reaches staging without manual SQL; a release build produces installable, correctly-configured artifacts for mac/win/linux; staging exists for the Phase 3 red-team suite and Phase 5 two-tenant e2e.**
 
 **Phase 2 — Identity: pair-first.** *(~3 weeks)*
+
+> **Execution status (2026-07-05): IN PROGRESS.** Pairing/provisioning/device-session slice is deployed and verified. The employee-credential cutover is implemented and locally tested; `upload-image` JWT enforcement is deployed to EasySoft-staging, but migration `20260710000000_phase2_employee_credentials_cutover.sql` is **not applied** because staging DB authentication failed. Production remains unchanged and Shim R2 remains open. Detailed evidence, deployment order, and remaining work: `docs/phase2-identity.md`.
+
 - `pair-device` edge fn + real `DevicePairing.tsx` (pre-auth route in `src/App.tsx`); device auth users; Dexie name scoping in `resolveDexieDbName()` + legacy alias for the production till (R3); post-pairing bootstrap replaces startup seed; `/order-status` pairing gate (§10).
 - `employee_pin_login` + `employee_credentials` population + `LoginForm2`/`SupabaseAuthContext` rewrite **in one deploy** with stripping credentials from `get_employees_delta` (ends R2). `proof_hash` deleted from `upload-image` (→`verify_jwt=true`) and `extract-purchase-document`.
 - Sync services require a session (fail-closed); `ConnectivityGate` v1; **pair the production till**.

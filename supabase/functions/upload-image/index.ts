@@ -1,5 +1,5 @@
 // Unified image upload helper function
-// - Validates employee via PIN/password hash proof OR Supabase JWT (if present)
+// - Requires a paired device/human JWT and scopes employee lookup to its tenant
 // - Checks inventory permission (admin/manager OR access_levels includes 'inventory' or 'all')
 // - Returns a short-lived signed upload URL and a final public URL (if bucket is public) or a path
 //
@@ -9,7 +9,6 @@
 //   Body (JSON):
 //     {
 //       "employee_number": string,
-//       "proof_hash": string,           // hash(pin) or hash(password) created client-side
 //       "file_name": string,           // original filename to infer extension
 //       "content_type": string         // mime type
 //     }
@@ -34,9 +33,17 @@ type Json = Record<string, unknown> | null;
 interface UploadRequestBody {
   employee_number?: string;
   employee_id?: string;
-  proof_hash?: string;
   file_name?: string;
   content_type?: string;
+  path?: string;
+}
+
+interface EmployeeAuthorizationRow {
+  id: string;
+  is_active: boolean;
+  role: string;
+  access_levels: string[];
+  employee_number: string;
 }
 
 const BUCKET_ID = 'product-images';
@@ -121,7 +128,7 @@ async function handleUpload(req: Request) {
   let body: UploadRequestBody;
   try {
     body = await req.json();
-  } catch (_) {
+  } catch {
     const res = badRequest('Invalid JSON body');
     corsHeaders['Content-Type'] = 'application/json';
     return new Response(await res.text(), { status: 400, headers: corsHeaders });
@@ -129,13 +136,12 @@ async function handleUpload(req: Request) {
 
   const employeeNumber = (body.employee_number || '').toString();
   const employeeIdFromBody = (body.employee_id || '').toString();
-  const proofHash = (body.proof_hash || '').toString();
   const fileName = sanitizeFileName((body.file_name || '').toString());
   const contentType = (body.content_type || '').toString();
 
   if (!employeeNumber && !employeeIdFromBody) return new Response(JSON.stringify({ error: 'employee_number or employee_id is required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   // For DELETE, we expect a path to delete in file_name (re-using field) or a dedicated "path"
-  const deletePath = (body as any).path as string | undefined;
+  const deletePath = body.path;
   if (req.method === 'DELETE') {
     const targetPath = deletePath || fileName;
     if (!targetPath) return new Response(JSON.stringify({ error: 'path required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -145,84 +151,50 @@ async function handleUpload(req: Request) {
     if (!isAllowedContentType(contentType)) return badRequest('Unsupported content_type');
   }
 
-  // Try to resolve employee via multiple strategies
-  let employee: any = null;
-  let empErr: any = null;
-  let resolvedViaToken = false;
-
-  // If a Bearer token is provided, try to resolve auth user and map to employees
+  let employee: EmployeeAuthorizationRow | null = null;
   const authHeader = req.headers.get('Authorization') || '';
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.replace('Bearer ', '');
-    try {
-      const { data: userData, error: userErr } = await admin.auth.getUser(token);
-      if (!userErr && userData?.user) {
-        const authUser = userData.user;
-        // Prefer matching employees.id == auth user id
-        let query = admin
-          .from('employees')
-          .select('id, is_active, role, access_levels, pin, password_hash, email, employee_number')
-          .eq('id', authUser.id)
-          .maybeSingle();
-        let res = await query;
-        if (res.data) {
-          employee = res.data;
-          resolvedViaToken = true;
-        } else {
-          // Fallback: match by email if available
-          if (authUser.email) {
-            const byEmail = await admin
-              .from('employees')
-              .select('id, is_active, role, access_levels, pin, password_hash, email, employee_number')
-              .eq('email', authUser.email)
-              .maybeSingle();
-            if (byEmail.data) { employee = byEmail.data; resolvedViaToken = true; }
-          }
-        }
-      }
-    } catch (_) {
-      // ignore auth token errors; we'll fallback to body-based lookup
-    }
-  }
+  if (!authHeader.startsWith('Bearer ')) return unauthorized('Bearer session required');
+  const token = authHeader.slice(7);
+  const { data: userData, error: userError } = await admin.auth.getUser(token);
+  if (userError || !userData.user) return unauthorized('Invalid session');
 
-  // If still not resolved, try by employee_id
-  if (!employee && employeeIdFromBody) {
-    const byId = await admin
-      .from('employees')
-      .select('id, is_active, role, access_levels, pin, password_hash, email, employee_number')
-      .eq('id', employeeIdFromBody)
+  const tenantId = userData.user.app_metadata.tenant_id;
+  const appRole = userData.user.app_metadata.app_role;
+  if (typeof tenantId !== 'string' || !tenantId) return forbidden('Tenant claim required');
+
+  if (appRole === 'device') {
+    const deviceId = userData.user.app_metadata.device_id;
+    if (typeof deviceId !== 'string' || !deviceId) return forbidden('Device claim required');
+    const { data: device } = await admin
+      .from('devices')
+      .select('id')
+      .eq('id', deviceId)
+      .eq('tenant_id', tenantId)
+      .eq('auth_user_id', userData.user.id)
+      .eq('status', 'enrolled')
       .maybeSingle();
-    if (byId.error) empErr = byId.error;
-    if (byId.data) employee = byId.data;
+    if (!device) return forbidden('Device is not enrolled');
   }
 
-  // If still not resolved, try by employee_number
-  if (!employee && employeeNumber) {
-    const byNumber = await admin
-      .from('employees')
-      .select('id, is_active, role, access_levels, pin, password_hash, email, employee_number')
-      .eq('employee_number', employeeNumber)
-      .maybeSingle();
-    if (byNumber.error) empErr = byNumber.error;
-    if (byNumber.data) employee = byNumber.data;
+  let employeeQuery = admin
+    .from('employees')
+    .select('id, is_active, role, access_levels, employee_number')
+    .eq('tenant_id', tenantId);
+  if (appRole === 'device') {
+    employeeQuery = employeeIdFromBody
+      ? employeeQuery.eq('id', employeeIdFromBody)
+      : employeeQuery.eq('employee_number', employeeNumber);
+  } else {
+    employeeQuery = employeeQuery.eq('auth_id', userData.user.id);
   }
+  const employeeResult = await employeeQuery.maybeSingle();
+  if (employeeResult.error) return serverError(`Employee lookup failed: ${employeeResult.error.message}`);
+  employee = employeeResult.data;
 
-  if (empErr) return new Response(JSON.stringify({ error: `Employee lookup failed: ${empErr.message}` }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   if (!employee) return new Response(JSON.stringify({ error: 'Employee not found' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   if (!employee.is_active) return new Response(JSON.stringify({ error: 'Employee inactive' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   if (!hasInventoryPermission(employee.role, employee.access_levels)) {
     return new Response(JSON.stringify({ error: 'Missing inventory permission' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-  }
-
-  // Verify proof_hash: must match either stored pin or password_hash
-  // Require proof for PIN-only sessions; allow Bearer-authenticated admins/managers to skip proof
-  if (!resolvedViaToken) {
-    if (!proofHash) return new Response(JSON.stringify({ error: 'Proof required' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    const matchesPin = employee.pin && proofHash === employee.pin;
-    const matchesPassword = employee.password_hash && proofHash === employee.password_hash;
-    if (!matchesPin && !matchesPassword) {
-      return new Response(JSON.stringify({ error: 'Invalid credentials proof' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
   }
 
   if (req.method === 'DELETE') {
@@ -256,5 +228,3 @@ async function handleUpload(req: Request) {
 
 // Deno entrypoint
 Deno.serve((req) => handleUpload(req));
-
-

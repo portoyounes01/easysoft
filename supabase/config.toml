@@ -368,8 +368,9 @@ entrypoint = "./functions/test-cashier/index.ts"
 
 [functions.upload-image]
 enabled = true
-# We accept requests without a Supabase Auth JWT because many employees authenticate via PIN only
-verify_jwt = false
+# Phase 2: the paired device/human session is mandatory; employee PINs are
+# verified separately by employee_pin_login and no credential hash is replayed.
+verify_jwt = true
 import_map = "./functions/import_map.json"
 entrypoint = "./functions/upload-image/index.ts"
 

@@ -11,6 +11,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { loadEnv } = require('./lib/env.cjs');
 const { readYamlIfExists } = require('./lib/loadYaml.cjs');
@@ -18,6 +19,14 @@ const { coerceToUuidOrDeterministic } = require('./lib/uuid.cjs');
 
 function log(msg) { console.log(msg); }
 function error(msg) { console.error(msg); }
+
+const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+
+function normalizeCredential(value) {
+    if (!value) return null;
+    if (/^[0-9a-f]{64}$/i.test(value) || /^\$2[aby]\$/.test(value)) return value;
+    return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
 
 function normalizeEmployees(input) {
     const rows = (input && input.employees) || [];
@@ -27,8 +36,8 @@ function normalizeEmployees(input) {
         name: e.name,
         email: e.email || null,
         phone: e.phone || null,
-        password_hash: e.password_hash || null,
-        pin: e.pin || null,
+        password_hash: normalizeCredential(e.password_hash),
+        pin: normalizeCredential(e.pin),
         role: e.role,
         access_levels: Array.isArray(e.access_levels) ? e.access_levels : [],
         is_active: e.is_active !== false,
@@ -94,8 +103,25 @@ function normalizeCashDrawerLogs(input) {
 
 async function upsertEmployees(supabase, employees) {
     if (!employees.length) return 0;
-    const { error: err } = await supabase.from('employees').upsert(employees, { onConflict: 'employee_number' });
+    const tenantId = process.env.POS_TENANT_ID || DEFAULT_TENANT_ID;
+    const roster = employees.map(({ password_hash, pin, ...employee }) => ({
+        ...employee,
+        tenant_id: tenantId,
+    }));
+    const credentials = employees.map((employee) => ({
+        employee_id: employee.id,
+        tenant_id: tenantId,
+        pin_hash: employee.pin?.startsWith('$2') ? employee.pin : null,
+        password_hash: employee.password_hash?.startsWith('$2') ? employee.password_hash : null,
+        legacy_sha256_pin: employee.pin && !employee.pin.startsWith('$2') ? employee.pin.toLowerCase() : null,
+        legacy_sha256_password: employee.password_hash && !employee.password_hash.startsWith('$2')
+            ? employee.password_hash.toLowerCase()
+            : null,
+    }));
+    const { error: err } = await supabase.from('employees').upsert(roster, { onConflict: 'employee_number' });
     if (err) throw new Error(`employees upsert failed: ${err.message}`);
+    const { error: credentialErr } = await supabase.from('employee_credentials').upsert(credentials, { onConflict: 'employee_id' });
+    if (credentialErr) throw new Error(`employee credentials upsert failed: ${credentialErr.message}`);
     return employees.length;
 }
 
@@ -177,5 +203,3 @@ async function run() {
 }
 
 run();
-
-

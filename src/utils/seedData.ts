@@ -959,9 +959,9 @@ export class SeedDataService {
         deleted_at: e.deleted_at ? e.deleted_at.toISOString() : null,
       }));
 
-      const { error } = await supabase
-        .from('employees')
-        .upsert(payload, { onConflict: 'employee_number' });
+      const { error } = await supabase.rpc('upsert_employees', {
+        employees_data: payload,
+      });
 
       if (error) {
         console.error('Failed to seed employees to Supabase:', error);

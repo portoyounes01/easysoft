@@ -1,4 +1,6 @@
 import { employeeLocalService, initializeLocalDatabase, localDb } from '../lib/localDatabase';
+import { supabase } from '../lib/supabase';
+import type { EmployeeLoginResult } from '../types/supabase';
 import type {
     EmployeeHrSummary,
     LeaveStatus,
@@ -6,7 +8,6 @@ import type {
     LocalEmployeeHrProfile,
     LocalLeaveRequest,
 } from '../types/hr';
-import { verifyPasswordHash } from '../utils/hashUtils';
 import { generateUUID } from '../utils/uuid';
 
 const MS_PER_DAY = 86_400_000;
@@ -141,12 +142,12 @@ class HrService {
         await initializeLocalDatabase();
         const employee = await employeeLocalService.getEmployeeById(employeeId);
         if (!employee || !pin.trim()) return false;
-        // Accept whichever credential the employee authenticates with: cashiers /
-        // managers use a PIN, while admins only have a password_hash (no PIN), so
-        // they confirm clock in/out with the same password they sign in with.
-        if (employee.pin && (await verifyPasswordHash(pin, employee.pin))) return true;
-        if (employee.password_hash && (await verifyPasswordHash(pin, employee.password_hash))) return true;
-        return false;
+        const { data, error } = await supabase.rpc('employee_pin_login', {
+            p_employee_number: employee.employee_number,
+            p_secret: pin,
+        });
+        if (error) throw new Error('Could not verify employee credentials. Check the connection and try again.');
+        return Boolean((data as EmployeeLoginResult[] | null)?.[0]?.success);
     }
 
     async getOpenShift(employeeId: string): Promise<LocalAttendanceEntry | undefined> {

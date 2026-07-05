@@ -48,6 +48,10 @@ export interface Database {
                 Args: { since_timestamp?: string };
                 Returns: EmployeeRow[];
             };
+            employee_pin_login: {
+                Args: { p_employee_number: string; p_secret: string };
+                Returns: EmployeeLoginResult[];
+            };
             upsert_employees: {
                 Args: { employees_data: unknown };
                 Returns: { id: string; success: boolean; error: string }[];
@@ -256,12 +260,15 @@ export interface Product extends ProductRow {
 // Base employee interface from database
 export interface EmployeeRow {
     id: string;
+    tenant_id?: string;
     employee_number: string;
     name: string;
     email: string | null;
     phone: string | null;
-    password_hash: string | null;
-    pin: string | null;
+    // Transitional local-write fields only. Phase 2 removes these columns from
+    // public.employees and the server roster never returns them.
+    password_hash?: string | null;
+    pin?: string | null;
     role: 'admin' | 'manager' | 'cashier' | 'trainee';
     access_levels: string[];
     is_active: boolean;
@@ -338,6 +345,15 @@ export interface Employee extends EmployeeRow {
         device?: string;
         success: boolean;
     }>;
+}
+
+export interface EmployeeLoginResult {
+    employee_id: string | null;
+    employee_number: string | null;
+    name: string | null;
+    role: string | null;
+    success: boolean;
+    error: 'invalid_credentials' | 'locked' | 'no_tenant_context' | null;
 }
 
 // Sync metadata for offline operations

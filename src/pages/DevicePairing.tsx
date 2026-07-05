@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { QrCode, MonitorSmartphone, HelpCircle, Loader2, CheckCircle2, AlertCircle, KeyRound } from 'lucide-react';
 import { PairingButton } from '../components/ui/PairingButton';
 import { supabase } from '../lib/supabase';
+import { saveDevicePairingScope } from '../utils/devicePairingStorage';
 
 type PairStatus = 'idle' | 'pairing' | 'success' | 'error';
 
@@ -21,7 +21,6 @@ function friendlyError(code: string): string {
 
 const DevicePairing: React.FC = () => {
   // 1. Hooks
-  const navigate = useNavigate();
   const [code, setCode] = useState('');
   const [deviceName, setDeviceName] = useState('');
   const [status, setStatus] = useState<PairStatus>('idle');
@@ -54,9 +53,15 @@ const DevicePairing: React.FC = () => {
         refresh_token: body.refresh_token,
       });
       if (sessErr) throw new Error('Paired, but could not establish the device session locally.');
+      saveDevicePairingScope({
+        tenantId: body.tenant_id,
+        storeId: body.store_id,
+        deviceId: body.device_id,
+        pairedAt: new Date().toISOString(),
+      });
       setStatus('success');
-      // Device is enrolled; hand off to the employee login screen.
-      setTimeout(() => navigate('/'), 900);
+      // Reload so the module-level Dexie singleton opens the newly scoped DB.
+      setTimeout(() => window.location.replace('/'), 900);
     } catch (e) {
       setStatus('error');
       setError(e instanceof Error ? e.message : friendlyError('pairing_failed'));

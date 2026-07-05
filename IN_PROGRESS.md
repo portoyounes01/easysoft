@@ -283,15 +283,14 @@
   - Added `tests/products-categories-i18n.test.tsx` for basic assertions
 
 
-## Multi-Tenant Database Migration (Planning)
-- Status: ACTIVE (planning and documentation)
-- Description: Designing and documenting the shift to a single Supabase project with tenant isolation via RLS and tenant-scoped constraints.
-- Artifacts:
-  - `MULTI_TENANT_MIGRATION_PLAN.md` added with end-to-end phases, schema changes, RLS patterns, RPC updates, tests, and rollback.
-- Next Steps:
-  - Review plan with stakeholders
-  - Prepare staged SQL migration bundle
-  - Create seed organization and membership mapping approach
+## Multi-Tenant Migration — Phase 2 Identity
+- Status: ACTIVE (implementation; 2026-07-05)
+- Canonical plan: `docs/multi-tenant-plan.md`
+- Execution log: `docs/phase2-identity.md`
+- Completed/deployed: Phase 0 core hardening, Phase 1 tenant backbone/claim helpers, device provisioning, `pair-device`, pairing UI/session bootstrap, and `employee_pin_login` foundation.
+- Current slice: employee credential cutover implemented and locally verified; JWT-only `upload-image` deployed to EasySoft-staging.
+- Blocker: staging SQL apply requires a valid EasySoft-staging Postgres password. Production is unchanged and the credential-delta exposure remains open until the coordinated cutover.
+- Next: validate/apply the cutover on staging, then finish Dexie scoping, post-pair bootstrap, authenticated sync enforcement, and `ConnectivityGate`.
 
 ---
 

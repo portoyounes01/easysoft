@@ -26,6 +26,7 @@ import DesignSystem2 from './pages/DesignSystem2';
 import FiscalAudit from './pages/FiscalAudit';
 import OrderQueue from './pages/OrderQueue';
 import OrderStatusDisplay from './pages/OrderStatusDisplay';
+import { hasDevicePairingScope } from './utils/devicePairingStorage';
 import HR from './pages/HR';
 import CashDrawerAudit from './pages/CashDrawerAudit';
 import PurchaseReceipts from './pages/PurchaseReceipts';
@@ -137,7 +138,10 @@ const AppContent: React.FC = () => {
           )
         }
       />
-      <Route path="/order-status" element={<OrderStatusDisplay />} />
+      <Route
+        path="/order-status"
+        element={hasDevicePairingScope() ? <OrderStatusDisplay /> : <Navigate to="/pair-device" replace />}
+      />
 
       {/* Device pairing — pre-auth: a fresh till pairs (gets a device session) before any employee login (Phase 2). */}
       <Route path="/pair-device" element={<DevicePairing />} />

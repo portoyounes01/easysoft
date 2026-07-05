@@ -41,15 +41,26 @@ import type { LocalRawMaterial, LocalRecipeLine } from '../types/rawMaterial';
 import { buildHashPlaintext, extractQrHashFourChars } from '../fiscal/signing';
 import { buildAtQrPayloadString } from '../fiscal/qrPayload';
 import { assertInvoiceSeriesSegment, buildInvoiceNo, computeNextSequential, formatSequential, invoiceSeriesSegment } from '../fiscal/seriesUtils';
+import { readDevicePairingScope } from '../utils/devicePairingStorage';
 const DEXIE_NAME_PRODUCTION = 'POSDatabase';
 const DEXIE_NAME_TRAINING = 'restaurante_pos_training';
+const LEGACY_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+const LEGACY_STORE_ID = '00000000-0000-0000-0000-000000000002';
 
 /** Separate IndexedDB when modo formação — read before first open (reload after toggle). */
 export function resolveDexieDbName(): string {
     try {
-        if (typeof localStorage !== 'undefined' && localStorage.getItem('pos_dexie_slot') === 'training') {
-            return DEXIE_NAME_TRAINING;
+        const isTraining = typeof localStorage !== 'undefined' && localStorage.getItem('pos_dexie_slot') === 'training';
+        const pairing = readDevicePairingScope();
+        if (!pairing) return isTraining ? DEXIE_NAME_TRAINING : DEXIE_NAME_PRODUCTION;
+
+        // Shim R3: tenant #1's pilot till keeps its existing database. Other
+        // pairings are structurally isolated, including re-pairing this install.
+        if (pairing.tenantId === LEGACY_TENANT_ID && pairing.storeId === LEGACY_STORE_ID) {
+            return isTraining ? DEXIE_NAME_TRAINING : DEXIE_NAME_PRODUCTION;
         }
+        const scopedName = `POSDatabase::${pairing.tenantId}::${pairing.storeId}`;
+        return isTraining ? `${scopedName}::training` : scopedName;
     } catch {
         /* ignore */
     }
@@ -614,6 +625,10 @@ export class EmployeeLocalService {
                 // Convert string dates to Date objects
                 const localEmployee: LocalEmployee = {
                     ...employee,
+                    // Credential material is input-only during employee create/reset.
+                    // A roster pull must also erase hashes left by pre-Phase-2 clients.
+                    password_hash: null,
+                    pin: null,
                     created_at: new Date(employee.created_at),
                     updated_at: new Date(employee.updated_at),
                     last_synced_at: employee.last_synced_at ? new Date(employee.last_synced_at) : null,
@@ -698,6 +713,8 @@ export class EmployeeLocalService {
                 await localDb.employees.update(id, {
                     needs_push: false,
                     last_synced_at: now,
+                    password_hash: null,
+                    pin: null,
                 });
             }
         });

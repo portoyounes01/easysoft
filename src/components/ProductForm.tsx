@@ -91,7 +91,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
     const [costInput, setCostInput] = useState('');
     const [pendingUploadPaths, setPendingUploadPaths] = useState<string[]>([]);
     const [pendingDeletes, setPendingDeletes] = useState<string[]>([]);
-    const { employee, credentialHash } = useSupabaseAuth();
+    const { employee } = useSupabaseAuth();
     const { settings } = useSettings();
     const currencySymbol = settings.pos.currencySymbol;
 
@@ -231,7 +231,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                 path,
                                 employee_id: employee?.id || undefined,
                                 employee_number: employee?.employee_number || undefined,
-                                proof_hash: credentialHash || undefined,
                             })
                         });
                     }));
@@ -254,7 +253,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                 path,
                                 employee_id: employee?.id || undefined,
                                 employee_number: employee?.employee_number || undefined,
-                                proof_hash: credentialHash || undefined,
                             })
                         });
                     }));
@@ -289,7 +287,6 @@ const ProductForm: React.FC<ProductFormProps> = ({
                             path,
                             employee_id: employee?.id || undefined,
                             employee_number: employee?.employee_number || undefined,
-                            proof_hash: credentialHash || undefined,
                         })
                     });
                     // Ignore errors on cleanup
@@ -795,4 +792,4 @@ const ProductForm: React.FC<ProductFormProps> = ({
     );
 };
 
-export default ProductForm; 
+export default ProductForm;

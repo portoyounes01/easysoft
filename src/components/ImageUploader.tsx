@@ -64,8 +64,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     // Note: Permission checks should be done at the component usage level
     // This component assumes the user already has inventory access
 
-    // Auth context for upload proof and identity
-    const { employee, credentialHash } = useSupabaseAuth();
+    const { employee } = useSupabaseAuth();
     const { t } = useTranslation();
 
     const [state, setState] = useState<ImageUploadState>({
@@ -240,7 +239,6 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         const reqBody = {
             employee_number: employee.employee_number,
             employee_id: employee.id,
-            proof_hash: credentialHash || null,
             file_name: file.name,
             content_type: file.type
         };
@@ -322,7 +320,6 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                     path: pathToDelete,
                     employee_id: employee?.id,
                     employee_number: employee?.employee_number,
-                    proof_hash: credentialHash || undefined,
                 })
             });
         } catch { }

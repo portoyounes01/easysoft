@@ -78,7 +78,9 @@ describe('populateTransactionData utility functions', () => {
       });
       
       // Verify all tables were called
-      expect(mockFrom).toHaveBeenCalledWith('employees');
+      expect(mockRpc).toHaveBeenCalledWith('upsert_employees', expect.objectContaining({
+        employees_data: expect.any(Array),
+      }));
       expect(mockFrom).toHaveBeenCalledWith('categories');
       expect(mockFrom).toHaveBeenCalledWith('products');
       expect(mockFrom).toHaveBeenCalledWith('customers');
@@ -86,56 +88,52 @@ describe('populateTransactionData utility functions', () => {
       expect(mockFrom).toHaveBeenCalledWith('transaction_items');
       
       // Verify upsert was called for each table
-      expect(mockUpsert).toHaveBeenCalledTimes(6);
+      expect(mockUpsert).toHaveBeenCalledTimes(5);
     });
 
     it('handles employee insertion error', async () => {
-      mockUpsert.mockResolvedValueOnce({ error: { message: 'Employee insertion failed' } });
+      mockRpc.mockResolvedValueOnce({ error: { message: 'Employee insertion failed' } });
       
       await expect(populateTransactionData()).rejects.toThrow();
       
-      expect(mockFrom).toHaveBeenCalledWith('employees');
-      expect(mockUpsert).toHaveBeenCalledTimes(1);
+      expect(mockRpc).toHaveBeenCalledWith('upsert_employees', expect.any(Object));
+      expect(mockUpsert).not.toHaveBeenCalled();
     });
 
     it('handles categories insertion error', async () => {
       mockUpsert
-        .mockResolvedValueOnce({ error: null }) // employees succeed
-        .mockResolvedValueOnce({ error: { message: 'Categories insertion failed' } }); // categories fail
+        .mockResolvedValueOnce({ error: { message: 'Categories insertion failed' } });
       
       await expect(populateTransactionData()).rejects.toThrow();
       
-      expect(mockFrom).toHaveBeenCalledWith('employees');
+      expect(mockRpc).toHaveBeenCalledWith('upsert_employees', expect.any(Object));
       expect(mockFrom).toHaveBeenCalledWith('categories');
-      expect(mockUpsert).toHaveBeenCalledTimes(2);
+      expect(mockUpsert).toHaveBeenCalledTimes(1);
     });
 
     it('handles products insertion error', async () => {
       mockUpsert
-        .mockResolvedValueOnce({ error: null }) // employees succeed
         .mockResolvedValueOnce({ error: null }) // categories succeed
         .mockResolvedValueOnce({ error: { message: 'Products insertion failed' } }); // products fail
       
       await expect(populateTransactionData()).rejects.toThrow();
       
-      expect(mockUpsert).toHaveBeenCalledTimes(3);
+      expect(mockUpsert).toHaveBeenCalledTimes(2);
     });
 
     it('handles customers insertion error', async () => {
       mockUpsert
-        .mockResolvedValueOnce({ error: null }) // employees succeed
         .mockResolvedValueOnce({ error: null }) // categories succeed
         .mockResolvedValueOnce({ error: null }) // products succeed
         .mockResolvedValueOnce({ error: { message: 'Customers insertion failed' } }); // customers fail
       
       await expect(populateTransactionData()).rejects.toThrow();
       
-      expect(mockUpsert).toHaveBeenCalledTimes(4);
+      expect(mockUpsert).toHaveBeenCalledTimes(3);
     });
 
     it('handles transactions insertion error', async () => {
       mockUpsert
-        .mockResolvedValueOnce({ error: null }) // employees succeed
         .mockResolvedValueOnce({ error: null }) // categories succeed
         .mockResolvedValueOnce({ error: null }) // products succeed
         .mockResolvedValueOnce({ error: null }) // customers succeed
@@ -143,12 +141,11 @@ describe('populateTransactionData utility functions', () => {
       
       await expect(populateTransactionData()).rejects.toThrow();
       
-      expect(mockUpsert).toHaveBeenCalledTimes(5);
+      expect(mockUpsert).toHaveBeenCalledTimes(4);
     });
 
     it('handles transaction items insertion error', async () => {
       mockUpsert
-        .mockResolvedValueOnce({ error: null }) // employees succeed
         .mockResolvedValueOnce({ error: null }) // categories succeed
         .mockResolvedValueOnce({ error: null }) // products succeed
         .mockResolvedValueOnce({ error: null }) // customers succeed
@@ -157,7 +154,7 @@ describe('populateTransactionData utility functions', () => {
       
       await expect(populateTransactionData()).rejects.toThrow();
       
-      expect(mockUpsert).toHaveBeenCalledTimes(6);
+      expect(mockUpsert).toHaveBeenCalledTimes(5);
     });
   });
 
@@ -244,7 +241,7 @@ describe('populateTransactionData utility functions', () => {
       await populateTransactionData();
       
       // Check that employees were created with hashed passwords
-      const employeesCall = mockUpsert.mock.calls[0][0]; // First upsert call should be employees
+      const employeesCall = mockRpc.mock.calls.find(([name]) => name === 'upsert_employees')?.[1].employees_data;
       expect(employeesCall).toHaveLength(3); // 3 employees
       
       // Check admin employee
@@ -272,7 +269,7 @@ describe('populateTransactionData utility functions', () => {
     it('creates categories with proper structure', async () => {
       await populateTransactionData();
       
-      const categoriesCall = mockUpsert.mock.calls[1][0]; // Second upsert call should be categories
+      const categoriesCall = mockUpsert.mock.calls[0][0];
       expect(categoriesCall).toHaveLength(4); // 4 categories
       
       const beverageCategory = categoriesCall.find((cat: any) => cat.name === 'Beverages');
@@ -286,7 +283,7 @@ describe('populateTransactionData utility functions', () => {
     it('creates products with proper pricing and stock', async () => {
       await populateTransactionData();
       
-      const productsCall = mockUpsert.mock.calls[2][0]; // Third upsert call should be products
+      const productsCall = mockUpsert.mock.calls[1][0];
       expect(productsCall).toHaveLength(6); // 6 products
       
       const coffeeProduct = productsCall.find((prod: any) => prod.name === 'Premium Coffee Beans');
@@ -302,7 +299,7 @@ describe('populateTransactionData utility functions', () => {
     it('creates transactions with proper financial calculations', async () => {
       await populateTransactionData();
       
-      const transactionsCall = mockUpsert.mock.calls[4][0]; // Fifth upsert call should be transactions
+      const transactionsCall = mockUpsert.mock.calls[3][0];
       expect(transactionsCall).toHaveLength(12); // 12 transactions
       
       // Check a specific transaction
