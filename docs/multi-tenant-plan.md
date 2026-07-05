@@ -22,6 +22,7 @@
 | D8 | **Per-tenant fiskaly cost metering** | A8: costs absorbed in subscription | Phase 6 (as margin monitoring) | Unnoticed margin erosion on document-heavy tenants |
 | D9 | **Notification push delivery** | Events table written from day one; delivery needs the PWA | With D2 | None — events accumulate and are queryable |
 | D10 | **electron-updater + code signing** | Needs cert purchase decision | Phase 1∥ decision, before fleet grows | Manual till updates; OS security warnings on installers |
+| — | **Till update/deploy mechanics** (thin shell + network UI, fail-closed boot gate, version handshakes, backend deploy safety) | Own brief; expand into a plan when we reach deploy/update phases | See `docs/update-policy.md`; Stage 0 rides Phase 0 (extend runtime-config with `ui_origin`+`renderer_source`), Stages 3–4 before Phase 5 | Fleet-wide selling outage on a bad deploy; can't remotely fix a shell/native bug; **code-signing has multi-week procurement lead time — start now** |
 | D11 | **vendus/invoicexpress retirement** | Legacy; user: fiskaly mandatory for all new tenants; functions never deployed | Post-v1 decision (delete vs keep dormant) | Dead code carrying old API contracts |
 | D12 | **Fiscal proxy edge functions (v1 versions)** | Never deployed; tenant-aware v2 built fresh in Phase 4 | Phase 4 (`pos-checkout` et al.) | None — no production surface exists today; just never deploy the v1 versions |
 
