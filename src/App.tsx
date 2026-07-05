@@ -34,6 +34,13 @@ import StockProfitReport from './pages/StockProfitReport';
 
 const Router = ['app:', 'file:'].includes(window.location.protocol) ? HashRouter : BrowserRouter;
 
+// Dev-tools gate (Phase 0 hardening): dangerous/demo routes register ONLY in dev builds or when
+// explicitly enabled. Keeps the mass-delete /setup UI, the unauthenticated /pos2 preview, the
+// seed/cashier/electron test stubs, and the design-system out of production bundles.
+// Production Electron/web builds have import.meta.env.DEV === false and leave the flag unset.
+// NOTE: the /settings?hw= panels themselves are gated in Settings.tsx — App.tsx stubs alone are not enough.
+const DEV_TOOLS = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DANGEROUS_DATA_TOOLS === 'true';
+
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useSupabaseAuth();
   const { t } = useTranslation();
@@ -132,8 +139,8 @@ const AppContent: React.FC = () => {
       />
       <Route path="/order-status" element={<OrderStatusDisplay />} />
 
-      {/* Standalone UI-redesign preview — no auth, no shared Layout/Sidebar, isolated from the working app */}
-      <Route path="/pos2" element={<POS2 />} />
+      {/* Standalone UI-redesign preview — dev-only (unauthenticated); not registered in production builds */}
+      {DEV_TOOLS && <Route path="/pos2" element={<POS2 />} />}
 
       {/* App routes — shared Layout + Sidebar (including POS) */}
       <Route
@@ -296,33 +303,38 @@ const AppContent: React.FC = () => {
                       </PermissionRoute>
                     }
                   />
-                  <Route
-                    path="/setup"
-                    element={
-                      <PermissionRoute permission="settings">
-                        <DataSetup />
-                      </PermissionRoute>
-                    }
-                  />
-                  <Route path="/seed" element={<Navigate to="/settings?hw=seed" replace />} />
-                  <Route
-                    path="/receipt-demo"
-                    element={
-                      <PermissionRoute permission="sales">
-                        <ReceiptDemoPage />
-                      </PermissionRoute>
-                    }
-                  />
-                  <Route
-                    path="/receipt-demo/:id"
-                    element={
-                      <PermissionRoute permission="sales">
-                        <ReceiptDemoPage />
-                      </PermissionRoute>
-                    }
-                  />
-                  <Route path="/cashier-testing" element={<Navigate to="/settings?hw=cashier" replace />} />
-                  <Route path="/electron-testing" element={<Navigate to="/settings?hw=electron" replace />} />
+                  {DEV_TOOLS && (
+                    <>
+                      <Route
+                        path="/setup"
+                        element={
+                          <PermissionRoute permission="settings">
+                            <DataSetup />
+                          </PermissionRoute>
+                        }
+                      />
+                      <Route path="/seed" element={<Navigate to="/settings?hw=seed" replace />} />
+                      <Route
+                        path="/receipt-demo"
+                        element={
+                          <PermissionRoute permission="sales">
+                            <ReceiptDemoPage />
+                          </PermissionRoute>
+                        }
+                      />
+                      <Route
+                        path="/receipt-demo/:id"
+                        element={
+                          <PermissionRoute permission="sales">
+                            <ReceiptDemoPage />
+                          </PermissionRoute>
+                        }
+                      />
+                    </>
+                  )}
+                  {DEV_TOOLS && <Route path="/cashier-testing" element={<Navigate to="/settings?hw=cashier" replace />} />}
+                  {DEV_TOOLS && <Route path="/electron-testing" element={<Navigate to="/settings?hw=electron" replace />} />}
+                  {/* /printer-test stays available — printer setup/recovery is production functionality */}
                   <Route path="/printer-test" element={<Navigate to="/settings?hw=printer" replace />} />
                   <Route
                     path="/pair-device"
@@ -332,15 +344,19 @@ const AppContent: React.FC = () => {
                       </PermissionRoute>
                     }
                   />
-                  <Route
-                    path="/design-system"
-                    element={
-                      <PermissionRoute permission="settings">
-                        <DesignSystem2 />
-                      </PermissionRoute>
-                    }
-                  />
-                  <Route path="/design-system-2" element={<Navigate to="/design-system" replace />} />
+                  {DEV_TOOLS && (
+                    <>
+                      <Route
+                        path="/design-system"
+                        element={
+                          <PermissionRoute permission="settings">
+                            <DesignSystem2 />
+                          </PermissionRoute>
+                        }
+                      />
+                      <Route path="/design-system-2" element={<Navigate to="/design-system" replace />} />
+                    </>
+                  )}
                 </Routes>
               </Layout>
             </POSProvider>

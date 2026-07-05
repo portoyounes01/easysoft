@@ -253,6 +253,8 @@ const Settings: React.FC = () => {
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
     const [activeTab, setActiveTab] = useState<SettingsTabId>('security');
     const [hardwareTool, setHardwareTool] = useState<HardwareSettingsTool>('printer');
+    // Phase 0 hardening: seed/cashier/electron panels are dev-only; the 'printer' panel is always available.
+    const devToolsEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DANGEROUS_DATA_TOOLS === 'true';
     const [pendingChanges, setPendingChanges] = useState(false);
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
     const [saftStart, setSaftStart] = useState(() => new Date().toISOString().slice(0, 10));
@@ -411,11 +413,12 @@ const Settings: React.FC = () => {
 
     useEffect(() => {
         const hw = searchParams.get('hw');
-        if (hw === 'printer' || hw === 'seed' || hw === 'cashier' || hw === 'electron') {
+        const allowed: HardwareSettingsTool[] = devToolsEnabled ? ['printer', 'seed', 'cashier', 'electron'] : ['printer'];
+        if (hw && (allowed as string[]).includes(hw)) {
             setActiveTab('hardware');
-            setHardwareTool(hw);
+            setHardwareTool(hw as HardwareSettingsTool);
         }
-    }, [searchParams]);
+    }, [searchParams, devToolsEnabled]);
 
     const markChanged = useCallback(() => {
         setPendingChanges(true);
@@ -1384,7 +1387,7 @@ const Settings: React.FC = () => {
             { id: 'seed', label: t('settings.hwSeedLabel'), description: t('settings.hwSeedDesc'), icon: Database },
             { id: 'cashier', label: t('settings.hwCashierLabel'), description: t('settings.hwCashierDesc'), icon: BadgeCheck },
             { id: 'electron', label: 'Electron', description: t('settings.hwElectronDesc'), icon: Monitor },
-        ];
+        ].filter(tool => tool.id === 'printer' || devToolsEnabled);
         return (
             <div className="space-y-6">
                 <SettingCard
@@ -1419,9 +1422,9 @@ const Settings: React.FC = () => {
 
                 <div className={`${glassCard} p-3 sm:p-5`}>
                     {hardwareTool === 'printer' && <PrinterSettingsPanel embedded />}
-                    {hardwareTool === 'seed' && <SeedManagementPanel embedded />}
-                    {hardwareTool === 'cashier' && <CashierTestingPanel embedded />}
-                    {hardwareTool === 'electron' && <ElectronTestingPanel embedded />}
+                    {devToolsEnabled && hardwareTool === 'seed' && <SeedManagementPanel embedded />}
+                    {devToolsEnabled && hardwareTool === 'cashier' && <CashierTestingPanel embedded />}
+                    {devToolsEnabled && hardwareTool === 'electron' && <ElectronTestingPanel embedded />}
                 </div>
             </div>
         );

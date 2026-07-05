@@ -891,44 +891,15 @@ export async function clearTransactionData() {
         const { error: sqlError } = await supabase.rpc('clear_all_transaction_data');
         
         if (sqlError) {
+            // Phase 0 hardening: the previous raw per-table delete fallback (mass-DELETE on every
+            // table via the anon client) was removed. It was a catastrophic footgun once multi-tenant,
+            // and it silently bypassed the fiscal/sealed-document protections. If the RPC is missing or
+            // fails, surface the error loudly instead of nuking the database directly.
             console.error('❌ SQL clear function failed:', sqlError);
-            console.log('🔄 Falling back to individual table deletions...');
-            
-            // Fallback: Simple delete all approach
-            console.log('🗑️ Deleting daily_sales_summary...');
-            const { error: summaryError } = await supabase.from('daily_sales_summary').delete().gte('id', 0);
-            if (summaryError) console.error('❌ Error deleting daily sales summary:', summaryError);
-            else console.log('✅ Daily sales summary deleted');
-            
-            console.log('🗑️ Deleting transaction_items...');
-            const { error: itemsError } = await supabase.from('transaction_items').delete().gte('created_at', '1900-01-01');
-            if (itemsError) console.error('❌ Error deleting transaction items:', itemsError);
-            else console.log('✅ Transaction items deleted');
-            
-            console.log('🗑️ Deleting transactions...');
-            const { error: transactionsError } = await supabase.from('transactions').delete().gte('created_at', '1900-01-01');
-            if (transactionsError) console.error('❌ Error deleting transactions:', transactionsError);
-            else console.log('✅ Transactions deleted');
-            
-            console.log('🗑️ Deleting customers...');
-            const { error: customersError } = await supabase.from('customers').delete().gte('created_at', '1900-01-01');
-            if (customersError) console.error('❌ Error deleting customers:', customersError);
-            else console.log('✅ Customers deleted');
-            
-            console.log('🗑️ Deleting products...');
-            const { error: productsError } = await supabase.from('products').delete().gte('created_at', '1900-01-01');
-            if (productsError) console.error('❌ Error deleting products:', productsError);
-            else console.log('✅ Products deleted');
-            
-            console.log('🗑️ Deleting categories...');
-            const { error: categoriesError } = await supabase.from('categories').delete().gte('created_at', '1900-01-01');
-            if (categoriesError) console.error('❌ Error deleting categories:', categoriesError);
-            else console.log('✅ Categories deleted');
-            
-            console.log('🗑️ Deleting employees...');
-            const { error: employeesError } = await supabase.from('employees').delete().gte('created_at', '1900-01-01');
-            if (employeesError) console.error('❌ Error deleting employees:', employeesError);
-            else console.log('✅ Employees deleted');
+            throw new Error(
+                `clear_all_transaction_data RPC failed (${sqlError.message}). ` +
+                `The raw-delete fallback was removed for safety (Phase 0 hardening); no data was deleted.`
+            );
         } else {
             console.log('✅ SQL clear function executed successfully!');
         }

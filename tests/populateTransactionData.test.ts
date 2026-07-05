@@ -171,17 +171,18 @@ describe('populateTransactionData utility functions', () => {
       expect(mockRpc).toHaveBeenCalledWith('clear_all_transaction_data');
     });
 
-    it('falls back to table deletes when RPC returns an error', async () => {
+    it('throws and does NOT mass-delete when the RPC returns an error (Phase 0 hardening)', async () => {
       mockRpc.mockResolvedValue({ error: { message: 'function not found' } });
       const gte = vi.fn().mockResolvedValue({ error: null });
       mockDelete.mockReturnValue({ gte });
 
-      const result = await clearTransactionData();
+      // The raw per-table delete fallback was removed for safety: a failing/missing RPC must
+      // surface loudly, never mass-DELETE every table directly via the anon client.
+      await expect(clearTransactionData()).rejects.toThrow();
 
-      expect(result).toEqual({ success: true });
       expect(mockRpc).toHaveBeenCalledWith('clear_all_transaction_data');
-      expect(mockFrom).toHaveBeenCalledWith('daily_sales_summary');
-      expect(mockFrom).toHaveBeenCalledWith('transaction_items');
+      expect(mockFrom).not.toHaveBeenCalledWith('daily_sales_summary');
+      expect(mockFrom).not.toHaveBeenCalledWith('transaction_items');
     });
   });
 
