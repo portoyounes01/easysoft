@@ -107,11 +107,14 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Fetch employee data based on authenticated user
   const fetchEmployeeData = async (userId: string): Promise<Employee | null> => {
     try {
+      // maybeSingle (not single): a session whose user is NOT an employee — e.g. a bare
+      // device session between pairing and PIN login — legitimately matches 0 rows. single()
+      // would 406/PGRST116 and log a spurious error on that normal path.
       const { data, error } = await supabase
         .from('employees')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching employee data:', error);
@@ -368,22 +371,30 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
 
       if (event === 'SIGNED_IN' && session) {
-        // Fetch employee data for the authenticated user
-        const employee = await fetchEmployeeData(session.user.id);
-
-        setState({
-          user: session.user,
-          employee,
-          session,
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-          credentialHash: null,
-        });
+        // Defer the employee lookup outside this callback. fetchEmployeeData issues a
+        // PostgREST query that internally calls supabase.auth.getSession() to attach the
+        // token; getSession would deadlock against the auth lock held while this SIGNED_IN
+        // callback runs (e.g. immediately after setSession during device pairing).
+        // setTimeout(0) runs it after the lock is released.
+        // isAuthenticated is gated on resolving an EMPLOYEE: a bare device session (no
+        // employee yet) must leave the app on the login screen, not count as logged-in.
+        setTimeout(async () => {
+          if (!mounted) return;
+          const employee = await fetchEmployeeData(session.user.id);
+          setState({
+            user: session.user,
+            employee,
+            session,
+            isAuthenticated: !!employee,
+            isLoading: false,
+            error: null,
+            credentialHash: null,
+          });
+        }, 0);
       } else if (event === 'SIGNED_OUT') {
         setState({
           user: null,
@@ -433,7 +444,8 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           user: session.user,
           employee,
           session,
-          isAuthenticated: true,
+          // A device session with no employee is "paired but not signed in" -> stay on login.
+          isAuthenticated: !!employee,
           isLoading: false,
           error: null,
           credentialHash: null,

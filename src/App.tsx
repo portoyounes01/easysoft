@@ -139,6 +139,9 @@ const AppContent: React.FC = () => {
       />
       <Route path="/order-status" element={<OrderStatusDisplay />} />
 
+      {/* Device pairing — pre-auth: a fresh till pairs (gets a device session) before any employee login (Phase 2). */}
+      <Route path="/pair-device" element={<DevicePairing />} />
+
       {/* Standalone UI-redesign preview — dev-only (unauthenticated); not registered in production builds */}
       {DEV_TOOLS && <Route path="/pos2" element={<POS2 />} />}
 
@@ -336,14 +339,6 @@ const AppContent: React.FC = () => {
                   {DEV_TOOLS && <Route path="/electron-testing" element={<Navigate to="/settings?hw=electron" replace />} />}
                   {/* /printer-test stays available — printer setup/recovery is production functionality */}
                   <Route path="/printer-test" element={<Navigate to="/settings?hw=printer" replace />} />
-                  <Route
-                    path="/pair-device"
-                    element={
-                      <PermissionRoute permission="settings">
-                        <DevicePairing />
-                      </PermissionRoute>
-                    }
-                  />
                   {DEV_TOOLS && (
                     <>
                       <Route
