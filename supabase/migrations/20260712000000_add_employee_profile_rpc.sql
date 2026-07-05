@@ -7,8 +7,9 @@
 -- though claims-mandatory roster RPCs are available. Keep the table closed and
 -- expose only this narrow tenant-derived lookup.
 -- =====================================================================
-
-BEGIN;
+-- NOTE: no explicit BEGIN/COMMIT — `supabase db push` already wraps each
+-- migration in a transaction; an inner COMMIT breaks that atomicity (it caused
+-- 20260710 to partially apply without being recorded on EasySoft).
 
 CREATE OR REPLACE FUNCTION public.get_employee_profile(p_employee_id uuid)
 RETURNS SETOF public.employees
@@ -27,5 +28,3 @@ $$;
 
 REVOKE ALL ON FUNCTION public.get_employee_profile(uuid) FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.get_employee_profile(uuid) TO authenticated;
-
-COMMIT;

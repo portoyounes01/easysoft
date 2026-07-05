@@ -20,8 +20,11 @@
 -- rolled back, then copy legacy/bcrypt values back explicitly. Never expose
 -- employee_credentials through a client policy.
 -- =====================================================================
-
-BEGIN;
+-- NOTE: no explicit BEGIN/COMMIT. `supabase db push` already wraps each
+-- migration in a transaction. The inner COMMIT that used to be here committed
+-- the DDL before the ledger row was written, so a failed push left EasySoft
+-- with the columns dropped but this migration UNRECORDED (partial cutover).
+-- Removing it lets db push apply + record this migration atomically.
 
 -- Refuse to silently migrate plaintext or malformed values. The running app
 -- writes SHA-256 hex; bcrypt rows are accepted for already-upgraded fixtures.
@@ -298,5 +301,3 @@ DROP FUNCTION IF EXISTS public.upsert_employees_with_mapping(jsonb);
 ALTER TABLE public.employees
   DROP COLUMN password_hash,
   DROP COLUMN pin;
-
-COMMIT;

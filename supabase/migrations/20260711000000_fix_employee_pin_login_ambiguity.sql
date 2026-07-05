@@ -7,8 +7,8 @@
 -- reached only after a valid credential matches, causing every successful
 -- login to return SQLSTATE 42702 while invalid credentials behave normally.
 -- =====================================================================
-
-BEGIN;
+-- NOTE: no explicit BEGIN/COMMIT — `supabase db push` already wraps each
+-- migration in a transaction; an inner COMMIT breaks that atomicity.
 
 CREATE OR REPLACE FUNCTION public.employee_pin_login(p_employee_number text, p_secret text)
 RETURNS TABLE (employee_id uuid, employee_number text, name text, role text, success boolean, error text)
@@ -103,5 +103,3 @@ END $$;
 
 REVOKE ALL ON FUNCTION public.employee_pin_login(text, text) FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.employee_pin_login(text, text) TO authenticated;
-
-COMMIT;
