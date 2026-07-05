@@ -94,6 +94,9 @@ BEGIN
 END;
 $$;
 
+-- RETURNS TABLE columns grow across migrations; CREATE OR REPLACE cannot change a
+-- function's return type, so drop the prior (genesis) definition first.
+DROP FUNCTION IF EXISTS public.get_customers_delta(timestamptz);
 CREATE OR REPLACE FUNCTION get_customers_delta(since_timestamp TIMESTAMPTZ DEFAULT NULL)
 RETURNS TABLE (
     id UUID,

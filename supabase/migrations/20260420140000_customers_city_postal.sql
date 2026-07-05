@@ -114,6 +114,7 @@ $$;
 -- ---------------------------------------------------------------------------
 -- get_customers_delta: return city, postal_code
 -- ---------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.get_customers_delta(timestamptz);
 CREATE OR REPLACE FUNCTION get_customers_delta(since_timestamp TIMESTAMPTZ DEFAULT NULL)
 RETURNS TABLE (
     id UUID,
