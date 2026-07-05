@@ -143,7 +143,9 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ content: { type: 'API_KEY', key: secret.fiskaly_api_key, secret: secret.fiskaly_api_secret } }) });
     if (!tRes.ok) return await fail('fiskaly_auth_failed', 502, await tRes.text());
     const tBody = await tRes.json();
-    fiskalyToken = tBody.access_token; // ⚠️ASSUMED field name (token lifetime unconfirmed)
+    // VERIFIED against test.api.fiskaly.com: token is content.authentication.bearer
+    // (a ~24h RS256 JWT; content.authentication.expires_at). Responses wrap in `content`.
+    fiskalyToken = tBody?.content?.authentication?.bearer;
     if (!fiskalyToken) return await fail('fiskaly_auth_no_token', 502, tBody);
   } catch (e) {
     return await fail('fiskaly_unreachable', 503, String(e)); // online-required: client blocks, nothing queued
