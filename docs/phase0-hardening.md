@@ -6,6 +6,25 @@
 
 ---
 
+## ✅ STATUS (2026-07-05) — Phase 0 substantially complete on EasySoft
+
+Target changed to greenfield **EasySoft** (prod `kmojrkkjuehmpordueoe`) + **EasySoft-staging** — old test project deleted. Hardening baked into the baseline instead of retrofitted.
+
+**Done & verified (committed `140e588`, `02dd58e`, `f7ff8df`):**
+- **DB baseline + hardening** applied to EasySoft & staging: full schema (genesis + 7 migrations), permissive-anon RLS baseline, **S7** (revoke unused employee-admin RPCs), **S8** (`clear_all_transaction_data` never created → 404), **S9** (`security_invoker` views), **S17** (skip-sealed upsert), **S18/S19** (sealed-doc immutability triggers). Verified via PostgREST: all core tables anon-accessible, migration columns present, RPCs work, dangerous RPC gone.
+- **Code:** S1 (dead file), S2 (anon-key typo), S10/S11 (`/setup` + unauthenticated `/pos2` + demo routes gated), S11 (mass-delete fallback removed), S12 (Settings dev-panels gated; printer preserved).
+- **S15 removed** from the baseline (no real protection while `get_employees_delta` leaks hashes; folds into Phase 2).
+
+**Deferred (flagged, not silent):**
+- **S6** disable public signup → **needs a dashboard toggle** (CLI mgmt token is in the macOS keychain). Low impact now; will also revisit in Phase 2. *Action: you, Dashboard → Auth → turn off "Allow new users to sign up".*
+- **S13** drop `VITE_FISCAL_RSA_PRIVATE_KEY_PEM` from Vercel → needs your Vercel access; key never used in prod.
+- **S20** client sealed-doc sync skip → **Phase 4** (only matters once fiscal issuance creates sealed docs; the DB triggers S18/S19 already protect them).
+- **S21** edge CORS lockdown → needs the exact prod origin set (Electron `app://pos` + Vercel domain).
+- **S22** Electron runtime-config layer → pairs with anon-key rotation (itself deferred).
+- **Cleanup:** legacy root `*.sql` scripts (superseded by genesis) still in repo — archive to avoid accidental re-run.
+
+---
+
 ## 🔴 LIVE EXPOSURE — cannot be fully closed in Phase 0 (closes in Phase 2)
 
 **`get_employees_delta(timestamptz)` is a `SECURITY DEFINER` function, EXECUTE-able by `anon`, that returns every employee's `pin` and `password_hash` (unsalted SHA-256).** Anyone holding the public anon key (shipped in every app bundle) can call it and dump all credential hashes, then brute-force the 4-digit PINs offline in seconds.
