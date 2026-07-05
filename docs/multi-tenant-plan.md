@@ -8,6 +8,8 @@
 
 > **Rule (user-mandated):** no work is silently pushed to "later." Every deferral is listed here with when it lands and the risk of forgetting it. If an item on this list bothers you — say so and it moves into v1.
 
+> 🔴 **KNOWN LIVE EXPOSURE (not deferrable scope — a standing risk until Phase 2).** `get_employees_delta` (SECURITY DEFINER, anon-EXECUTE) returns every employee's unsalted SHA-256 `pin`/`password_hash` to any caller with the public anon key. Phase 0 **cannot** close this (a SECURITY DEFINER function bypasses column revokes; the app also needs the hashes client-side today). Closure = **Phase 2** (server-side PIN verify + salted hashing + strip hashes from the delta). Because v1 is now online-required, the offline-login reason to ship hashes to the client is gone → **recommendation: run Phase 2 right after the safe Phase 0 wins, ahead of Phase 1.** Full detail: `docs/phase0-hardening.md`.
+
 | # | Deferred item | Why | Lands | Risk if forgotten |
 |---|--------------|-----|-------|-------------------|
 | D1 | **Offline sales mode** | User decision: v1 online-required | Future major version (seams designed in §7.4) | Tills cannot sell during internet/fiskaly outages; lawful fallback is pre-printed AT documents (manual) |
