@@ -1,4 +1,4 @@
-import { connectionStatus } from '../lib/supabase';
+import { connectionStatus, supabase } from '../lib/supabase';
 import { employeeService } from './employeeService';
 import { productSyncService } from './productService';
 import { customerSyncService } from './customerSyncService';
@@ -140,10 +140,29 @@ export class SyncManager {
         }
     }
 
+    // All sync RPCs are authenticated + tenant-scoped post-cutover (Phase 2/3). Without a
+    // device/user session there is nothing we can legitimately sync, and firing the RPCs
+    // anyway 401s / 42501s — which the UI misreads as "could not reach server". So skip
+    // quietly until a session exists (e.g. on the pre-login screen, or a browser-core view
+    // with no device session). A real paired till restores its device session at boot.
+    private async hasAuthSession(): Promise<boolean> {
+        try {
+            const { data } = await supabase.auth.getSession();
+            return !!data.session;
+        } catch {
+            return false;
+        }
+    }
+
     // Perform full sync of all entities
     async fullSync(): Promise<void> {
         if (this.syncInProgress) {
             console.log('SyncManager: Sync already in progress, skipping');
+            return;
+        }
+
+        if (!(await this.hasAuthSession())) {
+            console.log('SyncManager: no auth session yet — skipping sync (nothing to sync unauthenticated)');
             return;
         }
 
@@ -296,7 +315,12 @@ export class SyncManager {
     // Bootstrap all entities (for new installations)
     async bootstrap(): Promise<void> {
         console.log('SyncManager: Starting bootstrap...');
-        
+
+        if (!(await this.hasAuthSession())) {
+            console.log('SyncManager: no auth session yet — skipping bootstrap');
+            return;
+        }
+
         try {
             // Bootstrap in dependency order
             await this.syncEntity('employees', () => employeeService.performSync());

@@ -321,9 +321,25 @@ export class EmployeeService {
         }
     }
 
+    // Post-cutover the employee RPCs (upsert_employees / get_employees_delta) are
+    // authenticated + tenant-scoped. Without a device/user session they 401/42501, which
+    // the login screen misreads as "could not reach server". Skip quietly until authed.
+    private async hasAuthSession(): Promise<boolean> {
+        try {
+            const { data } = await supabase.auth.getSession();
+            return !!data.session;
+        } catch {
+            return false;
+        }
+    }
+
     // Perform bi-directional sync
     private async performSync(): Promise<void> {
         if (!isSupabaseConfigured() || this.syncInProgress) {
+            return;
+        }
+
+        if (!(await this.hasAuthSession())) {
             return;
         }
 
