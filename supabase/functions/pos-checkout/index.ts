@@ -68,6 +68,10 @@ Deno.serve(async (req) => {
   const meta = (claims.app_metadata ?? {}) as Record<string, string>;
   const tenantId = meta.tenant_id, storeId = meta.store_id, deviceId = meta.device_id;
   if (!tenantId || !deviceId) return json({ error: 'no_tenant_context' }, 401);
+  // Positive fiscal boundary: ONLY a device session may issue. A human/PWA JWT
+  // (app_role owner/admin/manager) must never reach issuance — belt-and-braces with
+  // the device_id check above so the fiscal-read-only constraint can't erode. (§4.2 L1)
+  if (meta.app_role !== 'device') return json({ error: 'not_a_device_session' }, 403);
 
   // device must be enrolled (covers the <=JWT-lifetime revocation window)
   const { data: device } = await admin.from('devices').select('id,status,training_mode').eq('id', deviceId).eq('tenant_id', tenantId).maybeSingle();
