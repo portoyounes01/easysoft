@@ -1,4 +1,5 @@
 import { connectionStatus, supabase } from '../lib/supabase';
+import { isPwaHost } from '../lib/host';
 import { employeeService } from './employeeService';
 import { productSyncService } from './productService';
 import { customerSyncService } from './customerSyncService';
@@ -63,6 +64,12 @@ export class SyncManager {
 
     // Initialize the sync manager
     private initialize(): void {
+        // PWA host (browser) must NOT run the Dexie/delta sync engine at all — it reads
+        // tenant data via direct PostgREST (docs/pwa-plan.md §2.5). Only the Electron till
+        // (isPwaHost === false) drives sync. This also stops a background singleton from
+        // firing the tenant-scoped delta RPCs in a manager's browser.
+        if (isPwaHost) return;
+
         // Listen for connection status changes
         connectionStatus.subscribe(this.handleConnectionChange.bind(this));
 

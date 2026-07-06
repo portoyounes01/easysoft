@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured, connectionStatus } from '../lib/supabase';
+import { isPwaHost } from '../lib/host';
 import { employeeLocalService, initializeLocalDatabase } from '../lib/localDatabase';
 import { hashPassword } from '../utils/hashUtils';
 import {
@@ -336,6 +337,12 @@ export class EmployeeService {
     // Perform bi-directional sync
     private async performSync(): Promise<void> {
         if (!isSupabaseConfigured() || this.syncInProgress) {
+            return;
+        }
+
+        // PWA host (browser) never runs the Dexie/delta sync — reads go via direct
+        // PostgREST (docs/pwa-plan.md §2.5). Only the Electron till syncs employees.
+        if (isPwaHost) {
             return;
         }
 
