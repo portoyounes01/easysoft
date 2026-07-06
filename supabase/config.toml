@@ -422,3 +422,26 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/import_map.json"
 entrypoint = "./functions/invoicexpress-fiscal/index.ts"
+
+# --- PWA human auth (P1) ---
+# pwa-login is the login itself (no session yet), so the gateway must NOT require a JWT;
+# it resolves username/email + password server-side and mints active-tenant claims.
+[functions.pwa-login]
+enabled = true
+verify_jwt = false
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/pwa-login/index.ts"
+
+# switch-tenant + provision-human require an existing human session (verify_jwt=true);
+# each re-checks membership / caller authz in-body.
+[functions.switch-tenant]
+enabled = true
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/switch-tenant/index.ts"
+
+[functions.provision-human]
+enabled = true
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/provision-human/index.ts"
