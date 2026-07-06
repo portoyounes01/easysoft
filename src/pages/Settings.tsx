@@ -246,8 +246,10 @@ const ReadinessList: React.FC<{ items: ReadinessItem[] }> = ({ items }) => (
 
 const Settings: React.FC = () => {
     const { settings, updateSettings, resetToDefaults, isLoading } = useSettings();
-    const { employee } = useSupabaseAuth();
-    const isSystemAdmin = isSystemAdministrator(employee);
+    const { employee, principal } = useSupabaseAuth();
+    // Owner (a membership human with no employee row) is the tenant's top authority and
+    // gets the system-admin surface; till ADMIN001 keeps it via isSystemAdministrator.
+    const isSystemAdmin = isSystemAdministrator(employee) || principal?.role === 'owner';
     const { t } = useTranslation();
     const [searchParams] = useSearchParams();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();

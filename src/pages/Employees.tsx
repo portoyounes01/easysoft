@@ -53,8 +53,17 @@ const EmployeesInner: React.FC = () => {
         clearOperationError
     } = useEmployees();
 
-    const { employee: currentUser } = useSupabaseAuth();
-    const isCurrentSystemAdmin = isSystemAdministrator(currentUser);
+    const { employee: currentUser, principal } = useSupabaseAuth();
+    // IDENTITY check (ADMIN001) — gates who may SEE/GRANT the RESTRICTED access levels
+    // (reports/dashboard/profit_costs/orders/clear_data) and protects ADMIN001 rows.
+    // Extended ONLY to owner (a membership human, the tenant's top authority). Keeping this
+    // narrow is critical: folding it into a role check would let every admin grant
+    // restricted levels (privilege escalation) — docs/pwa-p1-refactor-plan.md Gap #1.
+    const isCurrentSystemAdmin = isSystemAdministrator(currentUser) || principal?.role === 'owner';
+    // SEPARATE role gate — who may create/edit/delete ADMIN-role employees. A till admin
+    // employee, a human admin, or a human owner (NOT a manager). Deliberately distinct from
+    // isCurrentSystemAdmin so an admin can manage admins without gaining restricted-grant power.
+    const canManageAdminEmployees = canManageAdminEmployees || principal?.role === 'admin' || principal?.role === 'owner';
 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedRole, setSelectedRole] = useState('all');
@@ -317,7 +326,7 @@ const EmployeesInner: React.FC = () => {
         }
 
         // Prevent non-admins from assigning admin role
-        if (formData.role === 'admin' && currentUser?.role !== 'admin') {
+        if (formData.role === 'admin' && !canManageAdminEmployees) {
             errors.role = 'Only administrators can assign admin role';
         }
 
@@ -371,13 +380,13 @@ const EmployeesInner: React.FC = () => {
         if (!validateForm()) return;
 
         // Additional security check: prevent non-admins from creating/modifying admin employees
-        if (formData.role === 'admin' && currentUser?.role !== 'admin') {
+        if (formData.role === 'admin' && !canManageAdminEmployees) {
             console.error('Security violation: Non-admin attempted to create/modify admin employee');
             return;
         }
 
         // If editing an admin employee, only allow admins
-        if (editingEmployee?.role === 'admin' && currentUser?.role !== 'admin') {
+        if (editingEmployee?.role === 'admin' && !canManageAdminEmployees) {
             console.error('Security violation: Non-admin attempted to modify admin employee');
             return;
         }
@@ -450,7 +459,7 @@ const EmployeesInner: React.FC = () => {
         }
 
         // Prevent non-admins from editing admin employees
-        if (employee.role === 'admin' && currentUser?.role !== 'admin') {
+        if (employee.role === 'admin' && !canManageAdminEmployees) {
             console.warn('Non-admin user attempted to edit admin employee');
             return;
         }
@@ -500,7 +509,7 @@ const EmployeesInner: React.FC = () => {
         }
 
         // Prevent non-admins from deleting admin employees
-        if (showDeleteConfirm.role === 'admin' && currentUser?.role !== 'admin') {
+        if (showDeleteConfirm.role === 'admin' && !canManageAdminEmployees) {
             console.error('Security violation: Non-admin attempted to delete admin employee');
             setShowDeleteConfirm(null);
             return;
@@ -683,11 +692,11 @@ const EmployeesInner: React.FC = () => {
                     const daysWorked = Math.max(1, Math.round(employee.hours_worked / 8));
                     const canEditEmployee =
                         employee.role !== 'admin' ||
-                        (currentUser?.role === 'admin' &&
+                        (canManageAdminEmployees &&
                             (isCurrentSystemAdmin || !isSystemAdministrator(employee)));
                     const canDeleteEmployee =
                         !isSystemAdministrator(employee) &&
-                        (currentUser?.role === 'admin' || employee.role !== 'admin');
+                        (canManageAdminEmployees || employee.role !== 'admin');
 
                     return (
                         <div
@@ -711,7 +720,7 @@ const EmployeesInner: React.FC = () => {
                                 <div className="flex items-center space-x-2">
                                     {getRoleBadge(employee.role, employee.is_active)}
                                     {/* Show lock icon for admin employees when viewed by non-admins */}
-                                    {employee.role === 'admin' && currentUser?.role !== 'admin' && (
+                                    {employee.role === 'admin' && !canManageAdminEmployees && (
                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600" title={t('employees.badges.adminAccessRestricted')}>
                                             <KeyRound className="w-3 h-3" />
                                         </span>
@@ -954,8 +963,8 @@ const EmployeesInner: React.FC = () => {
                                                 <select
                                                     value={formData.role}
                                                     onChange={(e) => handleFormChange('role', e.target.value as EmployeeRole)}
-                                                    disabled={editingEmployee?.role === 'admin' && currentUser?.role !== 'admin'}
-                                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editingEmployee?.role === 'admin' && currentUser?.role !== 'admin'
+                                                    disabled={editingEmployee?.role === 'admin' && !canManageAdminEmployees}
+                                                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editingEmployee?.role === 'admin' && !canManageAdminEmployees
                                                         ? 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed'
                                                         : 'border-gray-300'
                                                         }`}
@@ -963,7 +972,7 @@ const EmployeesInner: React.FC = () => {
                                                     <option value="cashier">{t('employees.form.roles.cashier')}</option>
                                                     <option value="manager">{t('employees.form.roles.manager')}</option>
                                                     {/* Only admins can create/assign admin role */}
-                                                    {currentUser?.role === 'admin' && (
+                                                    {canManageAdminEmployees && (
                                                         <option value="admin">{t('employees.form.roles.admin')}</option>
                                                     )}
                                                 </select>
