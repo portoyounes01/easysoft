@@ -185,6 +185,25 @@ Deno.serve(async (req) => {
     return new Response('Method Not Allowed', { status: 405, headers: corsHeaders });
   }
 
+  // §4.2 L2 (docs/pwa-plan.md): this legacy issuer uses GLOBAL provider credentials and
+  // would otherwise issue a real fiscal document for ANY caller — including the public
+  // anon key or a PWA human JWT (it was never role/tenant/device checked). Fiscal
+  // issuance is DEVICE-ONLY: reject anything whose app_role claim is not 'device'. Full
+  // deletion is the coordinated cutover D30 (once the client is wired to pos-checkout);
+  // this closes the abuse vector meanwhile. Pair with verify_jwt=true in config.toml.
+  {
+    const authz = req.headers.get('Authorization') ?? '';
+    const tok = authz.startsWith('Bearer ') ? authz.slice(7) : '';
+    let role = '';
+    try {
+      const claims = JSON.parse(atob(tok.split('.')[1])) as { app_metadata?: { app_role?: string } };
+      role = claims.app_metadata?.app_role ?? '';
+    } catch { role = ''; }
+    if (role !== 'device') {
+      return new Response(JSON.stringify({ error: 'device_session_required' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+  }
+
   let body: RequestBody;
   try {
     body = await req.json();

@@ -398,3 +398,27 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/import_map.json"
 entrypoint = "./functions/pos-checkout/index.ts"
+
+# --- Legacy fiscal issuers (§4.2 L2) — HARDENED, slated for deletion (D30) ---
+# These proxy to external providers with GLOBAL env-var credentials. They were
+# previously unmanaged (absent from this file => default verify_jwt), so any JWT
+# (incl. the public anon key) could issue a real document. Now verify_jwt=true AND
+# each rejects any non-device session in-body (app_role !== 'device'). Delete these
+# three + their provider env vars once the client is fully on pos-checkout.
+[functions.fiskaly-fiscal]
+enabled = true
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/fiskaly-fiscal/index.ts"
+
+[functions.vendus-fiscal]
+enabled = true
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/vendus-fiscal/index.ts"
+
+[functions.invoicexpress-fiscal]
+enabled = true
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/invoicexpress-fiscal/index.ts"
