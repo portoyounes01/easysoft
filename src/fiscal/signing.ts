@@ -1,4 +1,5 @@
 import type { SystemSettings } from '../contexts/SettingsContext';
+import { isPwaHost } from '../lib/host';
 import { getFiscalRsaPrivateKeyPemFromEnv } from '../utils/fiscalEnvDefaults';
 import { HASH_FIELD_SEPARATOR, formatGrossTotalForHash } from './spec';
 import {
@@ -187,6 +188,16 @@ export async function createSignerFromSettings(settings: SystemSettings): Promis
         } catch {
             // fall through to PEM path (e.g. stale preload)
         }
+    }
+
+    // HARD CONSTRAINT (docs/pwa-plan.md §2.4): a browser/PWA host must NEVER be able to
+    // sign a fiscal document. The Electron till reaches the secure-key branch above (or,
+    // with a stale preload, still falls through to the PEM path — window.electronAPI is
+    // present, so isPwaHost is false). Only a true browser build lands here with isPwaHost
+    // true — refuse before touching any key material. Server-side, pos-checkout + the
+    // sync RPCs also reject non-device sessions; this client guard is defense-in-depth.
+    if (isPwaHost) {
+        throw new Error('Fiscal signing is unavailable in the browser (PWA host): fiscal issuance is device-only.');
     }
 
     const pem = getFiscalRsaPrivateKeyPemFromEnv()?.trim() || settings.fiscal?.privateKeyPem?.trim();
