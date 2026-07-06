@@ -28,6 +28,7 @@ import {
   MonitorSmartphone,
 } from "lucide-react";
 import { useSupabaseAuth } from "../../contexts/SupabaseAuthContext";
+import { isPwaHost } from "../../lib/host";
 import { useDesignSystem2Customization } from "../../contexts/DesignSystem2CustomizationContext";
 import LanguageSwitcher from "../LanguageSwitcher";
 import { OPEN_MY_PROFILE_EVENT } from "../HR/MyProfileDialog";
@@ -52,7 +53,10 @@ const sidebarNavClass = (isActive: boolean, isCollapsed: boolean): string => {
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavigate }) => {
-  const { employee, signOut, hasPermission } = useSupabaseAuth();
+  const { employee, principal, signOut, hasPermission } = useSupabaseAuth();
+  // Till-only nav items — never shown on the PWA (browser) host (docs/pwa-plan.md §2.3);
+  // HostRoute also blocks them at the route level.
+  const TILL_ONLY_PATHS = new Set(["/pos", "/queue", "/cash-drawer-audit"]);
   const { t } = useTranslation();
   const { visualStyle, prefs } = useDesignSystem2Customization();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -227,6 +231,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         <nav className={`min-h-0 flex-1 overflow-y-auto py-5 ${isCollapsed ? "px-3" : "px-6"}`}>
           <ul className="space-y-4">
             {menuItems.map((item) => {
+              if (isPwaHost && TILL_ONLY_PATHS.has(item.path)) return null;
               if (!hasPermission(item.permission)) return null;
 
               const Icon = item.icon;
@@ -289,10 +294,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
             {!isCollapsed && (
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold text-gray-950">
-                  {employee?.name}
+                  {employee?.name ?? principal?.displayName}
                 </p>
                 <p className="truncate text-[11px] font-medium text-gray-400">
-                  {employee?.role.toUpperCase()}
+                  {(employee?.role ?? principal?.role ?? "").toUpperCase()}
                 </p>
               </div>
             )}

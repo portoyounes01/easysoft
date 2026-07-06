@@ -6,6 +6,9 @@ import { POSProvider } from './contexts/POSContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import Layout from './components/Layout/Layout';
 import LoginForm2 from './components/Auth/LoginForm2';
+import LoginFormPwa from './components/Auth/LoginFormPwa';
+import { HostRoute, PWA_LANDING } from './components/routing/HostRoute';
+import { isPwaHost } from './lib/host';
 import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
 import POS2 from './pages/POS2';
@@ -67,8 +70,12 @@ const PermissionRoute: React.FC<{
   permission: string;
   fallbackPath?: string;
 }> = ({ children, permission, fallbackPath = '/pos' }) => {
-  const { hasPermission, employee } = useSupabaseAuth();
+  const { hasPermission, employee, principal } = useSupabaseAuth();
   const { t } = useTranslation();
+  // A denied browser/PWA human must not be bounced to /pos (till-only) — send to PWA_LANDING.
+  const denyRedirect = isPwaHost ? PWA_LANDING : fallbackPath;
+  const displayName = employee?.name ?? principal?.displayName ?? '';
+  const displayRole = employee?.role ?? principal?.role ?? '';
 
   if (!hasPermission(permission)) {
     // Show access denied page for unauthorized access attempts
@@ -82,14 +89,14 @@ const PermissionRoute: React.FC<{
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-4">{t('app.accessDenied')}</h1>
           <p className="text-gray-600 mb-6">
-            {t('app.accessDeniedMessage', { name: employee?.name ?? '' })}
+            {t('app.accessDeniedMessage', { name: displayName })}
             <br />
             <span className="text-sm text-gray-500">
-              {t('app.yourRole')} <span className="font-medium capitalize">{employee?.role}</span>
+              {t('app.yourRole')} <span className="font-medium capitalize">{displayRole}</span>
             </span>
           </p>
           <div className="space-y-3">
-            <Navigate to={fallbackPath} replace />
+            <Navigate to={denyRedirect} replace />
             <p className="text-sm text-gray-500">{t('app.redirecting')}</p>
           </div>
         </div>
@@ -100,45 +107,24 @@ const PermissionRoute: React.FC<{
   return <>{children}</>;
 };
 
-// Role-based redirect logic for security
-const getRoleBasedRedirect = (role: string): string => {
-  switch (role) {
-    case 'admin':
-      return '/pos'; // POS is the main post-login workspace
-    case 'manager':
-      return '/pos'; // POS is the main post-login workspace
-    case 'cashier':
-      return '/pos'; // Point of sale for cashiers
-    default:
-      return '/pos'; // Default to POS for unknown roles (safest option)
-  }
-};
+// Post-login landing — HOST-aware. The till lands on /pos (the operator workspace); a
+// browser/PWA human lands on PWA_LANDING (/pos is till-only and would dead-end). Role is
+// no longer the discriminator: the host is.
+const getRoleBasedRedirect = (_role: string): string => (isPwaHost ? PWA_LANDING : '/pos');
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated, employee } = useSupabaseAuth();
+  const { isAuthenticated, principal } = useSupabaseAuth();
+  // Host-selected login: the browser/PWA human form, or the till's employee-PIN screen.
+  // Gate on isAuthenticated (principal), NOT `employee` — a PWA human has no employee row
+  // and would otherwise be stuck on the login screen while authenticated.
+  const loginElement = isAuthenticated
+    ? <Navigate to={getRoleBasedRedirect(principal?.role ?? '')} replace />
+    : (isPwaHost ? <LoginFormPwa /> : <LoginForm2 />);
 
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={
-          isAuthenticated && employee ? (
-            <Navigate to={getRoleBasedRedirect(employee.role)} replace />
-          ) : (
-            <LoginForm2 />
-          )
-        }
-      />
-      <Route
-        path="/login2"
-        element={
-          isAuthenticated && employee ? (
-            <Navigate to={getRoleBasedRedirect(employee.role)} replace />
-          ) : (
-            <LoginForm2 />
-          )
-        }
-      />
+      <Route path="/login" element={loginElement} />
+      <Route path="/login2" element={loginElement} />
       <Route
         path="/order-status"
         element={hasDevicePairingScope() ? <OrderStatusDisplay /> : <Navigate to="/pair-device" replace />}
@@ -161,9 +147,11 @@ const AppContent: React.FC = () => {
                   <Route
                     path="/pos"
                     element={
-                      <PermissionRoute permission="sales">
-                        <POS />
-                      </PermissionRoute>
+                      <HostRoute host="till">
+                        <PermissionRoute permission="sales">
+                          <POS />
+                        </PermissionRoute>
+                      </HostRoute>
                     }
                   />
                   <Route
@@ -273,17 +261,21 @@ const AppContent: React.FC = () => {
                   <Route
                     path="/queue"
                     element={
-                      <PermissionRoute permission="sales">
-                        <OrderQueue />
-                      </PermissionRoute>
+                      <HostRoute host="till">
+                        <PermissionRoute permission="sales">
+                          <OrderQueue />
+                        </PermissionRoute>
+                      </HostRoute>
                     }
                   />
                   <Route
                     path="/cash-drawer-audit"
                     element={
-                      <PermissionRoute permission="transactions">
-                        <CashDrawerAudit />
-                      </PermissionRoute>
+                      <HostRoute host="till">
+                        <PermissionRoute permission="transactions">
+                          <CashDrawerAudit />
+                        </PermissionRoute>
+                      </HostRoute>
                     }
                   />
                   <Route path="/delivery-orders" element={<Navigate to="/orders" replace />} />
@@ -365,6 +357,9 @@ const AppContent: React.FC = () => {
                       <Route path="/design-system-2" element={<Navigate to="/design-system" replace />} />
                     </>
                   )}
+                  {/* Catch-all: an unknown or till-only path (e.g. /pos on the PWA) lands the
+                      user on the host's home instead of a blank screen. */}
+                  <Route path="*" element={<Navigate to={isPwaHost ? PWA_LANDING : '/pos'} replace />} />
                 </Routes>
               </Layout>
             </POSProvider>

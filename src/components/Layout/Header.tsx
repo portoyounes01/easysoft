@@ -10,7 +10,10 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isSidebarCollapsed }) => {
-  const { employee, signOut } = useSupabaseAuth();
+  const { employee, principal, signOut } = useSupabaseAuth();
+  // Identity display works for both hosts: employee (till) or principal (PWA human).
+  const identityName = employee?.name ?? principal?.displayName ?? '';
+  const identitySub = employee?.employee_number ?? principal?.role ?? '';
   const { t } = useTranslation();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -113,13 +116,13 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isSidebarCollapsed }) 
                 >
                   <div className="w-7 sm:w-8 h-7 sm:h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
                     <span className="text-white text-xs sm:text-sm font-bold">
-                      {employee?.name.split(' ').map((n: string) => n[0]).join('')}
+                      {identityName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                     </span>
                   </div>
                   {/* User info - hidden on small screens */}
                   <div className="hidden md:block">
-                    <p className="text-sm font-semibold text-gray-800 text-left whitespace-nowrap">{employee?.name}</p>
-                    <p className="text-xs text-gray-500 text-left">{employee?.employee_number}</p>
+                    <p className="text-sm font-semibold text-gray-800 text-left whitespace-nowrap">{identityName}</p>
+                    <p className="text-xs text-gray-500 text-left">{identitySub}</p>
                   </div>
                 </button>
 
