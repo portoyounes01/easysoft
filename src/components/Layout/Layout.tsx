@@ -3,6 +3,8 @@ import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
+import InstallBanner from "../pwa/InstallBanner";
+import { isPwaHost } from "../../lib/host";
 import MyProfileDialog from "../HR/MyProfileDialog";
 import { useSettings } from "../../contexts/SettingsContext";
 import { DesignSystem2CustomizationProvider } from "../../contexts/DesignSystem2CustomizationContext";
@@ -177,6 +179,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   {t("settings.company.seriesOutsideValidityBanner")}
                 </div>
               )}
+              {isPwaHost && <InstallBanner />}
               {children}
             </main>
           </div>
