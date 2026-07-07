@@ -43,6 +43,7 @@ import { getReceiptT } from '../utils/receiptLanguage';
 import type { FiscalTransactionMetadata } from '../fiscal/types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { runFiscalCreditNoteForTransaction } from '../fiscal/creditNoteCheckout';
+import { syncManager } from '../services/syncManager';
 import { parseCreditNoteNotesFields } from '../fiscal/creditNoteNotes';
 import { buildReceiptCustomerProps } from '../fiscal/fiscalCustomer';
 import { saftTypeToReceiptDocumentType } from '../fiscal/saleDocumentType';
@@ -171,6 +172,9 @@ const TransactionsInner: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [creditNoteBusyId, setCreditNoteBusyId] = useState<string | null>(null);
+    const [creditNoteTx, setCreditNoteTx] = useState<Transaction | null>(null);
+    const [creditNoteReason, setCreditNoteReason] = useState('');
+    const [creditNoteResult, setCreditNoteResult] = useState<{ ok: boolean; msg: string } | null>(null);
     const [showCustomInvoice, setShowCustomInvoice] = useState(false);
 
     const loadTransactions = async () => {
@@ -224,24 +228,24 @@ const TransactionsInner: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only
     }, []);
 
-    const handleIssueCreditNote = async (tx: Transaction) => {
+    // Open the in-app credit-note modal (web dialog — window.confirm/prompt/alert don't work in
+    // Electron; prompt() throws outright). The modal collects the optional reason.
+    const openCreditNoteModal = (tx: Transaction) => {
         if (!employee) {
-            window.alert(t('transactions.creditNote.needEmployee'));
+            setCreditNoteResult({ ok: false, msg: t('transactions.creditNote.needEmployee') });
             return;
         }
-        if (
-            !window.confirm(
-                t('transactions.creditNote.confirm', { number: tx.transactionNumber })
-            )
-        ) {
-            return;
-        }
-        const reason = window.prompt(t('transactions.creditNote.reasonPrompt'), '');
-        if (reason === null) {
-            return;
-        }
+        setCreditNoteReason('');
+        setCreditNoteResult(null);
+        setCreditNoteTx(tx);
+    };
+
+    const confirmCreditNote = async () => {
+        const tx = creditNoteTx;
+        if (!tx || !employee) return;
         try {
             setCreditNoteBusyId(tx.id);
+            setCreditNoteResult(null);
             const pm =
                 tx.paymentMethod === 'card' || tx.paymentMethod === 'mixed'
                     ? tx.paymentMethod
@@ -249,7 +253,7 @@ const TransactionsInner: React.FC = () => {
             const result = await runFiscalCreditNoteForTransaction({
                 settings,
                 originalTransactionId: tx.id,
-                creditReason: reason.trim() || undefined,
+                creditReason: creditNoteReason.trim() || undefined,
                 payment: {
                     paymentMethod: pm,
                     employeeId: employee.id,
@@ -257,12 +261,16 @@ const TransactionsInner: React.FC = () => {
                     employeeNumber: employee.employee_number,
                 },
             });
-            window.alert(t('transactions.creditNote.success', { invoiceNo: result.invoiceNo }));
+            // Push the NC to the server NOW so its CREDIT_NOTE_ISSUED alert fires immediately rather
+            // than on the next 5-min background cycle (checkout does the same after a sale).
+            try { void syncManager.forceSync(); } catch { /* best-effort */ }
             await loadTransactions();
+            setCreditNoteTx(null);
+            setCreditNoteResult({ ok: true, msg: t('transactions.creditNote.success', { invoiceNo: result.invoiceNo }) });
         } catch (e) {
             console.error(e);
             const msg = e instanceof Error ? e.message : '';
-            window.alert(msg ? `${t('transactions.creditNote.error')} ${msg}` : t('transactions.creditNote.error'));
+            setCreditNoteResult({ ok: false, msg: msg ? `${t('transactions.creditNote.error')} ${msg}` : t('transactions.creditNote.error') });
         } finally {
             setCreditNoteBusyId(null);
         }
@@ -960,7 +968,7 @@ const TransactionsInner: React.FC = () => {
                                                                     : t('transactions.list.issueCreditNote')
                                                             }
                                                             icon={FileMinus}
-                                                            onClick={() => void handleIssueCreditNote(transaction)}
+                                                            onClick={() => openCreditNoteModal(transaction)}
                                                             disabled={creditNoteBusyId !== null}
                                                             isLoading={creditNoteBusyId === transaction.id}
                                                             className={`${rowActionBtn} !bg-gradient-to-r !from-orange-500 !to-amber-600 hover:!from-orange-600 hover:!to-amber-600`}
@@ -994,6 +1002,57 @@ const TransactionsInner: React.FC = () => {
                     onClose={() => setShowCustomInvoice(false)}
                     onSubmit={handleCreateCustomInvoice}
                 />
+                {creditNoteTx && (
+                    <div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                        onClick={() => creditNoteBusyId === null && setCreditNoteTx(null)}
+                    >
+                        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                            <h3 className="text-lg font-bold text-gray-900">
+                                {t('transactions.creditNote.confirm', { number: creditNoteTx.transactionNumber })}
+                            </h3>
+                            <label className="mt-4 block">
+                                <span className="mb-1 block text-sm font-medium text-gray-600">
+                                    {t('transactions.creditNote.reasonPrompt')}
+                                </span>
+                                <textarea
+                                    value={creditNoteReason}
+                                    onChange={(e) => setCreditNoteReason(e.target.value)}
+                                    rows={3}
+                                    className="w-full rounded-xl border border-gray-300 p-3 text-sm focus:border-orange-500 focus:outline-none"
+                                    autoFocus
+                                />
+                            </label>
+                            {creditNoteResult && !creditNoteResult.ok && (
+                                <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{creditNoteResult.msg}</p>
+                            )}
+                            <div className="mt-5 flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setCreditNoteTx(null)}
+                                    disabled={creditNoteBusyId !== null}
+                                    className="flex-1 rounded-xl bg-gray-100 px-4 py-2.5 font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                                >
+                                    {t('common.cancel', { defaultValue: 'Cancel' })}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void confirmCreditNote()}
+                                    disabled={creditNoteBusyId !== null}
+                                    className="flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 px-4 py-2.5 font-semibold text-white hover:from-orange-600 disabled:opacity-50"
+                                >
+                                    {creditNoteBusyId ? t('transactions.creditNote.issuing') : t('transactions.list.issueCreditNote')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {creditNoteResult && creditNoteResult.ok && (
+                    <div className="fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-3 rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white shadow-2xl">
+                        <span>{creditNoteResult.msg}</span>
+                        <button type="button" className="opacity-80 hover:opacity-100" onClick={() => setCreditNoteResult(null)}>✕</button>
+                    </div>
+                )}
             </div>
         </div>
     );
