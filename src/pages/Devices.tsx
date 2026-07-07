@@ -34,6 +34,13 @@ const statusStyle: Record<ManagedDevice['status'], string> = {
   revoked: 'bg-red-100 text-red-800 border-red-200',
 };
 
+// Presence (P3c) is maintained by the till heartbeat + offline sweep; only meaningful once enrolled.
+const presenceStyle: Record<ManagedDevice['presence'], { cls: string; label: string }> = {
+  online: { cls: 'bg-emerald-100 text-emerald-800 border-emerald-200', label: 'Online' },
+  offline: { cls: 'bg-red-100 text-red-800 border-red-200', label: 'Offline' },
+  unknown: { cls: 'bg-gray-100 text-gray-600 border-gray-200', label: 'Unknown' },
+};
+
 function latestPairingCode(device: ManagedDevice) {
   return [...(device.device_pairing_codes ?? [])]
     .sort((left, right) => right.created_at.localeCompare(left.created_at))[0];
@@ -369,12 +376,21 @@ const Devices: React.FC = () => {
                       <p className="mt-1 flex items-center gap-2 text-gray-600"><Store className="h-4 w-4" /> {storesById.get(device.store_id) ?? 'Unknown store'}</p>
                     </div>
                   </div>
-                  <span className={`rounded-full border px-3 py-1 text-sm font-bold capitalize ${statusStyle[device.status]}`}>{device.status}</span>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {device.status === 'enrolled' && (
+                      <span className={`rounded-full border px-3 py-1 text-sm font-bold ${presenceStyle[device.presence].cls}`}>
+                        {presenceStyle[device.presence].label}
+                      </span>
+                    )}
+                    <span className={`rounded-full border px-3 py-1 text-sm font-bold capitalize ${statusStyle[device.status]}`}>{device.status}</span>
+                  </div>
                 </div>
 
                 <div className="mt-5 grid gap-3 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600 sm:grid-cols-2">
                   <div className="flex items-center gap-2">
-                    {device.status === 'enrolled' ? <Wifi className="h-4 w-4 text-emerald-600" /> : <WifiOff className="h-4 w-4 text-gray-400" />}
+                    {device.status === 'enrolled' && device.presence === 'online'
+                      ? <Wifi className="h-4 w-4 text-emerald-600" />
+                      : <WifiOff className="h-4 w-4 text-gray-400" />}
                     Last seen: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : 'Never'}
                   </div>
                   <div>Created: {new Date(device.created_at).toLocaleDateString()}</div>

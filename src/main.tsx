@@ -15,6 +15,7 @@ import './utils/testScript';
 import { prepareLocalStartupData } from './utils/startupSeed';
 import { isTillHost } from './lib/host';
 import { registerPwa } from './pwa';
+import { initDeviceHeartbeat } from './services/deviceHeartbeat';
 
 // Initialize app with local seed support
 async function initializeApp() {
@@ -32,6 +33,9 @@ async function initializeApp() {
 
   // Register the PWA (browser host only; no-op on the Electron till).
   registerPwa();
+
+  // Till presence heartbeat (Electron + device session only; no-op elsewhere).
+  initDeviceHeartbeat();
 
   // Render the app
   createRoot(document.getElementById('root')!).render(

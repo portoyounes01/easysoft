@@ -6,6 +6,7 @@ import { hasEmployeePermission } from '../utils/accessPermissions';
 import type { Principal, MembershipRole } from '../types/principal';
 import { ROLE_CAPABILITIES, humanHasCapability } from '../utils/roleCapabilities';
 import { isPwaHost } from '../lib/host';
+import { reconcileAlerts } from '../lib/push';
 
 // Keep the Realtime socket's auth token in lockstep with the session so the RLS-scoped
 // notification channel authorizes as the signed-in user (setAuth is realtime-only — no
@@ -432,6 +433,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
             error: null,
           });
           syncRealtimeAuth(session);
+          if (principal?.tenantId) void reconcileAlerts(session.user.id, principal.tenantId);
         } else {
           // Device/undefined: defer the employee lookup outside this callback.
           // fetchEmployeeData issues a PostgREST query whose internal getSession() would
@@ -479,6 +481,9 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           principal: deriveMembershipPrincipal(session) ?? prev.principal,
         }));
         syncRealtimeAuth(session);
+        // Switch-tenant refreshes the token with new app_metadata — repoint push at the new tenant.
+        const refreshedTenant = deriveMembershipPrincipal(session)?.tenantId;
+        if (refreshedTenant) void reconcileAlerts(session.user.id, refreshedTenant);
       }
     });
 
@@ -519,6 +524,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
             error: null,
           });
           syncRealtimeAuth(session);
+          if (principal?.tenantId) void reconcileAlerts(session.user.id, principal.tenantId);
         } else {
           const employee = await fetchEmployeeData(session);
           const principal = employee ? deriveEmployeePrincipal(employee, session) : null;

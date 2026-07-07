@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
         .order('name'),
       admin
         .from('devices')
-        .select('id, store_id, label, status, enrolled_at, last_seen_at, created_at, device_pairing_codes(expires_at, used_at, created_at)')
+        .select('id, store_id, label, status, enrolled_at, last_seen_at, presence, presence_changed_at, created_at, device_pairing_codes(expires_at, used_at, created_at)')
         .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false }),
     ]);
@@ -159,7 +159,7 @@ Deno.serve(async (req) => {
     const { data: device, error: deviceError } = await admin
       .from('devices')
       .insert({ tenant_id: tenantId, store_id: storeId, label, status: 'provisioned' })
-      .select('id, store_id, label, status, enrolled_at, last_seen_at, created_at')
+      .select('id, store_id, label, status, enrolled_at, last_seen_at, presence, presence_changed_at, created_at')
       .single();
     if (deviceError || !device) return json({ error: 'device_create_failed' }, 500);
 

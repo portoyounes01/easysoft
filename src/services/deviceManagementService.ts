@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 export type ManagedDeviceStatus = 'provisioned' | 'enrolled' | 'revoked';
+export type DevicePresence = 'online' | 'offline' | 'unknown';
 
 export interface ManagedStore {
   id: string;
@@ -21,6 +22,8 @@ export interface ManagedDevice {
   status: ManagedDeviceStatus;
   enrolled_at: string | null;
   last_seen_at: string | null;
+  presence: DevicePresence;
+  presence_changed_at: string | null;
   created_at: string;
   device_pairing_codes: PairingCodeSummary[];
 }

@@ -222,9 +222,11 @@ max_frequency = "5s"
 # uri = "pg-functions://postgres/auth/before-user-created-hook"
 
 # This hook runs before a token is issued and allows you to add additional claims based on the authentication method used.
-# [auth.hook.custom_access_token]
-# enabled = true
-# uri = "pg-functions://<database>/<schema>/<hook_name>"
+# P3d: re-reads tenant_members on every issue and strips stale tenant claims when a membership was
+# revoked, bounding the feed/REST leak to ≤ jwt_expiry (see 20260724000000_custom_access_token_hook.sql).
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
 [auth.sms.twilio]
@@ -445,3 +447,20 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/import_map.json"
 entrypoint = "./functions/provision-human/index.ts"
+
+# --- Notifications P3b/P3d ---
+# notify-push is invoked by the pg delivery trigger + cron backstop (no user JWT); it gates on a
+# shared-secret header (x-webhook-secret) instead. verify_jwt MUST be false or the trigger's call is rejected.
+[functions.notify-push]
+enabled = true
+verify_jwt = false
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/notify-push/index.ts"
+
+# revoke-human removes a (user, tenant) membership; requires an admin/owner session (verify_jwt=true),
+# re-checks caller authz in-body, then service-role deletes membership + push subs + force-signs-out.
+[functions.revoke-human]
+enabled = true
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/revoke-human/index.ts"
