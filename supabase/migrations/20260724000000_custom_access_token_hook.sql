@@ -21,9 +21,13 @@ DECLARE
   meta     jsonb := COALESCE(event->'claims'->'app_metadata', '{}'::jsonb);
   v_user   uuid  := NULLIF(event->>'user_id', '')::uuid;
   v_tenant uuid  := NULLIF(meta->>'tenant_id', '')::uuid;
+  v_role   text  := meta->>'app_role';
 BEGIN
-  IF v_user IS NULL OR v_tenant IS NULL THEN
-    RETURN event; -- nothing to validate (device/anon/unclaimed) — pass through untouched
+  -- CRITICAL: devices carry app_metadata.tenant_id too but are NOT in tenant_members (that table
+  -- is humans-only). Their claims come from the devices table + pairing, so NEVER strip a device
+  -- session — doing so would brick every till's RLS/RPCs. Only human (membership) claims are validated.
+  IF v_user IS NULL OR v_tenant IS NULL OR v_role IS NULL OR v_role = 'device' THEN
+    RETURN event; -- device/anon/unclaimed — pass through untouched
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.tenant_members WHERE user_id = v_user AND tenant_id = v_tenant) THEN
     -- membership revoked: drop stale tenant claims so app.tenant_id() is NULL at next refresh
