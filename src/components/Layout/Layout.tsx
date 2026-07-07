@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
 import MyProfileDialog from "../HR/MyProfileDialog";
 import { useSettings } from "../../contexts/SettingsContext";
@@ -139,7 +140,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden relative z-10 w-full">
             {!isPosRoute && (
-              <div className="h-[80px] flex-shrink-0 border-b border-[#dedede] bg-[#f7f7f7]" />
+              <div className="h-[64px] md:h-[80px] flex-shrink-0 border-b border-[#dedede] bg-[#f7f7f7] flex items-center gap-2 px-4 md:px-6">
+                {/* Mobile nav trigger: the sidebar is a drawer < md, so this is the only way
+                    to open the menu. Hidden on desktop where the sidebar is in-flow. */}
+                <button
+                  type="button"
+                  onClick={toggleNavSidebar}
+                  className="md:hidden -ml-1 p-2 rounded-lg text-gray-700 hover:bg-black/5 transition-colors"
+                  aria-label={t("sidebar.openMenu", { defaultValue: "Open menu" })}
+                >
+                  <Menu className="w-6 h-6" />
+                </button>
+                <div className="md:hidden flex items-center gap-2 min-w-0">
+                  <span className="text-lg font-bold text-gray-900 truncate">POS System</span>
+                </div>
+              </div>
             )}
             <main
               className={
