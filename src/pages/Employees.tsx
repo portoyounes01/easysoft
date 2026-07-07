@@ -63,7 +63,7 @@ const EmployeesInner: React.FC = () => {
     // SEPARATE role gate — who may create/edit/delete ADMIN-role employees. A till admin
     // employee, a human admin, or a human owner (NOT a manager). Deliberately distinct from
     // isCurrentSystemAdmin so an admin can manage admins without gaining restricted-grant power.
-    const canManageAdminEmployees = canManageAdminEmployees || principal?.role === 'admin' || principal?.role === 'owner';
+    const canManageAdminEmployees = currentUser?.role === 'admin' || principal?.role === 'admin' || principal?.role === 'owner';
 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedRole, setSelectedRole] = useState('all');

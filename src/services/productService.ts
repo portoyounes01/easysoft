@@ -2,6 +2,8 @@ import { supabase, connectionStatus } from '../lib/supabase';
 import { localDb } from '../lib/localDatabase';
 import { generateUUID } from '../utils/uuid';
 import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage';
+import { isPwaHost } from '../lib/host';
+import { fetchAllPages } from '../lib/supabasePaging';
 import {
     ProductRow,
     CategoryRow,
@@ -24,6 +26,27 @@ export const DEFAULT_GENERAL_CATEGORY_ID = '00000001-0001-4001-8001-000000000001
 export class CategoryService {
     // Get all categories (offline-first)
     async getAllCategories(): Promise<LocalCategory[]> {
+        if (isPwaHost) {
+            const rows = await fetchAllPages<CategoryRow>((from, to) =>
+                supabase
+                    .from('categories')
+                    .select('*')
+                    .is('deleted_at', null)
+                    .order('display_order', { ascending: true })
+                    .order('id', { ascending: true })
+                    .range(from, to)
+            );
+            return rows.map(category => ({
+                ...category,
+                created_at: new Date(category.created_at),
+                updated_at: new Date(category.updated_at),
+                last_synced_at: category.last_synced_at ? new Date(category.last_synced_at) : null,
+                deleted_at: category.deleted_at ? new Date(category.deleted_at) : null,
+                needs_push: false,
+                is_conflicted: false,
+            }));
+        }
+
         const categories = await localDb.categories
             .filter(cat => cat.deleted_at === null)
             .toArray();
@@ -190,6 +213,27 @@ export class CategoryService {
 export class ProductService {
     // Get all products (offline-first)
     async getAllProducts(): Promise<LocalProduct[]> {
+        if (isPwaHost) {
+            const rows = await fetchAllPages<ProductRow>((from, to) =>
+                supabase
+                    .from('products')
+                    .select('*')
+                    .is('deleted_at', null)
+                    .order('display_order', { ascending: true })
+                    .order('id', { ascending: true })
+                    .range(from, to)
+            );
+            return rows.map(product => ({
+                ...product,
+                created_at: new Date(product.created_at),
+                updated_at: new Date(product.updated_at),
+                last_synced_at: product.last_synced_at ? new Date(product.last_synced_at) : null,
+                deleted_at: product.deleted_at ? new Date(product.deleted_at) : null,
+                needs_push: false,
+                is_conflicted: false,
+            }));
+        }
+
         const products = await localDb.products
             .filter(prod => prod.deleted_at === null)
             .toArray();
@@ -592,6 +636,7 @@ export class ProductSyncService {
 
     // Full sync (pull then push)
     async fullSync(): Promise<void> {
+        if (isPwaHost) return;
         try {
             // Get last sync timestamps
             const categorySyncMeta = await localDb.syncMetadata.get('categories');

@@ -1,6 +1,7 @@
 import { transactionLocalService, customerLocalService, employeeLocalService } from '../lib/localDatabase';
 import { connectionStatus } from '../lib/supabase';
-import { reportingService } from './transactionService';
+import { isPwaHost } from '../lib/host';
+import { reportingService, transactionService } from './transactionService';
 import {
     LocalTransaction,
     LocalTransactionItem,
@@ -12,6 +13,47 @@ import {
     ProductPerformance,
     OverviewMetrics
 } from '../types/supabase';
+
+// --- PWA row-level reporting helpers (docs/pwa-read-surfaces-plan.md Step 1b) ---
+// ReportTransaction uses `time` (not transaction_time), so filterByHour below can't be
+// reused; these operate on the assembled ReportTransaction[] from getReportRows.
+function filterRowsByHour(rows: ReportTransaction[], hourRange?: ReportFilters['hourRange']): ReportTransaction[] {
+    if (!hourRange) return rows;
+    const { start, end } = hourRange;
+    return rows.filter((r) => { const raw = (r.time ?? '').trim(); if (!/^\d{1,2}/.test(raw)) return true; const h = Number(raw.slice(0, 2)); return h >= start && h <= end; });
+}
+function applyCategory(rows: ReportTransaction[], categoryId?: string) {
+    return categoryId ? rows.filter((r) => r.items.some((i) => i.categoryId === categoryId)) : rows;
+}
+function overviewFromRows(rows: ReportTransaction[]): OverviewMetrics {
+    const totalRevenue = rows.reduce((s, r) => s + r.total, 0);
+    const totalTransactions = rows.length;
+    const totalItems = rows.reduce((s, r) => s + r.items.reduce((n, i) => n + i.quantity, 0), 0);
+    return { totalRevenue, totalTransactions, totalItems, avgTransaction: totalTransactions ? totalRevenue / totalTransactions : 0 };
+}
+function employeePerfFromRows(rows: ReportTransaction[]): EmployeePerformance[] {
+    const m = new Map<string, EmployeePerformance>();
+    for (const r of rows) {
+        const e = m.get(r.employeeId) || { employeeId: r.employeeId, employeeName: r.employeeName, totalSales: 0, transactionCount: 0, itemsSold: 0 };
+        e.totalSales += r.total; e.transactionCount += 1; e.itemsSold += r.items.reduce((n, i) => n + i.quantity, 0);
+        m.set(r.employeeId, e);
+    }
+    return [...m.values()].sort((a, b) => b.totalSales - a.totalSales);
+}
+function productPerfFromRows(rows: ReportTransaction[]): ProductPerformance[] {
+    const m = new Map<string, ProductPerformance>();
+    for (const r of rows) for (const i of r.items) {
+        const p = m.get(i.productId) || { productId: i.productId, productName: i.productName, categoryName: i.categoryName, quantitySold: 0, totalRevenue: 0, transactionCount: 0 };
+        p.quantitySold += i.quantity; p.totalRevenue += i.total; p.transactionCount += 1;
+        m.set(i.productId, p);
+    }
+    return [...m.values()].sort((a, b) => b.quantitySold - a.quantitySold);
+}
+// Shared PWA row fetch: getReportRows + hour filter (throws on error — never masks a
+// tenant/auth failure as empty data).
+async function pwaRows(filters: ReportFilters): Promise<ReportTransaction[]> {
+    return filterRowsByHour(await transactionService.getReportRows(filters), filters.hourRange);
+}
 
 // Keep only transactions whose start hour falls within an inclusive hour-of-day
 // range. A missing/unparseable time is kept so it is never silently dropped.
@@ -52,6 +94,7 @@ export class OfflineReportingService {
 
     // Get transactions for reporting (offline-first)
     async getTransactionsForReporting(filters: ReportFilters): Promise<ReportTransaction[]> {
+        if (isPwaHost) { const rows = await pwaRows(filters); return applyCategory(rows, filters.categoryId); }
         // The hour-of-day filter needs row-level data; server aggregates can't honour
         // it, so force the local path whenever an hour range is set.
         const useOffline = (await this.shouldUseOfflineData()) || Boolean(filters.hourRange);
@@ -151,6 +194,7 @@ export class OfflineReportingService {
 
     // Get employee performance metrics (offline-first)
     async getEmployeePerformance(filters: ReportFilters): Promise<EmployeePerformance[]> {
+        if (isPwaHost) return employeePerfFromRows(await pwaRows(filters));
         // The hour-of-day filter needs row-level data; server aggregates can't honour
         // it, so force the local path whenever an hour range is set.
         const useOffline = (await this.shouldUseOfflineData()) || Boolean(filters.hourRange);
@@ -224,6 +268,7 @@ export class OfflineReportingService {
 
     // Get product performance metrics (offline-first)
     async getProductPerformance(filters: ReportFilters): Promise<ProductPerformance[]> {
+        if (isPwaHost) return productPerfFromRows(await pwaRows(filters));
         // The hour-of-day filter needs row-level data; server aggregates can't honour
         // it, so force the local path whenever an hour range is set.
         const useOffline = (await this.shouldUseOfflineData()) || Boolean(filters.hourRange);
@@ -300,6 +345,7 @@ export class OfflineReportingService {
 
     // Get overview metrics (offline-first)
     async getOverviewMetrics(filters: ReportFilters): Promise<OverviewMetrics> {
+        if (isPwaHost) return overviewFromRows(await pwaRows(filters));
         // The hour-of-day filter needs row-level data; server aggregates can't honour
         // it, so force the local path whenever an hour range is set.
         const useOffline = (await this.shouldUseOfflineData()) || Boolean(filters.hourRange);
@@ -376,6 +422,18 @@ export class OfflineReportingService {
 
     // Get comprehensive report data (offline-first)
     async getReportData(filters: ReportFilters) {
+        // PWA hot path: fetch the row set ONCE and derive all 4 view-models from it (the
+        // per-method branches below would each re-fetch). Row-level so hourRange is honoured.
+        if (isPwaHost) {
+            const rows = await pwaRows(filters);
+            return {
+                transactions: applyCategory(rows, filters.categoryId),
+                employeePerformance: employeePerfFromRows(rows),
+                productPerformance: productPerfFromRows(rows),
+                overviewMetrics: overviewFromRows(rows),
+                dataSource: 'server' as const,
+            };
+        }
         const [
             transactions,
             employeePerformance,
@@ -399,6 +457,10 @@ export class OfflineReportingService {
 
     // Export transactions to CSV format (using local data)
     async generateCSVReport(filters: ReportFilters): Promise<string> {
+        if (isPwaHost) {
+            const rows = applyCategory(await pwaRows(filters), filters.categoryId);
+            return reportingService.generateCSVReport(rows); // reuse the pure CSV builder
+        }
         const transactions = await this.getLocalTransactionsForReporting(filters);
         
         const headers = [

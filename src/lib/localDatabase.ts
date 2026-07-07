@@ -42,6 +42,9 @@ import { buildHashPlaintext, extractQrHashFourChars } from '../fiscal/signing';
 import { buildAtQrPayloadString } from '../fiscal/qrPayload';
 import { assertInvoiceSeriesSegment, buildInvoiceNo, computeNextSequential, formatSequential, invoiceSeriesSegment } from '../fiscal/seriesUtils';
 import { readDevicePairingScope } from '../utils/devicePairingStorage';
+import { supabase } from './supabase';
+import { isPwaHost } from './host';
+import { fetchAllPages } from './supabasePaging';
 const DEXIE_NAME_PRODUCTION = 'POSDatabase';
 const DEXIE_NAME_TRAINING = 'restaurante_pos_training';
 const LEGACY_TENANT_ID = '00000000-0000-0000-0000-000000000001';
@@ -767,6 +770,30 @@ export class CustomerLocalService {
 
     // Get all non-deleted customers (includes active and inactive)
     async getAllCustomers(): Promise<LocalCustomer[]> {
+        if (isPwaHost) {
+            const rows = await fetchAllPages<any>((from, to) =>
+                supabase
+                    .from('customers')
+                    .select('*')
+                    .is('deleted_at', null)
+                    .order('name', { ascending: true })
+                    .order('id', { ascending: true })
+                    .range(from, to)
+            );
+            return rows.map(customer => ({
+                ...customer,
+                tax_number: customer.tax_number ?? null,
+                country: customer.country ?? 'PT',
+                city: customer.city ?? null,
+                postal_code: customer.postal_code ?? null,
+                created_at: new Date(customer.created_at),
+                updated_at: new Date(customer.updated_at),
+                last_synced_at: customer.last_synced_at ? new Date(customer.last_synced_at) : null,
+                deleted_at: customer.deleted_at ? new Date(customer.deleted_at) : null,
+                needs_push: false,
+                is_conflicted: false,
+            }));
+        }
         return await localDb.customers
             .filter(customer => customer.deleted_at === null)
             .toArray();
@@ -795,6 +822,7 @@ export class CustomerLocalService {
 
     // Create new customer
     async createCustomer(customerData: Omit<LocalCustomer, 'id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'>): Promise<string> {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         const taxRaw = customerData.tax_number;
         const normalizedNew =
             taxRaw == null || String(taxRaw).trim() === ''
@@ -838,6 +866,7 @@ export class CustomerLocalService {
 
     // Update customer
     async updateCustomer(id: string, updates: Partial<LocalCustomer>): Promise<void> {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         const updateData = {
             ...updates,
             updated_at: new Date(),
@@ -852,6 +881,7 @@ export class CustomerLocalService {
 
     // Soft delete customer
     async deleteCustomer(id: string): Promise<void> {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         await localDb.transaction('rw', [localDb.customers], async () => {
             await localDb.customers.update(id, {
                 deleted_at: new Date(),
@@ -1207,6 +1237,27 @@ export class TransactionLocalService {
     }
 
     async getLatestPurchaseDatesByCustomer(): Promise<Record<string, Date>> {
+        if (isPwaHost) {
+            const rows = await fetchAllPages<{ customer_id: string | null; transaction_date: string; transaction_time: string | null }>((from, to) =>
+                supabase
+                    .from('transactions')
+                    .select('customer_id, transaction_date, transaction_time')
+                    .eq('status', 'completed')
+                    .is('deleted_at', null)
+                    .not('customer_id', 'is', null)
+                    .order('transaction_date', { ascending: false })
+                    .order('id', { ascending: true })
+                    .range(from, to)
+            );
+            const latest: Record<string, Date> = {};
+            for (const t of rows) {
+                if (!t.customer_id) continue;
+                const purchasedAt = new Date(t.transaction_date + 'T' + (t.transaction_time || '00:00:00'));
+                const cur = latest[t.customer_id];
+                if (!cur || purchasedAt.getTime() > cur.getTime()) latest[t.customer_id] = purchasedAt;
+            }
+            return latest;
+        }
         const transactions = await localDb.transactions
             .filter(
                 transaction =>

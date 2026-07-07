@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { fetchAllPages } from '../lib/supabasePaging';
 import {
     isPgrstMissingTransactionsColumnError,
     stripOptionalFiscalTransactionFields,
@@ -24,6 +25,48 @@ import {
 // =====================================================
 
 export const transactionService = {
+    // PWA report source: fully-assembled ReportTransaction[] via direct PostgREST, paginated
+    // (past the 1000-row cap) and id-chunked (keeps transaction_id=in.(...) URL small so a
+    // strict proxy can't 414). Completed-only + date/employee/payment filters; hourRange and
+    // category are applied by the caller. (docs/pwa-read-surfaces-plan.md Step 1a)
+    async getReportRows(filters: ReportFilters): Promise<ReportTransaction[]> {
+        const txCols = 'id, employee_id, employee_name, customer_id, customer_name, transaction_date, transaction_time, subtotal, discount, tax, total, payment_method, status';
+        const transactions = await fetchAllPages<any>((from, to) => {
+            let q = supabase.from('transactions').select(txCols)
+                .is('deleted_at', null).eq('status', 'completed')
+                .gte('transaction_date', filters.dateRange.start)
+                .lte('transaction_date', filters.dateRange.end)
+                .order('transaction_date', { ascending: false }).order('id', { ascending: true })
+                .range(from, to);
+            if (filters.employeeId) q = q.eq('employee_id', filters.employeeId);
+            if (filters.paymentMethod) q = q.eq('payment_method', filters.paymentMethod);
+            return q;
+        });
+        if (transactions.length === 0) return [];
+        const itemCols = 'transaction_id, product_id, product_name, category_id, category_name, quantity, unit_price, unit_cost, line_total, profit_amount';
+        const ID_CHUNK = 100; // keep transaction_id=in.(...) URL ~4KB, under proxy header buffers
+        const ids = transactions.map((t) => t.id);
+        const items: any[] = [];
+        for (let i = 0; i < ids.length; i += ID_CHUNK) {
+            const slice = ids.slice(i, i + ID_CHUNK);
+            const chunk = await fetchAllPages<any>((from, to) =>
+                supabase.from('transaction_items').select(itemCols)
+                    .in('transaction_id', slice).is('deleted_at', null)
+                    .order('id', { ascending: true }).range(from, to));
+            items.push(...chunk);
+        }
+        const byTx = new Map<string, any[]>();
+        for (const it of items) { const a = byTx.get(it.transaction_id); if (a) a.push(it); else byTx.set(it.transaction_id, [it]); }
+        return transactions.map((t) => ({
+            id: t.id, employeeId: t.employee_id, employeeName: t.employee_name,
+            customerId: t.customer_id || undefined, customerName: t.customer_name || undefined,
+            date: t.transaction_date, time: t.transaction_time,
+            items: (byTx.get(t.id) || []).map((it) => ({ productId: it.product_id, productName: it.product_name, categoryId: it.category_id || '', categoryName: it.category_name || '', quantity: it.quantity, unitPrice: it.unit_price, cost: it.unit_cost, total: it.line_total, profit: it.profit_amount })),
+            subtotal: t.subtotal, discount: t.discount, tax: t.tax, total: t.total,
+            paymentMethod: t.payment_method, status: t.status as 'completed' | 'refunded',
+        }));
+    },
+
     // Get all transactions with optional filters
     async getTransactions(filters?: {
         employeeId?: string;

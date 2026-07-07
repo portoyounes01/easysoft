@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured, connectionStatus } from '../lib/supabase';
 import { isPwaHost } from '../lib/host';
+import { fetchAllPages } from '../lib/supabasePaging';
 import { employeeLocalService, initializeLocalDatabase } from '../lib/localDatabase';
 import { hashPassword } from '../utils/hashUtils';
 import {
@@ -9,6 +10,39 @@ import {
     SyncMetadata,
     Employee
 } from '../types/supabase';
+
+// PWA (browser) read source: explicit column list for the read-only roster fetched
+// straight from PostgREST. Omits password_hash/pin (never leave the server to a browser).
+const EMPLOYEE_PWA_COLS = 'id, tenant_id, employee_number, name, email, phone, role, access_levels, is_active, hire_date, total_sales, transaction_count, average_transaction, hours_worked, auth_id, created_at, updated_at, last_synced_at, deleted_at';
+
+// Map a raw PostgREST employees row to the app Employee shape (ISO string dates).
+function mapRowToEmployee(e: any): Employee {
+    return {
+        id: e.id,
+        employee_number: e.employee_number,
+        name: e.name,
+        email: e.email,
+        phone: e.phone,
+        role: e.role,
+        access_levels: e.access_levels,
+        is_active: e.is_active,
+        hire_date: e.hire_date,
+        total_sales: e.total_sales,
+        transaction_count: e.transaction_count,
+        average_transaction: e.average_transaction,
+        hours_worked: e.hours_worked,
+        created_at: e.created_at,
+        updated_at: e.updated_at,
+        last_synced_at: e.last_synced_at ?? null,
+        deleted_at: e.deleted_at ?? null,
+        performance: {
+            totalSales: e.total_sales,
+            transactionCount: e.transaction_count,
+            averageTransaction: e.average_transaction,
+            hoursWorked: e.hours_worked,
+        },
+    } as Employee;
+}
 
 // Service class that manages employees with offline-first approach
 export class EmployeeService {
@@ -63,6 +97,18 @@ export class EmployeeService {
 
     // Get all employees (from local store)
     async getAllEmployees(): Promise<Employee[]> {
+        if (isPwaHost) {
+            const rows = await fetchAllPages<any>((from, to) =>
+                supabase
+                    .from('employees')
+                    .select(EMPLOYEE_PWA_COLS)
+                    .is('deleted_at', null)
+                    .order('name', { ascending: true })
+                    .order('id', { ascending: true })
+                    .range(from, to)
+            );
+            return rows.map(mapRowToEmployee);
+        }
         await this.ensureInitialized();
         const localEmployees = await employeeLocalService.getAllEmployees();
         return this.convertLocalToEmployee(localEmployees);
@@ -70,6 +116,16 @@ export class EmployeeService {
 
     // Get employee by ID
     async getEmployeeById(id: string): Promise<Employee | null> {
+        if (isPwaHost) {
+            const { data, error } = await supabase
+                .from('employees')
+                .select(EMPLOYEE_PWA_COLS)
+                .eq('id', id)
+                .is('deleted_at', null)
+                .maybeSingle();
+            if (error) throw error;
+            return data ? mapRowToEmployee(data) : null;
+        }
         await this.ensureInitialized();
         const localEmployee = await employeeLocalService.getEmployeeById(id);
         return localEmployee ? this.convertLocalToEmployee([localEmployee])[0] : null;
@@ -77,6 +133,16 @@ export class EmployeeService {
 
     // Get employee by employee number
     async getEmployeeByNumber(employeeNumber: string): Promise<Employee | null> {
+        if (isPwaHost) {
+            const { data, error } = await supabase
+                .from('employees')
+                .select(EMPLOYEE_PWA_COLS)
+                .eq('employee_number', employeeNumber)
+                .is('deleted_at', null)
+                .maybeSingle();
+            if (error) throw error;
+            return data ? mapRowToEmployee(data) : null;
+        }
         await this.ensureInitialized();
         const localEmployee = await employeeLocalService.getEmployeeByNumber(employeeNumber);
         return localEmployee ? this.convertLocalToEmployee([localEmployee])[0] : null;
@@ -84,6 +150,7 @@ export class EmployeeService {
 
     // Create new employee
     async createEmployee(employeeData: EmployeeFormData): Promise<string> {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         await this.ensureInitialized();
 
         // Validate employee number is unique
@@ -132,6 +199,7 @@ export class EmployeeService {
 
     // Update employee
     async updateEmployee(id: string, updates: Partial<EmployeeFormData>): Promise<void> {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         await this.ensureInitialized();
 
         const updateData: Partial<LocalEmployee> = {};
@@ -163,6 +231,7 @@ export class EmployeeService {
 
     // Delete employee (soft delete)
     async deleteEmployee(id: string): Promise<void> {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         await this.ensureInitialized();
         await employeeLocalService.deleteEmployee(id);
 
@@ -174,6 +243,15 @@ export class EmployeeService {
 
     // Search employees
     async searchEmployees(query: string): Promise<Employee[]> {
+        if (isPwaHost) {
+            const all = await this.getAllEmployees();
+            const q = query.toLowerCase();
+            return all.filter(e =>
+                e.name.toLowerCase().includes(q) ||
+                e.employee_number.toLowerCase().includes(q) ||
+                ((e.email ?? '').toLowerCase().includes(q))
+            );
+        }
         await this.ensureInitialized();
         const localEmployees = await employeeLocalService.searchEmployees(query);
         return this.convertLocalToEmployee(localEmployees);
@@ -181,6 +259,36 @@ export class EmployeeService {
 
     // Filter employees
     async filterEmployees(filters: EmployeeFilters): Promise<Employee[]> {
+        if (isPwaHost) {
+            let employees = await this.getAllEmployees();
+
+            if (filters.role && filters.role !== 'all') {
+                employees = employees.filter(emp => emp.role === filters.role);
+            }
+
+            if (filters.is_active !== undefined) {
+                employees = employees.filter(emp => emp.is_active === filters.is_active);
+            }
+
+            if (filters.search) {
+                const searchTerm = filters.search.toLowerCase();
+                employees = employees.filter(emp =>
+                    emp.name.toLowerCase().includes(searchTerm) ||
+                    emp.employee_number.toLowerCase().includes(searchTerm) ||
+                    (emp.email && emp.email.toLowerCase().includes(searchTerm))
+                );
+            }
+
+            if (filters.hire_date_from) {
+                employees = employees.filter(emp => emp.hire_date >= filters.hire_date_from!);
+            }
+
+            if (filters.hire_date_to) {
+                employees = employees.filter(emp => emp.hire_date <= filters.hire_date_to!);
+            }
+
+            return employees;
+        }
         await this.ensureInitialized();
         let employees = await employeeLocalService.getAllEmployees();
 
@@ -215,6 +323,10 @@ export class EmployeeService {
 
     // Get employees by role
     async getEmployeesByRole(role: string): Promise<Employee[]> {
+        if (isPwaHost) {
+            const all = await this.getAllEmployees();
+            return all.filter(e => e.role === role && e.is_active === true);
+        }
         await this.ensureInitialized();
         const localEmployees = await employeeLocalService.getEmployeesByRole(role);
         return this.convertLocalToEmployee(localEmployees);

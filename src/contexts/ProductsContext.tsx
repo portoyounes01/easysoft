@@ -11,8 +11,9 @@ import {
     calculatePriceWithTax
 } from '../types/supabase';
 import { categoryService, productService, productSyncService } from '../services/productService';
-import { initializeLocalDatabase, localDb } from '../lib/localDatabase';
+import { initializeLocalDatabase } from '../lib/localDatabase';
 import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage';
+import { isTillHost, isPwaHost } from '../lib/host';
 
 // =====================================================
 // Types
@@ -175,21 +176,18 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             dispatch({ type: 'SET_LOADING', payload: true });
             dispatch({ type: 'SET_ERROR', payload: null });
 
-            await initializeLocalDatabase();
-            await categoryService.ensureDefaultGeneralCategory();
+            if (isTillHost) {
+                await initializeLocalDatabase();
+                await categoryService.ensureDefaultGeneralCategory();
+            }
 
-            // Use direct database queries to avoid service layer issues
             const [products, categories] = await Promise.all([
-                localDb.products.filter((prod: LocalProduct) => prod.deleted_at === null).toArray(),
-                localDb.categories.filter((cat: LocalCategory) => cat.deleted_at === null).toArray()
+                productService.getAllProducts(),
+                categoryService.getAllCategories()
             ]);
 
-            // Sort the results manually
-            const sortedProducts = products.sort((a: LocalProduct, b: LocalProduct) => a.display_order - b.display_order);
-            const sortedCategories = categories.sort((a: LocalCategory, b: LocalCategory) => a.display_order - b.display_order);
-
-            dispatch({ type: 'SET_PRODUCTS', payload: sortedProducts });
-            dispatch({ type: 'SET_CATEGORIES', payload: sortedCategories });
+            dispatch({ type: 'SET_PRODUCTS', payload: products });
+            dispatch({ type: 'SET_CATEGORIES', payload: categories });
         } catch (error) {
             console.error('Failed to load products and categories:', error);
             dispatch({ type: 'SET_ERROR', payload: t('pos.failedToLoadData') });
@@ -226,6 +224,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // =====================================================
 
     const createProduct = async (productData: ProductFormData): Promise<string> => {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -266,6 +265,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const updateProduct = async (id: string, updates: Partial<LocalProduct>): Promise<void> => {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -279,6 +279,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const deleteProduct = async (id: string): Promise<void> => {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -328,6 +329,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // =====================================================
 
     const createCategory = async (categoryData: CategoryFormData): Promise<string> => {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -352,6 +354,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const updateCategory = async (id: string, updates: Partial<LocalCategory>): Promise<void> => {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -365,6 +368,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const deleteCategory = async (id: string): Promise<void> => {
+        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -428,6 +432,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // =====================================================
 
     const syncData = async (): Promise<void> => {
+        if (isPwaHost) return;
         if (!state.syncStatus.isOnline) return;
 
         try {
