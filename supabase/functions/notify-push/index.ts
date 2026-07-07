@@ -42,18 +42,25 @@ Deno.serve(async (req) => {
     .eq('severity', 'critical')
     .is('delivered_at', null);
   if (body.event_id) q = q.eq('id', body.event_id);
-  else if (!body.sweep) return json({ error: 'event_id_or_sweep_required' }, 400);
+  // Sweep bounds retries to the last 24h so a persistently-failing event stops being re-dispatched
+  // forever (there's no per-event attempt counter); a single event_id call is always processable.
+  else if (body.sweep) q = q.gt('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+  else return json({ error: 'event_id_or_sweep_required' }, 400);
   const { data: events, error: evErr } = await q.limit(200);
   if (evErr) return json({ error: 'events_query_failed', detail: evErr.message }, 500);
 
-  let sent = 0, pruned = 0, delivered = 0;
+  let sent = 0, pruned = 0, delivered = 0, deferred = 0;
 
   for (const ev of events ?? []) {
     // Membership-checked fan-out (two service-role reads; PostgREST can't embed the non-FK join).
-    const [{ data: subs }, { data: members }] = await Promise.all([
+    const [{ data: subs, error: subErr }, { data: members, error: memErr }] = await Promise.all([
       admin.from('push_subscriptions').select('endpoint, p256dh, auth, user_id').eq('tenant_id', ev.tenant_id),
       admin.from('tenant_members').select('user_id').eq('tenant_id', ev.tenant_id),
     ]);
+    // A transient read failure would yield an EMPTY target set; stamping delivered here would
+    // permanently drop the alert (the delivered_at gate stops the cron retry). Skip instead — leave
+    // delivered_at NULL so the next sweep retries.
+    if (subErr || memErr) { deferred++; continue; }
     const memberIds = new Set((members ?? []).map((m: { user_id: string }) => m.user_id));
     const seen = new Set<string>();
     const targets = (subs ?? []).filter((s: { user_id: string; endpoint: string }) => {
@@ -73,6 +80,7 @@ Deno.serve(async (req) => {
       url: `/alerts?event=${ev.id}`,
     });
 
+    let transientFailure = false;
     for (const t of targets as Array<{ endpoint: string; p256dh: string; auth: string }>) {
       try {
         await webpush.sendNotification({ endpoint: t.endpoint, keys: { p256dh: t.p256dh, auth: t.auth } }, payload);
@@ -82,16 +90,23 @@ Deno.serve(async (req) => {
         if (code === 404 || code === 410) { // gone — prune the dead subscription
           await admin.from('push_subscriptions').delete().eq('endpoint', t.endpoint);
           pruned++;
+        } else {
+          // 429 / 5xx / network timeout (statusCode undefined) — retryable. Don't stamp delivered;
+          // the cron backstop re-dispatches within ~60s (a survivor endpoint may get a duplicate,
+          // which the SW's tag=event_id collapses).
+          transientFailure = true;
         }
       }
     }
 
-    // Stamp delivered regardless (zero subscribers still counts as handled) — stops the cron retry loop.
+    // Stamp delivered ONLY when nothing is left to retry (all sends succeeded/pruned, or zero
+    // targets). A transient failure leaves delivered_at NULL so the backstop retries.
+    if (transientFailure) { deferred++; continue; }
     const { error: upErr } = await admin.from('notification_events')
       .update({ delivered_at: new Date().toISOString() })
       .eq('id', ev.id).is('delivered_at', null);
     if (!upErr) delivered++;
   }
 
-  return json({ status: 'ok', events: (events ?? []).length, sent, pruned, delivered });
+  return json({ status: 'ok', events: (events ?? []).length, sent, pruned, delivered, deferred });
 });

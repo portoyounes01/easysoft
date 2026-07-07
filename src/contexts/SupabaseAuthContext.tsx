@@ -6,7 +6,7 @@ import { hasEmployeePermission } from '../utils/accessPermissions';
 import type { Principal, MembershipRole } from '../types/principal';
 import { ROLE_CAPABILITIES, humanHasCapability } from '../utils/roleCapabilities';
 import { isPwaHost } from '../lib/host';
-import { reconcileAlerts } from '../lib/push';
+import { reconcileAlerts, disableAlerts } from '../lib/push';
 
 // Keep the Realtime socket's auth token in lockstep with the session so the RLS-scoped
 // notification channel authorizes as the signed-in user (setAuth is realtime-only — no
@@ -457,14 +457,22 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           }, 0);
         }
       } else if (event === 'SIGNED_OUT') {
-        setState({
-          user: null,
-          employee: null,
-          principal: null,
-          session: null,
-          isAuthenticated: false,
-          isLoading: false,
-          error: null,
+        setState(prev => {
+          // Drop THIS device's push subscription for the signed-out user's active tenant so a shared
+          // device stops surfacing their tenant's criticals after logout (plan §P3b). Best-effort +
+          // PWA-only (disableAlerts no-ops without a subscription, e.g. on the till).
+          const uid = prev.session?.user?.id;
+          const tid = prev.principal?.tenantId;
+          if (uid && tid) void disableAlerts(uid, tid);
+          return {
+            user: null,
+            employee: null,
+            principal: null,
+            session: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: null,
+          };
         });
         clearRealtimeAuth();
       } else if (event === 'TOKEN_REFRESHED' && session) {

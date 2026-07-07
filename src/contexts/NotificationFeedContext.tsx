@@ -46,6 +46,9 @@ export const NotificationFeedProvider: React.FC<{ children: React.ReactNode }> =
   // being in the effect's dependency list (which would tear down the channel).
   const tenantRef = useRef<string | null>(tenantId);
   tenantRef.current = tenantId;
+  // Latest events, readable inside markAllRead without adding `events` to its deps.
+  const eventsRef = useRef<NotificationEvent[]>([]);
+  eventsRef.current = events;
 
   // Pull the most recent events + this user's read cursor. Called on every SUBSCRIBED
   // (initial connect AND each Realtime auto-rejoin), so a reconnect self-heals any gap.
@@ -125,7 +128,10 @@ export const NotificationFeedProvider: React.FC<{ children: React.ReactNode }> =
   const markAllRead = useCallback(async () => {
     const tid = tenantRef.current;
     if (!tid || !userId) return;
-    const now = new Date().toISOString();
+    // Cursor = the newest loaded event's SERVER-stamped created_at (events are ordered desc), not
+    // the client clock — comparing a client-clock cursor against server created_at miscounts the
+    // badge under device clock skew. Fall back to client now only when the feed is empty.
+    const now = eventsRef.current[0]?.created_at ?? new Date().toISOString();
     setLastReadAt(now); // optimistic — the feed is non-destructive, so a failed write just re-shows the dot
     const { error } = await supabase
       .from('notification_read_state')

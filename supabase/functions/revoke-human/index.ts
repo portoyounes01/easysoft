@@ -53,9 +53,12 @@ Deno.serve(async (req) => {
   if (!mem) return json({ status: 'ok', note: 'no_membership' });
   if (RANK[mem.role as string] > RANK[callerRole]) return json({ error: 'role_exceeds_caller' }, 403);
 
-  // 1) remove the membership
-  const { error: dmErr } = await admin.from('tenant_members').delete().eq('user_id', targetUser).eq('tenant_id', tenant);
+  // 1) remove the membership via the last-owner-guarded RPC — serializes concurrent revokes so
+  //    two owners removing each other can't zero out ownership, and refuses to drop the last owner.
+  const { data: revokeResult, error: dmErr } = await admin.rpc('revoke_tenant_member', { p_tenant: tenant, p_user: targetUser });
   if (dmErr) return json({ error: 'membership_delete_failed', detail: dmErr.message }, 500);
+  if (revokeResult === 'last_owner') return json({ error: 'cannot_remove_last_owner' }, 409);
+  if (revokeResult === 'no_membership') return json({ status: 'ok', note: 'no_membership' });
 
   // 2) drop this user's push subscriptions for the tenant — stops off-device push at once,
   //    independent of the delivery-side membership join (defense in depth).
