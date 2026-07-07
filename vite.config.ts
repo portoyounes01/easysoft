@@ -4,7 +4,9 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: process.env.NODE_ENV === 'production' ? './' : '/',
+  // Electron (file://) needs a relative base; the Vercel/web PWA needs an absolute base so
+  // the service-worker scope and /manifest.webmanifest resolve from the domain root.
+  base: process.env.VERCEL ? '/' : (process.env.NODE_ENV === 'production' ? './' : '/'),
   server: {
     // Allow access from other machines on the network
     host: '0.0.0.0',

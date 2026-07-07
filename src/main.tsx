@@ -13,16 +13,25 @@ import './utils/debugDatabase';
 import './utils/testScript';
 // Import startup seed loader for offline initialization
 import { prepareLocalStartupData } from './utils/startupSeed';
+import { isTillHost } from './lib/host';
+import { registerPwa } from './pwa';
 
 // Initialize app with local seed support
 async function initializeApp() {
-  const startupSeed = await prepareLocalStartupData();
+  // The local Dexie startup seed is a TILL concept (offline-first cache). The PWA (browser)
+  // reads from PostgREST and must not write demo data into a manager's browser IndexedDB.
+  const startupSeed = isTillHost
+    ? await prepareLocalStartupData()
+    : { bootstrapLoaded: false, localSeedLoaded: false };
 
   if (startupSeed.bootstrapLoaded || startupSeed.localSeedLoaded) {
     console.log('🎉 App initialized with local startup data');
   } else {
     console.log('📱 App initialized normally');
   }
+
+  // Register the PWA (browser host only; no-op on the Electron till).
+  registerPwa();
 
   // Render the app
   createRoot(document.getElementById('root')!).render(
