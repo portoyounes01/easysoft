@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
 import InstallBanner from "../pwa/InstallBanner";
+import NotificationBell from "../notifications/NotificationBell";
+import { NotificationFeedProvider } from "../../contexts/NotificationFeedContext";
 import { isPwaHost } from "../../lib/host";
 import MyProfileDialog from "../HR/MyProfileDialog";
 import { useSettings } from "../../contexts/SettingsContext";
@@ -112,7 +114,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     [toggleNavSidebar, closeNavSidebar, isPosRoute],
   );
 
-  return (
+  const tree = (
     <DesignSystem2CustomizationProvider>
       <LayoutNavProvider value={layoutNavValue}>
         <div className="flex h-screen overflow-hidden bg-[#f7f7f7]">
@@ -156,6 +158,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <div className="md:hidden flex items-center gap-2 min-w-0">
                   <span className="text-lg font-bold text-gray-900 truncate">POS System</span>
                 </div>
+                {isPwaHost && (
+                  <div className="ml-auto flex items-center">
+                    <NotificationBell />
+                  </div>
+                )}
               </div>
             )}
             <main
@@ -188,6 +195,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </LayoutNavProvider>
     </DesignSystem2CustomizationProvider>
   );
+
+  // The notification feed is browser-only — the till never renders a consumer, so mount the
+  // provider (a live Realtime channel) only on the PWA host.
+  return isPwaHost ? <NotificationFeedProvider>{tree}</NotificationFeedProvider> : tree;
 };
 
 export default Layout;

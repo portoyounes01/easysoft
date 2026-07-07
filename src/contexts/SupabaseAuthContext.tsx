@@ -5,6 +5,23 @@ import { Employee, EmployeeLoginResult } from '../types/supabase';
 import { hasEmployeePermission } from '../utils/accessPermissions';
 import type { Principal, MembershipRole } from '../types/principal';
 import { ROLE_CAPABILITIES, humanHasCapability } from '../utils/roleCapabilities';
+import { isPwaHost } from '../lib/host';
+
+// Keep the Realtime socket's auth token in lockstep with the session so the RLS-scoped
+// notification channel authorizes as the signed-in user (setAuth is realtime-only — no
+// PostgREST/getSession — so it's safe to call inside the auth-state callbacks that hold the
+// auth lock). PWA host only: the till has no notification feed. On sign-out we pass no token
+// (falls back to anon, which RLS denies — fail-closed) and drop every open channel.
+// See docs/pwa-notifications-plan.md P3a Step 4.
+function syncRealtimeAuth(session: Session | null): void {
+  if (!isPwaHost) return;
+  void supabase.realtime.setAuth(session?.access_token);
+}
+function clearRealtimeAuth(): void {
+  if (!isPwaHost) return;
+  void supabase.realtime.setAuth();
+  supabase.removeAllChannels();
+}
 
 interface AuthState {
   user: User | null;
@@ -414,6 +431,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
             isLoading: false,
             error: null,
           });
+          syncRealtimeAuth(session);
         } else {
           // Device/undefined: defer the employee lookup outside this callback.
           // fetchEmployeeData issues a PostgREST query whose internal getSession() would
@@ -446,6 +464,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           isLoading: false,
           error: null,
         });
+        clearRealtimeAuth();
       } else if (event === 'TOKEN_REFRESHED' && session) {
         // SAFETY-CRITICAL: isAuthenticated now keys on principal, and the till's ~hourly
         // device token refresh arrives here. deriveMembershipPrincipal returns null for a
@@ -459,6 +478,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           session,
           principal: deriveMembershipPrincipal(session) ?? prev.principal,
         }));
+        syncRealtimeAuth(session);
       }
     });
 
@@ -498,6 +518,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
             isLoading: false,
             error: null,
           });
+          syncRealtimeAuth(session);
         } else {
           const employee = await fetchEmployeeData(session);
           const principal = employee ? deriveEmployeePrincipal(employee, session) : null;

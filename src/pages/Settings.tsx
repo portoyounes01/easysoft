@@ -49,13 +49,15 @@ import { isSystemAdministrator } from '../utils/systemAdmin';
 import { generateUUID } from '../utils/uuid';
 import type { ReceiptLanguage } from '../utils/receiptLanguage';
 import { PrinterSettingsPanel, type HardwareSettingsTool } from './PrinterTestPage';
+import NotificationSettings from '../components/notifications/NotificationSettings';
+import { isPwaHost } from '../lib/host';
 import { SeedManagementPanel } from './SeedManagement';
 import { CashierTestingPanel } from './CashierTesting';
 import { ElectronTestingPanel } from './ElectronCashierTesting';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 
-type SettingsTabId = 'security' | 'pos' | 'loyalty' | 'hr' | 'display' | 'hardware' | 'company';
+type SettingsTabId = 'security' | 'pos' | 'loyalty' | 'hr' | 'display' | 'hardware' | 'company' | 'alerts';
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 type VendusCheckStatus = 'idle' | 'checking' | 'ok' | 'error';
 
@@ -328,6 +330,15 @@ const Settings: React.FC = () => {
                 icon: SettingsIcon,
                 description: t('settings.tabCompanyDesc'),
             },
+            // Alert thresholds drive the server-side notification triggers — PWA-admin concern only.
+            ...(isPwaHost
+                ? [{
+                    id: 'alerts' as const,
+                    label: t('settings.tabAlertsLabel', { defaultValue: 'Alerts' }),
+                    icon: Bell,
+                    description: t('settings.tabAlertsDesc', { defaultValue: 'Notification thresholds' }),
+                }]
+                : []),
         ],
         [t]
     );
@@ -2188,6 +2199,7 @@ const Settings: React.FC = () => {
         if (activeTab === 'hr') return renderHr();
         if (activeTab === 'display') return renderDisplay();
         if (activeTab === 'hardware') return renderHardware();
+        if (activeTab === 'alerts') return <NotificationSettings />;
         return renderCompany();
     };
 
