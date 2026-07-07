@@ -12,9 +12,11 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { 'Content-Type': 'application/json' } });
 
+const euro = (v: unknown) => (Number.isFinite(Number(v)) ? ` · €${Number(v).toFixed(2)}` : '');
 const CRITICAL_COPY: Record<string, { title: string; body: (p: Record<string, unknown>) => string }> = {
   FISCAL_CANCELLATION: { title: 'Fiscal cancellation', body: (p) => `Document ${p.transaction_number ? '#' + p.transaction_number : ''} was cancelled.` },
   FISCAL_ISSUE_FAILED: { title: 'Fiscal issuing failed', body: (p) => (typeof p.error === 'string' && p.error ? p.error : 'A sale could not be fiscalised.') },
+  CREDIT_NOTE_ISSUED: { title: 'Credit note issued', body: (p) => `Credit note ${p.transaction_number ? '#' + p.transaction_number : ''} issued${euro(p.total)}`.trim() },
 };
 
 Deno.serve(async (req) => {

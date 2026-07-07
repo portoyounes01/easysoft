@@ -62,6 +62,7 @@ export function notificationDescription(e: NotificationEvent): string {
   const p = (e.payload ?? {}) as Record<string, unknown>;
   const tx = p.transaction_number ? `#${p.transaction_number}` : '';
   switch (e.event_type) {
+    case 'CREDIT_NOTE_ISSUED':
     case 'REFUND_ISSUED':
       return [tx, money(p.total)].filter(Boolean).join(' · ');
     case 'FISCAL_CANCELLATION':
