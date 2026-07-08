@@ -176,14 +176,14 @@ const ReportsInner: React.FC = () => {
     };
 
     const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat(language?.startsWith('pt') ? 'pt-PT' : 'en-US', {
+        return new Intl.NumberFormat(language?.startsWith('pt') ? 'pt-PT' : language?.startsWith('es') ? 'es-ES' : 'en-US', {
             style: 'currency',
             currency: 'EUR'
         }).format(amount);
     };
 
     const formatDate = (date: string) => {
-        return new Date(date).toLocaleDateString(language?.startsWith('pt') ? 'pt-PT' : 'en-US');
+        return new Date(date).toLocaleDateString(language?.startsWith('pt') ? 'pt-PT' : language?.startsWith('es') ? 'es-ES' : 'en-US');
     };
 
     const tabs = [

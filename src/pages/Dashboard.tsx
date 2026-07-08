@@ -18,7 +18,7 @@ const Dashboard: React.FC = () => {
   const { language } = useLanguage();
 
   // 3. Computed values (useMemo)
-  const locale = useMemo(() => (language?.startsWith('pt') ? 'pt-PT' : 'en-US'), [language]);
+  const locale = useMemo(() => (language?.startsWith('pt') ? 'pt-PT' : language?.startsWith('es') ? 'es-ES' : 'en-US'), [language]);
   const todayStr = useMemo(
     () => new Date().toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric' }),
     [locale]

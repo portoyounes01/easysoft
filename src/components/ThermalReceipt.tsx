@@ -76,7 +76,7 @@ export interface ReceiptProps {
   /** Cashier / operator name for AT evidence */
   emitterName?: string;
   /** Overrides settings receipt language when set (e.g. receipt demo). */
-  receiptLanguage?: 'en' | 'pt';
+  receiptLanguage?: 'en' | 'pt' | 'es';
   /** Official provider-rendered output; used for Vendus during transition. */
   officialOutput?: FiscalOfficialOutput;
 }
@@ -123,9 +123,9 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   const { settings } = useSettings();
   const receiptLang = receiptLanguageProp ?? settings.receipt.receiptLanguage;
   const t = useMemo(() => getReceiptT(receiptLang), [receiptLang]);
-  const dateLocale = receiptLang === 'pt' ? 'pt-PT' : 'en-GB';
+  const dateLocale = receiptLang === 'pt' ? 'pt-PT' : receiptLang === 'es' ? 'es-ES' : 'en-GB';
   const [qrCodeImage, setQrCodeImage] = useState<string>('');
-  const isCashPayment = ['Numerário', 'Cash', 'Dinheiro'].includes(payment.method);
+  const isCashPayment = ['Numerário', 'Cash', 'Dinheiro', 'Efectivo'].includes(payment.method);
 
   useEffect(() => {
     if (qrCodeImageProp) {

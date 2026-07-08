@@ -8,6 +8,8 @@ import { InputField } from './ui/InputField';
 import VirtualKeyboard from './VirtualKeyboard';
 import SimpleNumpad from './SimpleNumpad';
 import { LocalCustomer } from '../types/supabase';
+import { useSettings } from '../contexts/SettingsContext';
+import { getCountryProfile } from '../lib/countryProfile';
 
 interface CustomerDialogProps {
     open: boolean;
@@ -50,11 +52,21 @@ function normalizeStoredTaxNumber(tax: string | null | undefined): string {
     return (tax ?? '').replace(/\s/g, '').toUpperCase();
 }
 
-/** Portugal postal: digits only in UI, formatted as 1234-567 */
-function formatPtPostalInput(raw: string): string {
-    const digits = raw.replace(/\D/g, '').slice(0, 7);
-    if (digits.length <= 4) return digits;
-    return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+/** Country-aware ISO2 from a free-text country field. */
+function deriveCountryIso(raw: string): string {
+    const v = (raw || '').trim();
+    if (v.length === 0 || v.toLowerCase() === 'portugal') return 'PT';
+    if (v.toLowerCase() === 'españa' || v.toLowerCase() === 'espana' || v.toLowerCase() === 'spain') return 'ES';
+    return v.slice(0, 2).toUpperCase();
+}
+
+/** Postal-code input mask by country: PT = NNNN-NNN, ES = NNNNN (5 digits, no dash). */
+function formatPostalInput(raw: string, countryIso: string): string {
+    const digits = raw.replace(/\D/g, '');
+    if (countryIso === 'ES') return digits.slice(0, 5);
+    const d = digits.slice(0, 7);
+    if (d.length <= 4) return d;
+    return `${d.slice(0, 4)}-${d.slice(4)}`;
 }
 
 export const CustomerDialog: React.FC<CustomerDialogProps> = ({
@@ -65,6 +77,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     onRegisterCustomer
 }) => {
     const { t } = useTranslation();
+    const { settings } = useSettings();
+    const opCountry = settings.operatingCountry;
+    const countryProfile = getCountryProfile(opCountry);
     const [view, setView] = useState<ViewMode>('list');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCustomer, setSelectedCustomer] = useState<LocalCustomer | null>(null);
@@ -99,7 +114,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         if (open) {
             setView('list');
             setSearchTerm('');
-            setNewCustomerForm(initialFormState);
+            setNewCustomerForm({ ...initialFormState, country: opCountry });
             setFormError(null);
             setActiveField(''); // Reset active field to hide keyboard
         }
@@ -133,7 +148,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     const handleFormChange = (field: string, value: string) => {
         setFormError(null);
         const next =
-            field === 'postalCode' ? formatPtPostalInput(value) : value;
+            field === 'postalCode' ? formatPostalInput(value, deriveCountryIso(newCustomerForm.country)) : value;
         setNewCustomerForm(prev => ({ ...prev, [field]: next }));
     };
 
@@ -148,7 +163,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 if (field === 'taxId') {
                     finalValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
                 } else if (field === 'postalCode') {
-                    finalValue = formatPtPostalInput(value);
+                    finalValue = formatPostalInput(value, deriveCountryIso(newCustomerForm.country));
                 }
                 handleFormChange(field, finalValue);
             },
@@ -183,14 +198,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         const addr = newCustomerForm.address.trim();
         const city = newCustomerForm.city.trim();
         const postal = newCustomerForm.postalCode.trim();
-        const rawCountry = newCustomerForm.country.trim();
-        const countryIso =
-            rawCountry.length === 0 || rawCountry.toLowerCase() === 'portugal'
-                ? 'PT'
-                : rawCountry.slice(0, 2).toUpperCase();
+        const countryIso = deriveCountryIso(newCustomerForm.country);
 
         if (countryIso === 'PT' && postal.length > 0 && !/^\d{4}-\d{3}$/.test(postal)) {
             setFormError(t('pos.customerForm.invalidPostalPt'));
+            return;
+        }
+        if (countryIso === 'ES' && postal.length > 0 && !/^\d{5}$/.test(postal)) {
+            setFormError(t('pos.customerForm.invalidPostalEs', { defaultValue: 'Código postal no válido (5 dígitos).' }));
             return;
         }
 
@@ -400,14 +415,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                 />
                                 <div className="relative">
                                     <InputField
-                                        label="NIF *"
+                                        label={`${countryProfile.taxId.label} *`}
                                         icon={TaxIcon}
                                         value={newCustomerForm.taxId}
                                         onChange={(e) => handleFormChange('taxId', e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase())}
                                         onClick={() => handleTextFieldClick('taxId', true, true, 9)}
                                         className={activeField === 'taxId' ? 'bg-blue-50' : ''}
-                                        placeholder={t('forms.taxNumberExample')}
-                                        error={newCustomerForm.taxId && getNifValidationState(newCustomerForm.taxId) !== 'valid' ? 'Invalid NIF' : undefined}
+                                        placeholder={countryProfile.taxId.placeholder}
+                                        error={newCustomerForm.taxId && getNifValidationState(newCustomerForm.taxId) !== 'valid' ? t('customers.form.errors.taxInvalid', { defaultValue: `Invalid ${countryProfile.taxId.label}` }) : undefined}
                                         rightIcon={newCustomerForm.taxId && getNifValidationState(newCustomerForm.taxId) === 'valid' ? Check : undefined}
                                     />
                                 </div>

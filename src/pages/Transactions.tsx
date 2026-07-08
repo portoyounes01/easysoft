@@ -31,6 +31,7 @@ import type { ReceiptProps } from '../components/ThermalReceipt';
 import { usePOS } from '../contexts/POSContext';
 import type { FiscalCartLine } from '../fiscal/checkoutOrchestrator';
 import type { LocalCustomer, LocalProduct } from '../types/supabase';
+import { activeProfile } from '../lib/countryProfile';
 import { generateUUID } from '../utils/uuid';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import {
@@ -325,14 +326,14 @@ const TransactionsInner: React.FC = () => {
     };
 
     const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('pt-PT', {
+        return new Intl.NumberFormat(activeProfile().locale, {
             style: 'currency',
             currency: 'EUR'
         }).format(amount);
     };
 
     const formatDate = (date: string) => {
-        return new Date(date).toLocaleDateString('pt-PT', {
+        return new Date(date).toLocaleDateString(activeProfile().locale, {
             weekday: 'short',
             year: 'numeric',
             month: 'short',

@@ -826,7 +826,7 @@ const EmployeesInner: React.FC = () => {
 
                             <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                                 <span className="text-sm text-gray-500">
-                                    {t('employees.card.hireDate')} {new Date(employee.hire_date).toLocaleDateString(language?.startsWith('pt') ? 'pt-PT' : 'en-US')}
+                                    {t('employees.card.hireDate')} {new Date(employee.hire_date).toLocaleDateString(language?.startsWith('pt') ? 'pt-PT' : language?.startsWith('es') ? 'es-ES' : 'en-US')}
                                 </span>
                                 <div className="flex items-center space-x-2">
                                     {/* Only admins can edit other admins */}

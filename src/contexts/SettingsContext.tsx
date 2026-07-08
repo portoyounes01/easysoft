@@ -4,6 +4,7 @@ import { applyFiscalSecretsFromEnv, settingsWithoutPersistedFiscalSecrets } from
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { defaultSeriesProfiles, normalizeStoredSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { normalizeReceiptLanguage, type ReceiptLanguage } from '../utils/receiptLanguage';
+import { type OperatingCountry, normalizeCountry, setActiveCountry } from '../lib/countryProfile';
 
 function mergeSeriesProfilesDeep(
     base: Record<FiscalSeriesDocKey, ReceiptSeriesProfile>,
@@ -205,6 +206,12 @@ function migrateStoredReceipt(raw: unknown, defaults: SystemSettings['receipt'])
 }
 
 export interface SystemSettings {
+    /**
+     * Operating country — the single source of truth for every PT vs ES difference
+     * (fiscal issuer set, VAT/IVA rates, tax-id format, locale/formatting, default UI +
+     * receipt language, postal/phone shape). See src/lib/countryProfile.ts.
+     */
+    operatingCountry: OperatingCountry;
     autoLogout: {
         enabled: boolean;
         timeoutMinutes: number;
@@ -397,6 +404,7 @@ interface SettingsContextType extends SettingsState {
 }
 
 const defaultSettings: SystemSettings = {
+    operatingCountry: 'PT',
     autoLogout: {
         enabled: true,
         timeoutMinutes: 15,
@@ -636,6 +644,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                     const mergedSettings = {
                         ...defaultSettings,
                         ...parsedSettings,
+                        operatingCountry: normalizeCountry(parsedSettings.operatingCountry),
                         autoLogout: {
                             ...defaultSettings.autoLogout,
                             ...(parsedSettings.autoLogout || {}),
@@ -696,6 +705,18 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
         loadSettings();
     }, []);
+
+    // Keep the module-level active country (used by country-aware formatters/validators) and a
+    // lightweight localStorage mirror in sync. The mirror lets LanguageContext — which is mounted
+    // ABOVE SettingsProvider — resolve the country's default language at init time.
+    useEffect(() => {
+        setActiveCountry(state.settings.operatingCountry);
+        try {
+            localStorage.setItem('operating_country', state.settings.operatingCountry);
+        } catch {
+            /* non-fatal */
+        }
+    }, [state.settings.operatingCountry]);
 
     return (
         <SettingsContext.Provider value={{ ...state, updateSettings, resetToDefaults }}>

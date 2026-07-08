@@ -44,7 +44,9 @@ import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
 import { checkVendusFiscalHealth, fetchVendusSaftXml } from '../fiscal/vendusFiscalIssuer';
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
-import { IVA_RATES } from '../types/supabase';
+import { ivaRatesForCountry } from '../types/supabase';
+import { getCountryProfile, OPERATING_COUNTRIES, type OperatingCountry } from '../lib/countryProfile';
+import { useLanguage } from '../contexts/LanguageContext';
 import { isSystemAdministrator } from '../utils/systemAdmin';
 import { generateUUID } from '../utils/uuid';
 import type { ReceiptLanguage } from '../utils/receiptLanguage';
@@ -253,6 +255,8 @@ const Settings: React.FC = () => {
     // gets the system-admin surface; till ADMIN001 keeps it via isSystemAdministrator.
     const isSystemAdmin = isSystemAdministrator(employee) || principal?.role === 'owner';
     const { t } = useTranslation();
+    const { setLanguage } = useLanguage();
+    const countryProfile = getCountryProfile(settings.operatingCountry);
     const [searchParams] = useSearchParams();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
     const [activeTab, setActiveTab] = useState<SettingsTabId>('security');
@@ -386,7 +390,9 @@ const Settings: React.FC = () => {
                 ? 'InvoiceXpress'
                 : settings.fiscal.issuer === 'fiskaly'
                     ? 'Fiskaly'
-                    : 'Local AT';
+                    : settings.fiscal.issuer === 'sign_es'
+                        ? 'SIGN ES'
+                        : 'Local AT';
     const isExternalIssuer =
         settings.fiscal.issuer === 'invoicexpress' || settings.fiscal.issuer === 'fiskaly';
     const activeTabMeta = tabs.find(tab => tab.id === activeTab) ?? tabs[0];
@@ -526,6 +532,29 @@ const Settings: React.FC = () => {
             markChanged();
         },
         [markChanged, updateSettings]
+    );
+
+    const handleOperatingCountryChange = useCallback(
+        (country: OperatingCountry) => {
+            const profile = getCountryProfile(country);
+            // Switching country resets the fiscal issuer to the country's only/default valid
+            // issuer (ES ⇒ sign_es; PT ⇒ local_at), the standard IVA rate, and the default
+            // UI + receipt language. The user can still re-pick language afterwards.
+            updateSettings({
+                operatingCountry: country,
+                pos: { taxRate: profile.defaultVatRate },
+                receipt: { receiptLanguage: profile.defaultLanguage },
+                fiscal: {
+                    issuer: profile.defaultFiscalIssuer,
+                    vendus: { enabled: profile.defaultFiscalIssuer === 'vendus' },
+                    invoicexpress: { enabled: profile.defaultFiscalIssuer === 'invoicexpress' },
+                    fiskaly: { enabled: profile.defaultFiscalIssuer === 'fiskaly' },
+                },
+            } as Parameters<typeof updateSettings>[0]);
+            setLanguage(profile.defaultLanguage);
+            markChanged();
+        },
+        [markChanged, updateSettings, setLanguage]
     );
 
     const handleInvoiceXpressSettingChange = useCallback(
@@ -906,11 +935,17 @@ const Settings: React.FC = () => {
                             onChange={event => handleSettingsChange('pos', 'taxRate', parseFloat(event.target.value))}
                             className={fieldClass}
                         >
-                            {IVA_RATES.map(rate => (
-                                <option key={rate.value} value={rate.value}>
-                                    {rate.label}
-                                </option>
-                            ))}
+                            {(() => {
+                                const rates = ivaRatesForCountry(settings.operatingCountry).map((r) => ({ value: r.value as number, label: r.label as string }));
+                                if (!rates.some((r) => r.value === settings.pos.taxRate)) {
+                                    rates.unshift({ value: settings.pos.taxRate, label: `${Math.round(settings.pos.taxRate * 100)}%` });
+                                }
+                                return rates.map((rate) => (
+                                    <option key={rate.value} value={rate.value}>
+                                        {rate.label}
+                                    </option>
+                                ));
+                            })()}
                         </select>
                     </SettingsRow>
                 </SettingCard>
@@ -1551,6 +1586,7 @@ const Settings: React.FC = () => {
                 >
                     <option value="pt">{t('settings.company.receiptLanguagePt')}</option>
                     <option value="en">{t('settings.company.receiptLanguageEn')}</option>
+                    <option value="es">{t('settings.company.receiptLanguageEs')}</option>
                 </select>
             </SettingsRow>
             <SettingsRow title={t('settings.counterLabelTitle')} description={t('settings.counterLabelDesc')} icon={Store}>
@@ -1681,6 +1717,22 @@ const Settings: React.FC = () => {
             accent="from-slate-950 to-blue-700"
         >
             {isSystemAdmin && (
+                <SettingsRow title={t('settings.operatingCountryTitle')} description={t('settings.operatingCountryDesc')}>
+                    <SegmentedControl
+                        value={settings.operatingCountry}
+                        onChange={handleOperatingCountryChange}
+                        options={OPERATING_COUNTRIES.map((c) => ({
+                            value: c,
+                            label: getCountryProfile(c).name,
+                            description: c === 'PT'
+                                ? 'Portugal — AT / SAF-T'
+                                : 'España — SIGN ES / Veri*factu',
+                        }))}
+                    />
+                </SettingsRow>
+            )}
+
+            {isSystemAdmin && (
                 <SettingsRow title={t('settings.activeIssuerTitle')} description={t('settings.activeIssuerDesc')}>
                     <SegmentedControl
                         value={settings.fiscal.issuer}
@@ -1691,7 +1743,7 @@ const Settings: React.FC = () => {
                             { value: 'invoicexpress', label: 'InvoiceXpress', description: t('settings.issuerIxDesc') },
                             { value: 'fiskaly', label: 'Fiskaly', description: t('settings.issuerFiskalyDesc') },
                             { value: 'sign_es', label: 'SIGN ES (España)', description: t('settings.issuerSignEsDesc', { defaultValue: 'España — fiskaly SIGN ES / Veri*factu (facturas simplificadas + rectificativas).' }) },
-                        ]}
+                        ].filter((o) => countryProfile.fiscalIssuers.includes(o.value as SystemSettings['fiscal']['issuer']))}
                     />
                 </SettingsRow>
             )}
@@ -1883,6 +1935,19 @@ const Settings: React.FC = () => {
             </SettingCard>
         );
     };
+
+    const renderSignEsSetup = () => (
+        <SettingCard
+            title={t('settings.signEsSetupTitle', { defaultValue: 'SIGN ES (España) — Veri*factu' })}
+            description={t('settings.signEsSetupDesc', { defaultValue: 'La configuración fiscal de España (entorno, contribuyente, series FS/FC/FR y numeración) se gestiona en el servidor mediante el aprovisionamiento SIGN ES. No hay nada que configurar aquí.' })}
+            icon={Cloud}
+            accent="from-rose-600 to-orange-500"
+        >
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
+                {t('settings.signEsSetupNote', { defaultValue: 'El alta del comercio (organización gestionada, claves, contribuyente y clientes/cajas) se realiza una sola vez con la función de aprovisionamiento provision-sign-es. Las facturas se emiten y se registran en AEAT automáticamente.' })}
+            </div>
+        </SettingCard>
+    );
 
     const renderVendusSetup = () => (
         <SettingCard
@@ -2187,9 +2252,12 @@ const Settings: React.FC = () => {
                 : isSystemAdmin
                     ? settings.fiscal.issuer === 'vendus'
                         ? renderVendusSetup()
-                        : renderExternalIssuerSetup()
+                        : settings.fiscal.issuer === 'sign_es'
+                            ? renderSignEsSetup()
+                            : renderExternalIssuerSetup()
                     : null}
-            {renderSaftExport()}
+            {/* SAF-T is a Portugal-only fiscal export; Spain (Veri*factu) has no SAF-T obligation. */}
+            {settings.operatingCountry === 'PT' && renderSaftExport()}
         </div>
     );
 

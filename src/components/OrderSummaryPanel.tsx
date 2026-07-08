@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { Archive, Table, Save, Minus, Plus, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LocalProduct } from '../types/supabase';
+import { activeProfile } from '../lib/countryProfile';
 import { POSActionButton } from './ui/POSActionButton';
 import { OutlineButton } from './ui/OutlineButton';
 import { TabToggle, TabToggleOption } from './ui/TabToggle';
@@ -79,7 +80,8 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     }, []);
 
     const formatCurrency = useCallback((value: number) => {
-        return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR' }).format(value);
+        // Deterministic, country-aware locale (was browser-default → non-deterministic grouping).
+        return new Intl.NumberFormat(activeProfile().locale, { style: 'currency', currency: 'EUR' }).format(value);
     }, []);
 
     const formatDiscountDisplay = useCallback((discountInfo?: { type: 'none' | 'percentage' | 'fixed'; value: number; amount: number }) => {

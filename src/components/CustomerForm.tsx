@@ -5,6 +5,8 @@ import { BaseDialog } from './ui/BaseDialog';
 import { ActionButton } from './ui/ActionButton';
 import { LocalCustomer } from '../types/supabase';
 import { customerLocalService } from '../lib/localDatabase';
+import { useSettings } from '../contexts/SettingsContext';
+import { getCountryProfile } from '../lib/countryProfile';
 
 interface CustomerFormProps {
   isOpen: boolean;
@@ -41,10 +43,21 @@ function normalizeStoredTaxNumber(tax: string | null | undefined): string {
   return (tax ?? '').replace(/\s/g, '').toUpperCase();
 }
 
-function formatPtPostalInput(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 7);
-  if (digits.length <= 4) return digits;
-  return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+/** Country-aware ISO2 from a free-text country field ("Portugal"/"España"/"PT"/"ES"). */
+function deriveCountryIso(raw: string): string {
+  const v = (raw || '').trim();
+  if (v.length === 0 || v.toLowerCase() === 'portugal') return 'PT';
+  if (v.toLowerCase() === 'españa' || v.toLowerCase() === 'espana' || v.toLowerCase() === 'spain') return 'ES';
+  return v.slice(0, 2).toUpperCase();
+}
+
+/** Postal-code input mask by country: PT = NNNN-NNN, ES = NNNNN (5 digits, no dash). */
+function formatPostalInput(raw: string, countryIso: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (countryIso === 'ES') return digits.slice(0, 5);
+  const d = digits.slice(0, 7);
+  if (d.length <= 4) return d;
+  return `${d.slice(0, 4)}-${d.slice(4)}`;
 }
 
 function getNifValidationState(nif: string): 'default' | 'valid' | 'invalid' {
@@ -66,6 +79,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const { settings } = useSettings();
+  const opCountry = settings.operatingCountry;
   const [fields, setFields] = useState<CustomerFormFields>(emptyFields);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,10 +102,11 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
         is_active: customer.is_active,
       });
     } else {
-      setFields(emptyFields);
+      // New customer defaults to the shop's operating country.
+      setFields({ ...emptyFields, country: opCountry });
     }
     setFormError(null);
-  }, [isOpen, customer]);
+  }, [isOpen, customer, opCountry]);
 
   const handleCancel = useCallback(() => {
     setFormError(null);
@@ -110,7 +126,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
         return;
       }
       if (key === 'postal_code') {
-        setFields((prev) => ({ ...prev, postal_code: formatPtPostalInput(value) }));
+        setFields((prev) => ({ ...prev, postal_code: formatPostalInput(value, deriveCountryIso(prev.country)) }));
         return;
       }
       if (key === 'is_active') {
@@ -131,14 +147,14 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
     const addr = fields.address.trim();
     const city = fields.city.trim();
     const postal = fields.postal_code.trim();
-    const rawCountry = fields.country.trim();
-    const countryIso =
-      rawCountry.length === 0 || rawCountry.toLowerCase() === 'portugal'
-        ? 'PT'
-        : rawCountry.slice(0, 2).toUpperCase();
+    const countryIso = deriveCountryIso(fields.country);
 
     if (countryIso === 'PT' && postal.length > 0 && !/^\d{4}-\d{3}$/.test(postal)) {
       setFormError(t('pos.customerForm.invalidPostalPt'));
+      return;
+    }
+    if (countryIso === 'ES' && postal.length > 0 && !/^\d{5}$/.test(postal)) {
+      setFormError(t('pos.customerForm.invalidPostalEs', { defaultValue: 'Código postal no válido (5 dígitos).' }));
       return;
     }
 

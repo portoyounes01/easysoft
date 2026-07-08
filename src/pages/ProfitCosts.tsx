@@ -137,7 +137,7 @@ const ProfitCosts: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const locale = language?.startsWith('pt') ? 'pt-PT' : 'en-US';
+    const locale = language?.startsWith('pt') ? 'pt-PT' : language?.startsWith('es') ? 'es-ES' : 'en-US';
     const currencyFormatter = useMemo(
         () => new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }),
         [locale],

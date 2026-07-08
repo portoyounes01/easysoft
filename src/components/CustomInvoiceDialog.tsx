@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileText, Plus, Trash2, X } from 'lucide-react';
 
-import { IVA_RATES, calculateTaxAmount } from '../types/supabase';
+import { ivaRatesForCountry, calculateTaxAmount } from '../types/supabase';
+import { useSettings } from '../contexts/SettingsContext';
+import { getCountryProfile } from '../lib/countryProfile';
 
 export interface CustomInvoiceLine {
     description: string;
@@ -33,7 +35,7 @@ interface CustomInvoiceDialogProps {
 
 const DEFAULT_IVA = 0.23;
 
-const emptyLine = (): LineForm => ({ description: '', quantity: '1', unitPrice: '', ivaRate: DEFAULT_IVA });
+const emptyLine = (ivaRate: number = DEFAULT_IVA): LineForm => ({ description: '', quantity: '1', unitPrice: '', ivaRate });
 
 const toNumber = (value: string): number => {
     const parsed = parseFloat(value.replace(',', '.'));
@@ -42,7 +44,13 @@ const toNumber = (value: string): number => {
 
 const CustomInvoiceDialog: React.FC<CustomInvoiceDialogProps> = ({ open, onClose, onSubmit }) => {
     const { t } = useTranslation();
-    const [lines, setLines] = useState<LineForm[]>([emptyLine()]);
+    const { settings } = useSettings();
+    // Country-aware IVA options + default rate + tax-id placeholder (PT NIF vs ES NIF/CIF/NIE).
+    const country = settings.operatingCountry;
+    const ivaRates = ivaRatesForCountry(country);
+    const countryProfile = getCountryProfile(country);
+    const defaultIva = countryProfile.defaultVatRate;
+    const [lines, setLines] = useState<LineForm[]>([emptyLine(defaultIva)]);
     const [customerName, setCustomerName] = useState('');
     const [customerNif, setCustomerNif] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
@@ -50,7 +58,7 @@ const CustomInvoiceDialog: React.FC<CustomInvoiceDialogProps> = ({ open, onClose
     const [error, setError] = useState('');
 
     const reset = () => {
-        setLines([emptyLine()]);
+        setLines([emptyLine(defaultIva)]);
         setCustomerName('');
         setCustomerNif('');
         setPaymentMethod('cash');
@@ -61,7 +69,7 @@ const CustomInvoiceDialog: React.FC<CustomInvoiceDialogProps> = ({ open, onClose
         setLines(prev => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
     };
 
-    const addLine = () => setLines(prev => [...prev, emptyLine()]);
+    const addLine = () => setLines(prev => [...prev, emptyLine(defaultIva)]);
     const removeLine = (index: number) =>
         setLines(prev => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)));
 
@@ -174,7 +182,7 @@ const CustomInvoiceDialog: React.FC<CustomInvoiceDialogProps> = ({ open, onClose
                                         onChange={e => updateLine(index, { ivaRate: Number(e.target.value) })}
                                         className="min-h-touch-sm rounded-lg border border-gray-300 px-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                                     >
-                                        {IVA_RATES.map(rate => (
+                                        {ivaRates.map(rate => (
                                             <option key={rate.value} value={rate.value}>
                                                 {Math.round(rate.value * 100)}%
                                             </option>
@@ -217,9 +225,9 @@ const CustomInvoiceDialog: React.FC<CustomInvoiceDialogProps> = ({ open, onClose
                             {t('transactions.customInvoice.nif')}
                             <input
                                 value={customerNif}
-                                onChange={e => setCustomerNif(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9))}
-                                inputMode="numeric"
-                                placeholder="000000000"
+                                onChange={e => setCustomerNif(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 9))}
+                                inputMode="text"
+                                placeholder={countryProfile.taxId.placeholder}
                                 className="mt-1 min-h-touch-sm w-full rounded-lg border border-gray-300 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                             />
                         </label>

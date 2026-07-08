@@ -13,8 +13,9 @@ import { useProducts } from '../contexts/ProductsContext';
 import {
     ProductFormData,
     LocalProduct,
-    IVA_RATES
+    ivaRatesForCountry
 } from '../types/supabase';
+import { getCountryProfile } from '../lib/countryProfile';
 import VirtualKeyboard from './VirtualKeyboard';
 import VirtualNumpad from './VirtualNumpad';
 import ImageUploader from './ImageUploader';
@@ -94,6 +95,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
     const { employee } = useSupabaseAuth();
     const { settings } = useSettings();
     const currencySymbol = settings.pos.currencySymbol;
+    // Country-aware IVA rate list + standard-rate default (PT 6/13/23, ES 21/10/4/0).
+    const ivaRates = ivaRatesForCountry(settings.operatingCountry);
+    const defaultIvaRate = getCountryProfile(settings.operatingCountry).defaultVatRate;
 
     const activeCategories = useMemo(
         () => categories.filter(cat => cat.is_active && !cat.deleted_at),
@@ -136,7 +140,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 category_id: '',
                 price: 0,
                 cost: 0,
-                iva_rate: 0.23,
+                iva_rate: defaultIvaRate,
                 stock: 0,
                 min_stock: 0,
                 image_url: '',
@@ -601,11 +605,20 @@ const ProductForm: React.FC<ProductFormProps> = ({
                                     className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 ${errors.iva_rate ? 'border-red-500' : 'border-gray-300'
                                         }`}
                                 >
-                                    {IVA_RATES.map(rate => (
-                                        <option key={rate.value} value={rate.value}>
-                                            {rate.label}
-                                        </option>
-                                    ))}
+                                    {(() => {
+                                        const opts = ivaRates.map((r) => ({ value: r.value as number, label: r.label as string }));
+                                        // Preserve a stored rate that isn't in the active country's set (e.g. a
+                                        // PT-rated 23% product viewed after switching to ES) so the select never
+                                        // goes blank; show it as a plain percentage so it's visibly non-standard.
+                                        if (!opts.some((o) => o.value === formData.iva_rate)) {
+                                            opts.unshift({ value: formData.iva_rate, label: `${Math.round(formData.iva_rate * 100)}%` });
+                                        }
+                                        return opts.map((o) => (
+                                            <option key={o.value} value={o.value}>
+                                                {o.label}
+                                            </option>
+                                        ));
+                                    })()}
                                 </select>
                                 {errors.iva_rate && (
                                     <p className="mt-1 text-sm text-red-600 flex items-center">

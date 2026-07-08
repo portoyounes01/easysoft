@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { activeProfile } from '../lib/countryProfile';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import '../styles/design-system-2-scope.css';
@@ -128,20 +129,20 @@ const orderTableColumnClass: Record<OrderTableColumn, string> = {
 };
 
 const formatCurrency = (value: number): string =>
-  new Intl.NumberFormat('pt-PT', {
+  new Intl.NumberFormat(activeProfile().locale, {
     style: 'currency',
     currency: 'EUR',
   }).format(value);
 
 const formatOrderDate = (value: string): string =>
-  new Intl.DateTimeFormat('en-US', {
+  new Intl.DateTimeFormat(activeProfile().locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(value));
 
 const formatOrderTime = (value: string): string =>
-  new Intl.DateTimeFormat('en-US', {
+  new Intl.DateTimeFormat(activeProfile().locale, {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
