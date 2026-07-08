@@ -31,7 +31,10 @@ const SIGN_ES_HOST: Record<string, string> = {
   test: 'https://test.es.sign.fiskaly.com/api/v1',
   live: 'https://live.es.sign.fiskaly.com/api/v1',
 };
-const SERIES_CODE: Record<string, string> = { SIMPLIFIED: 'FS', COMPLETE: 'FC' }; // no I/O/W (fiskaly legibility)
+// Series per invoice kind (no I/O/W per fiskaly legibility guidance). Spanish invoicing rules
+// (RD 1619/2012) require rectificativas on their OWN series — hence the distinct FR series.
+const SERIES_CODE: Record<string, string> = { SIMPLIFIED: 'FS', COMPLETE: 'FC', CORRECTING: 'FR' };
+const CORRECTION_CODES = new Set(['CORRECTION_1', 'CORRECTION_2', 'CORRECTION_3', 'CORRECTION_4']);
 const REJECTED = new Set(['REQUIRES_CORRECTION', 'REQUIRES_INSPECTION', 'INVALID']);
 const DEC2 = /^\d{1,12}(\.\d{1,2})?$/;   // invoice full_amount (Decimal12p2), non-negative
 const DEC8 = /^\d{1,12}(\.\d{1,8})?$/;   // item amounts (Decimal12p8), non-negative
@@ -75,6 +78,8 @@ Deno.serve(async (req) => {
     text?: string; full_amount?: string; items?: EsItem[];
     recipient?: { nif?: string; legal_name?: string; address_line?: string; postal_code?: string };
     issued_at?: string;
+    // CORRECTING (rectificativa, ES-4): reference to the original + AEAT correction code
+    original_fiscal_document_id?: string; correction_code?: string;
   };
   try { body = await req.json(); } catch { return json({ error: 'invalid_json' }, 400); }
 
@@ -82,7 +87,12 @@ Deno.serve(async (req) => {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(checkoutId)) return json({ error: 'invalid_checkout_id' }, 400);
 
   const docType = (body.doc_type ?? 'SIMPLIFIED').toUpperCase();
-  if (!SERIES_CODE[docType]) return json({ error: 'unsupported_doc_type', detail: 'ES-2 issues SIMPLIFIED|COMPLETE; CORRECTING = ES-4' }, 400);
+  if (!SERIES_CODE[docType]) return json({ error: 'unsupported_doc_type', detail: 'SIMPLIFIED | COMPLETE | CORRECTING' }, 400);
+  const correctionCode = (body.correction_code ?? 'CORRECTION_1').toUpperCase();
+  if (docType === 'CORRECTING') {
+    if (!body.original_fiscal_document_id) return json({ error: 'original_fiscal_document_id_required' }, 400);
+    if (!CORRECTION_CODES.has(correctionCode)) return json({ error: 'invalid_correction_code' }, 400);
+  }
 
   // ---- validate money BEFORE reserving a correlative number (a bad body must never burn one) ----
   if (typeof body.full_amount !== 'string' || !DEC2.test(body.full_amount)) return json({ error: 'invalid_full_amount', detail: 'non-negative decimal string, <=2dp' }, 400);
@@ -129,6 +139,20 @@ Deno.serve(async (req) => {
   // ---- per-tenant config + secret ----
   const environment = device.training_mode ? 'test' : 'live';
   const clientId = environment === 'test' ? device.sign_es_client_id_test : device.sign_es_client_id_live;
+
+  // CORRECTING: resolve the original invoice (tenant-scoped, same environment). Its
+  // fiskaly_record_id is the SIGN ES invoice UUID the wrapper must reference.
+  let originalInvoiceUuid: string | null = null;
+  if (docType === 'CORRECTING') {
+    const { data: orig } = await admin.from('fiscal_documents')
+      .select('id, fiskaly_record_id, invoice_kind, environment, verifactu_cancellation')
+      .eq('id', body.original_fiscal_document_id!).eq('tenant_id', tenantId).maybeSingle();
+    if (!orig || !orig.fiskaly_record_id) return json({ error: 'original_not_found' }, 404);
+    if (orig.environment !== environment) return json({ error: 'original_environment_mismatch' }, 409);
+    if (!['SIMPLIFIED', 'COMPLETE'].includes(orig.invoice_kind ?? '')) return json({ error: 'original_not_correctable', detail: `invoice_kind=${orig.invoice_kind}` }, 409);
+    if (orig.verifactu_cancellation && orig.verifactu_cancellation !== 'NOT_CANCELLED') return json({ error: 'original_cancelled' }, 409);
+    originalInvoiceUuid = orig.fiskaly_record_id;
+  }
   const { data: cfg } = await admin.from('tenant_fiscal_config').select('issuer').eq('tenant_id', tenantId).eq('environment', environment).maybeSingle();
   const { data: secret } = await admin.from('tenant_fiscal_secrets').select('fiskaly_api_key,fiskaly_api_secret').eq('tenant_id', tenantId).eq('environment', environment).maybeSingle();
   if (!cfg || cfg.issuer !== 'sign_es') return await fail('fiscal_config_missing', 409, "tenant_fiscal_config.issuer must be 'sign_es'");
@@ -169,9 +193,12 @@ Deno.serve(async (req) => {
   const invoiceId = await derivedUuidV4(`${checkoutId}:es-invoice`); // retry-stable
   const authH = { Authorization: `Bearer ${esToken}` };
   const simplified = { type: 'SIMPLIFIED', series: seriesName, number, text: (body.text ?? 'Venta TPV').slice(0, 250), full_amount: body.full_amount, items: body.items, ...(body.issued_at ? { issued_at: body.issued_at } : {}) };
+  // CORRECTING wrapper is ES-0-VERIFIED: {type, id:<original uuid>, code, method, invoice:<nested>}.
   const content = docType === 'COMPLETE'
     ? { type: 'COMPLETE', data: simplified, recipients: [{ id: { legal_name: body.recipient?.legal_name ?? 'Cliente', tax_number: (body.recipient?.nif ?? '').toUpperCase() }, address_line: body.recipient?.address_line ?? '-', postal_code: body.recipient?.postal_code ?? '-' }] }
-    : simplified;
+    : docType === 'CORRECTING'
+      ? { type: 'CORRECTING', id: originalInvoiceUuid, code: correctionCode, method: 'SUBSTITUTION', invoice: simplified }
+      : simplified;
 
   const persist = async (inv: unknown) => {
     const c = (inv as { content?: Record<string, unknown> })?.content ?? (inv as Record<string, unknown>);

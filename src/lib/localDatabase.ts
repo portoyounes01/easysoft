@@ -1961,6 +1961,11 @@ export class TransactionLocalService {
             externalDocumentId: ext.documentId,
             externalReference: ext.externalReference,
             officialOutput,
+            // Spain / SIGN ES: surface the Veri*factu legend to the receipt (providerMeta.legend,
+            // e.g. "QR tributario:|VERI*FACTU"); other providers leave it undefined.
+            verifactuLegend: ext.provider === 'sign_es'
+                ? (typeof ext.providerMeta?.legend === 'string' && ext.providerMeta.legend.trim() ? ext.providerMeta.legend : 'VERI*FACTU')
+                : undefined,
         };
     }
 

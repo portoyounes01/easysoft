@@ -877,6 +877,7 @@ const POSInner: React.FC = () => {
                 counter: settings.receipt.counterLabel,
                 ticketNumber: queueTicketNumber,
                 verificationCode: fiscal?.atcudBody || '',
+                verifactuLegend: fiscal?.verifactuLegend,
                 documentNumber: fiscal?.invoiceNo || '',
                 documentHash: fiscal?.hashBase64,
                 hashFourChars: fiscal?.hashFourChars,

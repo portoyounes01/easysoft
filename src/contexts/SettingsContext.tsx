@@ -276,7 +276,7 @@ export interface SystemSettings {
     };
     /** Portugal AT: signing, training mode, key version (HashControl). */
     fiscal: {
-        issuer: 'local_at' | 'vendus' | 'invoicexpress' | 'fiskaly';
+        issuer: 'local_at' | 'vendus' | 'invoicexpress' | 'fiskaly' | 'sign_es';
         hashControlVersion: string;
         /** RSA private key PKCS#8 PEM — dev/local; prefer secure storage in production */
         privateKeyPem?: string;

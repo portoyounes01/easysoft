@@ -51,7 +51,10 @@ export interface ReceiptProps {
   date: Date;
   counter: string;
   ticketNumber?: string;
-  verificationCode: string; // ATCUD body (e.g. CSDF7T5H-0001); printed as ATCUD: …
+  verificationCode: string; // ATCUD body (e.g. CSDF7T5H-0001); printed as ATCUD: …  (empty for ES)
+  /** Spain / Veri*factu legend (e.g. "VERI*FACTU"). When set, replaces the PT "…/AT" certified
+   *  line — the QR block already renders the AEAT validation QR from qrCodeData. */
+  verifactuLegend?: string;
   documentHash?: string; // Base64 RSA-SHA1 fiscal hash (optional / debug)
   /** Four signature chars (positions 1,11,21,31 of Base64 hash) */
   hashFourChars?: string;
@@ -97,6 +100,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   counter,
   ticketNumber,
   verificationCode,
+  verifactuLegend,
   documentHash,
   hashFourChars,
   qrCodeData,
@@ -608,13 +612,17 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       <div className="separator"></div>
 
-      {/* Legal — 4 hash chars (pos. 1,11,21,31), dash, then certification phrase (LogicPOS layout) */}
-      <div className="center small-text">
-        {t('thermalReceipt.certifiedLine', {
-          hashPrefix: hashFourChars?.trim() ? `${hashFourChars.trim()}-` : '',
-          num: certificationNumberForReceiptDisplay(certificationNumber),
-        })}
-      </div>
+      {/* Legal — ES: the Veri*factu legend; PT: 4 hash chars + AT certification phrase (LogicPOS layout) */}
+      {verifactuLegend?.trim() ? (
+        <div className="center small-text bold">{verifactuLegend.trim()}</div>
+      ) : (
+        <div className="center small-text">
+          {t('thermalReceipt.certifiedLine', {
+            hashPrefix: hashFourChars?.trim() ? `${hashFourChars.trim()}-` : '',
+            num: certificationNumberForReceiptDisplay(certificationNumber),
+          })}
+        </div>
+      )}
 
       {/* Order queue number — printed last, below a dashed separator. Only present
           on the freshly issued receipt; the back-office reprint omits it. */}

@@ -62,6 +62,17 @@ export async function runFiscalCheckout(params: {
         });
     }
 
+    if (settings.fiscal.issuer === 'sign_es') {
+        const { issueSignEsSale } = await import('./signEsFiscalIssuer');
+        return issueSignEsSale({
+            settings,
+            cart,
+            selectedCustomer,
+            payment,
+            globalDiscount,
+        });
+    }
+
     const invoiceTypeSaft = SALE_INVOICE_TYPE_SAFT;
     const receiptProfile = receiptProfileForSale(settings.receipt, invoiceTypeSaft);
     const draft = buildSaleCheckoutDraft({ cart, selectedCustomer, payment, globalDiscount });

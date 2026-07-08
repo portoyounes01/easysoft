@@ -417,6 +417,11 @@ const TransactionsInner: React.FC = () => {
             date,
             counter: settings.receipt.counterLabel,
             verificationCode,
+            // Spain / Veri*factu: the reprint detects an ES document by its at_validation_code and
+            // shows the VERI*FACTU legend (its QR is the persisted AEAT validation URL in qrPayload).
+            verifactuLegend: (fiscal?.at_validation_code ?? '').toUpperCase() === 'VERIFACTU'
+                ? (typeof meta?.external?.meta?.legend === 'string' && meta.external.meta.legend.trim() ? meta.external.meta.legend : 'VERI*FACTU')
+                : undefined,
             documentHash: fiscal?.hash_base64 ?? undefined,
             hashFourChars: fiscal?.hash_four_chars ?? meta?.hashFourChars,
             qrCodeData: qrPayload ?? undefined,

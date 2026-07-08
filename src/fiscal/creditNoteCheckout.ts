@@ -82,6 +82,16 @@ export async function runFiscalCreditNoteForTransaction(params: {
         });
     }
 
+    if (origFiscal.fiscal_provider === 'sign_es') {
+        const { issueSignEsCreditNoteForTransaction } = await import('./signEsFiscalIssuer');
+        return issueSignEsCreditNoteForTransaction({
+            settings,
+            originalTransactionId,
+            payment,
+            creditReason,
+        });
+    }
+
     const now = new Date();
     const transactionDate = now.toISOString().split('T')[0];
     const transactionTime = now.toTimeString().split(' ')[0];

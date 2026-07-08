@@ -4,7 +4,8 @@ import type { SaftFiscalDocumentType } from './spec';
 import type { FiscalSigner } from './signing';
 
 export type CertificationMode = 'production' | 'training';
-export type FiscalProvider = 'local_at' | 'vendus' | 'invoicexpress' | 'fiskaly';
+/** 'sign_es' = Spain / fiskaly SIGN ES (Veri*factu) issued via the pos-checkout-es edge fn (ES-3). */
+export type FiscalProvider = 'local_at' | 'vendus' | 'invoicexpress' | 'fiskaly' | 'sign_es';
 /** Cloud issuers that own numbering / ATCUD / hash / QR (everything except the local AT chain). */
 export type ExternalFiscalProvider = Exclude<FiscalProvider, 'local_at'>;
 
@@ -173,6 +174,8 @@ export interface FiscalCheckoutResult {
     externalDocumentId?: string;
     externalReference?: string;
     officialOutput?: FiscalOfficialOutput;
+    /** Spain / Veri*factu compliance legend for the receipt (e.g. "VERI*FACTU"); undefined for PT. */
+    verifactuLegend?: string;
 }
 
 /** Row slice for fiscal checkout before invoice / hash exist (filled inside atomic DB txn). */

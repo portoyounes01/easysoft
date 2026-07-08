@@ -1690,6 +1690,7 @@ const Settings: React.FC = () => {
                             { value: 'vendus', label: 'Vendus', description: t('settings.issuerVendusDesc') },
                             { value: 'invoicexpress', label: 'InvoiceXpress', description: t('settings.issuerIxDesc') },
                             { value: 'fiskaly', label: 'Fiskaly', description: t('settings.issuerFiskalyDesc') },
+                            { value: 'sign_es', label: 'SIGN ES (España)', description: t('settings.issuerSignEsDesc', { defaultValue: 'España — fiskaly SIGN ES / Veri*factu (facturas simplificadas + rectificativas).' }) },
                         ]}
                     />
                 </SettingsRow>

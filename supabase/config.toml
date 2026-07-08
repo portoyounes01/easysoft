@@ -464,6 +464,14 @@ verify_jwt = false
 import_map = "./functions/import_map.json"
 entrypoint = "./functions/reconcile-verifactu/index.ts"
 
+# provision-sign-es: one-call Spain onboarding (managed org -> key -> taxpayer -> signer -> clients
+# -> persisted config/secrets). Owner/admin human session required; tenant forced from the JWT.
+[functions.provision-sign-es]
+enabled = true
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/provision-sign-es/index.ts"
+
 # --- Notifications P3b/P3d ---
 # notify-push is invoked by the pg delivery trigger + cron backstop (no user JWT); it gates on a
 # shared-secret header (x-webhook-secret) instead. verify_jwt MUST be false or the trigger's call is rejected.
