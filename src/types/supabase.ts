@@ -591,6 +591,21 @@ export const IVA_RATES = [
 
 export type IVARate = typeof IVA_RATES[number]['value'];
 
+// Spanish IVA rates (ES-1, Veri*factu track — docs/fiskaly-strategy-brief.md). The server
+// column is a generic NUMERIC(5,4), so rate sets are a per-country UI concern. NOTE: recargo
+// de equivalencia (per-line surcharge for equivalence-regime retailers) is deliberately NOT
+// modeled on products — loudly deferred, REGISTER D-ES1.
+export const ES_IVA_RATES = [
+    { value: 0.00, label: '0% (Exento/0%)', description: 'Exempt or 0%-rated essentials' },
+    { value: 0.04, label: '4% (Superreducido)', description: 'Basic necessities: bread, milk, books, medicines' },
+    { value: 0.10, label: '10% (Reducido)', description: 'Food, hospitality, passenger transport' },
+    { value: 0.21, label: '21% (General)', description: 'Most goods and services' }
+] as const;
+
+// Country-aware rate list for product/tax UIs (falls back to PT, the current default market).
+export const ivaRatesForCountry = (country: string | null | undefined) =>
+    (country || 'PT').toUpperCase() === 'ES' ? ES_IVA_RATES : IVA_RATES;
+
 // Stock status calculation helper
 export const calculateStockStatus = (product: Pick<ProductRow, 'stock' | 'min_stock' | 'track_stock'>): 'in_stock' | 'low_stock' | 'out_of_stock' => {
     if (!readPosTrackInventoryFromStorage() || !product.track_stock) return 'in_stock';
