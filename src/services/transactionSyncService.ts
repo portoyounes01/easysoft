@@ -254,8 +254,21 @@ export class TransactionSyncService {
                             results.push({ transactionId: transaction.id, success: false, error: error.message });
                         }
                     } else {
-                        console.log(`TransactionSync: Successfully pushed transaction ${transaction.id}`);
-                        results.push({ transactionId: transaction.id, success: true, result });
+                        // HTTP 200 is NOT success: the RPC catches per-row errors and returns
+                        // [{transaction_id, success, error}] with success=false (e.g. the credit-note
+                        // 'transaction_id is ambiguous' failure). Trusting the transport marked failed
+                        // rows as synced -> the row was never retried: SILENT FISCAL DATA LOSS.
+                        const row = Array.isArray(result)
+                            ? (result[0] as { success?: boolean; error?: string | null } | undefined)
+                            : null;
+                        const rowOk = row ? row.success === true : true; // older fn shapes return no row set
+                        if (rowOk) {
+                            console.log(`TransactionSync: Successfully pushed transaction ${transaction.id}`);
+                            results.push({ transactionId: transaction.id, success: true, result });
+                        } else {
+                            console.error(`TransactionSync: Server rejected transaction ${transaction.id}:`, row?.error);
+                            results.push({ transactionId: transaction.id, success: false, error: row?.error ?? 'server_rejected' });
+                        }
                     }
                 } catch (error) {
                     console.error(`TransactionSync: Error processing transaction ${transaction.id}:`, error);
