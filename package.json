@@ -129,8 +129,7 @@
             "x64"
           ]
         }
-      ],
-      "icon": "public/icon.ico"
+      ]
     },
     "linux": {
       "target": [
