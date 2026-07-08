@@ -74,36 +74,36 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">{t('dashboard.title')}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">{t('dashboard.title')}</h1>
           <p className="text-gray-600 mt-1">{t('dashboard.welcome')}</p>
         </div>
-        <div className="flex items-center space-x-2 bg-blue-50 px-4 py-2 rounded-lg">
-          <Calendar className="w-5 h-5 text-blue-600" />
+        <div className="flex items-center space-x-2 bg-blue-50 px-4 py-2 rounded-lg self-start sm:self-auto whitespace-nowrap">
+          <Calendar className="w-5 h-5 text-blue-600 shrink-0" />
           <span className="text-blue-800 font-medium">{todayStr}</span>
         </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           return (
-            <div key={index} className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 rounded-lg ${stat.bgColor}`}>
-                  <Icon className="w-6 h-6 text-white" />
+            <div key={index} className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <div className={`p-2.5 sm:p-3 rounded-lg ${stat.bgColor}`}>
+                  <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
-                <span className={`text-sm font-semibold px-2 py-1 rounded-full ${stat.changeType === 'positive'
+                <span className={`text-xs sm:text-sm font-semibold px-2 py-1 rounded-full ${stat.changeType === 'positive'
                     ? 'text-green-700 bg-green-100'
                     : 'text-red-700 bg-red-100'
                   }`}>
                   {stat.change}
                 </span>
               </div>
-              <h3 className="text-2xl font-bold text-gray-800 mb-1">{stat.value}</h3>
-              <p className="text-gray-600 text-sm">{stat.title}</p>
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-1">{stat.value}</h3>
+              <p className="text-gray-600 text-xs sm:text-sm">{stat.title}</p>
             </div>
           );
         })}

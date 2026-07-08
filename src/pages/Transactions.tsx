@@ -688,8 +688,8 @@ const TransactionsInner: React.FC = () => {
 
                 {/* Summary Stats */}
                 {!loading && !error && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-600">{t('transactions.summary.totalTransactions')}</p>
@@ -701,7 +701,7 @@ const TransactionsInner: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-600">{t('transactions.summary.totalRevenue')}</p>
@@ -713,7 +713,7 @@ const TransactionsInner: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-600">{t('transactions.summary.averageTransaction')}</p>
@@ -725,7 +725,7 @@ const TransactionsInner: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-600">{t('transactions.summary.completed')}</p>
@@ -740,7 +740,7 @@ const TransactionsInner: React.FC = () => {
                 )}
 
                 {/* Filters */}
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div className="flex flex-1 items-center space-x-4">
                             <div className="relative flex-1 max-w-md">
