@@ -1,3 +1,8 @@
+> ⚰️ **SUPERSEDED 2026-07-08 — DO NOT SEND.** fiskaly (Eduardo Jacobo, email 2026-07-06)
+> says Portugal + Belgium will be served by the **UAPI** (unified EU API), not SIGN PT,
+> and Spain (SIGN ES) is the urgent integration. Kept for account-identifier reference
+> only. See `docs/REGISTER.md` B12→B14/B15.
+
 # fiskaly request — enable SIGN PT (Portugal) in TEST
 
 **Why saved:** verified 2026-07-06 that the fiskaly account has no SIGN PT product
