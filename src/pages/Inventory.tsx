@@ -160,7 +160,7 @@ const Inventory: React.FC = () => {
 
             {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <SummaryCard icon={Boxes} label={t('inventory.rawItems')} value={String(materials.filter(m => m.is_active).length)} />
                 <SummaryCard icon={AlertTriangle} label={t('inventory.lowOnStock')} value={String(lowStock.length)} warning={lowStock.length > 0} />
             </div>

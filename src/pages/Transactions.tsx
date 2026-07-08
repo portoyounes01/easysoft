@@ -831,39 +831,39 @@ const TransactionsInner: React.FC = () => {
                         ) : (
                             <div className="divide-y divide-gray-200">
                                 {filteredTransactions.map((transaction) => (
-                                    <div key={transaction.id} className="px-6 py-4">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center space-x-4">
-                                                <div className="bg-gray-100 p-2 rounded-lg">
+                                    <div key={transaction.id} className="px-4 py-4 sm:px-6">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex min-w-0 items-start gap-3 sm:items-center sm:space-x-1">
+                                                <div className="bg-gray-100 p-2 rounded-lg shrink-0">
                                                     {getPaymentMethodIcon(transaction.paymentMethod)}
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <div className="flex items-center space-x-2 flex-wrap gap-1">
                                                         <h3 className="font-semibold text-gray-900">{transaction.transactionNumber}</h3>
                                                         <span className={getStatusBadge(transaction.status)}>
                                                             {transaction.status.replace('_', ' ')}
                                                         </span>
                                                     </div>
-                                                    <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
+                                                    <div className="flex flex-col gap-1 text-sm text-gray-600 mt-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
                                                         <span className="flex items-center space-x-1">
-                                                            <Calendar className="w-3 h-3" />
+                                                            <Calendar className="w-3 h-3 shrink-0" />
                                                             <span>{formatDate(transaction.date)} {t('transactions.list.dateAt')} {transaction.time}</span>
                                                         </span>
                                                         {transaction.customerName && (
-                                                            <span className="flex items-center space-x-1">
-                                                                <User className="w-3 h-3" />
-                                                                <span>{transaction.customerName}</span>
+                                                            <span className="flex items-center space-x-1 min-w-0">
+                                                                <User className="w-3 h-3 shrink-0" />
+                                                                <span className="truncate">{transaction.customerName}</span>
                                                             </span>
                                                         )}
-                                                        <span className="flex items-center space-x-1">
-                                                            <Users className="w-3 h-3" />
-                                                            <span>{transaction.employeeName}</span>
+                                                        <span className="flex items-center space-x-1 min-w-0">
+                                                            <Users className="w-3 h-3 shrink-0" />
+                                                            <span className="truncate">{transaction.employeeName}</span>
                                                         </span>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center space-x-4">
+                                            <div className="flex items-center gap-2 shrink-0 sm:space-x-4">
                                                 <div className="text-right">
                                                     <p className="text-lg font-bold text-gray-900">{formatCurrency(transaction.total)}</p>
                                                     <p className="text-sm text-gray-500">{transaction.items.length} {transaction.items.length !== 1 ? t('transactions.list.itemPlural') : t('transactions.list.itemSingular')}</p>

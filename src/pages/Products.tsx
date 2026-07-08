@@ -376,7 +376,7 @@ const ProductsInner: React.FC = () => {
           </div>
         </div>
 
-        <div className={`overflow-x-auto ${layoutClasses.contentInsetX}`}>
+        <div className={`hidden overflow-x-auto md:block ${layoutClasses.contentInsetX}`}>
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
@@ -515,6 +515,97 @@ const ProductsInner: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile: table reflowed to a card list (desktop <table> above is hidden < md) */}
+        <div className={`space-y-2.5 pb-1 md:hidden ${layoutClasses.contentInsetX}`}>
+          {paginatedProducts.map((product) => (
+            <div key={product.id} className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                  <Package className="h-4 w-4 text-gray-300" />
+                  {product.image_url && (
+                    <img
+                      src={product.image_url}
+                      alt={product.name}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewingProduct(product)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-semibold text-gray-900">{product.name}</span>
+                    {getExtendedStatusBadge(product)}
+                  </div>
+                  <div className="mt-0.5 font-mono text-[11px] text-gray-400">
+                    #{String(product.sku || product.id.slice(0, 8)).toUpperCase()}
+                  </div>
+                  <div className="mt-0.5 text-xs text-gray-500">
+                    {categoryIdToName.get(product.category_id || '') || t('products.table.noCategory')}
+                  </div>
+                </button>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <span className="font-semibold tabular-nums text-gray-900">€{product.price.toFixed(2)}</span>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setOpenMenuProductId(openMenuProductId === product.id ? null : product.id)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
+                      aria-haspopup="menu"
+                      aria-expanded={openMenuProductId === product.id}
+                      title={t('products.table.actionsTitle')}
+                    >
+                      <MoreVertical className="h-5 w-5" />
+                    </button>
+                    {openMenuProductId === product.id && (
+                      <div className="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setViewingProduct(product);
+                            setOpenMenuProductId(null);
+                          }}
+                          className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {t('products.table.view')}
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            handleEditProduct(product);
+                            setOpenMenuProductId(null);
+                          }}
+                          className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          {t('products.table.edit')}
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setOpenMenuProductId(null);
+                            handleDeleteProduct(product.id);
+                          }}
+                          className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
+                        >
+                          {t('products.table.delete')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
 
         <div

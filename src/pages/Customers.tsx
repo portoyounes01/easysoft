@@ -276,7 +276,7 @@ const CustomersInner: React.FC = () => {
           </div>
         </div>
 
-        <div className={`overflow-x-auto ${layoutClasses.contentInsetX}`}>
+        <div className={`hidden overflow-x-auto md:block ${layoutClasses.contentInsetX}`}>
           <table className="w-full min-w-[1280px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
@@ -352,6 +352,59 @@ const CustomersInner: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile: table reflowed to a card list (desktop <table> above is hidden < md) */}
+        <div className={`space-y-2.5 pb-1 md:hidden ${layoutClasses.contentInsetX}`}>
+          {paginatedCustomers.map(customer => (
+            <div key={customer.id} className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setViewingCustomer(customer)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-semibold text-gray-900">{customer.name}</span>
+                    {statusBadge(customer)}
+                  </div>
+                  <div className="mt-0.5 font-mono text-xs text-gray-500">{customer.tax_number ?? '—'}</div>
+                  {customer.email && <div className="mt-1 truncate text-xs text-gray-600">{customer.email}</div>}
+                  {customer.phone && <div className="text-xs text-gray-600">{customer.phone}</div>}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    {customer.city && <span>{customer.city}</span>}
+                    <span className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 font-semibold tabular-nums text-emerald-800">
+                      {customer.loyalty_points.toLocaleString()} pts
+                    </span>
+                  </div>
+                </button>
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setOpenMenuCustomerId(openMenuCustomerId === customer.id ? null : customer.id)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
+                    aria-haspopup="menu"
+                    aria-expanded={openMenuCustomerId === customer.id}
+                  >
+                    <MoreVertical className="h-5 w-5" />
+                  </button>
+                  {openMenuCustomerId === customer.id && (
+                    <div className="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg" role="menu">
+                      <button type="button" className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50" onClick={() => { setViewingCustomer(customer); setOpenMenuCustomerId(null); }}>
+                        {t('customers.table.view')}
+                      </button>
+                      <button type="button" className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50" onClick={() => { handleEditCustomer(customer); setOpenMenuCustomerId(null); }}>
+                        {t('customers.table.edit')}
+                      </button>
+                      <button type="button" className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50" onClick={() => { setOpenMenuCustomerId(null); void handleDeleteCustomer(customer.id); }}>
+                        {t('customers.table.delete')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className={`flex flex-col justify-between gap-4 border-t border-gray-100 py-3 sm:flex-row sm:items-center ${layoutClasses.contentInsetX}`}>
