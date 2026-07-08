@@ -25,7 +25,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          # >=22.12 required by @electron/rebuild@4 (and >=20 by @serialport/*@13); under Node 18
+          # the bundled node-gyp misreports "Could not find any Visual Studio installation" on the
+          # windows-latest runner (which has VS 2022). Do NOT install VS / set --msvs-version.
+          node-version: "22"
           cache: "npm"
 
       - name: Install dependencies
