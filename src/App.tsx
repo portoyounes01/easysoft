@@ -9,7 +9,6 @@ import LoginForm2 from './components/Auth/LoginForm2';
 import LoginFormPwa from './components/Auth/LoginFormPwa';
 import { HostRoute, PWA_LANDING } from './components/routing/HostRoute';
 import { isPwaHost } from './lib/host';
-import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
 import POS2 from './pages/POS2';
 import Products from './pages/Products';
@@ -154,13 +153,10 @@ const AppContent: React.FC = () => {
                       </HostRoute>
                     }
                   />
+                  {/* Dashboard removed (was mock/placeholder) — '/' routes to the host landing. */}
                   <Route
                     path="/"
-                    element={
-                      <PermissionRoute permission="dashboard">
-                        <Dashboard />
-                      </PermissionRoute>
-                    }
+                    element={<Navigate to={isPwaHost ? PWA_LANDING : '/pos'} replace />}
                   />
                   <Route
                     path="/products"

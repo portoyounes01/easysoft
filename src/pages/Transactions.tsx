@@ -26,6 +26,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import ReceiptDialog from '../components/ReceiptDialog';
+import ReceiptPdfRenderer from '../components/ReceiptPdfRenderer';
 import CustomInvoiceDialog, { type CustomInvoicePayload } from '../components/CustomInvoiceDialog';
 import type { ReceiptProps } from '../components/ThermalReceipt';
 import { usePOS } from '../contexts/POSContext';
@@ -163,6 +164,7 @@ const TransactionsInner: React.FC = () => {
 
     const [showReceiptPreview, setShowReceiptPreview] = useState(false);
     const [receiptPreviewData, setReceiptPreviewData] = useState<ReceiptProps | null>(null);
+    const [pdfJob, setPdfJob] = useState<{ receipt: ReceiptProps; filename: string } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedStatus, setSelectedStatus] = useState('all');
@@ -523,34 +525,26 @@ const TransactionsInner: React.FC = () => {
         }
     };
 
-    const handleDownloadTransaction = (tx: Transaction) => {
-        const payload = {
-            transactionNumber: tx.transactionNumber,
-            date: tx.date,
-            time: tx.time,
-            customerName: tx.customerName,
-            customerNif: tx.customerNif,
-            employeeName: tx.employeeName,
-            status: tx.status,
-            paymentMethod: tx.paymentMethod,
-            items: tx.items,
-            subtotal: tx.subtotal,
-            discount: tx.discount,
-            tax: tx.tax,
-            total: tx.total,
-            cashReceived: tx.cashReceived,
-            changeGiven: tx.changeGiven,
-        };
-        const blob = new Blob([JSON.stringify(payload, null, 2)], {
-            type: 'application/json;charset=utf-8',
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const safe = tx.transactionNumber.replace(/[^\w-]+/g, '_').slice(0, 80);
-        a.download = `transaction-${safe || tx.id}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+    // Download = the actual receipt as a PDF (was a raw JSON dump). Builds the same
+    // ReceiptProps as the on-screen preview, pre-generates the QR, and hands off to the
+    // off-screen ReceiptPdfRenderer (html2canvas + jsPDF, lazily loaded).
+    const handleDownloadTransaction = async (tx: Transaction) => {
+        if (pdfJob) return; // one at a time
+        try {
+            const receipt = await buildReceiptPropsForTransaction(tx.id, undefined);
+            if (!receipt) return;
+            if (receipt.qrCodeData && !receipt.qrCodeImage) {
+                try {
+                    receipt.qrCodeImage = await generateQRCodeImage(receipt.qrCodeData);
+                } catch {
+                    /* renderer's img-decode wait covers the async fallback */
+                }
+            }
+            const safe = (receipt.documentNumber || tx.transactionNumber).replace(/[^\w-]+/g, '_').slice(0, 80);
+            setPdfJob({ receipt, filename: `${safe || tx.id}.pdf` });
+        } catch (e) {
+            console.error('Failed to prepare receipt PDF:', e);
+        }
     };
 
     // Issue a fatura (FT) for free-text line items not tied to catalogue products.
@@ -644,19 +638,19 @@ const TransactionsInner: React.FC = () => {
                         <h1 className="text-3xl font-bold text-gray-900">{t('transactions.header.title')}</h1>
                         <p className="text-gray-600 mt-1">{t('transactions.header.subtitle')}</p>
                     </div>
-                    <div className="mt-4 flex items-center space-x-3 sm:mt-0">
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-0 sm:flex sm:items-center sm:gap-3">
                         <AdminActionButton
                             variant="outline"
                             label={t('transactions.customInvoice.button')}
                             icon={FilePlus}
                             onClick={() => setShowCustomInvoice(true)}
-                            className={toolbarBtn}
+                            className={`${toolbarBtn} w-full sm:w-auto`}
                         />
                         <AdminActionButton
                             variant="primary"
                             label={t('transactions.header.export')}
                             icon={Download}
-                            className={headerPrimaryBtn}
+                            className={`${headerPrimaryBtn} w-full sm:w-auto`}
                         />
                     </div>
                 </div>
@@ -742,8 +736,9 @@ const TransactionsInner: React.FC = () => {
                 {/* Filters */}
                 <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div className="flex flex-1 items-center space-x-4">
-                            <div className="relative flex-1 max-w-md">
+                        {/* Mobile: full-width search on its own row, then Filters/Refresh 2-up; sm: restores the desktop row. */}
+                        <div className="flex flex-col gap-3 sm:flex-1 sm:flex-row sm:items-center sm:gap-4">
+                            <div className="relative w-full sm:flex-1 sm:max-w-md">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
@@ -753,23 +748,25 @@ const TransactionsInner: React.FC = () => {
                                     className="ds2-control-radius-lg ds2-toolbar-control-h box-border w-full max-w-md border border-gray-300 pl-10 pr-4 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
-                            <AdminActionButton
-                                variant="outline"
-                                label={t('transactions.filters.filters')}
-                                icon={Filter}
-                                showChevron={true}
-                                onClick={() => setShowFilters(!showFilters)}
-                                className={toolbarBtn}
-                            />
-                            <AdminActionButton
-                                variant="outline"
-                                label={t('transactions.refresh')}
-                                icon={Receipt}
-                                onClick={() => void loadTransactions()}
-                                disabled={loading}
-                                title={t('transactions.refreshTooltip')}
-                                className={toolbarBtn}
-                            />
+                            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
+                                <AdminActionButton
+                                    variant="outline"
+                                    label={t('transactions.filters.filters')}
+                                    icon={Filter}
+                                    showChevron={true}
+                                    onClick={() => setShowFilters(!showFilters)}
+                                    className={`${toolbarBtn} w-full sm:w-auto`}
+                                />
+                                <AdminActionButton
+                                    variant="outline"
+                                    label={t('transactions.refresh')}
+                                    icon={Receipt}
+                                    onClick={() => void loadTransactions()}
+                                    disabled={loading}
+                                    title={t('transactions.refreshTooltip')}
+                                    className={`${toolbarBtn} w-full sm:w-auto`}
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -984,7 +981,7 @@ const TransactionsInner: React.FC = () => {
                                                         variant="outline"
                                                         label={t('transactions.list.download')}
                                                         icon={Download}
-                                                        onClick={() => handleDownloadTransaction(transaction)}
+                                                        onClick={() => void handleDownloadTransaction(transaction)}
                                                         className={rowActionBtn}
                                                     />
                                                 </div>
@@ -1001,6 +998,13 @@ const TransactionsInner: React.FC = () => {
                         open={showReceiptPreview}
                         onClose={() => setShowReceiptPreview(false)}
                         receipt={receiptPreviewData}
+                    />
+                )}
+                {pdfJob && (
+                    <ReceiptPdfRenderer
+                        receipt={pdfJob.receipt}
+                        filename={pdfJob.filename}
+                        onDone={() => setPdfJob(null)}
                     />
                 )}
                 <CustomInvoiceDialog

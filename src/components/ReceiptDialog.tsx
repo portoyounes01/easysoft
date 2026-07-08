@@ -68,7 +68,9 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({ open, onClose, receipt, p
             open={open}
             onClose={handleClose}
             title={t('pos.receiptPreview') || 'Receipt Preview'}
-            width="50vw"
+            // 50vw broke on phones (≈195px, receipt crushed). max() keeps desktop at exactly
+            // 50vw (720px@1440 wins the max) while phones get min(95vw, 640px).
+            width="max(50vw, min(95vw, 640px))"
             height="90vh"
             className="max-w-[95vw]"
             footer={

@@ -267,16 +267,17 @@ const ProductsInner: React.FC = () => {
               aria-label={t('products.header.searchPlaceholder')}
             />
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {/* Mobile: 2×2 action grid (equal touch targets); sm: restores the desktop flex row. */}
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:flex-wrap sm:items-center">
             <AdminActionButton
               variant="outline"
               type="button"
               icon={ScanLine}
               label={t('products.importPurchase')}
               onClick={() => setShowPurchaseImport(true)}
-              className={toolbarBtn}
+              className={`${toolbarBtn} w-full sm:w-auto`}
             />
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <AdminActionButton
                 variant="outline"
                 type="button"
@@ -286,7 +287,7 @@ const ProductsInner: React.FC = () => {
                   setShowSortMenu((prev) => !prev);
                   setShowFilterMenu(false);
                 }}
-                className={toolbarBtn}
+                className={`${toolbarBtn} w-full sm:w-auto`}
               />
               {showSortMenu && (
                 <div className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
@@ -314,7 +315,7 @@ const ProductsInner: React.FC = () => {
               )}
             </div>
 
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <AdminActionButton
                 variant="outline"
                 type="button"
@@ -324,7 +325,7 @@ const ProductsInner: React.FC = () => {
                   setShowFilterMenu((prev) => !prev);
                   setShowSortMenu(false);
                 }}
-                className={toolbarBtn}
+                className={`${toolbarBtn} w-full sm:w-auto`}
               />
               {showFilterMenu && (
                 <div className="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-gray-200 bg-white p-4 shadow-lg">
@@ -347,7 +348,7 @@ const ProductsInner: React.FC = () => {
               )}
             </div>
 
-            <div className="relative sm:ml-0">
+            <div className="relative w-full sm:ml-0 sm:w-auto">
               <AdminActionButton
                 variant="primary"
                 type="button"

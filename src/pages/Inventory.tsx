@@ -169,7 +169,57 @@ const Inventory: React.FC = () => {
                 {filtered.length === 0 ? (
                     <div className="p-10 text-center text-slate-500">{t('inventory.emptyState')}</div>
                 ) : (
-                    <table className="w-full text-left text-sm">
+                    <>
+                    {/* Mobile: 6-column table reflowed to cards (was crushed inside overflow-hidden at 390px) */}
+                    <div className="divide-y divide-slate-100 md:hidden">
+                        {filtered.map(material => {
+                            const low = material.min_stock > 0 && material.stock <= material.min_stock;
+                            return (
+                                <div key={material.id} className={`p-4 ${material.is_active ? '' : 'opacity-50'}`}>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="font-semibold text-slate-950">{material.name}</div>
+                                            {material.supplier && <div className="text-xs text-slate-400">{material.supplier}</div>}
+                                            {!material.is_active && <span className="text-xs text-slate-400">{t('inventory.inactiveTag')}</span>}
+                                        </div>
+                                        <div className="shrink-0 text-right">
+                                            <span className={`font-semibold ${low ? 'text-amber-600' : 'text-slate-950'}`}>
+                                                {material.stock} {material.unit}
+                                                {low && <AlertTriangle className="ml-1 inline h-4 w-4" />}
+                                            </span>
+                                            {material.min_stock > 0 && (
+                                                <div className="text-xs text-slate-400">{t('inventory.minStock', { value: material.min_stock })}</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between gap-3">
+                                        <div className="text-xs text-slate-500">
+                                            {currency}{material.cost.toFixed(2)}/{material.unit}
+                                            <span className="mx-1.5 text-slate-300">·</span>
+                                            {t('inventory.columnStockValue')}: {currency}{(material.cost * material.stock).toFixed(2)}
+                                        </div>
+                                        <div className="flex shrink-0 gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setAdjusting(material); setAdjustValue(String(material.stock)); }}
+                                                className="flex min-h-touch-xs items-center gap-1 rounded-xl bg-slate-100 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                                            >
+                                                <SlidersHorizontal className="h-4 w-4" /> {t('inventory.adjust')}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => openEdit(material)}
+                                                className="flex min-h-touch-xs items-center gap-1 rounded-xl bg-slate-100 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+                                            >
+                                                <Pencil className="h-4 w-4" /> {t('inventory.edit')}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <table className="hidden w-full text-left text-sm md:table">
                         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                             <tr>
                                 <th className="px-5 py-3">{t('inventory.columnItem')}</th>
@@ -225,6 +275,7 @@ const Inventory: React.FC = () => {
                             })}
                         </tbody>
                     </table>
+                    </>
                 )}
             </section>
 
