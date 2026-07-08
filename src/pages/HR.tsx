@@ -395,7 +395,7 @@ const HR: React.FC = () => {
 
             {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>}
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <SummaryCard icon={UsersRound} label={t('hr.activeEmployees')} value={String(employees.length)} />
                 <SummaryCard icon={AlertTriangle} label={t('hr.contractsExpiringSoon')} value={String(expiringContracts.length)} warning={expiringContracts.length > 0} />
             </div>

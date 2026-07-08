@@ -632,9 +632,9 @@ const EmployeesInner: React.FC = () => {
                 </div>
             )}
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-800">{t('employees.header.title')}</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">{t('employees.header.title')}</h1>
                     <p className="text-gray-600 mt-1">{t('employees.header.subtitle')}</p>
                 </div>
                 <AdminActionButton
@@ -642,7 +642,7 @@ const EmployeesInner: React.FC = () => {
                     label={t('employees.header.addEmployee')}
                     icon={Plus}
                     onClick={handleAddEmployee}
-                    className={headerPrimaryBtn}
+                    className={`${headerPrimaryBtn} self-start sm:self-auto`}
                 />
             </div>
 
