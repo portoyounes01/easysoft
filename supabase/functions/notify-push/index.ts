@@ -17,6 +17,7 @@ const CRITICAL_COPY: Record<string, { title: string; body: (p: Record<string, un
   FISCAL_CANCELLATION: { title: 'Fiscal cancellation', body: (p) => `Document ${p.transaction_number ? '#' + p.transaction_number : ''} was cancelled.` },
   FISCAL_ISSUE_FAILED: { title: 'Fiscal issuing failed', body: (p) => (typeof p.error === 'string' && p.error ? p.error : 'A sale could not be fiscalised.') },
   CREDIT_NOTE_ISSUED: { title: 'Credit note issued', body: (p) => `Credit note ${p.transaction_number ? '#' + p.transaction_number : ''} issued${euro(p.total)}`.trim() },
+  VERIFACTU_REJECTED: { title: 'Veri*factu rejected by AEAT', body: (p) => `${p.series ? p.series + '/' + (p.number ?? '') + ' — ' : ''}${typeof p.error === 'string' && p.error ? p.error : 'AEAT rejected the invoice registration; a corrective invoice is required.'}`.slice(0, 200) },
 };
 
 Deno.serve(async (req) => {

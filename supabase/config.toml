@@ -448,6 +448,22 @@ verify_jwt = true
 import_map = "./functions/import_map.json"
 entrypoint = "./functions/provision-human/index.ts"
 
+# --- Spain / SIGN ES (ES-2) ---
+# pos-checkout-es issues Veri*factu invoices; only a paired till (device session) checks out,
+# so the gateway verifies the JWT and the fn re-checks device enrollment + derives tenant/store/device.
+[functions.pos-checkout-es]
+enabled = true
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/pos-checkout-es/index.ts"
+
+# reconcile-verifactu is invoked by the per-minute cron (no user JWT); gates on a shared-secret header.
+[functions.reconcile-verifactu]
+enabled = true
+verify_jwt = false
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/reconcile-verifactu/index.ts"
+
 # --- Notifications P3b/P3d ---
 # notify-push is invoked by the pg delivery trigger + cron backstop (no user JWT); it gates on a
 # shared-secret header (x-webhook-secret) instead. verify_jwt MUST be false or the trigger's call is rejected.

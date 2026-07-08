@@ -1,6 +1,6 @@
 import {
   RefreshCcw, XOctagon, Percent, Archive, DoorOpen, Tag, MonitorSmartphone,
-  ShieldOff, KeyRound, FileDown, FileWarning, GraduationCap, WifiOff, Wifi, Bell,
+  ShieldOff, KeyRound, FileDown, FileWarning, GraduationCap, WifiOff, Wifi, Bell, ScanLine,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -39,6 +39,7 @@ export const NOTIFICATION_META: Record<string, { icon: LucideIcon; title: string
   TRAINING_MODE_CHANGED: { icon: GraduationCap, title: 'Training mode changed' },
   DEVICE_OFFLINE: { icon: WifiOff, title: 'Till offline' },
   DEVICE_ONLINE: { icon: Wifi, title: 'Till back online' },
+  VERIFACTU_REJECTED: { icon: ScanLine, title: 'Veri*factu rejected' },
 };
 
 export function notificationMeta(type: string): { icon: LucideIcon; title: string } {
@@ -72,6 +73,8 @@ export function notificationDescription(e: NotificationEvent): string {
         .filter(Boolean).join(' · ');
     case 'FISCAL_ISSUE_FAILED':
       return typeof p.error === 'string' && p.error ? p.error : 'Fiscal issuing failed';
+    case 'VERIFACTU_REJECTED':
+      return [p.series && p.number ? `${p.series}/${p.number}` : '', typeof p.error === 'string' ? p.error : `AEAT: ${p.state ?? 'rejected'}`].filter(Boolean).join(' · ');
     case 'DRAWER_OPEN_NO_SALE':
       return typeof p.reason === 'string' ? p.reason : 'Drawer opened with no sale attached';
     case 'DEVICE_OFFLINE':
