@@ -17,7 +17,8 @@ import {
     UserCheck,
     UserX,
     Copy,
-    Banknote
+    Banknote,
+    X
 } from 'lucide-react';
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
@@ -37,6 +38,7 @@ import {
 } from '../utils/accessPermissions';
 import { isSystemAdministrator } from '../utils/systemAdmin';
 import { formatCurrency } from '../lib/countryProfile';
+import { useIsMobile } from '../hooks/useIsMobile';
 import '../styles/design-system-2-scope.css';
 
 const EmployeesInner: React.FC = () => {
@@ -73,6 +75,9 @@ const EmployeesInner: React.FC = () => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState<Employee | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+    const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+    const employeeFormSnapshotRef = useRef<string>('');
+    const isMobileViewport = useIsMobile();
     const [showDatabaseReset, setShowDatabaseReset] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -529,6 +534,23 @@ const EmployeesInner: React.FC = () => {
         setOpenDropdown(openDropdown === employeeId ? null : employeeId);
     };
 
+    // Mobile form sheet: snapshot the form when it opens so the X can warn on unsaved edits.
+    useEffect(() => {
+        if (showEmployeeForm) {
+            employeeFormSnapshotRef.current = JSON.stringify(formData);
+            setShowDiscardConfirm(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showEmployeeForm]);
+
+    const requestCloseEmployeeForm = () => {
+        if (JSON.stringify(formData) !== employeeFormSnapshotRef.current) {
+            setShowDiscardConfirm(true);
+        } else {
+            handleCloseForm();
+        }
+    };
+
     /**
      * Kebab actions menu (edit / copy number / (de)activate / delete), shared by the desktop
      * card and the mobile list row. `menuId` must be unique per rendered instance (the mobile
@@ -935,34 +957,11 @@ const EmployeesInner: React.FC = () => {
             </div>
 
             {/* Employee Form Modal */}
-            {showEmployeeForm && (
-                <BaseDialog
-                    open={showEmployeeForm}
-                    onClose={handleCloseForm}
-                    title={editingEmployee ? t('employees.actions.editTitle') : t('employees.actions.addTitle')}
-                    width="55vw"
-                    height="85vh"
-                    footer={
-                        <div className="flex space-x-4">
-                            <ActionButton
-                                type="button"
-                                onClick={handleCloseForm}
-                                label={t('employees.form.cancel')}
-                                variant="secondary"
-                                className="flex-1"
-                                style={{ height: '5vh', fontSize: '1.6vh' }}
-                            />
-                            <ActionButton
-                                type="submit"
-                                form="employee-form"
-                                disabled={isSubmitting}
-                                label={isSubmitting ? t('employees.form.saving') : editingEmployee ? t('employees.form.update') : t('employees.form.create')}
-                                className="flex-1"
-                                style={{ height: '5vh', fontSize: '1.6vh' }}
-                            />
-                        </div>
-                    }
-                >
+            {showEmployeeForm && (() => {
+                // Shared form body: the tablet/terminal BaseDialog below renders it UNCHANGED;
+                // mobile wraps the same children in a full-screen sheet (X top-left + sticky
+                // full-width "Save Changes", per the mobile form pattern).
+                const formShellChildren = (
                     <div className="flex h-full flex-col">
                         {formData.employee_number && (
                             <div className="px-6 pt-5 text-sm font-medium text-gray-600">
@@ -1159,8 +1158,111 @@ const EmployeesInner: React.FC = () => {
 
                                 </form>
                     </div>
-                </BaseDialog>
-            )}
+                );
+
+                if (!isMobileViewport) {
+                    return (
+                        <BaseDialog
+                            open={showEmployeeForm}
+                            onClose={handleCloseForm}
+                            title={editingEmployee ? t('employees.actions.editTitle') : t('employees.actions.addTitle')}
+                            width="55vw"
+                            height="85vh"
+                            footer={
+                                <div className="flex space-x-4">
+                                    <ActionButton
+                                        type="button"
+                                        onClick={handleCloseForm}
+                                        label={t('employees.form.cancel')}
+                                        variant="secondary"
+                                        className="flex-1"
+                                        style={{ height: '5vh', fontSize: '1.6vh' }}
+                                    />
+                                    <ActionButton
+                                        type="submit"
+                                        form="employee-form"
+                                        disabled={isSubmitting}
+                                        label={isSubmitting ? t('employees.form.saving') : editingEmployee ? t('employees.form.update') : t('employees.form.create')}
+                                        className="flex-1"
+                                        style={{ height: '5vh', fontSize: '1.6vh' }}
+                                    />
+                                </div>
+                            }
+                        >
+                            {formShellChildren}
+                        </BaseDialog>
+                    );
+                }
+
+                // Mobile: full-screen sheet — X top-left, centered title, scrollable form,
+                // always-visible bottom primary action. No duplicated Cancel/Save.
+                return (
+                    <div className="fixed inset-0 z-[70] flex flex-col bg-white">
+                        <div className="flex items-center border-b border-gray-200 px-2 py-2.5">
+                            <button
+                                type="button"
+                                onClick={requestCloseEmployeeForm}
+                                aria-label={t('common.cancel')}
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                            <h2 className="min-w-0 flex-1 truncate pr-10 text-center text-lg font-bold text-gray-900">
+                                {editingEmployee ? t('employees.actions.editTitle') : t('employees.actions.addTitle')}
+                            </h2>
+                        </div>
+
+                        <div className="min-h-0 flex-1">{formShellChildren}</div>
+
+                        <div className="border-t border-gray-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                            <button
+                                type="submit"
+                                form="employee-form"
+                                disabled={isSubmitting}
+                                className="w-full rounded-xl bg-green-600 py-3.5 text-base font-semibold text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {isSubmitting
+                                    ? t('employees.form.saving')
+                                    : editingEmployee
+                                        ? t('employees.form.saveChanges')
+                                        : t('employees.form.create')}
+                            </button>
+                        </div>
+
+                        {/* Discard-changes confirmation (web modal — native confirm is unavailable in Electron) */}
+                        {showDiscardConfirm && (
+                            <div
+                                className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-6"
+                                onClick={() => setShowDiscardConfirm(false)}
+                            >
+                                <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                                    <h3 className="text-lg font-bold text-gray-900">{t('employees.form.discardTitle')}</h3>
+                                    <p className="mt-1 text-sm text-gray-600">{t('employees.form.discardBody')}</p>
+                                    <div className="mt-5 space-y-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowDiscardConfirm(false)}
+                                            className="w-full rounded-xl bg-gray-100 py-3 font-semibold text-gray-900 transition-colors hover:bg-gray-200"
+                                        >
+                                            {t('employees.form.keepEditing')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowDiscardConfirm(false);
+                                                handleCloseForm();
+                                            }}
+                                            className="w-full rounded-xl bg-red-600 py-3 font-semibold text-white transition-colors hover:bg-red-700"
+                                        >
+                                            {t('employees.form.discard')}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (
