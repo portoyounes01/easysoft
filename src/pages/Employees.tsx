@@ -39,7 +39,6 @@ import {
     RestrictedAccessLevels,
 } from '../utils/accessPermissions';
 import { isSystemAdministrator } from '../utils/systemAdmin';
-import { formatCurrency } from '../lib/countryProfile';
 import { useIsMobile } from '../hooks/useIsMobile';
 import '../styles/design-system-2-scope.css';
 
@@ -652,10 +651,14 @@ const EmployeesInner: React.FC = () => {
         // You could add a toast notification here
     };
 
+    // Mobile: drop the ds2 content inset so page content aligns with the Layout-level
+    // elements (e.g. the install banner), which only get the main `p-5`.
+    const pageInsetX = isMobileViewport ? 'px-0' : layoutClasses.contentInsetX;
+
     // Show database reset if there's a schema error
     if (showDatabaseReset) {
         return scopeShell(
-            <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
+            <div className={`space-y-6 ${pageInsetX}`}>
                 <div>
                     <h1 className="text-3xl font-bold text-gray-800">{t('employees.header.title')}</h1>
                     <p className="mt-1 text-gray-600">{t('employees.errors.dbResetNeeded')}</p>
@@ -675,7 +678,7 @@ const EmployeesInner: React.FC = () => {
 
     if (loadError) {
         return scopeShell(
-            <div className={`flex h-full flex-col items-center justify-center space-y-4 p-12 ${layoutClasses.contentInsetX}`}>
+            <div className={`flex h-full flex-col items-center justify-center space-y-4 p-12 ${pageInsetX}`}>
                 <p className="font-semibold text-red-600">{loadError}</p>
                 <div className="flex space-x-3">
                     <button
@@ -703,7 +706,7 @@ const EmployeesInner: React.FC = () => {
             style={visualStyle}
             data-ds2-neutral={prefs.neutralFamilyId}
         >
-            <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
+            <div className={`space-y-6 ${pageInsetX}`}>
             {syncError && (
                 <div className="flex flex-col sm:flex-row sm:items-start gap-4 rounded-2xl border-2 border-orange-300 bg-orange-50 p-4">
                     <div className="flex-1 min-w-0">
@@ -858,18 +861,15 @@ const EmployeesInner: React.FC = () => {
                                 >
                                     <div className="flex items-center gap-2">
                                         <span className={`min-w-0 truncate text-[15px] font-semibold ${employee.is_active ? 'text-gray-900' : 'text-gray-600'}`}>{employee.name}</span>
-                                        <span className="shrink-0">{getRoleBadge(employee.role, employee.is_active, true)}</span>
+                                        <span className="shrink-0 font-mono text-[11px] text-gray-400">{employee.employee_number}</span>
+                                    </div>
+                                    <div className="mt-1 flex items-center gap-2">
+                                        {getRoleBadge(employee.role, employee.is_active, true)}
                                         {!employee.is_active && (
                                             <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700">
                                                 {t('employees.badges.inactive')}
                                             </span>
                                         )}
-                                    </div>
-                                    <div className="mt-1 flex items-center gap-x-2 text-[11px] leading-4">
-                                        <span className="shrink-0 font-mono text-gray-400">{employee.employee_number}</span>
-                                        <span className="truncate text-gray-600">{formatCurrency(employee.total_sales)}</span>
-                                        <span className="shrink-0 text-gray-300">|</span>
-                                        <span className="shrink-0 text-gray-600">{employee.transaction_count} tx</span>
                                     </div>
                                 </button>
                                 {renderEmployeeActionsMenu(employee, canDeleteEmployee, `m-${employee.id}`, true)}
