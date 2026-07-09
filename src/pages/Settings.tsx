@@ -2296,21 +2296,22 @@ const Settings: React.FC = () => {
             <div className={`relative z-10 mx-auto max-w-[1500px] space-y-6 pt-6 ${layoutClasses.contentInsetX}`}>
                 {isSystemAdmin && (
                     <header className={`${glassCard} overflow-hidden`}>
-                        <div className="p-6 lg:p-8">
-                            <div className="grid gap-3 sm:grid-cols-3">
-                                <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('settings.statFiscalIssuer')}</p>
-                                    <p className="mt-2 text-lg font-semibold text-slate-950">{fiscalIssuerLabel}</p>
+                        <div className="p-4 sm:p-6 lg:p-8">
+                            {/* One glanceable status strip: 3-across even on mobile (was a vertical stack). */}
+                            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                                <div className="rounded-2xl bg-white/75 p-2.5 ring-1 ring-slate-200 sm:rounded-3xl sm:p-4">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">{t('settings.statFiscalIssuer')}</p>
+                                    <p className="mt-1 text-sm font-semibold text-slate-950 sm:mt-2 sm:text-lg">{fiscalIssuerLabel}</p>
                                 </div>
-                                <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('settings.statDatabase')}</p>
-                                    <p className="mt-2 text-lg font-semibold text-slate-950">
+                                <div className="rounded-2xl bg-white/75 p-2.5 ring-1 ring-slate-200 sm:rounded-3xl sm:p-4">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">{t('settings.statDatabase')}</p>
+                                    <p className="mt-1 text-sm font-semibold text-slate-950 sm:mt-2 sm:text-lg">
                                         {settings.fiscal.trainingMode ? t('settings.statTraining') : t('settings.statProduction')}
                                     </p>
                                 </div>
-                                <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('settings.statSaveState')}</p>
-                                    <p className="mt-2 text-lg font-semibold text-slate-950">
+                                <div className="rounded-2xl bg-white/75 p-2.5 ring-1 ring-slate-200 sm:rounded-3xl sm:p-4">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">{t('settings.statSaveState')}</p>
+                                    <p className="mt-1 text-sm font-semibold text-slate-950 sm:mt-2 sm:text-lg">
                                         {pendingChanges ? t('settings.statUnsaved') : saveStatus === 'saved' ? t('settings.statSaved') : t('settings.statClean')}
                                     </p>
                                 </div>

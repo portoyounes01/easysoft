@@ -183,7 +183,75 @@ const CategoriesInner: React.FC = () => {
                     </div>
 
                     <div className={`py-4 ${layoutClasses.contentInsetX}`}>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {/* Mobile: compact tap-to-edit list (the big touch-grid tiles below are for md+ / the till). */}
+                        <div className="space-y-2.5 md:hidden">
+                            {categories
+                                .filter((category) => !category.deleted_at)
+                                .sort((a, b) => a.display_order - b.display_order)
+                                .map((category) => {
+                                    const productCount = products.filter(
+                                        (p) => p.category_id === category.id && p.is_active && !p.deleted_at
+                                    ).length;
+                                    return (
+                                        <div
+                                            key={category.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    handleEditCategory(category);
+                                                }
+                                            }}
+                                            onClick={() => handleEditCategory(category)}
+                                            className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 shadow-sm transition-colors ${category.is_active
+                                                ? 'border-gray-200 bg-white hover:border-blue-300'
+                                                : 'border-gray-300 bg-gray-100 opacity-60'
+                                                }`}
+                                        >
+                                            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-r ${category.color} ${!category.is_active ? 'opacity-70' : ''}`}>
+                                                <Package className="h-5 w-5 text-white" />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                                    <span className={`truncate font-semibold ${category.is_active ? 'text-gray-800' : 'text-gray-500'}`}>
+                                                        {category.name}
+                                                    </span>
+                                                    {!category.is_active && (
+                                                        <span className="rounded-full bg-gray-500 px-2 py-0.5 text-[10px] font-medium text-white">
+                                                            {t('categories.grid.inactive')}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className={`truncate text-xs ${category.is_active ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                    {category.description || t('categories.grid.noDescription')}
+                                                    <span className="mx-1.5 text-gray-300">·</span>
+                                                    {t('categories.grid.productsCount', { count: productCount })}
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteCategory(category.id, category.name);
+                                                }}
+                                                className="ds2-control-radius-lg min-h-touch-xs min-w-touch-xs shrink-0 p-2 text-red-600 transition-colors hover:bg-red-50"
+                                                title={t('categories.grid.deleteCategoryTitle')}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            <DashedCardButton
+                                icon={Plus}
+                                label={t('categories.addCategoryCard')}
+                                onClick={handleCreateCategory}
+                                className="min-h-14 w-full"
+                            />
+                        </div>
+
+                        <div className="hidden gap-4 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                             {categories
                                 .filter((category) => !category.deleted_at)
                                 .sort((a, b) => a.display_order - b.display_order)

@@ -36,6 +36,7 @@ import {
     RestrictedAccessLevels,
 } from '../utils/accessPermissions';
 import { isSystemAdministrator } from '../utils/systemAdmin';
+import { formatCurrency } from '../lib/countryProfile';
 import '../styles/design-system-2-scope.css';
 
 const EmployeesInner: React.FC = () => {
@@ -528,6 +529,78 @@ const EmployeesInner: React.FC = () => {
         setOpenDropdown(openDropdown === employeeId ? null : employeeId);
     };
 
+    /**
+     * Kebab actions menu (edit / copy number / (de)activate / delete), shared by the desktop
+     * card and the mobile list row. `menuId` must be unique per rendered instance (the mobile
+     * row uses `m-<id>`) so the open/close + click-outside logic keeps working.
+     */
+    const renderEmployeeActionsMenu = (employee: Employee, canDeleteEmployee: boolean, menuId: string) => (
+        <div className="relative" ref={openDropdown === menuId ? dropdownRef : null}>
+            <button
+                onClick={() => handleDropdownToggle(menuId)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+            >
+                <MoreVertical className="w-4 h-4" />
+            </button>
+            {openDropdown === menuId && (
+                <div className="absolute right-0 top-10 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+                    <button
+                        onClick={() => {
+                            handleEditEmployee(employee);
+                            setOpenDropdown(null);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                    >
+                        <Edit className="w-4 h-4" />
+                        <span>{t('employees.actions.edit')}</span>
+                    </button>
+
+                    <button
+                        onClick={() => handleCopyEmployeeNumber(employee.employee_number)}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                    >
+                        <Copy className="w-4 h-4" />
+                        <span>{t('employees.actions.copyNumber')}</span>
+                    </button>
+
+                    {!isSystemAdministrator(employee) && (
+                        <button
+                            onClick={() => handleToggleEmployeeStatus(employee)}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                        >
+                            {employee.is_active ? (
+                                <>
+                                    <UserX className="w-4 h-4" />
+                                    <span>{t('employees.actions.deactivate')}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <UserCheck className="w-4 h-4" />
+                                    <span>{t('employees.actions.reactivate')}</span>
+                                </>
+                            )}
+                        </button>
+                    )}
+
+                    <div className="border-t border-gray-100 my-1"></div>
+
+                    {canDeleteEmployee && (
+                        <button
+                            onClick={() => {
+                                setShowDeleteConfirm(employee);
+                                setOpenDropdown(null);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            <span>{t('employees.actions.delete')}</span>
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+
     // Handle activate/deactivate employee
     const handleToggleEmployeeStatus = async (employee: Employee) => {
         if (isSystemAdministrator(employee)) {
@@ -686,7 +759,58 @@ const EmployeesInner: React.FC = () => {
             </div>
 
             {/* Employee Cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Mobile: compact contact-list rows (the analytics cards below are md+). */}
+            <div className="space-y-2.5 md:hidden">
+                {filteredEmployees.map((employee) => {
+                    const canEditEmployee =
+                        employee.role !== 'admin' ||
+                        (canManageAdminEmployees &&
+                            (isCurrentSystemAdmin || !isSystemAdministrator(employee)));
+                    const canDeleteEmployee =
+                        !isSystemAdministrator(employee) &&
+                        (canManageAdminEmployees || employee.role !== 'admin');
+                    return (
+                        <div
+                            key={employee.id}
+                            className={`rounded-xl border bg-white p-3 shadow-sm ${employee.is_active ? 'border-gray-100' : 'border-gray-200 opacity-75'}`}
+                            data-testid={`employee-row-${employee.employee_number}`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${employee.is_active ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-gray-300'}`}>
+                                    <span className="text-sm font-bold text-white">
+                                        {employee.name.split(' ').map(n => n[0]).join('')}
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => canEditEmployee && handleEditEmployee(employee)}
+                                    className="min-w-0 flex-1 text-left"
+                                >
+                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                        <span className={`truncate font-semibold ${employee.is_active ? 'text-gray-900' : 'text-gray-600'}`}>{employee.name}</span>
+                                        {getRoleBadge(employee.role, employee.is_active)}
+                                        {!employee.is_active && (
+                                            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700">
+                                                {t('employees.badges.inactive')}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="mt-0.5 truncate text-xs text-gray-500">
+                                        <span className="font-mono">{employee.employee_number}</span>
+                                        <span className="mx-1.5 text-gray-300">·</span>
+                                        {formatCurrency(employee.total_sales)}
+                                        <span className="mx-1.5 text-gray-300">·</span>
+                                        {employee.transaction_count} tx
+                                    </div>
+                                </button>
+                                {renderEmployeeActionsMenu(employee, canDeleteEmployee, `m-${employee.id}`)}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="hidden gap-6 md:grid md:grid-cols-1 lg:grid-cols-2">
                 {filteredEmployees.map((employee) => {
                     // Calculate days worked (assuming 8 hours = 1 day)
                     const daysWorked = Math.max(1, Math.round(employee.hours_worked / 8));
@@ -730,72 +854,7 @@ const EmployeesInner: React.FC = () => {
                                             {t('employees.badges.inactive')}
                                         </span>
                                     )}
-                                    <div className="relative" ref={openDropdown === employee.id ? dropdownRef : null}>
-                                        <button
-                                            onClick={() => handleDropdownToggle(employee.id)}
-                                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                                        >
-                                            <MoreVertical className="w-4 h-4" />
-                                        </button>
-
-                                        {/* Dropdown Menu */}
-                                        {openDropdown === employee.id && (
-                                            <div className="absolute right-0 top-10 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
-                                                <button
-                                                    onClick={() => {
-                                                        handleEditEmployee(employee);
-                                                        setOpenDropdown(null);
-                                                    }}
-                                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                    <span>{t('employees.actions.edit')}</span>
-                                                </button>
-
-                                                <button
-                                                    onClick={() => handleCopyEmployeeNumber(employee.employee_number)}
-                                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-                                                >
-                                                    <Copy className="w-4 h-4" />
-                                                    <span>{t('employees.actions.copyNumber')}</span>
-                                                </button>
-
-                                                {!isSystemAdministrator(employee) && (
-                                                    <button
-                                                        onClick={() => handleToggleEmployeeStatus(employee)}
-                                                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-                                                    >
-                                                        {employee.is_active ? (
-                                                            <>
-                                                                <UserX className="w-4 h-4" />
-                                                                <span>{t('employees.actions.deactivate')}</span>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <UserCheck className="w-4 h-4" />
-                                                                <span>{t('employees.actions.reactivate')}</span>
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                )}
-
-                                                <div className="border-t border-gray-100 my-1"></div>
-
-                                                {canDeleteEmployee && (
-                                                    <button
-                                                        onClick={() => {
-                                                            setShowDeleteConfirm(employee);
-                                                            setOpenDropdown(null);
-                                                        }}
-                                                        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                        <span>{t('employees.actions.delete')}</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
+                                    {renderEmployeeActionsMenu(employee, canDeleteEmployee, employee.id)}
                                 </div>
                             </div>
 
