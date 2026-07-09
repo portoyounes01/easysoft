@@ -1051,6 +1051,7 @@ const resources = {
                     title: 'Employee Management',
                     subtitle: 'Manage staff, track performance, and set permissions',
                     addEmployee: 'Add Employee',
+                    addEmployeeShort: 'Add',
                     searchPlaceholder: 'Search employees...',
                     allRoles: 'All Roles',
                     filters: 'Filters',
@@ -3521,6 +3522,7 @@ const resources = {
                     title: 'Gestão de Funcionários',
                     subtitle: 'Gerir equipa, acompanhar desempenho e definir permissões',
                     addEmployee: 'Adicionar Funcionário',
+                    addEmployeeShort: 'Adicionar',
                     searchPlaceholder: 'Pesquisar funcionários...',
                     allRoles: 'Todas as Funções',
                     filters: 'Filtros',
@@ -5983,6 +5985,7 @@ const resources = {
                     "title": "Gestión de empleados",
                     "subtitle": "Gestiona el personal, controla el rendimiento y establece permisos",
                     "addEmployee": "Añadir empleado",
+                    "addEmployeeShort": "Añadir",
                     "searchPlaceholder": "Buscar empleados...",
                     "allRoles": "Todos los roles",
                     "filters": "Filtros"

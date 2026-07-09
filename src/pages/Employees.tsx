@@ -18,7 +18,9 @@ import {
     UserX,
     Copy,
     Banknote,
-    X
+    X,
+    MoreHorizontal,
+    SlidersHorizontal
 } from 'lucide-react';
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
@@ -76,6 +78,7 @@ const EmployeesInner: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
     const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+    const [showMobileRoleChips, setShowMobileRoleChips] = useState(true);
     const employeeFormSnapshotRef = useRef<string>('');
     const isMobileViewport = useIsMobile();
     const [showDatabaseReset, setShowDatabaseReset] = useState(false);
@@ -181,10 +184,13 @@ const EmployeesInner: React.FC = () => {
         });
     }, [employees, searchTerm, selectedRole]);
 
-    const getRoleBadge = (role: string, isActive: boolean) => {
+    const getRoleBadge = (role: string, isActive: boolean, compact = false) => {
+        const sizing = compact
+            ? 'space-x-0.5 px-1.5 py-0.5 text-[10px]'
+            : 'space-x-1 px-2 py-1 text-xs';
         if (!isActive) {
             return (
-                <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700`}>
+                <span className={`inline-flex items-center ${sizing} rounded-full font-medium bg-gray-200 text-gray-700`}>
                     <Shield className="w-3 h-3" />
                     <span>{role.toUpperCase()}</span>
                 </span>
@@ -198,7 +204,7 @@ const EmployeesInner: React.FC = () => {
         };
 
         return (
-            <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${colors[role] || 'bg-gray-100 text-gray-800'}`}>
+            <span className={`inline-flex items-center ${sizing} rounded-full font-medium ${colors[role] || 'bg-gray-100 text-gray-800'}`}>
                 <Shield className="w-3 h-3" />
                 <span>{role.toUpperCase()}</span>
             </span>
@@ -556,13 +562,13 @@ const EmployeesInner: React.FC = () => {
      * card and the mobile list row. `menuId` must be unique per rendered instance (the mobile
      * row uses `m-<id>`) so the open/close + click-outside logic keeps working.
      */
-    const renderEmployeeActionsMenu = (employee: Employee, canDeleteEmployee: boolean, menuId: string) => (
+    const renderEmployeeActionsMenu = (employee: Employee, canDeleteEmployee: boolean, menuId: string, horizontalTrigger = false) => (
         <div className="relative" ref={openDropdown === menuId ? dropdownRef : null}>
             <button
                 onClick={() => handleDropdownToggle(menuId)}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
             >
-                <MoreVertical className="w-4 h-4" />
+                {horizontalTrigger ? <MoreHorizontal className="w-5 h-5" /> : <MoreVertical className="w-4 h-4" />}
             </button>
             {openDropdown === menuId && (
                 <div className="absolute right-0 top-10 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
@@ -727,23 +733,65 @@ const EmployeesInner: React.FC = () => {
                 </div>
             )}
             {/* Header */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
+            <div className="flex items-start justify-between gap-3 sm:items-center">
+                <div className="min-w-0">
                     <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">{t('employees.header.title')}</h1>
                     <p className="text-gray-600 mt-1">{t('employees.header.subtitle')}</p>
                 </div>
                 <AdminActionButton
                     variant="primary"
-                    label={t('employees.header.addEmployee')}
+                    label={isMobileViewport ? t('employees.header.addEmployeeShort') : t('employees.header.addEmployee')}
                     icon={Plus}
                     onClick={handleAddEmployee}
-                    className={`${headerPrimaryBtn} self-start sm:self-auto`}
+                    className={`${headerPrimaryBtn} shrink-0 self-start sm:self-auto`}
                 />
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
+                {/* Mobile: full-width search + filter toggle, role chips below (desktop keeps the select). */}
+                <div className="space-y-3 sm:hidden">
+                    <div className="flex gap-2">
+                        <div className="relative min-w-0 flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                            <input
+                                type="text"
+                                placeholder={t('employees.header.searchPlaceholder')}
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="ds2-control-radius-lg ds2-toolbar-control-h box-border w-full border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowMobileRoleChips((v) => !v)}
+                            aria-label={t('employees.header.filters')}
+                            aria-expanded={showMobileRoleChips}
+                            className={`ds2-control-radius-lg ds2-toolbar-control-h box-border flex w-11 shrink-0 items-center justify-center border transition-colors ${showMobileRoleChips ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-50 text-gray-600'}`}
+                        >
+                            <SlidersHorizontal className="h-4 w-4" />
+                        </button>
+                    </div>
+                    {showMobileRoleChips && (
+                        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
+                            {roles.map(role => (
+                                <button
+                                    key={role}
+                                    type="button"
+                                    onClick={() => setSelectedRole(role)}
+                                    className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm transition-colors ${selectedRole === role
+                                        ? 'bg-green-50 font-semibold text-green-700 ring-1 ring-green-200'
+                                        : 'bg-gray-100 font-medium text-gray-600'
+                                        }`}
+                                >
+                                    {role === 'all' ? t('employees.header.allRoles') : role.charAt(0).toUpperCase() + role.slice(1)}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="hidden sm:flex sm:flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
                     <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -782,7 +830,7 @@ const EmployeesInner: React.FC = () => {
 
             {/* Employee Cards */}
             {/* Mobile: compact contact-list rows (the analytics cards below are md+). */}
-            <div className="space-y-2.5 md:hidden">
+            <div className="space-y-3 md:hidden">
                 {filteredEmployees.map((employee) => {
                     const canEditEmployee =
                         employee.role !== 'admin' ||
@@ -794,11 +842,11 @@ const EmployeesInner: React.FC = () => {
                     return (
                         <div
                             key={employee.id}
-                            className={`rounded-xl border bg-white p-3 shadow-sm ${employee.is_active ? 'border-gray-100' : 'border-gray-200 opacity-75'}`}
+                            className={`rounded-2xl border bg-white p-3 shadow-sm ${employee.is_active ? 'border-gray-100' : 'border-gray-200 opacity-75'}`}
                             data-testid={`employee-row-${employee.employee_number}`}
                         >
-                            <div className="flex items-center gap-3">
-                                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${employee.is_active ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-gray-300'}`}>
+                            <div className="flex items-center gap-2.5">
+                                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${employee.is_active ? (employee.role === 'admin' ? 'bg-rose-500' : 'bg-green-600') : 'bg-gray-300'}`}>
                                     <span className="text-sm font-bold text-white">
                                         {employee.name.split(' ').map(n => n[0]).join('')}
                                     </span>
@@ -808,24 +856,23 @@ const EmployeesInner: React.FC = () => {
                                     onClick={() => canEditEmployee && handleEditEmployee(employee)}
                                     className="min-w-0 flex-1 text-left"
                                 >
-                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                        <span className={`truncate font-semibold ${employee.is_active ? 'text-gray-900' : 'text-gray-600'}`}>{employee.name}</span>
-                                        {getRoleBadge(employee.role, employee.is_active)}
+                                    <div className="flex items-center gap-2">
+                                        <span className={`min-w-0 truncate text-[15px] font-semibold ${employee.is_active ? 'text-gray-900' : 'text-gray-600'}`}>{employee.name}</span>
+                                        <span className="shrink-0">{getRoleBadge(employee.role, employee.is_active, true)}</span>
                                         {!employee.is_active && (
-                                            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700">
+                                            <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700">
                                                 {t('employees.badges.inactive')}
                                             </span>
                                         )}
                                     </div>
-                                    <div className="mt-0.5 truncate text-xs text-gray-500">
-                                        <span className="font-mono">{employee.employee_number}</span>
-                                        <span className="mx-1.5 text-gray-300">·</span>
-                                        {formatCurrency(employee.total_sales)}
-                                        <span className="mx-1.5 text-gray-300">·</span>
-                                        {employee.transaction_count} tx
+                                    <div className="mt-1 flex items-center gap-x-2 text-[11px] leading-4">
+                                        <span className="shrink-0 font-mono text-gray-400">{employee.employee_number}</span>
+                                        <span className="truncate text-gray-600">{formatCurrency(employee.total_sales)}</span>
+                                        <span className="shrink-0 text-gray-300">|</span>
+                                        <span className="shrink-0 text-gray-600">{employee.transaction_count} tx</span>
                                     </div>
                                 </button>
-                                {renderEmployeeActionsMenu(employee, canDeleteEmployee, `m-${employee.id}`)}
+                                {renderEmployeeActionsMenu(employee, canDeleteEmployee, `m-${employee.id}`, true)}
                             </div>
                         </div>
                     );
