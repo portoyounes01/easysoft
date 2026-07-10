@@ -35,6 +35,7 @@ import PurchaseReceipts from './pages/PurchaseReceipts';
 import Inventory from './pages/Inventory';
 import StockProfitReport from './pages/StockProfitReport';
 import Devices from './pages/Devices';
+import Assistant from './pages/Assistant';
 
 const Router = ['app:', 'file:'].includes(window.location.protocol) ? HashRouter : BrowserRouter;
 
@@ -219,6 +220,16 @@ const AppContent: React.FC = () => {
                     element={
                       <PermissionRoute permission="reports">
                         <Reports />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/assistant"
+                    element={
+                      // Gated on profit_costs = owner/admin only, matching the
+                      // assistant edge function's allowed roles.
+                      <PermissionRoute permission="profit_costs">
+                        <Assistant />
                       </PermissionRoute>
                     }
                   />

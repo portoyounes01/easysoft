@@ -488,3 +488,37 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/import_map.json"
 entrypoint = "./functions/revoke-human/index.ts"
+
+# --- AI assistant + WhatsApp ---
+[functions.assistant]
+enabled = true
+# In-app AI assistant. Requires a valid owner/admin human JWT; the function
+# re-verifies the tenant claim and role, then answers over curated, tenant-scoped,
+# read-only RPCs. Needs the ANTHROPIC_API_KEY secret.
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/assistant/index.ts"
+
+[functions.transcribe]
+enabled = true
+# In-app voice input for the assistant: owner/admin uploads an audio blob, it is
+# transcribed via Soniox (PT/ES) and returned as text. Needs the SONIOX_API_KEY secret.
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/transcribe/index.ts"
+
+[functions.whatsapp-pair-code]
+enabled = true
+# Owner/admin generates a WhatsApp pairing code (authenticated).
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/whatsapp-pair-code/index.ts"
+
+[functions.whatsapp-webhook]
+enabled = true
+# Meta WhatsApp Cloud API webhook. Meta calls it with no Supabase session — the
+# X-Hub-Signature-256 HMAC is the authenticity check, so the gateway must NOT
+# require a JWT. Needs WHATSAPP_* secrets + ANTHROPIC_API_KEY.
+verify_jwt = false
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/whatsapp-webhook/index.ts"
