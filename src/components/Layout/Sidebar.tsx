@@ -26,6 +26,7 @@ import {
   Boxes,
   LineChart,
   MonitorSmartphone,
+  Sparkles,
 } from "lucide-react";
 import { useSupabaseAuth } from "../../contexts/SupabaseAuthContext";
 import { isPwaHost } from "../../lib/host";
@@ -117,6 +118,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         icon: BarChart3,
         labelKey: "sidebar.menu.reports",
         permission: "reports",
+      },
+      {
+        path: "/assistant",
+        icon: Sparkles,
+        labelKey: "sidebar.menu.assistant",
+        // owner/admin only (matches the assistant edge function's roles)
+        permission: "profit_costs",
       },
       {
         path: "/profit-costs",

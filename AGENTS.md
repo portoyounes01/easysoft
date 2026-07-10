@@ -270,6 +270,7 @@ vi.mock('../src/services/employeeService', () => ({
 Before implementing features, reference:
 - `STYLE_GUIDE.md` - UI/design patterns, colors, typography
 - `DEVELOPMENT_GUIDE.md` - Architecture, TypeScript, components
+- `docs/AI_ASSISTANT_GUIDE.md` - The in-app AI assistant + its illustrated (screenshot) tutorials. **Read this before touching the assistant, or after any UI change** — it documents how to regenerate the tutorial screenshots (`scripts/capture-guide.cjs` → `upload-guide.cjs` → `npm run build:kb`) so the assistant stays correct when the UI changes.
 
 ---
 
