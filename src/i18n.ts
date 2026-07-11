@@ -5462,6 +5462,7 @@ const resources = {
                     "customers": "Clientes",
                     "employees": "Empleados",
                     "reports": "Informes",
+                    "assistant": "Asistente",
                     "profitCosts": "Beneficios y costes",
                     "transactions": "Transacciones",
                     "orders": "Pedidos",
@@ -6157,6 +6158,29 @@ const resources = {
                         "description": "Borrar datos locales no fiscales de IndexedDB"
                     }
                 }
+            },
+            "assistant": {
+                "title": "Asistente IA",
+                "subtitle": "Pregunta sobre tus ventas, stock y cómo usar la aplicación",
+                "placeholder": "Pregunta sobre tu negocio…",
+                "send": "Enviar",
+                "voice": "Grabar una pregunta por voz",
+                "stopVoice": "Detener grabación",
+                "listening": "Escuchando… toca para detener",
+                "transcribing": "Transcribiendo…",
+                "newChat": "Nueva conversación",
+                "thinking": "Pensando…",
+                "readOnlyNote": "Solo lectura: el asistente consulta y explica, pero nunca modifica tus datos. Solo ve tu negocio.",
+                "empty": {
+                    "title": "¿Qué te gustaría saber?",
+                    "hint": "Pregunta sobre ventas, productos, empleados, stock — o cómo usar el software."
+                },
+                "examples": [
+                    "¿Cuánto he vendido hoy?",
+                    "¿Qué empleado ha vendido más este mes?",
+                    "¿Cuáles son mis 5 productos más vendidos esta semana?",
+                    "¿Cómo añado un producto con una foto?"
+                ]
             },
             "reports": {
                 "header": {
