@@ -180,6 +180,14 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'tenant_id,environment' });
     if (secErr) return json({ error: 'persist_secrets_failed', detail: secErr.message }, 500);
+    // Provisioning Spain implies the tenant operates in Spain — stamp it so every
+    // country-aware surface (e.g. the assistant's tax/legal guardrail) engages even
+    // when the tenant was created with a placeholder NIF that kept the PT default.
+    // Best-effort: the tenants_nif_format CHECK can reject the stamp for a tenant
+    // whose stored NIF is PT-shaped (digits-only); fiscal provisioning must not
+    // fail on that — the NIF/country pair gets corrected with the real tax id.
+    const { error: countryErr } = await admin.from('tenants').update({ country: 'ES' }).eq('id', tenantId).neq('country', 'ES');
+    if (countryErr) console.error('tenants.country stamp failed (non-fatal)', countryErr.message);
     for (const [dev, cid] of Object.entries(deviceClient)) {
       const { error: dErr } = await admin.from('devices').update({ [clientCol]: cid }).eq('id', dev).eq('tenant_id', tenantId);
       if (dErr) return json({ error: 'persist_device_failed', detail: `${dev}: ${dErr.message}` }, 500);
