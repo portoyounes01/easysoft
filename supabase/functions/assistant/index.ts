@@ -62,10 +62,11 @@ Deno.serve(async (req: Request) => {
   if (!question) return json({ error: 'Ask a question.' }, 400);
   if (question.length > MAX_QUESTION_LEN) return json({ error: 'Question is too long.' }, 400);
 
-  // --- business name for the prompt (best-effort) ---
+  // --- business name + country for the prompt (best-effort) ---
   const { data: tenant } = await admin
-    .from('tenants').select('name, legal_name').eq('id', tenantId).maybeSingle();
+    .from('tenants').select('name, legal_name, country').eq('id', tenantId).maybeSingle();
   const businessName = tenant?.name ?? tenant?.legal_name ?? undefined;
+  const country = tenant?.country ?? undefined;
 
   // --- run the model over the curated read-only tools ---
   const vault = new PiiVault();
@@ -77,6 +78,7 @@ Deno.serve(async (req: Request) => {
       apiKey: anthropicKey,
       todayIso: lisbonToday(),
       businessName,
+      country,
       history: [], // Phase 1: stateless to the model (see index.ts header note)
       question,
       ctx,

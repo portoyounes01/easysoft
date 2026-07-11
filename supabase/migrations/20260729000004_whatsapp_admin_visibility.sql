@@ -17,3 +17,10 @@ DROP POLICY IF EXISTS owner_whatsapp_numbers_admin_delete ON public.owner_whatsa
 CREATE POLICY owner_whatsapp_numbers_admin_delete ON public.owner_whatsapp_numbers
   FOR DELETE TO authenticated
   USING (tenant_id = app.tenant_id() AND app.app_role() IN ('owner', 'admin'));
+
+-- Privileges: this repo grants clients per-table EXPLICITLY (default privileges
+-- are service_role-only since 20260709), so without these the policies above are
+-- unreachable — the linked-number list and unlink 42501 for every client.
+-- The RLS policies do the actual row gating; anon gets nothing.
+REVOKE ALL ON public.owner_whatsapp_numbers FROM anon;
+GRANT SELECT, DELETE ON public.owner_whatsapp_numbers TO authenticated;

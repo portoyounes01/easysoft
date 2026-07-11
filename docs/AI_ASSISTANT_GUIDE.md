@@ -23,9 +23,9 @@ GDPR: personal names/NIF/email/phone are pseudonymized before the model sees the
 
 | Area | Files |
 |---|---|
-| **DB — read tools** | `supabase/migrations/20260720000000_assistant_readonly_rpcs.sql` — the `assistant_*` SECURITY DEFINER, service-role-only, tenant-scoped read functions |
-| **DB — knowledge base** | `20260720000001_assistant_kb_docs.sql` — `kb_documents` table + `assistant_search_docs` (Postgres full-text) |
-| **DB — history/audit** | `20260720000002_assistant_conversations.sql` — conversations, messages, audit, retention purge |
+| **DB — read tools** | `supabase/migrations/20260729000000_assistant_readonly_rpcs.sql` — the `assistant_*` SECURITY DEFINER, service-role-only, tenant-scoped read functions |
+| **DB — knowledge base** | `20260729000001_assistant_kb_docs.sql` — `kb_documents` table + `assistant_search_docs` (Postgres full-text) |
+| **DB — history/audit** | `20260729000002_assistant_conversations.sql` — conversations, messages, audit, retention purge |
 | **Edge function** | `supabase/functions/assistant/` → `index.ts` (auth + HTTP + persistence), `core.ts` (Claude tool-use loop + system prompt), `tools.ts` (tool defs → RPCs), `pii.ts` (pseudonymize/rehydrate), `*_test.ts` (Deno tests) |
 | **Login fn (for auth)** | `supabase/functions/pwa-login/` (already in repo) |
 | **Config** | `supabase/config.toml` → `[functions.assistant] verify_jwt = true` |

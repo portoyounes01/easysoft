@@ -58,6 +58,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
   // Till-only nav items — never shown on the PWA (browser) host (docs/pwa-plan.md §2.3);
   // HostRoute also blocks them at the route level.
   const TILL_ONLY_PATHS = new Set(["/pos", "/queue", "/cash-drawer-audit"]);
+  // Human-session-only nav items — the assistant edge fns reject device JWTs, so a
+  // till employee (even a system admin) would only get backend 403s. PermissionRoute
+  // enforces the same at the route level (humanOnly).
+  const HUMAN_ONLY_PATHS = new Set(["/assistant"]);
   const { t } = useTranslation();
   const { visualStyle, prefs } = useDesignSystem2Customization();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -240,6 +244,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
           <ul className="space-y-4">
             {menuItems.map((item) => {
               if (isPwaHost && TILL_ONLY_PATHS.has(item.path)) return null;
+              if (HUMAN_ONLY_PATHS.has(item.path) && principal?.source !== "membership") return null;
               if (!hasPermission(item.permission)) return null;
 
               const Icon = item.icon;

@@ -162,12 +162,27 @@ Deno.serve(async (req: Request) => {
           .from('owner_whatsapp_numbers').select('tenant_id, user_id').eq('phone_e164', phoneE164).maybeSingle();
 
         if (reg?.tenant_id) {
-          const { data: tenant } = await admin.from('tenants').select('name, legal_name').eq('id', reg.tenant_id).maybeSingle();
+          // The registry row is a standing credential; tenant_members is the source of
+          // truth. Re-check membership + role on EVERY message (mirrors the custom
+          // access-token hook re-validating claims at refresh) so a revoked owner/admin
+          // loses WhatsApp access immediately — revoke-human also unlinks proactively,
+          // but this closes the gap for rows created before that or deleted out-of-band.
+          const { data: member } = await admin
+            .from('tenant_members').select('role')
+            .eq('user_id', reg.user_id).eq('tenant_id', reg.tenant_id).maybeSingle();
+          if (!member || !['owner', 'admin'].includes(member.role as string)) {
+            await admin.from('owner_whatsapp_numbers').delete().eq('phone_e164', phoneE164);
+            await sendText(phoneNumberId, TOKEN, from,
+              'This WhatsApp link is no longer active. If you need access again, ask an owner or admin to re-link it from the app (Assistant → "Link WhatsApp").');
+            continue;
+          }
+          const { data: tenant } = await admin.from('tenants').select('name, legal_name, country').eq('id', reg.tenant_id).maybeSingle();
           const vault = new PiiVault();
           const ctx: ToolContext = { admin, tenantId: reg.tenant_id, vault };
           const result = await runAssistant({
             apiKey: anthropicKey, todayIso: lisbonToday(),
             businessName: tenant?.name ?? tenant?.legal_name ?? undefined,
+            country: tenant?.country ?? undefined,
             history: [], question: text, ctx, channel: 'whatsapp',
           });
           await sendText(phoneNumberId, TOKEN, from, vault.rehydrate(result.answer));

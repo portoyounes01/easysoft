@@ -64,6 +64,11 @@ Deno.serve(async (req) => {
   //    independent of the delivery-side membership join (defense in depth).
   await admin.from('push_subscriptions').delete().eq('user_id', targetUser).eq('tenant_id', tenant);
 
+  // 2b) drop the user's linked WhatsApp numbers for the tenant — the assistant's WhatsApp
+  //     channel is another standing off-device credential; the webhook also re-checks
+  //     membership per message (defense in depth), but unlink here stops it at once.
+  await admin.from('owner_whatsapp_numbers').delete().eq('user_id', targetUser).eq('tenant_id', tenant);
+
   // 3) if the removed tenant was the user's ACTIVE claim, re-point it at a remaining membership
   //    (or clear tenant claims). The custom_access_token hook enforces this at refresh regardless.
   const { data: tu } = await admin.auth.admin.getUserById(targetUser);

@@ -64,12 +64,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
-// Permission-based route protection
+// Permission-based route protection. humanOnly additionally requires a membership
+// (human) session — for surfaces whose backend rejects device JWTs outright.
 const PermissionRoute: React.FC<{
   children: React.ReactNode;
   permission: string;
   fallbackPath?: string;
-}> = ({ children, permission, fallbackPath = '/pos' }) => {
+  humanOnly?: boolean;
+}> = ({ children, permission, fallbackPath = '/pos', humanOnly = false }) => {
   const { hasPermission, employee, principal } = useSupabaseAuth();
   const { t } = useTranslation();
   // A denied browser/PWA human must not be bounced to /pos (till-only) — send to PWA_LANDING.
@@ -77,7 +79,7 @@ const PermissionRoute: React.FC<{
   const displayName = employee?.name ?? principal?.displayName ?? '';
   const displayRole = employee?.role ?? principal?.role ?? '';
 
-  if (!hasPermission(permission)) {
+  if (!hasPermission(permission) || (humanOnly && principal?.source !== 'membership')) {
     // Show access denied page for unauthorized access attempts
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -227,8 +229,9 @@ const AppContent: React.FC = () => {
                     path="/assistant"
                     element={
                       // Gated on profit_costs = owner/admin only, matching the
-                      // assistant edge function's allowed roles.
-                      <PermissionRoute permission="profit_costs">
+                      // assistant edge function's allowed roles. humanOnly: the
+                      // edge fns reject device JWTs, so the till gets no route.
+                      <PermissionRoute permission="profit_costs" humanOnly>
                         <Assistant />
                       </PermissionRoute>
                     }

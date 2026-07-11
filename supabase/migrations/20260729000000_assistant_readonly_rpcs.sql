@@ -30,6 +30,12 @@ $$;
 
 
 -- --- 1. sales overview -------------------------------------------------------
+-- Sales RPCs aggregate public.transactions directly, NOT daily_sales_summary:
+-- that table's maintenance trigger (genesis update_daily_sales_summary) predates
+-- multi-tenancy and never stamps tenant_id, so every row carries the phase-1
+-- column DEFAULT. Filtering it by tenant would return nothing for real tenants
+-- and the whole platform's aggregates for the seed tenant. transactions IS
+-- tenant-stamped (phase 1 + the tenant-scoped sync RPCs), so it is the safe base.
 CREATE OR REPLACE FUNCTION public.assistant_sales_overview(
   p_tenant_id uuid, p_start date, p_end date
 )
@@ -38,19 +44,26 @@ DECLARE v json;
 BEGIN
   PERFORM public.assistant_require_tenant(p_tenant_id);
   SELECT json_build_object(
-    'total_revenue',      COALESCE(SUM(s.total_sales), 0),
-    'total_transactions', COALESCE(SUM(s.transaction_count), 0),
-    'total_items',        COALESCE(SUM(s.items_sold), 0),
-    'total_tax',          COALESCE(SUM(s.total_tax), 0),
-    'total_profit',       COALESCE(SUM(s.total_profit), 0),
-    'avg_transaction',    CASE WHEN COALESCE(SUM(s.transaction_count),0) > 0
-                               THEN ROUND(SUM(s.total_sales) / SUM(s.transaction_count), 2)
+    'total_revenue',      COALESCE(SUM(t.total), 0),
+    'total_transactions', COUNT(t.id),
+    'total_items',        COALESCE(SUM(it.items_sold), 0),
+    'total_tax',          COALESCE(SUM(t.tax), 0),
+    'total_profit',       COALESCE(SUM(it.total_profit), 0),
+    'avg_transaction',    CASE WHEN COUNT(t.id) > 0
+                               THEN ROUND(COALESCE(SUM(t.total), 0) / COUNT(t.id), 2)
                                ELSE 0 END,
     'date_start', p_start, 'date_end', p_end
   ) INTO v
-  FROM public.daily_sales_summary s
-  WHERE s.tenant_id = p_tenant_id
-    AND s.summary_date BETWEEN p_start AND p_end;
+  FROM public.transactions t
+  LEFT JOIN LATERAL (
+    SELECT SUM(ti.quantity) AS items_sold, SUM(ti.profit_amount) AS total_profit
+    FROM public.transaction_items ti
+    WHERE ti.transaction_id = t.id AND ti.deleted_at IS NULL
+  ) it ON true
+  WHERE t.tenant_id = p_tenant_id
+    AND t.status = 'completed'
+    AND t.deleted_at IS NULL
+    AND t.transaction_date BETWEEN p_start AND p_end;
   RETURN v;
 END;
 $$;
@@ -68,17 +81,24 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   PERFORM public.assistant_require_tenant(p_tenant_id);
   RETURN QUERY
-  SELECT s.summary_date,
-         COALESCE(SUM(s.total_sales), 0),
-         COALESCE(SUM(s.transaction_count), 0)::bigint,
-         COALESCE(SUM(s.items_sold), 0)::bigint,
-         COALESCE(SUM(s.total_tax), 0),
-         COALESCE(SUM(s.total_profit), 0)
-  FROM public.daily_sales_summary s
-  WHERE s.tenant_id = p_tenant_id
-    AND s.summary_date BETWEEN p_start AND p_end
-  GROUP BY s.summary_date
-  ORDER BY s.summary_date;
+  SELECT t.transaction_date,
+         COALESCE(SUM(t.total), 0),
+         COUNT(t.id)::bigint,
+         COALESCE(SUM(it.items_sold), 0)::bigint,
+         COALESCE(SUM(t.tax), 0),
+         COALESCE(SUM(it.total_profit), 0)
+  FROM public.transactions t
+  LEFT JOIN LATERAL (
+    SELECT SUM(ti.quantity) AS items_sold, SUM(ti.profit_amount) AS total_profit
+    FROM public.transaction_items ti
+    WHERE ti.transaction_id = t.id AND ti.deleted_at IS NULL
+  ) it ON true
+  WHERE t.tenant_id = p_tenant_id
+    AND t.status = 'completed'
+    AND t.deleted_at IS NULL
+    AND t.transaction_date BETWEEN p_start AND p_end
+  GROUP BY t.transaction_date
+  ORDER BY t.transaction_date;
 END;
 $$;
 
@@ -95,17 +115,24 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   PERFORM public.assistant_require_tenant(p_tenant_id);
   RETURN QUERY
-  SELECT s.employee_id,
-         COALESCE(e.name, 'Unknown'),
-         COALESCE(SUM(s.total_sales), 0),
-         COALESCE(SUM(s.transaction_count), 0)::bigint,
-         COALESCE(SUM(s.items_sold), 0)::bigint
-  FROM public.daily_sales_summary s
-  LEFT JOIN public.employees e ON e.id = s.employee_id AND e.tenant_id = p_tenant_id
-  WHERE s.tenant_id = p_tenant_id
-    AND s.summary_date BETWEEN p_start AND p_end
-  GROUP BY s.employee_id, e.name
-  ORDER BY SUM(s.total_sales) DESC;
+  SELECT t.employee_id,
+         COALESCE(e.name, MAX(t.employee_name), 'Unknown'),
+         COALESCE(SUM(t.total), 0),
+         COUNT(t.id)::bigint,
+         COALESCE(SUM(it.items_sold), 0)::bigint
+  FROM public.transactions t
+  LEFT JOIN public.employees e ON e.id = t.employee_id AND e.tenant_id = p_tenant_id
+  LEFT JOIN LATERAL (
+    SELECT SUM(ti.quantity) AS items_sold
+    FROM public.transaction_items ti
+    WHERE ti.transaction_id = t.id AND ti.deleted_at IS NULL
+  ) it ON true
+  WHERE t.tenant_id = p_tenant_id
+    AND t.status = 'completed'
+    AND t.deleted_at IS NULL
+    AND t.transaction_date BETWEEN p_start AND p_end
+  GROUP BY t.employee_id, e.name
+  ORDER BY SUM(t.total) DESC NULLS LAST;
 END;
 $$;
 
@@ -152,14 +179,16 @@ DECLARE v json;
 BEGIN
   PERFORM public.assistant_require_tenant(p_tenant_id);
   SELECT json_build_object(
-    'cash',  COALESCE(SUM(s.cash_sales), 0),
-    'card',  COALESCE(SUM(s.card_sales), 0),
-    'mixed', COALESCE(SUM(s.mixed_sales), 0),
-    'total', COALESCE(SUM(s.total_sales), 0)
+    'cash',  COALESCE(SUM(CASE WHEN t.payment_method = 'cash'  THEN t.total ELSE 0 END), 0),
+    'card',  COALESCE(SUM(CASE WHEN t.payment_method = 'card'  THEN t.total ELSE 0 END), 0),
+    'mixed', COALESCE(SUM(CASE WHEN t.payment_method = 'mixed' THEN t.total ELSE 0 END), 0),
+    'total', COALESCE(SUM(t.total), 0)
   ) INTO v
-  FROM public.daily_sales_summary s
-  WHERE s.tenant_id = p_tenant_id
-    AND s.summary_date BETWEEN p_start AND p_end;
+  FROM public.transactions t
+  WHERE t.tenant_id = p_tenant_id
+    AND t.status = 'completed'
+    AND t.deleted_at IS NULL
+    AND t.transaction_date BETWEEN p_start AND p_end;
   RETURN v;
 END;
 $$;
