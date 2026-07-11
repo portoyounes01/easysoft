@@ -2,11 +2,15 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     AlertTriangle,
+    Briefcase,
+    CalendarDays,
     CalendarPlus,
     ChevronLeft,
     ChevronRight,
+    Clock3,
     FileDown,
     FilePenLine,
+    NotebookText,
     Search,
     UsersRound,
     X,
@@ -74,6 +78,16 @@ const groupContiguousDates = (sortedKeys: string[]): Array<[string, string]> => 
 
 const mondayFirstOffset = (date: Date): number => (date.getDay() + 6) % 7;
 
+const employeeInitials = (name: string): string =>
+    name.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase();
+
+const roleToneClasses: Record<string, string> = {
+    admin: 'bg-red-50 text-red-700',
+    manager: 'bg-orange-50 text-orange-700',
+    cashier: 'bg-blue-50 text-blue-700',
+    trainee: 'bg-slate-100 text-slate-600',
+};
+
 const HR: React.FC = () => {
     const { t } = useTranslation();
     const { employee: signedInEmployee } = useSupabaseAuth();
@@ -93,6 +107,9 @@ const HR: React.FC = () => {
     const [bookingMode, setBookingMode] = useState<'single' | 'range'>('range');
     const [reportMonth, setReportMonth] = useState(() => toMonthKey(new Date()));
     const [exporting, setExporting] = useState(false);
+    const [mobileEmployeeView, setMobileEmployeeView] = useState<'overview' | 'leave'>('overview');
+    const [showMobileEditor, setShowMobileEditor] = useState(false);
+    const [showMobileAttendance, setShowMobileAttendance] = useState(false);
 
     const accrualRate = settings.hr.monthlyHolidayAccrualRate;
     const defaults = useMemo(
@@ -122,7 +139,7 @@ const HR: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [accrualRate, defaults]);
+    }, [accrualRate, defaults, t]);
 
     useEffect(() => {
         void loadData();
@@ -141,6 +158,9 @@ const HR: React.FC = () => {
         const profile = await hrService.getHrProfile(employee.id, defaults);
         setSelectedEmployee(employee);
         setEditingProfile(profile);
+        setMobileEmployeeView('overview');
+        setShowMobileEditor(false);
+        setShowMobileAttendance(false);
         setSelectedHolidayDates(new Set());
         setRangeAnchor(null);
         setBookingMonth(new Date());
@@ -149,6 +169,9 @@ const HR: React.FC = () => {
     const closeEmployee = () => {
         setSelectedEmployee(undefined);
         setEditingProfile(undefined);
+        setMobileEmployeeView('overview');
+        setShowMobileEditor(false);
+        setShowMobileAttendance(false);
         setSelectedHolidayDates(new Set());
         setRangeAnchor(null);
     };
@@ -209,8 +232,8 @@ const HR: React.FC = () => {
         setRangeAnchor(null);
     };
 
-    const bookSelectedHoliday = async () => {
-        if (!selectedEmployee || !editingProfile || !signedInEmployee || selectedHolidayDates.size === 0) return;
+    const bookSelectedHoliday = async (): Promise<boolean> => {
+        if (!selectedEmployee || !editingProfile || !signedInEmployee || selectedHolidayDates.size === 0) return false;
         setSaving(true);
         setError('');
         try {
@@ -226,21 +249,27 @@ const HR: React.FC = () => {
             ]);
             setLeaveRequests(requests);
             setSummaries(prev => ({ ...prev, [selectedEmployee.id]: summary }));
+            return true;
         } catch (bookError) {
             setError(bookError instanceof Error ? bookError.message : t('hr.errorBookHoliday'));
+            return false;
         } finally {
             setSaving(false);
         }
     };
 
-    const saveProfile = async () => {
+    const saveProfile = async (closeAfterSave = true) => {
         if (!editingProfile) return;
         setSaving(true);
         setError('');
         try {
             await hrService.saveHrProfile(editingProfile);
-            closeEmployee();
+            if (closeAfterSave) closeEmployee();
             await loadData();
+            if (!closeAfterSave && selectedEmployee) {
+                setEditingProfile(await hrService.getHrProfile(selectedEmployee.id, defaults));
+                setShowMobileEditor(false);
+            }
         } catch (saveError) {
             setError(saveError instanceof Error ? saveError.message : t('hr.errorSaveProfile'));
         } finally {
@@ -370,12 +399,145 @@ const HR: React.FC = () => {
         }
     };
 
+    const selectedSummary = selectedEmployee ? summaries[selectedEmployee.id] : undefined;
+    const mobileReportMonthLabel = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' })
+        .format(monthKeyToRange(reportMonth).start);
+    const workingPatternLabel = editingProfile
+        ? [
+            [1, t('hr.weekdayMon')], [2, t('hr.weekdayTue')], [3, t('hr.weekdayWed')],
+            [4, t('hr.weekdayThu')], [5, t('hr.weekdayFri')], [6, t('hr.weekdaySat')], [0, t('hr.weekdaySun')],
+        ].filter(([day]) => editingProfile.working_days.includes(Number(day))).map(([, label]) => label).join(', ')
+        : '';
+    const selectedHolidayRangeLabel = useMemo(() => {
+        const selected = [...selectedHolidayDates].sort();
+        if (selected.length === 0) return '';
+        const format = (value: string) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' })
+            .format(new Date(`${value}T12:00:00`));
+        return selected.length === 1 ? format(selected[0]) : `${format(selected[0])} – ${format(selected[selected.length - 1])}`;
+    }, [selectedHolidayDates]);
+
     if (loading) {
         return <div className="flex min-h-96 items-center justify-center text-slate-500">{t('hr.loadingWorkspace')}</div>;
     }
 
     return (
-        <div className="mx-auto max-w-[1500px] space-y-6 pt-6">
+        <div className="mx-auto max-w-[1500px]">
+            <div className="space-y-5 px-4 pb-7 pt-2 md:hidden">
+                {!selectedEmployee && (
+                    <>
+                        <header className="pt-2">
+                            <p className="text-sm font-semibold text-green-700">{t('hr.peopleOperationsEyebrow')}</p>
+                            <h1 className="mt-1 text-[32px] font-bold tracking-tight text-slate-950">{t('hr.pageTitle')}</h1>
+                        </header>
+
+                        <div className="relative">
+                            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                            <input
+                                value={search}
+                                onChange={event => setSearch(event.target.value)}
+                                placeholder={t('hr.searchPlaceholder')}
+                                className="min-h-touch w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-base outline-none focus:ring-4 focus:ring-green-100"
+                            />
+                        </div>
+
+                        {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>}
+
+                        <section className="grid grid-cols-2 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+                            <div className="border-r border-slate-100 p-4">
+                                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><UsersRound className="h-5 w-5" /></span>
+                                <p className="mt-3 text-3xl font-bold text-green-700">{employees.length}</p>
+                                <p className="mt-1 text-sm font-medium text-slate-500">{t('hr.activeEmployees')}</p>
+                            </div>
+                            <div className={`p-4 ${expiringContracts.length > 0 ? 'bg-amber-50' : ''}`}>
+                                <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${expiringContracts.length > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}><AlertTriangle className="h-5 w-5" /></span>
+                                <p className="mt-3 text-3xl font-bold text-slate-950">{expiringContracts.length}</p>
+                                <p className="mt-1 text-sm font-medium text-slate-500">{t('hr.contractsExpiringSoon')}</p>
+                            </div>
+                        </section>
+
+                        {expiringContracts.length > 0 && (
+                            <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+                                <h2 className="font-bold text-amber-950">{t('hr.contractAlerts')}</h2>
+                                <div className="mt-3 space-y-2">{expiringContracts.map(summary => <div key={summary.employee_id} className="rounded-2xl bg-white p-3 text-sm text-amber-900"><strong>{employeeName(summary.employee_id)}</strong><p className="mt-1">{t('hr.contractEndsRemaining', { date: summary.contract_end_date, count: summary.contract_days_remaining })}</p></div>)}</div>
+                            </section>
+                        )}
+
+                        <section>
+                            <div className="flex items-end justify-between gap-3 px-1">
+                                <div><h2 className="text-xl font-bold text-slate-950">{t('hr.employeesHeading')}</h2><p className="mt-0.5 text-sm text-slate-500">{mobileReportMonthLabel}</p></div>
+                                <div className="flex gap-2">
+                                    <label className="flex min-h-touch-xs min-w-touch-xs cursor-pointer items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm" aria-label={t('hr.reportPeriod')}>
+                                        <CalendarDays className="h-5 w-5" />
+                                        <input type="month" value={reportMonth} max={toMonthKey(new Date())} onChange={event => setReportMonth(event.target.value)} className="sr-only" />
+                                    </label>
+                                    <button type="button" disabled={exporting || employees.length === 0} onClick={() => void exportReport()} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm disabled:text-slate-300" aria-label={t('hr.exportPdf')}><FileDown className="h-5 w-5" /></button>
+                                </div>
+                            </div>
+                            <div className="mt-3 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+                                {filteredEmployees.map(employee => {
+                                    const summary = summaries[employee.id];
+                                    return (
+                                        <button key={employee.id} type="button" onClick={() => void openEmployee(employee)} className="flex min-h-touch items-center gap-3 border-b border-slate-100 px-4 py-3 text-left last:border-b-0">
+                                            <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-green-50 font-bold text-green-800">{employeeInitials(employee.name)}</span>
+                                            <span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className="truncate text-base font-bold text-slate-950">{employee.name}</span><span className={`rounded-full px-2 py-1 text-[11px] font-bold capitalize ${roleToneClasses[employee.role] ?? roleToneClasses.trainee}`}>{employee.role}</span></span><span className="mt-1 block text-sm text-slate-500">{employee.employee_number}</span></span>
+                                            <span className="text-right"><span className="block whitespace-nowrap text-sm font-bold text-green-700">{t('hr.daysAbbrev', { count: summary?.holiday_remaining ?? 0 })}</span><span className="mt-1 block text-xs text-slate-400">{t('hr.metricHolidayLeft')}</span></span>
+                                            <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-400" />
+                                        </button>
+                                    );
+                                })}
+                                {filteredEmployees.length === 0 && <p className="p-6 text-center text-sm text-slate-500">No employees match your search.</p>}
+                            </div>
+                        </section>
+                    </>
+                )}
+
+                {selectedEmployee && editingProfile && mobileEmployeeView === 'overview' && (
+                    <>
+                        <header>
+                            <button type="button" onClick={closeEmployee} className="flex min-h-touch-xs items-center gap-1 pr-3 text-base font-semibold text-green-700"><ChevronLeft className="h-5 w-5" />{t('hr.pageTitle')}</button>
+                            <div className="mt-4 flex items-center gap-4"><span className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-full bg-green-50 text-3xl font-bold text-green-700">{employeeInitials(selectedEmployee.name)}</span><div><h1 className="text-3xl font-bold tracking-tight text-slate-950">{selectedEmployee.name}</h1><div className="mt-2 flex items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize ${roleToneClasses[selectedEmployee.role] ?? roleToneClasses.trainee}`}>{selectedEmployee.role}</span><span className="text-sm text-slate-500">{selectedEmployee.employee_number}</span></div></div></div>
+                        </header>
+
+                        {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>}
+
+                        <section className="rounded-3xl border border-green-100 bg-green-50/70 p-5">
+                            <p className="text-4xl font-bold tracking-tight text-green-700">{selectedSummary?.holiday_remaining ?? 0} <span className="text-xl">days</span></p>
+                            <p className="mt-1 text-lg font-bold text-slate-950">{t('hr.metricHolidayLeft')}</p>
+                            <p className="mt-1 text-sm text-slate-500">{t('hr.daysAbbrev', { count: selectedSummary?.holiday_taken ?? 0 })} {t('hr.metricHolidayTaken').toLowerCase()}</p>
+                            <button type="button" onClick={() => setMobileEmployeeView('leave')} className="mt-5 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 text-base font-bold text-white shadow-sm"><CalendarPlus className="h-5 w-5" />{t('hr.bookHoliday')}</button>
+                        </section>
+
+                        <section><h2 className="px-1 text-xl font-bold text-slate-950">Employee details</h2><div className="mt-3 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+                            <button type="button" onClick={() => setShowMobileEditor(true)} className="flex min-h-touch w-full items-center gap-3 border-b border-slate-100 px-4 text-left"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><CalendarDays className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-bold text-slate-950">{t('hr.workingDays')}</span><span className="block truncate text-sm text-slate-500">{workingPatternLabel}</span></span><ChevronRight className="h-5 w-5 text-slate-400" /></button>
+                            <button type="button" onClick={() => setShowMobileEditor(true)} className="flex min-h-touch w-full items-center gap-3 border-b border-slate-100 px-4 text-left"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><Briefcase className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-bold text-slate-950">Contract</span><span className="block text-sm text-slate-500">{formatContractDate(selectedSummary?.contract_start_date)}</span></span><ChevronRight className="h-5 w-5 text-slate-400" /></button>
+                            <button type="button" onClick={() => setShowMobileAttendance(true)} className="flex min-h-touch w-full items-center gap-3 border-b border-slate-100 px-4 text-left"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><Clock3 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-bold text-slate-950">Attendance</span><span className="block text-sm text-slate-500">{t('hr.metricDaysWorked')}: {selectedSummary?.days_worked ?? 0}</span></span><ChevronRight className="h-5 w-5 text-slate-400" /></button>
+                            <button type="button" onClick={() => setShowMobileEditor(true)} className="flex min-h-touch w-full items-center gap-3 px-4 text-left"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><NotebookText className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-bold text-slate-950">{t('hr.internalNotes')}</span><span className="block truncate text-sm text-slate-500">{editingProfile.internal_notes || 'No notes added'}</span></span><ChevronRight className="h-5 w-5 text-slate-400" /></button>
+                        </div></section>
+                        <button type="button" onClick={() => setShowMobileEditor(true)} className="min-h-touch-xs w-full text-base font-bold text-green-700">Edit details</button>
+                    </>
+                )}
+
+                {selectedEmployee && editingProfile && mobileEmployeeView === 'leave' && (
+                    <>
+                        <header><button type="button" onClick={() => { setMobileEmployeeView('overview'); setSelectedHolidayDates(new Set()); setRangeAnchor(null); }} className="flex min-h-touch-xs items-center gap-1 pr-3 text-base font-semibold text-green-700"><ChevronLeft className="h-5 w-5" />{selectedEmployee.name}</button><h1 className="mt-4 text-[32px] font-bold tracking-tight text-slate-950">{t('hr.bookHoliday')}</h1><p className="mt-1 text-base text-slate-500">Choose the days away</p></header>
+                        {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>}
+                        <div className="grid grid-cols-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"><button type="button" onClick={() => { setBookingMode('range'); setRangeAnchor(null); }} className={`min-h-touch-xs rounded-xl text-sm font-bold ${bookingMode === 'range' ? 'bg-green-600 text-white shadow-sm' : 'text-slate-600'}`}>{t('hr.bookModePeriod')}</button><button type="button" onClick={() => { setBookingMode('single'); setRangeAnchor(null); }} className={`min-h-touch-xs rounded-xl text-sm font-bold ${bookingMode === 'single' ? 'bg-green-600 text-white shadow-sm' : 'text-slate-600'}`}>{t('hr.bookModeSingle')}</button></div>
+                        <p className="-mt-2 px-1 text-sm text-slate-500">{bookingMode === 'range' ? rangeAnchor ? t('hr.hintTapLastDay') : t('hr.hintTapFirstLast') : t('hr.hintTapIndividual')}</p>
+                        <section className="rounded-3xl border border-slate-100 bg-white p-3 shadow-sm">
+                            <div className="flex items-center justify-between"><button type="button" onClick={() => setBookingMonth(new Date(bookingMonth.getFullYear(), bookingMonth.getMonth() - 1, 1))} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-full bg-slate-100" aria-label={t('hr.previousMonth')}><ChevronLeft className="h-5 w-5" /></button><span className="text-lg font-bold capitalize text-slate-950">{new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(bookingMonth)}</span><button type="button" onClick={() => setBookingMonth(new Date(bookingMonth.getFullYear(), bookingMonth.getMonth() + 1, 1))} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-full bg-slate-100" aria-label={t('hr.nextMonth')}><ChevronRight className="h-5 w-5" /></button></div>
+                            <div className="mt-4 grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400">{[t('hr.weekdayMon'), t('hr.weekdayTue'), t('hr.weekdayWed'), t('hr.weekdayThu'), t('hr.weekdayFri'), t('hr.weekdaySat'), t('hr.weekdaySun')].map((label, index) => <span key={index}>{label}</span>)}</div>
+                            <div className="mt-2 grid grid-cols-7 gap-1">{calendarCells.map((date, index) => { if (!date) return <span key={`mobile-blank-${index}`} />; const key = toDateKey(date); const booked = bookedHolidayDates.has(key); const isSelected = selectedHolidayDates.has(key); const isAnchor = rangeAnchor === key; const isWorkingDay = editingProfile.working_days.includes(date.getDay()); return <button key={key} type="button" disabled={booked} onClick={() => handleSelectHolidayDay(key)} className={`flex min-h-touch-xs items-center justify-center rounded-xl text-sm font-bold transition-colors ${booked ? 'cursor-not-allowed bg-indigo-50 text-indigo-400' : isSelected ? 'bg-green-600 text-white' : isWorkingDay ? 'text-slate-800 active:bg-slate-100' : 'text-slate-300'} ${isAnchor ? 'ring-2 ring-green-800 ring-offset-1' : ''}`}>{date.getDate()}</button>; })}</div>
+                        </section>
+                        <section className="sticky bottom-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-xl"><div className="flex items-center justify-between gap-3"><div><p className="font-bold text-slate-950">{t('hr.bookNDays', { count: selectedHolidayDates.size })}</p><p className="mt-1 text-sm text-slate-500">{selectedHolidayRangeLabel || t('hr.hintTapFirstLast')}</p></div>{selectedHolidayDates.size > 0 && <button type="button" onClick={() => { setSelectedHolidayDates(new Set()); setRangeAnchor(null); }} className="min-h-touch-xs px-2 text-sm font-bold text-green-700">{t('hr.clear')}</button>}</div><button type="button" disabled={saving || selectedHolidayDates.size === 0} onClick={() => { void bookSelectedHoliday().then(booked => { if (booked) setMobileEmployeeView('overview'); }); }} className="mt-4 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 font-bold text-white disabled:bg-slate-300"><CalendarPlus className="h-5 w-5" />{saving ? t('hr.booking') : t('hr.bookNDays', { count: selectedHolidayDates.size })}</button></section>
+                    </>
+                )}
+
+                {selectedEmployee && editingProfile && showMobileAttendance && <div className="fixed inset-0 z-[90] flex items-end bg-black/45" role="dialog" aria-modal="true" aria-label="Attendance summary"><div className="w-full rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-500">{mobileReportMonthLabel}</p><h2 className="text-2xl font-bold text-slate-950">Attendance</h2></div><button type="button" onClick={() => setShowMobileAttendance(false)} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-full bg-slate-100" aria-label="Close attendance summary"><X className="h-5 w-5" /></button></div><div className="mt-5 grid grid-cols-2 gap-3"><Metric label={t('hr.metricDaysWorked')} value={String(selectedSummary?.days_worked ?? 0)} /><Metric label="Hours worked" value={String(selectedSummary?.hours_worked ?? 0)} /><Metric label={t('hr.metricNoShows')} value={t('hr.daysAbbrev', { count: selectedSummary?.no_show_days ?? 0 })} warning={(selectedSummary?.no_show_days ?? 0) > 0} /><Metric label={t('hr.metricHolidayTaken')} value={t('hr.daysAbbrev', { count: selectedSummary?.holiday_taken ?? 0 })} /></div><button type="button" onClick={() => setShowMobileAttendance(false)} className="mt-5 min-h-touch w-full rounded-2xl bg-slate-950 font-bold text-white">Done</button></div></div>}
+
+                {selectedEmployee && editingProfile && showMobileEditor && <div className="fixed inset-0 z-[90] flex items-end bg-black/45" role="dialog" aria-modal="true" aria-label="Edit employee details"><div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-500">{selectedEmployee.name}</p><h2 className="text-2xl font-bold text-slate-950">Edit details</h2></div><button type="button" onClick={() => setShowMobileEditor(false)} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-full bg-slate-100" aria-label="Close employee editor"><X className="h-5 w-5" /></button></div><div className="mt-5 space-y-5"><div className="grid grid-cols-2 gap-3"><Field label={t('hr.contractStart')}><input type="date" value={editingProfile.contract_start_date} onChange={event => setEditingProfile({ ...editingProfile, contract_start_date: event.target.value })} className="min-h-touch-xs w-full rounded-xl border border-slate-200 px-3 text-sm" /></Field><Field label={t('hr.contractEnd')}><input type="date" value={editingProfile.contract_end_date ?? ''} onChange={event => setEditingProfile({ ...editingProfile, contract_end_date: event.target.value || null })} className="min-h-touch-xs w-full rounded-xl border border-slate-200 px-3 text-sm" /></Field></div><Field label={t('hr.carriedDays')}><input type="number" step="0.5" value={editingProfile.carried_holiday_days} onChange={event => setEditingProfile({ ...editingProfile, carried_holiday_days: Number(event.target.value) })} className="min-h-touch-xs w-full rounded-xl border border-slate-200 px-3" /></Field><Field label={t('hr.workingDays')}><div className="grid grid-cols-4 gap-2">{[[1, t('hr.weekdayMon')], [2, t('hr.weekdayTue')], [3, t('hr.weekdayWed')], [4, t('hr.weekdayThu')], [5, t('hr.weekdayFri')], [6, t('hr.weekdaySat')], [0, t('hr.weekdaySun')]].map(([day, label]) => { const numericDay = Number(day); const selected = editingProfile.working_days.includes(numericDay); return <button key={day} type="button" onClick={() => setEditingProfile({ ...editingProfile, working_days: selected ? editingProfile.working_days.filter(item => item !== numericDay) : [...editingProfile.working_days, numericDay] })} className={`min-h-touch-xs rounded-xl text-sm font-bold ${selected ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{label}</button>; })}</div></Field><Field label={t('hr.internalNotes')}><textarea value={editingProfile.internal_notes} onChange={event => setEditingProfile({ ...editingProfile, internal_notes: event.target.value })} className="min-h-28 w-full rounded-2xl border border-slate-200 p-3" /></Field></div><button type="button" disabled={saving} onClick={() => void saveProfile(false)} className="mt-6 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 font-bold text-white disabled:bg-slate-300"><FilePenLine className="h-5 w-5" />{saving ? t('common.saving') : t('hr.saveProfile')}</button></div></div>}
+            </div>
+
+            <div className="hidden space-y-6 pt-6 md:block">
             <header className="flex flex-col gap-4 rounded-[2rem] border border-white bg-white/85 p-6 shadow-xl sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">{t('hr.peopleOperationsEyebrow')}</p>
@@ -704,6 +866,7 @@ const HR: React.FC = () => {
                     </div>
                 </div>
             )}
+        </div>
         </div>
     );
 };
