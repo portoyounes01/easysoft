@@ -163,6 +163,7 @@ BEGIN
    AND t.deleted_at IS NULL
    AND t.transaction_date BETWEEN p_start AND p_end
   WHERE ti.tenant_id = p_tenant_id
+    AND ti.deleted_at IS NULL
   GROUP BY ti.product_id
   ORDER BY SUM(ti.quantity) DESC NULLS LAST
   LIMIT GREATEST(COALESCE(p_limit, 10), 1);
@@ -274,6 +275,7 @@ BEGIN
    AND t.deleted_at IS NULL
    AND t.transaction_date BETWEEN p_start AND p_end
   WHERE ti.tenant_id = p_tenant_id
+    AND ti.deleted_at IS NULL
   GROUP BY ti.category_id
   ORDER BY SUM(ti.line_total) DESC NULLS LAST;
 END;
