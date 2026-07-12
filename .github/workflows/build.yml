@@ -34,7 +34,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check Supabase build config
+        # Fail loudly instead of shipping an exe with no backend config: src/lib/supabase.ts
+        # throws at startup (blank page) when these are absent from the Vite build.
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON: ${{ secrets.VITE_SUPABASE_ANON }}
+        shell: bash
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON" ]; then
+            echo "::error::VITE_SUPABASE_URL / VITE_SUPABASE_ANON repo secrets are not set. Add them under Settings > Secrets and variables > Actions (values from local .env)."
+            exit 1
+          fi
+
       - name: Build web app
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON: ${{ secrets.VITE_SUPABASE_ANON }}
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
         run: npm run build
 
       - name: Build Electron app (Windows)
