@@ -92,7 +92,12 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "discover-network-printers.js",
+      "identify-thermal-printers.js",
+      "auto-printer-setup.js",
+      "detect-usb-printers.js",
+      "test-thermal-printer.js"
     ],
     "extraResources": [
       {
