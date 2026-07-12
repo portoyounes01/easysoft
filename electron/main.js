@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, net, protocol, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, net, protocol, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -145,10 +145,24 @@ async function loadRenderer() {
 }
 
 async function createWindow() {
+  // No application menu = no File/Edit/View bar and nothing for Alt to reveal. Kept on
+  // macOS, where the menu carries Cmd+Q and clipboard shortcuts needed for local dev.
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null);
+  }
+
+  // Packaged tills run as a kiosk: fullscreen over the taskbar, no window buttons.
+  // Dev keeps a normal window so the machine stays usable. The kiosk/fullscreen keys
+  // must be ABSENT (not false) outside kiosk mode: an explicit `fullscreen: false`
+  // permanently disables the macOS green-button fullscreen (it only zooms).
+  const kiosk = !isDev;
+
   // Create the browser window
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    ...(kiosk ? { kiosk: true, fullscreen: true } : {}),
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -157,6 +171,18 @@ async function createWindow() {
     },
     icon: path.join(__dirname, '../public/favicon.ico'), // Add your app icon
     show: false // Don't show until ready
+  });
+
+  // The menu's accelerators died with the menu, so devtools gets a manual binding.
+  // ⚠️ Deliberately left active in production for now (owner's call, 2026-07-12) —
+  // remove before tills ship to real stores.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const comboI = (input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i';
+    if (input.key === 'F12' || comboI) {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
   });
 
   // Initialize hardware controller

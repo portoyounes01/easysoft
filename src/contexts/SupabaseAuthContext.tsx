@@ -52,6 +52,10 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Sentinel matched by LoginForm2 to offer the "Re-pair this till" action (kiosk has no
+// URL bar, so this failure must carry its own way back to /pair-device).
+export const TILL_NOT_PAIRED_ERROR = 'This till is not paired. Pair the device before employee login.';
+
 export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -261,7 +265,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const { data: sessionData } = await supabase.auth.getSession();
       const deviceSession = sessionData.session;
       if (!deviceSession || deviceSession.user.app_metadata.app_role !== 'device') {
-        throw new Error('This till is not paired. Pair the device before employee login.');
+        throw new Error(TILL_NOT_PAIRED_ERROR);
       }
 
       const { data, error } = await supabase.rpc('employee_pin_login', {

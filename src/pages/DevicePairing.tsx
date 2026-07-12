@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { QrCode, MonitorSmartphone, HelpCircle, Loader2, CheckCircle2, AlertCircle, KeyRound } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { QrCode, MonitorSmartphone, HelpCircle, Loader2, CheckCircle2, AlertCircle, KeyRound, ArrowLeft } from 'lucide-react';
 import { PairingButton } from '../components/ui/PairingButton';
 import { supabase } from '../lib/supabase';
-import { saveDevicePairingScope } from '../utils/devicePairingStorage';
+import { saveDevicePairingScope, hasDevicePairingScope } from '../utils/devicePairingStorage';
 
 type PairStatus = 'idle' | 'pairing' | 'success' | 'error';
 
@@ -22,6 +22,7 @@ function friendlyError(code: string): string {
 
 const DevicePairing: React.FC = () => {
   // 1. Hooks
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [code, setCode] = useState(() => searchParams.get('code')?.trim().toUpperCase() ?? '');
   const [deviceName, setDeviceName] = useState('');
@@ -148,6 +149,18 @@ const DevicePairing: React.FC = () => {
             <HelpCircle className="w-5 h-5" />
             <span className="text-base">Need help? Contact your administrator for a new pairing code.</span>
           </div>
+
+          {/* A till that already holds pairing data may have landed here via "Re-pair this
+              till" — give it a way back (the kiosk has no URL bar). */}
+          {hasDevicePairingScope() && status !== 'success' && (
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
+              className="mx-auto flex min-h-touch items-center gap-2 rounded-2xl px-4 text-lg font-semibold text-blue-600 hover:bg-blue-50"
+            >
+              <ArrowLeft className="w-5 h-5" /> Back to sign in
+            </button>
+          )}
         </div>
       </div>
     </div>

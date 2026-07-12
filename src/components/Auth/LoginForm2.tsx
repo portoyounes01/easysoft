@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { User, Wifi, WifiOff, X, Store, Delete, UserPlus, Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+import { useNavigate } from 'react-router-dom';
+import { useSupabaseAuth, TILL_NOT_PAIRED_ERROR } from '../../contexts/SupabaseAuthContext';
 import { useEmployees } from '../../contexts/EmployeesContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import {
@@ -124,6 +125,7 @@ const LoginForm2Inner: React.FC = () => {
   const submittingRef = useRef(false);
 
   const { signInWithEmployeeCredentials, isLoading } = useSupabaseAuth();
+  const navigate = useNavigate();
   const employeesContext = useEmployees();
 
   const companyLogoUrl = (settings.company as { logoUrl?: string }).logoUrl?.trim() || '';
@@ -605,6 +607,15 @@ const LoginForm2Inner: React.FC = () => {
                     {error && (
                       <div className="mx-auto mt-4 w-full max-w-sm shrink-0 rounded-xl border-2 border-red-200 bg-red-50 px-4 py-2">
                         <p className="line-clamp-2 text-center text-sm font-medium text-red-700">{error}</p>
+                        {error === TILL_NOT_PAIRED_ERROR && (
+                          <button
+                            type="button"
+                            onClick={() => navigate('/pair-device')}
+                            className="mx-auto mt-2 block rounded-lg bg-red-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-700"
+                          >
+                            Re-pair this till
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

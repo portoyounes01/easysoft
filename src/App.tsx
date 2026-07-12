@@ -119,9 +119,16 @@ const AppContent: React.FC = () => {
   // Host-selected login: the browser/PWA human form, or the till's employee-PIN screen.
   // Gate on isAuthenticated (principal), NOT `employee` — a PWA human has no employee row
   // and would otherwise be stuck on the login screen while authenticated.
+  // An unpaired till must land on /pair-device, not the PIN screen: the kiosk has no URL
+  // bar, so the pairing page is unreachable unless we route there ourselves (Devices.tsx
+  // hands the admin a one-time code meant to be typed on that machine).
   const loginElement = isAuthenticated
     ? <Navigate to={getRoleBasedRedirect(principal?.role ?? '')} replace />
-    : (isPwaHost ? <LoginFormPwa /> : <LoginForm2 />);
+    : isPwaHost
+      ? <LoginFormPwa />
+      : hasDevicePairingScope()
+        ? <LoginForm2 />
+        : <Navigate to="/pair-device" replace />;
 
   return (
     <Routes>
