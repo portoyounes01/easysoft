@@ -31,6 +31,7 @@ import {
     Store,
     Ticket,
     Trash2,
+    Weight,
     Wifi,
     type LucideIcon,
 } from 'lucide-react';
@@ -51,6 +52,7 @@ import { isSystemAdministrator } from '../utils/systemAdmin';
 import { generateUUID } from '../utils/uuid';
 import type { ReceiptLanguage } from '../utils/receiptLanguage';
 import { PrinterSettingsPanel, type HardwareSettingsTool } from './PrinterTestPage';
+import ScaleSettingsPanel from '../components/ScaleSettingsPanel';
 import NotificationSettings from '../components/notifications/NotificationSettings';
 import { isPwaHost } from '../lib/host';
 import { SeedManagementPanel } from './SeedManagement';
@@ -432,7 +434,9 @@ const Settings: React.FC = () => {
 
     useEffect(() => {
         const hw = searchParams.get('hw');
-        const allowed: HardwareSettingsTool[] = devToolsEnabled ? ['printer', 'seed', 'cashier', 'electron'] : ['printer'];
+        const allowed: HardwareSettingsTool[] = devToolsEnabled
+            ? ['printer', 'scale', 'seed', 'cashier', 'electron']
+            : ['printer', 'scale'];
         if (hw && (allowed as string[]).includes(hw)) {
             setActiveTab('hardware');
             setHardwareTool(hw as HardwareSettingsTool);
@@ -1432,10 +1436,11 @@ const Settings: React.FC = () => {
     const renderHardware = () => {
         const tools: Array<{ id: HardwareSettingsTool; label: string; description: string; icon: LucideIcon }> = [
             { id: 'printer', label: t('settings.hwPrintersLabel'), description: t('settings.hwPrintersDesc'), icon: Printer },
+            { id: 'scale', label: t('settings.hwScaleLabel'), description: t('settings.hwScaleDesc'), icon: Weight },
             { id: 'seed', label: t('settings.hwSeedLabel'), description: t('settings.hwSeedDesc'), icon: Database },
             { id: 'cashier', label: t('settings.hwCashierLabel'), description: t('settings.hwCashierDesc'), icon: BadgeCheck },
             { id: 'electron', label: 'Electron', description: t('settings.hwElectronDesc'), icon: Monitor },
-        ].filter(tool => tool.id === 'printer' || devToolsEnabled);
+        ].filter(tool => tool.id === 'printer' || tool.id === 'scale' || devToolsEnabled);
         return (
             <div className="space-y-6">
                 <SettingCard
@@ -1470,6 +1475,7 @@ const Settings: React.FC = () => {
 
                 <div className={`${glassCard} p-3 sm:p-5`}>
                     {hardwareTool === 'printer' && <PrinterSettingsPanel embedded />}
+                    {hardwareTool === 'scale' && <ScaleSettingsPanel embedded />}
                     {devToolsEnabled && hardwareTool === 'seed' && <SeedManagementPanel embedded />}
                     {devToolsEnabled && hardwareTool === 'cashier' && <CashierTestingPanel embedded />}
                     {devToolsEnabled && hardwareTool === 'electron' && <ElectronTestingPanel embedded />}

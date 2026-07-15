@@ -83,6 +83,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
     signHashPlaintext: (plaintext) => ipcRenderer.invoke('fiscal:sign-hash-plaintext', plaintext),
   },
 
+  // Weighing scale (CAS PR-II over RS-232)
+  scale: {
+    getStatus: () => ipcRenderer.invoke('scale:get-status'),
+    getConfig: () => ipcRenderer.invoke('scale:get-config'),
+    setConfig: (config) => ipcRenderer.invoke('scale:set-config', config),
+    listPorts: () => ipcRenderer.invoke('scale:list-ports'),
+    detect: () => ipcRenderer.invoke('scale:detect'),
+    readOnce: () => ipcRenderer.invoke('scale:read-once'),
+    start: () => ipcRenderer.invoke('scale:start'),
+    stop: () => ipcRenderer.invoke('scale:stop'),
+    onReading: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on('scale-reading', handler);
+      return () => ipcRenderer.removeListener('scale-reading', handler);
+    },
+    onStatusChange: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on('scale-status-change', handler);
+      return () => ipcRenderer.removeListener('scale-status-change', handler);
+    },
+  },
+
   // Development helpers
   isDev: process.env.NODE_ENV === 'development'
 });

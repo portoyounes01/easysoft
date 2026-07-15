@@ -23,7 +23,7 @@ const DS2_PRIMARY_ACTION =
 const DS2_SECONDARY_ACTION =
     'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-5 font-semibold text-white bg-gray-600 hover:bg-gray-700 shadow-sm transition-all duration-200';
 
-export type HardwareSettingsTool = 'printer' | 'seed' | 'cashier' | 'electron';
+export type HardwareSettingsTool = 'printer' | 'scale' | 'seed' | 'cashier' | 'electron';
 
 export interface PrinterSettingsPanelProps {
     /** When true, omit full-page chrome (used inside Settings). */

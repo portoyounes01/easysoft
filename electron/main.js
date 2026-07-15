@@ -9,9 +9,11 @@ const isDev = rendererConfig.mode === 'development';
 // Import our hardware controllers
 const HardwareController = require('./hardware/hardwareController');
 const { registerFiscalSigningIpc } = require('./fiscalSigning');
+const { registerScaleIpc } = require('./scaleIpc');
 
 let mainWindow;
 let hardwareController;
+let scaleController;
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
@@ -201,6 +203,9 @@ async function createWindow() {
     mainWindow = null;
     if (hardwareController) {
       hardwareController.cleanup();
+    }
+    if (scaleController) {
+      scaleController.cleanup();
     }
   });
 
@@ -520,6 +525,8 @@ ipcMain.handle('app:get-version', async () => {
 });
 
 registerFiscalSigningIpc(ipcMain, app);
+
+scaleController = registerScaleIpc(ipcMain, app);
 
 // Error handling
 process.on('uncaughtException', (error) => {

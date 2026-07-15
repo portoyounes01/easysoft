@@ -46,6 +46,50 @@ interface HardwareStatus {
   };
 }
 
+interface ScaleReading {
+  weight: number;
+  unit: string | null;
+  stable: boolean;
+  status: 'stable' | 'unstable' | 'unknown';
+  raw: string;
+  timestamp: string;
+}
+
+type ScaleState = 'idle' | 'detecting' | 'connected' | 'disconnected' | 'error';
+
+interface ScaleStatusInfo {
+  state: ScaleState;
+  polling: boolean;
+  port: string | null;
+  baud: number | null;
+  mock: boolean;
+  lastReading: ScaleReading | null;
+  lastError: string | null;
+}
+
+interface ScaleConfig {
+  enabled: boolean;
+  port: string; // 'auto' or an explicit port path like 'COM1'
+  baud: number;
+  lastGoodPort: string | null;
+  lastGoodBaud: number | null;
+}
+
+interface ScalePortInfo {
+  path: string;
+  manufacturer: string | null;
+  vendorId: string | null;
+  productId: string | null;
+}
+
+interface ScaleProbeResult {
+  port: string;
+  baud: number;
+  outcome: 'answered' | 'silent' | 'busy' | 'error';
+  detail?: string;
+  reply?: string;
+}
+
 interface ElectronAPI {
   hardware: {
     init(): Promise<{
@@ -246,6 +290,32 @@ interface ElectronAPI {
     }>;
   };
 
+  // Optional: older packaged shells predate the scale IPC surface, so the
+  // renderer must feature-detect and fall back to manual weight entry.
+  scale?: {
+    getStatus(): Promise<{ success: boolean; status?: ScaleStatusInfo; error?: string }>;
+    getConfig(): Promise<{ success: boolean; config?: ScaleConfig; error?: string }>;
+    setConfig(config: Partial<Pick<ScaleConfig, 'enabled' | 'port' | 'baud'>>): Promise<{
+      success: boolean;
+      config?: ScaleConfig;
+      error?: string;
+    }>;
+    listPorts(): Promise<{ success: boolean; ports: ScalePortInfo[]; error?: string }>;
+    detect(): Promise<{
+      success: boolean;
+      found?: boolean;
+      port?: string;
+      baud?: number;
+      results: ScaleProbeResult[];
+      error?: string;
+    }>;
+    readOnce(): Promise<{ success: boolean; reading?: ScaleReading; error?: string }>;
+    start(): Promise<{ success: boolean; alreadyRunning?: boolean; error?: string }>;
+    stop(): Promise<{ success: boolean; error?: string }>;
+    onReading(callback: (reading: ScaleReading) => void): () => void;
+    onStatusChange(callback: (status: ScaleStatusInfo) => void): () => void;
+  };
+
   isDev: boolean;
 }
 
@@ -255,4 +325,16 @@ declare global {
   }
 }
 
-export { ElectronAPI, ReceiptData, CashDrawerOptions, HardwareStatus, ConfiguredPrinter };
+export {
+  ElectronAPI,
+  ReceiptData,
+  CashDrawerOptions,
+  HardwareStatus,
+  ConfiguredPrinter,
+  ScaleReading,
+  ScaleState,
+  ScaleStatusInfo,
+  ScaleConfig,
+  ScalePortInfo,
+  ScaleProbeResult,
+};
