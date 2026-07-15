@@ -11,22 +11,30 @@ import type { SystemSettings, DeepPartial } from './SettingsContext';
 import { runFiscalCheckout, type FiscalCheckoutResult, type FiscalCartLine } from '../fiscal/checkoutOrchestrator';
 import { localTransactionToServerInsert, localTransactionItemsToServerInsert } from '../fiscal/pushServer';
 
+export interface CartLine {
+  /** Line identity. Unit products use product.id (same-product taps merge);
+   *  weighed products get a unique id per weighing (separate lines). */
+  lineId: string;
+  product: LocalProduct;
+  /** Units for unit products; kg (3 decimals) for weighed products. */
+  quantity: number;
+  discount: number;
+}
+
 interface POSState {
   currentTransaction: Partial<Transaction> | null;
-  cart: Array<{
-    product: LocalProduct;
-    quantity: number;
-    discount: number;
-  }>;
+  cart: CartLine[];
   cashDrawer: CashDrawer | null;
   selectedCustomer: LocalCustomer | null;
 }
 
 interface POSContextType extends POSState {
   addToCart: (product: LocalProduct, quantity?: number) => void;
-  removeFromCart: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
-  applyDiscount: (productId: string, discount: number) => void;
+  /** Adds one weighed line (kg). Never merges with existing lines. */
+  addWeighedToCart: (product: LocalProduct, weightKg: number) => void;
+  removeFromCart: (lineId: string) => void;
+  updateQuantity: (lineId: string, quantity: number) => void;
+  applyDiscount: (lineId: string, discount: number) => void;
   clearCart: () => void;
   selectCustomer: (customer: LocalCustomer | null) => void;
   openDrawer: (initialFloat: number) => void;
@@ -61,10 +69,10 @@ interface POSContextType extends POSState {
 const POSContext = createContext<POSContextType | undefined>(undefined);
 
 type POSAction =
-  | { type: 'ADD_TO_CART'; payload: { product: LocalProduct; quantity: number } }
+  | { type: 'ADD_TO_CART'; payload: { product: LocalProduct; quantity: number; lineId: string; merge: boolean } }
   | { type: 'REMOVE_FROM_CART'; payload: string }
-  | { type: 'UPDATE_QUANTITY'; payload: { productId: string; quantity: number } }
-  | { type: 'APPLY_DISCOUNT'; payload: { productId: string; discount: number } }
+  | { type: 'UPDATE_QUANTITY'; payload: { lineId: string; quantity: number } }
+  | { type: 'APPLY_DISCOUNT'; payload: { lineId: string; discount: number } }
   | { type: 'CLEAR_CART' }
   | { type: 'SELECT_CUSTOMER'; payload: LocalCustomer | null }
   | { type: 'OPEN_DRAWER'; payload: CashDrawer }
@@ -73,32 +81,33 @@ type POSAction =
 const posReducer = (state: POSState, action: POSAction): POSState => {
   switch (action.type) {
     case 'ADD_TO_CART': {
-      const existingItem = state.cart.find(item => item.product.id === action.payload.product.id);
+      const { product, quantity, lineId, merge } = action.payload;
+      const existingItem = merge ? state.cart.find(item => item.lineId === lineId) : undefined;
       if (existingItem) {
         return {
           ...state,
           cart: state.cart.map(item =>
-            item.product.id === action.payload.product.id
-              ? { ...item, quantity: item.quantity + action.payload.quantity }
+            item.lineId === lineId
+              ? { ...item, quantity: item.quantity + quantity }
               : item
           )
         };
       }
       return {
         ...state,
-        cart: [...state.cart, { product: action.payload.product, quantity: action.payload.quantity, discount: 0 }]
+        cart: [...state.cart, { lineId, product, quantity, discount: 0 }]
       };
     }
     case 'REMOVE_FROM_CART':
       return {
         ...state,
-        cart: state.cart.filter(item => item.product.id !== action.payload)
+        cart: state.cart.filter(item => item.lineId !== action.payload)
       };
     case 'UPDATE_QUANTITY':
       return {
         ...state,
         cart: state.cart.map(item =>
-          item.product.id === action.payload.productId
+          item.lineId === action.payload.lineId
             ? { ...item, quantity: action.payload.quantity }
             : item
         )
@@ -108,7 +117,7 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
       return {
         ...state,
         cart: state.cart.map(item =>
-          item.product.id === action.payload.productId
+          item.lineId === action.payload.lineId
             ? { ...item, discount: clamped }
             : item
         )
@@ -153,23 +162,32 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [dispatch]);
 
   const addToCart = (product: LocalProduct, quantity = 1) => {
-    dispatchPos({ type: 'ADD_TO_CART', payload: { product, quantity } });
+    // Unit products keep the historical merge-by-product semantics.
+    dispatchPos({ type: 'ADD_TO_CART', payload: { product, quantity, lineId: product.id, merge: true } });
   };
 
-  const removeFromCart = (productId: string) => {
-    dispatchPos({ type: 'REMOVE_FROM_CART', payload: productId });
+  const weighedLineSeq = useRef(0);
+  const addWeighedToCart = (product: LocalProduct, weightKg: number) => {
+    if (!(weightKg > 0)) return;
+    weighedLineSeq.current += 1;
+    const lineId = `${product.id}::w${Date.now()}-${weighedLineSeq.current}`;
+    dispatchPos({ type: 'ADD_TO_CART', payload: { product, quantity: weightKg, lineId, merge: false } });
   };
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const removeFromCart = (lineId: string) => {
+    dispatchPos({ type: 'REMOVE_FROM_CART', payload: lineId });
+  };
+
+  const updateQuantity = (lineId: string, quantity: number) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(lineId);
     } else {
-      dispatchPos({ type: 'UPDATE_QUANTITY', payload: { productId, quantity } });
+      dispatchPos({ type: 'UPDATE_QUANTITY', payload: { lineId, quantity } });
     }
   };
 
-  const applyDiscount = (productId: string, discount: number) => {
-    dispatchPos({ type: 'APPLY_DISCOUNT', payload: { productId, discount } });
+  const applyDiscount = (lineId: string, discount: number) => {
+    dispatchPos({ type: 'APPLY_DISCOUNT', payload: { lineId, discount } });
   };
 
   const clearCart = () => {
@@ -413,6 +431,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           category_id: item.product.category_id,
           category_name: item.product.category_name,
           quantity: item.quantity,
+          unit: item.product.sold_by_weight ? ('kg' as const) : ('un' as const),
           unit_price: item.product.price,
           unit_cost: item.product.cost,
           iva_rate: item.product.iva_rate,
@@ -562,6 +581,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <POSContext.Provider value={{
       ...state,
       addToCart,
+      addWeighedToCart,
       removeFromCart,
       updateQuantity,
       applyDiscount,

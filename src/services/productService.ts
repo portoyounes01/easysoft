@@ -369,7 +369,8 @@ export class ProductService {
         const product = await this.getProductById(id);
         if (!product || !readPosTrackInventoryFromStorage() || !product.track_stock) return;
 
-        const newStock = Math.max(0, product.stock + quantityChange);
+        // 3dp: weighed products adjust stock in fractional kg.
+        const newStock = Math.max(0, Math.round((product.stock + quantityChange) * 1000) / 1000);
         await this.updateProduct(id, { stock: newStock });
     }
 

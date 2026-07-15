@@ -188,6 +188,7 @@ export class TransactionSyncService {
                         category_id: item.category_id,
                         category_name: item.category_name,
                         quantity: item.quantity,
+                        unit: item.unit ?? 'un',
                         unit_price: item.unit_price,
                         unit_cost: item.unit_cost,
                         iva_rate: item.iva_rate,

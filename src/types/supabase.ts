@@ -186,6 +186,9 @@ export interface ProductRow {
     stock: number;
     min_stock: number;
     track_stock: boolean;
+    /** Sold by weight: price is €/kg, cart quantity is kg (3 decimals), stock is kg.
+     *  Optional because rows synced before the weight-products migration lack it. */
+    sold_by_weight?: boolean;
     image_url: string | null;
     supplier: string | null;
     location: string | null;
@@ -212,6 +215,7 @@ export interface ProductInsert {
     stock?: number;
     min_stock?: number;
     track_stock?: boolean;
+    sold_by_weight?: boolean;
     image_url?: string | null;
     supplier?: string | null;
     location?: string | null;
@@ -238,6 +242,7 @@ export interface ProductUpdate {
     stock?: number;
     min_stock?: number;
     track_stock?: boolean;
+    sold_by_weight?: boolean;
     image_url?: string | null;
     supplier?: string | null;
     location?: string | null;
@@ -550,6 +555,7 @@ export interface ProductFormData {
     stock: number;
     min_stock: number;
     track_stock: boolean;
+    sold_by_weight: boolean;
     image_url: string;
     supplier: string;
     location: string;
@@ -835,6 +841,9 @@ export interface TransactionItemRow {
     category_id: string | null;
     category_name: string | null;
     quantity: number;
+    /** 'kg' when the line was sold by weight (quantity is kg, unit_price €/kg).
+     *  Optional: rows written before the weight-products migration lack it ('un'). */
+    unit?: 'un' | 'kg';
     unit_price: number;
     unit_cost: number;
     iva_rate: number;
@@ -859,6 +868,7 @@ export interface TransactionItemInsert {
     category_id?: string | null;
     category_name?: string | null;
     quantity: number;
+    unit?: 'un' | 'kg';
     unit_price: number;
     unit_cost?: number;
     iva_rate: number;

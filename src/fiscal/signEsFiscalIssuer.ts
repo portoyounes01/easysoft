@@ -61,6 +61,9 @@ function certificationMode(settings: SystemSettings): 'production' | 'training' 
 }
 
 const dec2 = (n: number): string => n.toFixed(2);
+/** Quantities: 3 decimals so weighed lines (kg) keep their 0.005 kg resolution.
+ *  The edge fn accepts up to 8 decimals (DEC8). */
+const dec3 = (n: number): string => n.toFixed(3);
 const dec8 = (n: number): string => n.toFixed(8);
 /** 0.21 -> '21.0' (SIGN ES rate strings are percentages with decimals). */
 const rateStr = (rate: number): string => (rate * 100).toFixed(1);
@@ -147,7 +150,7 @@ export async function issueSignEsSale(params: {
         const discountGross = it.discount_amount ?? 0;
         return {
             text: (it.product_name || 'Artículo').slice(0, 250),
-            quantity: dec2(it.quantity),
+            quantity: dec3(it.quantity),
             unit_amount: dec8(it.unit_price / (1 + rate)),
             ...(discountGross > 0 ? { discount: dec8(discountGross / (1 + rate)) } : {}),
             full_amount: dec2(grossLine),
@@ -333,6 +336,7 @@ export async function issueSignEsCreditNoteForTransaction(params: {
                 category_id: item.category_id,
                 category_name: item.category_name,
                 quantity: item.quantity,
+                unit: item.unit ?? 'un',
                 unit_price: item.unit_price,
                 unit_cost: item.unit_cost,
                 iva_rate: item.iva_rate,

@@ -77,6 +77,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         iva_rate: 0.23, // Default to 23% (standard rate)
         stock: 0,
         min_stock: 0,
+        sold_by_weight: false,
         image_url: '',
         supplier: '',
         location: '',
@@ -125,6 +126,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 iva_rate: product.iva_rate,
                 stock: product.stock,
                 min_stock: product.min_stock,
+                sold_by_weight: product.sold_by_weight ?? false,
                 image_url: product.image_url || '',
                 supplier: product.supplier || '',
                 location: product.location || '',
@@ -143,6 +145,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 iva_rate: defaultIvaRate,
                 stock: 0,
                 min_stock: 0,
+                sold_by_weight: false,
                 image_url: '',
                 supplier: '',
                 location: '',
@@ -544,10 +547,29 @@ const ProductForm: React.FC<ProductFormProps> = ({
                         <div className="space-y-4">
                             <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('products.form.pricingTax')}</h3>
 
+                            {/* Sold by weight: lives here (not the disabled inventory block) because
+                                its primary effect is pricing — price becomes €/kg. */}
+                            <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                                <input
+                                    type="checkbox"
+                                    className="mt-0.5 h-5 w-5 rounded border-gray-300"
+                                    checked={formData.sold_by_weight}
+                                    onChange={(e) => handleFieldChange('sold_by_weight', e.target.checked)}
+                                />
+                                <span>
+                                    <span className="block text-sm font-semibold text-gray-700">
+                                        {t('products.form.soldByWeight')}
+                                    </span>
+                                    <span className="block text-xs text-gray-500">
+                                        {t('products.form.soldByWeightHint')}
+                                    </span>
+                                </span>
+                            </label>
+
                             {/* Price */}
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    {t('products.form.priceInclVat')}
+                                    {t('products.form.priceInclVat')}{formData.sold_by_weight ? ' — €/kg' : ''}
                                 </label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">
@@ -642,13 +664,19 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    {t('products.form.currentStock')}
+                                    {t('products.form.currentStock')}{formData.sold_by_weight ? ' (kg)' : ''}
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
+                                    step={formData.sold_by_weight ? '0.001' : '1'}
                                     value={formData.stock}
-                                    onChange={(e) => handleFieldChange('stock', parseInt(e.target.value) || 0)}
+                                    onChange={(e) => handleFieldChange(
+                                        'stock',
+                                        formData.sold_by_weight
+                                            ? parseFloat(e.target.value.replace(',', '.')) || 0
+                                            : parseInt(e.target.value) || 0
+                                    )}
                                     onClick={() => handleNumberFieldClick('stock')}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
                                     placeholder={t('forms.intPlaceholder')}
@@ -657,13 +685,19 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    {t('products.form.minimumStock')}
+                                    {t('products.form.minimumStock')}{formData.sold_by_weight ? ' (kg)' : ''}
                                 </label>
                                 <input
                                     type="number"
                                     min="0"
+                                    step={formData.sold_by_weight ? '0.001' : '1'}
                                     value={formData.min_stock}
-                                    onChange={(e) => handleFieldChange('min_stock', parseInt(e.target.value) || 0)}
+                                    onChange={(e) => handleFieldChange(
+                                        'min_stock',
+                                        formData.sold_by_weight
+                                            ? parseFloat(e.target.value.replace(',', '.')) || 0
+                                            : parseInt(e.target.value) || 0
+                                    )}
                                     onClick={() => handleNumberFieldClick('min_stock')}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
                                     placeholder={t('forms.intPlaceholder')}

@@ -447,10 +447,11 @@ const TransactionsInner: React.FC = () => {
                 header.customer_name,
                 fiscal?.customer_tax_id
             ),
-            items: rawItems.map((it: { id: string; product_name: string; quantity: number; unit_price: number; iva_rate?: number; line_total: number }) => ({
+            items: rawItems.map((it: { id: string; product_name: string; quantity: number; unit?: 'un' | 'kg'; unit_price: number; iva_rate?: number; line_total: number }) => ({
                 id: it.id,
                 description: it.product_name,
                 quantity: it.quantity,
+                unit: it.unit ?? 'un',
                 unitPrice: it.unit_price,
                 vatRate: Math.round(((it.iva_rate || 0) as number) * 100),
                 total: it.line_total,

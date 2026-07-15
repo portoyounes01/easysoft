@@ -86,6 +86,19 @@ function assertDiscountGuards(cart: FiscalCartLine[], globalDiscount?: FiscalGlo
     }
 }
 
+/** Money quantization: with 3-decimal weighed quantities, price×quantity has
+ *  sub-cent precision (0.625 × 12.90 = 8.0625). Every line is rounded to
+ *  cents ONCE here, and all aggregates are sums of those rounded lines — so
+ *  the charged, printed, synced and fiscally-registered totals are identical
+ *  by construction (SIGN ES full_amount is the sum of rounded lines). */
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+function lineMoney(item: FiscalCartLine): { gross: number; discount: number; net: number } {
+    const gross = round2(item.product.price * item.quantity);
+    const discount = round2((gross * item.discount) / 100);
+    return { gross, discount, net: round2(gross - discount) };
+}
+
 export function formatSystemEntryDate(d: Date): string {
     const y = d.getFullYear();
     const mo = String(d.getMonth() + 1).padStart(2, '0');
@@ -112,26 +125,19 @@ export function buildSaleCheckoutDraft(params: {
     const transactionDate = now.toISOString().split('T')[0];
     const transactionTime = now.toTimeString().split(' ')[0];
 
-    const originalSubtotal = cart.reduce((sum, item) => {
-        const itemTotal = item.product.price * item.quantity;
-        return sum + itemTotal;
-    }, 0);
+    const originalSubtotal = round2(cart.reduce((sum, item) => sum + lineMoney(item).gross, 0));
 
-    const subtotalAfterItemDiscounts = cart.reduce((sum, item) => {
-        const itemTotal = item.product.price * item.quantity;
-        const discountAmount = (itemTotal * item.discount) / 100;
-        return sum + (itemTotal - discountAmount);
-    }, 0);
+    const subtotalAfterItemDiscounts = round2(
+        cart.reduce((sum, item) => sum + lineMoney(item).net, 0)
+    );
 
-    const totalTax = cart.reduce((sum, item) => {
-        const itemTotal = item.product.price * item.quantity;
-        const discountAmount = (itemTotal * item.discount) / 100;
-        const discountedTotal = itemTotal - discountAmount;
-        return sum + calculateTaxAmount(discountedTotal, item.product.iva_rate);
-    }, 0);
+    const totalTax = cart.reduce(
+        (sum, item) => sum + calculateTaxAmount(lineMoney(item).net, item.product.iva_rate),
+        0
+    );
 
     const globalDiscountAmount = globalDiscount?.amount || 0;
-    const finalSubtotal = subtotalAfterItemDiscounts - globalDiscountAmount;
+    const finalSubtotal = round2(subtotalAfterItemDiscounts - globalDiscountAmount);
     const total = finalSubtotal;
 
     if (total <= 0) {
@@ -147,9 +153,7 @@ export function buildSaleCheckoutDraft(params: {
     const fiscalCustomer = buildFiscalCustomerFields(selectedCustomer);
 
     const transactionItems: FiscalCheckoutAtomicPayload['transactionItems'] = cart.map(item => {
-        const itemTotal = item.product.price * item.quantity;
-        const discountAmount = (itemTotal * item.discount) / 100;
-        const discountedTotal = itemTotal - discountAmount;
+        const { discount: discountAmount, net: discountedTotal } = lineMoney(item);
         const taxAmount = calculateTaxAmount(discountedTotal, item.product.iva_rate);
         const basePrice = calculatePriceWithoutTax(item.product.price, item.product.iva_rate);
         const profitAmount = (basePrice - item.product.cost) * item.quantity;
@@ -160,6 +164,7 @@ export function buildSaleCheckoutDraft(params: {
             category_id: item.product.category_id,
             category_name: item.product.category_name,
             quantity: item.quantity,
+            unit: item.product.sold_by_weight ? ('kg' as const) : ('un' as const),
             unit_price: item.product.price,
             unit_cost: item.product.cost,
             iva_rate: item.product.iva_rate,

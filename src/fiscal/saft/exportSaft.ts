@@ -274,13 +274,16 @@ ${productXml}
                 const taxCode = mapIvaDecimalToSaftTaxCode(it.iva_rate);
                 const taxPct = fmtDec(Math.round(it.iva_rate * 10000) / 100);
                 const unitGross = it.quantity > 0 ? lineGross / it.quantity : lineGross;
+                // Weighed lines: quantity is kg at 3 decimals; legacy rows without
+                // a unit ('un') keep the historical 2-decimal formatting.
+                const isWeighed = it.unit === 'kg';
                 return `
         <Line>
           <LineNumber>${idx + 1}</LineNumber>${ncSourceDocBlock}
           <ProductCode>${xmlEscape(code)}</ProductCode>
           <ProductDescription>${xmlEscape(it.product_name)}</ProductDescription>
-          <Quantity>${fmtDec(it.quantity)}</Quantity>
-          <UnitOfMeasure>UN</UnitOfMeasure>
+          <Quantity>${isWeighed ? it.quantity.toFixed(3) : fmtDec(it.quantity)}</Quantity>
+          <UnitOfMeasure>${isWeighed ? 'KG' : 'UN'}</UnitOfMeasure>
           <UnitPrice>${fmtDec(unitGross)}</UnitPrice>
           <TaxPointDate>${xmlEscape(fiscal.invoice_date)}</TaxPointDate>
           <Description>${xmlEscape(it.product_name)}</Description>

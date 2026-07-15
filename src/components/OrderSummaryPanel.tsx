@@ -10,8 +10,12 @@ import { ActionButton } from './ui/ActionButton';
 
 
 export interface OrderSummaryItem {
+    /** Cart line identity (weighed products can have several lines per product). */
+    lineId: string;
     product: LocalProduct;
     quantity: number;
+    /** 'kg' renders the quantity as a 3-decimal weight; default 'un'. */
+    unit?: 'un' | 'kg';
     /** When false, + is disabled (e.g. stock max reached). Defaults to true if omitted. */
     canIncrement?: boolean;
 }
@@ -40,10 +44,11 @@ export interface OrderSummaryPanelProps {
     };
     /** Last issued invoice no in current AT chain (local Dexie). */
     fiscalChainHint?: string;
-    /** Tap − to subtract 1 unit; removes line when quantity was 1. */
-    onDecrementCartLine?: (productId: string) => void;
-    /** Tap + to add 1 unit (stock limits enforced in parent). */
-    onIncrementCartLine?: (productId: string) => void;
+    /** Tap − to subtract 1 unit (removes the line when quantity was 1, or the
+     *  whole weighing on a kg line). Receives the cart lineId. */
+    onDecrementCartLine?: (lineId: string) => void;
+    /** Tap + to add 1 unit (stock limits enforced in parent). Receives the cart lineId. */
+    onIncrementCartLine?: (lineId: string) => void;
     /** Selected invoice customer for display (name + NIF). */
     customerSummary?: { name: string; taxNumber?: string | null };
 }
@@ -258,6 +263,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                     {items.map((ci, index) => {
                                         const linePadding = { paddingTop: index === 0 ? '2vh' : '1.5vh', paddingBottom: '1vh' } as const;
                                         const showStepper = Boolean(onDecrementCartLine || onIncrementCartLine);
+                                        const isWeighed = ci.unit === 'kg';
                                         const canInc = ci.canIncrement !== false;
                                         const lineDetails = (
                                             <div className="min-w-0 flex-1">
@@ -272,12 +278,15 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                                     <p className="font-semibold text-gray-900 whitespace-nowrap shrink-0" style={{ fontSize: '1.5vh' }}>{formatCurrency(ci.product.price * ci.quantity)}</p>
                                                 </div>
                                                 <div className="text-gray-500" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '0.5vh' }}>
-                                                    <span style={{ fontSize: '1.3vh' }}>{formatCurrency(ci.product.price)}</span>
+                                                    <span style={{ fontSize: '1.3vh' }}>
+                                                        {formatCurrency(ci.product.price)}
+                                                        {isWeighed ? '/kg' : ''}
+                                                    </span>
                                                 </div>
                                             </div>
                                         );
                                         return (
-                                            <li key={ci.product.id} style={linePadding}>
+                                            <li key={ci.lineId} style={linePadding}>
                                                 <div className="flex w-full items-center gap-2 rounded-xl px-1 py-1">
                                                     {lineDetails}
                                                     {showStepper ? (
@@ -290,7 +299,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                                                     type="button"
                                                                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-gray-300 bg-white text-gray-800 shadow-sm transition-all duration-150 hover:bg-gray-50 active:scale-95"
                                                                     aria-label={`${t('pos.cartQtyDecrease')}, ${ci.product.name}`}
-                                                                    onClick={() => onDecrementCartLine(ci.product.id)}
+                                                                    onClick={() => onDecrementCartLine(ci.lineId)}
                                                                 >
                                                                     <Minus className="h-5 w-5" strokeWidth={2.5} aria-hidden />
                                                                 </button>
@@ -300,15 +309,15 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                                                 style={{ fontSize: '1.65vh' }}
                                                                 aria-live="polite"
                                                             >
-                                                                {ci.quantity}
+                                                                {isWeighed ? `${ci.quantity.toFixed(3)} kg` : ci.quantity}
                                                             </span>
-                                                            {onIncrementCartLine ? (
+                                                            {onIncrementCartLine && !isWeighed ? (
                                                                 <button
                                                                     type="button"
                                                                     disabled={!canInc}
                                                                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-gray-300 bg-white text-gray-800 shadow-sm transition-all duration-150 hover:bg-gray-50 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
                                                                     aria-label={`${t('pos.cartQtyIncrease')}, ${ci.product.name}`}
-                                                                    onClick={() => onIncrementCartLine(ci.product.id)}
+                                                                    onClick={() => onIncrementCartLine(ci.lineId)}
                                                                 >
                                                                     <Plus className="h-5 w-5" strokeWidth={2.5} aria-hidden />
                                                                 </button>

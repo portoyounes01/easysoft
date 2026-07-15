@@ -23,6 +23,9 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useProducts } from '../contexts/ProductsContext';
 import OrderSummaryPanel from '../components/OrderSummaryPanel';
 import DiscountDialog from '../components/DiscountDialog';
+import WeighDialog from '../components/WeighDialog';
+import ScaleStatusIndicator from '../components/ScaleStatusIndicator';
+import scaleService from '../services/scaleService';
 import { LocalProduct, LocalCustomer } from '../types/supabase';
 import { useTranslation } from 'react-i18next';
 // import { transactionService } from '../services/transactionService';
@@ -63,7 +66,7 @@ const POSInner: React.FC = () => {
   const { t } = useTranslation();
   const { toggleNavSidebar } = useLayoutNav();
   const { visualStyle, prefs } = useDesignSystem2Customization();
-  const { cart, addToCart, clearCart, updateQuantity, selectedCustomer, selectCustomer, processTransaction } = usePOS();
+  const { cart, addToCart, addWeighedToCart, clearCart, updateQuantity, selectedCustomer, selectCustomer, processTransaction } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
   const { settings, updateSettings } = useSettings();
   const {
@@ -102,6 +105,29 @@ const POSInner: React.FC = () => {
     void recipeService.getProductIdsWithRecipe().then(setRecipeProductIds).catch(() => { });
   }, []);
 
+  // Weigh-item dialog (sold-by-weight products)
+  const [weighProduct, setWeighProduct] = useState<LocalProduct | null>(null);
+
+  // Till-scoped scale session: the scale is per-till hardware (like the
+  // printer), so detection/polling runs from POS mount onward — NOT per
+  // weigh-dialog open, which made every tap pay for a port scan and made the
+  // dialog flap between "waiting" and "unavailable". Deliberately no stop on
+  // unmount: navigating to Settings and back must not churn the serial port.
+  useEffect(() => {
+    if (!scaleService.isAvailable()) return;
+    void scaleService.getConfig().then((r) => {
+      if (r.success && r.config?.enabled) void scaleService.start();
+    });
+  }, []);
+
+  // Total quantity of a product across cart lines (weighed products can span
+  // several lines — one per weighing).
+  const cartQuantityForProduct = useCallback(
+    (productId: string) =>
+      cart.reduce((sum, item) => (item.product.id === productId ? sum + item.quantity : sum), 0),
+    [cart]
+  );
+
   // Stock validation helper function
   const canAddToCart = (product: LocalProduct, requestedQuantity = 1): boolean => {
     if (recipeProductIds.has(product.id)) {
@@ -115,17 +141,42 @@ const POSInner: React.FC = () => {
       return true;
     }
 
-    // Find current quantity in cart
-    const cartItem = cart.find(item => item.product.id === product.id);
-    const currentCartQuantity = cartItem ? cartItem.quantity : 0;
+    const currentCartQuantity = cartQuantityForProduct(product.id);
+    if (product.sold_by_weight) {
+      // Weight is unknown until the item is on the scale; the grid gate only
+      // requires some remaining capacity (3dp-rounded: weighings are exact
+      // 0.001 multiples, so raw float sums would leave phantom ~1e-16 capacity).
+      // The exact weight is re-checked at weigh-confirm via maxWeightKg.
+      return Number((product.stock - currentCartQuantity).toFixed(3)) > 0;
+    }
     const totalRequestedQuantity = currentCartQuantity + requestedQuantity;
 
     // Check if total would exceed available stock
     return totalRequestedQuantity <= product.stock;
   };
 
+  // Remaining sellable kg for the weigh dialog (undefined = unlimited).
+  const maxWeightForProduct = (product: LocalProduct): number | undefined => {
+    if (
+      recipeProductIds.has(product.id) ||
+      !settings.pos.trackInventory ||
+      !product.track_stock ||
+      settings.pos.allowNegativeStock
+    ) {
+      return undefined;
+    }
+    return Math.max(0, Number((product.stock - cartQuantityForProduct(product.id)).toFixed(3)));
+  };
+
   // Enhanced addToCart with stock validation
   const handleAddToCart = (product: LocalProduct, quantity = 1) => {
+    // Weighed products go through the scale dialog instead of quantity 1.
+    if (product.sold_by_weight) {
+      if (canAddToCart(product)) {
+        setWeighProduct(product);
+      }
+      return;
+    }
     // Only allow adding if stock validation passes
     // UI prevents clicks on out-of-stock items, but this is a safety check
     if (canAddToCart(product, quantity)) {
@@ -133,10 +184,20 @@ const POSInner: React.FC = () => {
     }
   };
 
+  const handleWeighConfirm = (weightKg: number) => {
+    if (!weighProduct) return;
+    const max = maxWeightForProduct(weighProduct);
+    if (max !== undefined && weightKg > max + 1e-9) {
+      return; // dialog disables Add beyond max; safety check
+    }
+    addWeighedToCart(weighProduct, weightKg);
+    setWeighProduct(null);
+  };
+
   const handleIncrementCartLine = useCallback(
-    (productId: string) => {
-      const line = cart.find(item => item.product.id === productId);
-      if (!line) return;
+    (lineId: string) => {
+      const line = cart.find(item => item.lineId === lineId);
+      if (!line || line.product.sold_by_weight) return; // weighed lines have a fixed weight
       if (recipeProductIds.has(line.product.id) || !settings.pos.trackInventory || !line.product.track_stock) {
         addToCart(line.product, 1);
         return;
@@ -150,10 +211,11 @@ const POSInner: React.FC = () => {
   );
 
   const handleDecrementCartLine = useCallback(
-    (productId: string) => {
-      const line = cart.find(item => item.product.id === productId);
+    (lineId: string) => {
+      const line = cart.find(item => item.lineId === lineId);
       if (!line) return;
-      updateQuantity(productId, line.quantity - 1);
+      // Tapping − on a weighed line removes the whole weighing.
+      updateQuantity(lineId, line.product.sold_by_weight ? 0 : line.quantity - 1);
     },
     [cart, updateQuantity]
   );
@@ -606,8 +668,7 @@ const POSInner: React.FC = () => {
                             {productsToShow.map((product) => {
                               const canAdd = canAddToCart(product, 1);
                               const isOutOfStock = !canAdd && !settings.pos.allowNegativeStock;
-                              const cartItem = cart.find(item => item.product.id === product.id);
-                              const cartQuantity = cartItem ? cartItem.quantity : 0;
+                              const cartQuantity = cartQuantityForProduct(product.id);
                               const remainingStock = product.stock - cartQuantity;
 
                               return (
@@ -615,6 +676,7 @@ const POSInner: React.FC = () => {
                                   key={product.id}
                                   name={product.name}
                                   price={product.price}
+                                  soldByWeight={product.sold_by_weight ?? false}
                                   stock={product.stock}
                                   imageUrl={product.image_url || undefined}
                                   cartQuantity={cartQuantity}
@@ -677,6 +739,7 @@ const POSInner: React.FC = () => {
                   Cart: {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
                 </span>
               )}
+              <ScaleStatusIndicator />
               <span>POS Terminal • {new Date().toLocaleDateString('pt-PT')}</span>
             </div>
           </div>
@@ -686,14 +749,17 @@ const POSInner: React.FC = () => {
       {/* Right Order Summary Panel (DEBUG 30/40/30) */}
       <OrderSummaryPanel
         items={cart.map(item => ({
+          lineId: item.lineId,
           product: item.product,
           quantity: item.quantity,
+          unit: item.product.sold_by_weight ? ('kg' as const) : ('un' as const),
           canIncrement:
-            recipeProductIds.has(item.product.id) ||
-            !settings.pos.trackInventory ||
-            !item.product.track_stock ||
-            settings.pos.allowNegativeStock ||
-            item.quantity < item.product.stock,
+            !item.product.sold_by_weight &&
+            (recipeProductIds.has(item.product.id) ||
+              !settings.pos.trackInventory ||
+              !item.product.track_stock ||
+              settings.pos.allowNegativeStock ||
+              cartQuantityForProduct(item.product.id) < item.product.stock),
         }))}
         onClearAll={handleClearAll}
         onDecrementCartLine={handleDecrementCartLine}
@@ -718,6 +784,14 @@ const POSInner: React.FC = () => {
           amount: discountAmount + customerDiscountAmount
         }}
         fiscalChainHint={lastFiscalInvoiceNo ?? undefined}
+      />
+
+      <WeighDialog
+        product={weighProduct}
+        maxWeightKg={weighProduct ? maxWeightForProduct(weighProduct) : undefined}
+        cashier={employee ? { id: employee.id, name: employee.name } : null}
+        onConfirm={handleWeighConfirm}
+        onClose={() => setWeighProduct(null)}
       />
 
       <DiscountDialog
@@ -898,9 +972,10 @@ const POSInner: React.FC = () => {
                 },
                 customer: buildReceiptCustomerProps(selectedCustomer),
                 items: cartSnapshot.map((ci) => ({
-                  id: ci.product.id,
+                  id: ci.lineId,
                   description: ci.product.name,
                   quantity: ci.quantity,
+                  unit: ci.product.sold_by_weight ? ('kg' as const) : ('un' as const),
                   unitPrice: ci.product.price,
                   vatRate: Math.round((ci.product.iva_rate || 0) * 100),
                   total: Number((ci.product.price * ci.quantity).toFixed(2)),

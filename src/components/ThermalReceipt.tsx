@@ -8,6 +8,9 @@ interface ReceiptItem {
   id: string;
   description: string;
   quantity: number;
+  /** 'kg' = weighed line: quantity prints with 3 decimals and the unit column
+   *  shows kg (unit price is €/kg). Default 'un'. */
+  unit?: 'un' | 'kg';
   unitPrice: number;
   vatRate: number;
   total: number;
@@ -463,13 +466,13 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
         {items.map((item, index) => (
           <React.Fragment key={item.id || index}>
-            <span>{item.quantity}</span>
-            <span>{t('thermalReceipt.unit')}</span>
+            <span>{item.unit === 'kg' ? item.quantity.toFixed(3) : item.quantity}</span>
+            <span>{item.unit === 'kg' ? t('thermalReceipt.unitKg') : t('thermalReceipt.unit')}</span>
             <span className="item-desc">{item.description}</span>
             <span>{item.vatRate}%</span>
             <span className="cell-end">{formatCurrency(round2(item.total * grossFactor))}</span>
             <span className="small-text grid-from-desc">
-              {t('thermalReceipt.unitPriceLine', {
+              {t(item.unit === 'kg' ? 'thermalReceipt.unitPriceLineKg' : 'thermalReceipt.unitPriceLine', {
                 price: item.unitPrice.toFixed(2).replace('.', ','),
               })}
             </span>

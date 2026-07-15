@@ -33,6 +33,7 @@ import type {
     LocalLeaveRequest,
 } from '../types/hr';
 import type { LocalCashDrawerEvent } from '../types/cashDrawer';
+import type { LocalManualWeightAudit } from '../types/scaleAudit';
 import type {
     LocalPurchaseReceipt,
     LocalPurchaseReceiptLine,
@@ -85,6 +86,7 @@ export class LocalPOSDatabase extends Dexie {
     purchaseReceipts!: Table<LocalPurchaseReceipt>;
     purchaseReceiptLines!: Table<LocalPurchaseReceiptLine>;
     rawMaterials!: Table<LocalRawMaterial>;
+    manualWeightAudits!: Table<LocalManualWeightAudit>;
     recipeLines!: Table<LocalRecipeLine>;
     transactions!: Table<LocalTransaction>;
     transactionItems!: Table<LocalTransactionItem>;
@@ -321,6 +323,15 @@ export class LocalPOSDatabase extends Dexie {
 
         this.version(15).stores(schemaV15).upgrade(async () => {
             console.log('Upgrading database to version 15 - raw materials & recipes (fiche technique)');
+        });
+
+        const schemaV16 = {
+            ...schemaV15,
+            manualWeightAudits: 'id, product_id, authorized_by_id, timestamp',
+        } as const;
+
+        this.version(16).stores(schemaV16).upgrade(async () => {
+            console.log('Upgrading database to version 16 - manual weight entry audit log');
         });
 
         // Add hooks for auto-updating sync flags
@@ -2170,7 +2181,8 @@ export class TransactionLocalService {
             for (const item of transactionItems) {
                 const product = await localDb.products.get(item.product_id);
                 if (product && readPosTrackInventoryFromStorage() && product.track_stock) {
-                    const newStock = Math.max(0, product.stock - item.quantity);
+                    // 3dp: weighed lines subtract fractional kg — keep stock free of binary-float drift.
+                    const newStock = Math.max(0, Math.round((product.stock - item.quantity) * 1000) / 1000);
                     await localDb.products.update(item.product_id, {
                         stock: newStock,
                         updated_at: new Date(),
