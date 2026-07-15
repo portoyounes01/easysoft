@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Archive, Table, Save, Minus, Plus, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LocalProduct } from '../types/supabase';
@@ -7,6 +7,7 @@ import { POSActionButton } from './ui/POSActionButton';
 import { OutlineButton } from './ui/OutlineButton';
 import { TabToggle, TabToggleOption } from './ui/TabToggle';
 import { ActionButton } from './ui/ActionButton';
+import { ScrollArea } from './ui/ScrollArea';
 
 
 export interface OrderSummaryItem {
@@ -75,9 +76,6 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     // 1. Hooks
     const { t } = useTranslation();
     const [serviceType, setServiceType] = useState<ServiceType>('dine-in');
-    const scrollRef = useRef<HTMLDivElement | null>(null);
-    const trackRef = useRef<HTMLDivElement | null>(null);
-    const thumbRef = useRef<HTMLDivElement | null>(null);
 
     // 2. Event handlers
     const handleSetServiceType = useCallback((type: ServiceType) => {
@@ -130,42 +128,14 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
 
     const displayTotals = totalsOverride || computedTotals;
 
-    // 4. Effects - none
-    const updateScrollbar = useCallback(() => {
-        const container = scrollRef.current;
-        const track = trackRef.current;
-        const thumb = thumbRef.current;
-        if (!container || !track || !thumb) return;
-
-        const isScrollable = container.scrollHeight > container.clientHeight + 1;
-        track.style.opacity = isScrollable ? '1' : '0';
-        if (!isScrollable) return;
-
-        const ratio = container.scrollTop / (container.scrollHeight - container.clientHeight || 1);
-        const trackHeight = track.clientHeight; // use actual track height, not container height
-        const bottomInsetPx = 4; // leave a small safe zone to avoid clipping at the bottom
-        const effectiveTrack = Math.max(0, trackHeight - bottomInsetPx);
-        const thumbHeight = Math.max(30, (container.clientHeight / container.scrollHeight) * effectiveTrack);
-        const top = ratio * (effectiveTrack - thumbHeight);
-        thumb.style.height = `${thumbHeight}px`;
-        thumb.style.transform = `translateY(${top}px)`;
-    }, []);
-
-    useEffect(() => {
-        updateScrollbar();
-    }, [items, updateScrollbar]);
-
-    useEffect(() => {
-        const handleResize = () => updateScrollbar();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [updateScrollbar]);
+    // 4. Effects - none (list scrollbar handled inside ScrollArea)
 
     // 5. Render
     return (
-        // <aside className={`w-[24.5vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[15.5%_58%_26.5%] h-screen overflow-hidden ${className}`}>
-
-        <aside className={`w-[24.5vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[auto_1fr_26.5%] h-screen overflow-hidden ${className}`}>
+        // minmax(0,1fr) row + minmax(0,1fr) column: without the explicit 0 minimum, the
+        // implicit `auto` track grows to the content's min-content size (long item names /
+        // many items), overflowing the panel instead of letting the list scroll.
+        <aside className={`w-[24.5vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[auto_minmax(0,1fr)_auto] grid-cols-[minmax(0,1fr)] h-screen overflow-hidden ${className}`}>
             {/* Top quick actions — auto height (2-up grid: Cash Drawer + Profile) */}
             <div className="overflow-hidden relative shrink-0" style={{ paddingTop: '1.25vh', paddingBottom: '1.25vh', paddingLeft: '2vh', paddingRight: '2vh' }}>
                 <div className="grid grid-cols-2" style={{ gap: '0.8vh' }}>
@@ -246,13 +216,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                     </div>
 
                     {/* Items list - takes most space */}
-                    <div className="flex-1 overflow-y-auto relative" style={{ paddingRight: '2vh' }}>
-                        <div
-                            ref={scrollRef}
-                            className="overflow-y-auto overscroll-contain h-full hide-native-scrollbar"
-                            onScroll={updateScrollbar}
-                            onMouseEnter={updateScrollbar}
-                        >
+                    <ScrollArea className="flex-1 min-h-0" gutter="2vh">
                             {items.length === 0 ? (
                                 <div className="text-center py-12">
                                     <p className="text-gray-500 mb-2" style={{ fontSize: '1.8vh' }}>{t('pos.noCartItemsTitle')}</p>
@@ -266,11 +230,11 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                         const isWeighed = ci.unit === 'kg';
                                         const canInc = ci.canIncrement !== false;
                                         const lineDetails = (
-                                            <div className="min-w-0 flex-1">
+                                            <div className="min-w-[7rem] flex-1">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <p
-                                                        className="font-semibold text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap"
-                                                        style={{ fontSize: '1.7vh', maxWidth: showStepper ? '11vw' : '14vw' }}
+                                                        className="flex-1 min-w-0 font-semibold text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap"
+                                                        style={{ fontSize: '1.7vh' }}
                                                         title={ci.product.name}
                                                     >
                                                         {ci.product.name}
@@ -287,11 +251,13 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                         );
                                         return (
                                             <li key={ci.lineId} style={linePadding}>
-                                                <div className="flex w-full items-center gap-2 rounded-xl px-1 py-1">
+                                                {/* flex-wrap + 7rem min on the details: on very narrow panels the
+                                                    stepper wraps under the line instead of painting over the price */}
+                                                <div className="flex w-full flex-wrap items-center gap-2 rounded-xl px-1 py-1">
                                                     {lineDetails}
                                                     {showStepper ? (
                                                         <div
-                                                            className="flex shrink-0 items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1"
+                                                            className="ml-auto flex shrink-0 items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1"
                                                             onClick={(e) => e.stopPropagation()}
                                                         >
                                                             {onDecrementCartLine ? (
@@ -330,15 +296,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                     })}
                                 </ul>
                             )}
-                        </div>
-
-                        {/* Custom scrollbar track */}
-                        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-2 flex">
-                            <div ref={trackRef} className="scroll-indicator-track w-full bg-[#F7F7F7] rounded-full relative my-2 transition-opacity duration-200 opacity-0">
-                                <div ref={thumbRef} className="scroll-indicator-thumb absolute left-0 right-0 bg-[#D7D7D7] rounded-full" style={{ top: 0, height: 40 }} />
-                            </div>
-                        </div>
-                    </div>
+                    </ScrollArea>
 
                     {/* Clear All Orders button at bottom */}
                     {items.length > 0 && (
@@ -352,11 +310,12 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                 </div>
             </div>
 
-            {/* Bottom section: Totals + Process button (26.5% row) */}
-            <div className="h-full overflow-hidden relative" style={{ paddingLeft: '2vh', paddingRight: '2vh', paddingBottom: '2vh', paddingTop: '1.5vh' }}>
-                <div className="h-full overflow-hidden flex flex-col justify-between">
+            {/* Bottom section: Totals + Process button (auto row — grows with the optional
+                fiscal-chain hint line instead of clipping the total) */}
+            <div className="relative" style={{ paddingLeft: '2vh', paddingRight: '2vh', paddingBottom: '2vh', paddingTop: '1.5vh' }}>
+                <div className="flex flex-col" style={{ gap: '1.5vh' }}>
                     {/* Totals section */}
-                    <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden" style={{ padding: '1vh', height: 'calc(26.5vh - 8vh - 2vh)' }}>
+                    <div className="bg-gray-50 rounded-xl border border-gray-200" style={{ padding: '1vh' }}>
                         {fiscalChainHint && (
                             <p className="text-gray-600 mb-1" style={{ fontSize: '1.25vh' }} title={t('pos.lastFiscalDocumentTooltip')}>
                                 {t('pos.lastFiscalDocumentLabel')} <span className="font-semibold text-gray-800">{fiscalChainHint}</span>

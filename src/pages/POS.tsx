@@ -550,8 +550,9 @@ const POSInner: React.FC = () => {
         <div className="flex-1 flex overflow-hidden">
           {/* Left Categories Sidebar - uses vw units to match CategoryFilterButton */}
           <div className="bg-neutral-100 flex flex-col" style={{ width: '8vw', paddingLeft: '0.5vw', paddingTop: '1.5vw' }}>
-            {/* All Categories (including All Menu) */}
-            <div className="flex-1 overflow-y-auto" style={{ padding: '0 0.5vw', gap: '0.5vw', display: 'flex', flexDirection: 'column' }}>
+            {/* All Categories (including All Menu) — scrollable, no scrollbar shown
+                (native one hidden: Windows renders hard-cornered gray bars) */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain hide-native-scrollbar" style={{ padding: '0 0.5vw', gap: '0.5vw', display: 'flex', flexDirection: 'column' }}>
               {/* All Menu Option */}
               <CategoryFilterButton
                 label={t('pos.allMenu')}
@@ -655,7 +656,9 @@ const POSInner: React.FC = () => {
                     </div>
                   </div>
                 )}
-                <div className="flex-1 min-h-0 overflow-y-auto">
+                {/* Scrollable, no scrollbar shown (native one hidden: Windows renders
+                    hard-cornered gray bars) */}
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain hide-native-scrollbar">
                   {/* Show products for selected category OR all products if no category selected */}
                   {(() => {
                     const productsToShow = selectedCategoryId ? filteredProducts : getActiveProducts();
