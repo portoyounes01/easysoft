@@ -2,7 +2,17 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
+import { POSProvider } from '../src/contexts/POSContext';
 import Tables from '../src/pages/Tables';
+
+const renderTables = () => render(
+    <MemoryRouter>
+        <POSProvider>
+            <Tables />
+        </POSProvider>
+    </MemoryRouter>
+);
 
 describe('Tables page', () => {
     beforeEach(() => {
@@ -10,7 +20,7 @@ describe('Tables page', () => {
     });
 
     it('creates and persists a table through the layout editor', () => {
-        const { unmount } = render(<Tables />);
+        const { unmount } = renderTables();
 
         expect(screen.getByTestId('tables-empty-state')).toBeInTheDocument();
 
@@ -29,7 +39,7 @@ describe('Tables page', () => {
         expect(localStorage.getItem('pos.table-layout.v1')).toContain('Terrace 1');
 
         unmount();
-        render(<Tables />);
+        renderTables();
 
         expect(screen.getAllByText('Terrace 1').length).toBeGreaterThan(0);
     });

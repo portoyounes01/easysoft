@@ -50,9 +50,14 @@ export interface OrderSummaryPanelProps {
     onIncrementCartLine?: (lineId: string) => void;
     /** Selected invoice customer for display (name + NIF). */
     customerSummary?: { name: string; taxNumber?: string | null };
+    /** Controlled service selection lets the POS keep table actions in the dine-in flow. */
+    serviceType?: ServiceType;
+    onServiceTypeChange?: (type: ServiceType) => void;
+    /** Name of the currently loaded table order, if any. */
+    tableName?: string;
 }
 
-type ServiceType = 'dine-in' | 'take-away';
+export type ServiceType = 'dine-in' | 'take-away';
 
 const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     items,
@@ -67,16 +72,21 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     fiscalChainHint,
     onDecrementCartLine,
     onIncrementCartLine,
-    customerSummary
+    customerSummary,
+    serviceType: controlledServiceType,
+    onServiceTypeChange,
+    tableName,
 }) => {
     // 1. Hooks
     const { t } = useTranslation();
-    const [serviceType, setServiceType] = useState<ServiceType>('dine-in');
+    const [uncontrolledServiceType, setUncontrolledServiceType] = useState<ServiceType>('dine-in');
+    const serviceType = controlledServiceType ?? uncontrolledServiceType;
 
     // 2. Event handlers
     const handleSetServiceType = useCallback((type: ServiceType) => {
-        setServiceType(type);
-    }, []);
+        setUncontrolledServiceType(type);
+        onServiceTypeChange?.(type);
+    }, [onServiceTypeChange]);
 
     const formatCurrency = useCallback((value: number) => {
         // Deterministic, country-aware locale (was browser-default → non-deterministic grouping).
@@ -178,6 +188,19 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                 onChange={handleSetServiceType}
                             />
                         </div>
+                        {tableName && (
+                            <div
+                                className="mb-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2"
+                                data-testid="order-panel-table-summary"
+                            >
+                                <p className="font-semibold text-emerald-900" style={{ fontSize: '1.45vh' }}>
+                                    Table: {tableName}
+                                </p>
+                                <p className="mt-0.5 text-emerald-700" style={{ fontSize: '1.25vh' }}>
+                                    This order is saved until payment.
+                                </p>
+                            </div>
+                        )}
                         {customerSummary && (
                             <div
                                 className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 mb-2"

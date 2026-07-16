@@ -1167,6 +1167,47 @@ export interface LocalQueueTicket {
     collected_at: Date | null;
 }
 
+/** Mutable, till-local restaurant order. This is deliberately separate from
+ * `LocalTransaction`: a table order is not a fiscal document and must not
+ * enter the transaction sync/reporting path until checkout is completed. */
+export type TableOrderStatus = 'open' | 'settling' | 'settled';
+
+export interface TableOrderLine {
+    /** Preserves the cart-line identity, including distinct weighed lines. */
+    lineId: string;
+    /** Product snapshot: price, VAT and weight rules stay stable while parked. */
+    product: LocalProduct;
+    quantity: number;
+    discount: number;
+}
+
+export interface TableOrderGlobalDiscount {
+    type: 'none' | 'percentage' | 'fixed';
+    value: number;
+}
+
+export interface TableOrderPointsRedemption {
+    customerId: string;
+    points: number;
+}
+
+export interface LocalTableOrder {
+    id: string;
+    table_id: string;
+    table_name: string;
+    status: TableOrderStatus;
+    /** Cart snapshot. It is mutable until settlement and never fiscal on its own. */
+    lines: TableOrderLine[];
+    customer: LocalCustomer | null;
+    global_discount: TableOrderGlobalDiscount;
+    points_redemption: TableOrderPointsRedemption | null;
+    created_at: Date;
+    updated_at: Date;
+    settled_at: Date | null;
+    /** Link retained after settlement; the fiscal transaction itself remains immutable. */
+    fiscal_transaction_id: string | null;
+}
+
 // Local database interfaces for transactions
 export interface LocalTransaction extends Omit<TransactionRow, 'created_at' | 'updated_at' | 'last_synced_at' | 'deleted_at'> {
     // Local specific fields

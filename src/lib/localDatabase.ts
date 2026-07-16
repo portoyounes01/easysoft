@@ -7,6 +7,7 @@ import {
     LocalProduct,
     LocalCustomer,
     LocalQueueTicket,
+    LocalTableOrder,
     LocalTransaction,
     LocalTransactionItem,
     LocalDailySalesSummary,
@@ -79,6 +80,7 @@ export class LocalPOSDatabase extends Dexie {
     products!: Table<LocalProduct>;
     customers!: Table<LocalCustomer>;
     queueTickets!: Table<LocalQueueTicket>;
+    tableOrders!: Table<LocalTableOrder>;
     attendanceEntries!: Table<LocalAttendanceEntry>;
     employeeHrProfiles!: Table<LocalEmployeeHrProfile>;
     leaveRequests!: Table<LocalLeaveRequest>;
@@ -332,6 +334,17 @@ export class LocalPOSDatabase extends Dexie {
 
         this.version(16).stores(schemaV16).upgrade(async () => {
             console.log('Upgrading database to version 16 - manual weight entry audit log');
+        });
+
+        // Version 17: mutable restaurant table orders. These are intentionally
+        // not transactions: an order only becomes fiscal when it is settled.
+        const schemaV17 = {
+            ...schemaV16,
+            tableOrders: 'id, table_id, status, updated_at, fiscal_transaction_id, [table_id+status]',
+        } as const;
+
+        this.version(17).stores(schemaV17).upgrade(async () => {
+            console.log('Upgrading database to version 17 - local table orders');
         });
 
         // Add hooks for auto-updating sync flags

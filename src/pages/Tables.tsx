@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
     Check,
     AlertCircle,
@@ -11,13 +12,31 @@ import {
     Trash2,
     X,
 } from 'lucide-react';
+import { usePOS } from '../contexts/POSContext';
+import { tableOrderService } from '../services/tableOrderService';
+import type {
+    LocalTableOrder,
+    TableOrderGlobalDiscount,
+    TableOrderPointsRedemption,
+} from '../types/supabase';
 
 type TableCapacity = 2 | 4 | 6;
-type TableStatus = 'available' | 'used';
+type TableStatus = 'available' | 'used' | 'settling';
 type TableShape = 'round' | 'square' | 'wide';
-type StatusFilter = 'all' | TableStatus;
+type StatusFilter = 'all' | 'available' | 'used';
 type CapacityFilter = 'all' | TableCapacity;
-type DialogKind = 'add' | 'confirm-add' | 'edit' | 'save' | 'reset' | 'delete' | null;
+type DialogKind =
+    | 'add'
+    | 'confirm-add'
+    | 'edit'
+    | 'save'
+    | 'reset'
+    | 'delete'
+    | 'assign-order'
+    | 'open-order'
+    | 'move-order'
+    | 'discard-order'
+    | null;
 
 interface RestaurantTable {
     id: string;
@@ -27,7 +46,11 @@ interface RestaurantTable {
     x: number;
     y: number;
     rotation: number;
+}
+
+interface DisplayTable extends RestaurantTable {
     status: TableStatus;
+    order: LocalTableOrder | null;
 }
 
 interface TableLayoutState {
@@ -41,7 +64,7 @@ interface TableFormState {
 }
 
 interface FloorTableProps {
-    table: RestaurantTable;
+    table: DisplayTable;
     selected: boolean;
     editable: boolean;
     onSelect: (id: string) => void;
@@ -52,6 +75,13 @@ interface DialogProps {
     children: React.ReactNode;
     onClose: () => void;
     title: string;
+}
+
+interface TablesNavigationState {
+    tableOrderSnapshot?: {
+        globalDiscount: TableOrderGlobalDiscount;
+        pointsRedemption: TableOrderPointsRedemption | null;
+    };
 }
 
 const TABLE_LAYOUT_STORAGE_KEY = 'pos.table-layout.v1';
@@ -88,8 +118,6 @@ const isTableCapacity = (value: unknown): value is TableCapacity => value === 2 
 
 const isTableShape = (value: unknown): value is TableShape => value === 'round' || value === 'square' || value === 'wide';
 
-const isTableStatus = (value: unknown): value is TableStatus => value === 'available' || value === 'used';
-
 const isRestaurantTable = (value: unknown): value is RestaurantTable => {
     if (typeof value !== 'object' || value === null) return false;
 
@@ -100,8 +128,7 @@ const isRestaurantTable = (value: unknown): value is RestaurantTable => {
         && isTableShape(candidate.shape)
         && typeof candidate.x === 'number'
         && typeof candidate.y === 'number'
-        && typeof candidate.rotation === 'number'
-        && isTableStatus(candidate.status);
+        && typeof candidate.rotation === 'number';
 };
 
 const loadLayout = (): TableLayoutState => {
@@ -164,7 +191,8 @@ const DotCanvas: React.FC<{
 );
 
 const FloorTable: React.FC<FloorTableProps> = ({ table, selected, editable, onSelect, onPointerDown }) => {
-    const isUsed = table.status === 'used';
+    const isUsed = table.status !== 'available';
+    const statusLabel = table.status === 'settling' ? 'payment in progress' : table.status;
     const surfaceClass = isUsed
         ? 'border-neutral-200 text-neutral-900'
         : 'border-neutral-200 bg-white text-neutral-900 hover:border-emerald-300';
@@ -181,7 +209,8 @@ const FloorTable: React.FC<FloorTableProps> = ({ table, selected, editable, onSe
                     ? 'repeating-linear-gradient(-45deg, #ffffff 0, #ffffff 6px, #e5e7eb 6px, #e5e7eb 9px)'
                     : undefined,
             }}
-            aria-label={`${table.name}, ${capacityLabels[table.capacity]}, ${table.status}`}
+            aria-label={`${table.name}, ${capacityLabels[table.capacity]}, ${statusLabel}`}
+            data-testid={`table-floor-${table.id}`}
             onClick={event => {
                 event.stopPropagation();
                 onSelect(table.id);
@@ -192,6 +221,11 @@ const FloorTable: React.FC<FloorTableProps> = ({ table, selected, editable, onSe
             <span className="pointer-events-none absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-neutral-800 px-1 text-xs font-bold text-white">
                 {table.capacity}
             </span>
+            {table.status === 'settling' && (
+                <span className="pointer-events-none absolute -bottom-2 rounded-full bg-amber-500 px-2 py-0.5 text-[0.65rem] font-bold text-white">
+                    Paying
+                </span>
+            )}
         </button>
     );
 };
@@ -221,7 +255,37 @@ const Dialog: React.FC<DialogProps> = ({ children, onClose, title }) => (
     </div>
 );
 
+const tableOrderTotal = (order: LocalTableOrder): number => {
+    const subtotal = order.lines.reduce((sum, line) => {
+        const lineTotal = line.product.price * line.quantity;
+        return sum + lineTotal * (1 - line.discount / 100);
+    }, 0);
+    const discount = order.global_discount.type === 'percentage'
+        ? subtotal * (order.global_discount.value / 100)
+        : order.global_discount.type === 'fixed'
+            ? order.global_discount.value
+            : 0;
+    return Math.max(0, subtotal - discount);
+};
+
+const formatCurrency = (value: number): string => new Intl.NumberFormat('pt-PT', {
+    style: 'currency',
+    currency: 'EUR',
+}).format(value);
+
 const Tables: React.FC = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const navigationState = location.state as TablesNavigationState | null;
+    const {
+        cart,
+        selectedCustomer,
+        activeTableOrder,
+        clearCart,
+        restoreCart,
+        setActiveTableOrder,
+        clearActiveTableOrder,
+    } = usePOS();
     const [layout, setLayout] = useState<TableLayoutState>(loadLayout);
     const [draft, setDraft] = useState<TableLayoutState>(cloneLayout(layout));
     const [isEditing, setIsEditing] = useState(false);
@@ -234,19 +298,54 @@ const Tables: React.FC = () => {
     const [addForm, setAddForm] = useState<TableFormState>({ name: '', capacity: '' });
     const [editForm, setEditForm] = useState<TableFormState>({ name: '', capacity: '' });
     const [toast, setToast] = useState<string | null>(null);
+    const [tableOrders, setTableOrders] = useState<LocalTableOrder[]>([]);
+    const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+    const [isProcessingOrder, setIsProcessingOrder] = useState(false);
+
+    const refreshTableOrders = useCallback(async () => {
+        try {
+            setIsLoadingOrders(true);
+            setTableOrders(await tableOrderService.listBlocking());
+        } catch (error) {
+            console.error('Could not load table orders', error);
+            setToast('Table orders could not be loaded. Please try again.');
+        } finally {
+            setIsLoadingOrders(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void refreshTableOrders();
+        return tableOrderService.subscribe(() => {
+            void refreshTableOrders();
+        });
+    }, [refreshTableOrders]);
 
     const activeLayout = isEditing ? draft : layout;
-    const selectedTable = activeLayout.tables.find(table => table.id === selectedTableId) ?? null;
+    const orderByTableId = useMemo(
+        () => new Map(tableOrders.map(order => [order.table_id, order])),
+        [tableOrders]
+    );
+    const displayTables = useMemo<DisplayTable[]>(() => activeLayout.tables.map(table => {
+        const order = orderByTableId.get(table.id) ?? null;
+        return {
+            ...table,
+            status: order?.status === 'settling' ? 'settling' : order ? 'used' : 'available',
+            order,
+        };
+    }), [activeLayout.tables, orderByTableId]);
+    const selectedTable = displayTables.find(table => table.id === selectedTableId) ?? null;
 
     const visibleTables = useMemo(() => {
         const normalizedSearch = search.trim().toLocaleLowerCase();
-        return activeLayout.tables.filter(table => {
+        return displayTables.filter(table => {
             const matchesSearch = normalizedSearch.length === 0 || table.name.toLocaleLowerCase().includes(normalizedSearch);
-            const matchesStatus = statusFilter === 'all' || table.status === statusFilter;
+            const matchesStatus = statusFilter === 'all'
+                || (statusFilter === 'used' ? table.status !== 'available' : table.status === 'available');
             const matchesCapacity = capacityFilter === 'all' || table.capacity === capacityFilter;
             return matchesSearch && matchesStatus && matchesCapacity;
         });
-    }, [activeLayout.tables, capacityFilter, search, statusFilter]);
+    }, [capacityFilter, displayTables, search, statusFilter]);
 
     useEffect(() => {
         if (!toast) return undefined;
@@ -269,6 +368,13 @@ const Tables: React.FC = () => {
     };
 
     const handleConfirmSave = () => {
+        const removedOpenTable = tableOrders.find(order => !draft.tables.some(table => table.id === order.table_id));
+        if (removedOpenTable) {
+            setDialog(null);
+            setToast(`Settle or free ${removedOpenTable.table_name} before removing it from the layout.`);
+            return;
+        }
+
         const nextLayout = cloneLayout(draft);
         persistLayout(nextLayout);
         setLayout(nextLayout);
@@ -279,6 +385,12 @@ const Tables: React.FC = () => {
     };
 
     const handleConfirmReset = () => {
+        if (tableOrders.length > 0) {
+            setDialog(null);
+            setToast('Settle or free all active tables before resetting the layout.');
+            return;
+        }
+
         const emptyLayout = cloneLayout(EMPTY_LAYOUT);
         setDraft(emptyLayout);
         persistLayout(emptyLayout);
@@ -309,7 +421,6 @@ const Tables: React.FC = () => {
             shape: shapeForCapacity(addForm.capacity),
             ...nextTablePosition(draft.tables.length),
             rotation: 0,
-            status: 'available',
         };
 
         setDraft(current => ({ ...current, tables: [...current.tables, newTable] }));
@@ -320,6 +431,10 @@ const Tables: React.FC = () => {
 
     const handleOpenEdit = () => {
         if (!selectedTable) return;
+        if (selectedTable.order) {
+            setToast(`Settle or free ${selectedTable.name} before renaming it.`);
+            return;
+        }
         setEditForm({ name: selectedTable.name, capacity: selectedTable.capacity });
         setDialog('edit');
     };
@@ -343,6 +458,11 @@ const Tables: React.FC = () => {
 
     const handleConfirmDelete = () => {
         if (!selectedTable) return;
+        if (selectedTable.order) {
+            setDialog(null);
+            setToast(`Settle or free ${selectedTable.name} before deleting it.`);
+            return;
+        }
 
         setDraft(current => ({
             ...current,
@@ -385,7 +505,130 @@ const Tables: React.FC = () => {
     };
 
     const handleSelectTable = (tableId: string) => {
-        setSelectedTableId(current => current === tableId ? null : tableId);
+        const table = displayTables.find(candidate => candidate.id === tableId);
+        if (!table) return;
+        setSelectedTableId(tableId);
+
+        if (isEditing) return;
+        if (table.status === 'settling') {
+            setToast(`${table.name} is locked while payment is being completed.`);
+            return;
+        }
+
+        if (table.status === 'available') {
+            setDialog(activeTableOrder ? 'move-order' : 'assign-order');
+            return;
+        }
+
+        if (activeTableOrder?.id === table.order?.id) {
+            navigate('/pos');
+            return;
+        }
+
+        if (activeTableOrder) {
+            setToast(`Finish or move the current order at ${activeTableOrder.tableName} before opening another table.`);
+            return;
+        }
+
+        setDialog('open-order');
+    };
+
+    const handleConfirmAssignOrder = async () => {
+        if (!selectedTable) return;
+        setIsProcessingOrder(true);
+        try {
+            const pendingSnapshot = navigationState?.tableOrderSnapshot;
+            const order = await tableOrderService.createOpenOrder({
+                tableId: selectedTable.id,
+                tableName: selectedTable.name,
+                lines: cart,
+                customer: selectedCustomer,
+                globalDiscount: pendingSnapshot?.globalDiscount ?? { type: 'none', value: 0 },
+                pointsRedemption: pendingSnapshot?.pointsRedemption ?? null,
+            });
+            setActiveTableOrder({ id: order.id, tableId: order.table_id, tableName: order.table_name });
+            setDialog(null);
+            navigate('/pos');
+        } catch (error) {
+            console.error('Could not assign order to table', error);
+            setToast(error instanceof Error ? error.message : 'Could not assign the table order.');
+            await refreshTableOrders();
+        } finally {
+            setIsProcessingOrder(false);
+        }
+    };
+
+    const handleConfirmOpenOrder = () => {
+        if (!selectedTable?.order || selectedTable.order.status !== 'open') return;
+        restoreCart(selectedTable.order.lines, selectedTable.order.customer);
+        setActiveTableOrder({
+            id: selectedTable.order.id,
+            tableId: selectedTable.order.table_id,
+            tableName: selectedTable.order.table_name,
+        });
+        setDialog(null);
+        navigate('/pos');
+    };
+
+    const handleConfirmMoveOrder = async () => {
+        if (!selectedTable || !activeTableOrder) return;
+        setIsProcessingOrder(true);
+        try {
+            await tableOrderService.moveOpenOrder(activeTableOrder.id, {
+                tableId: selectedTable.id,
+                tableName: selectedTable.name,
+            });
+            setActiveTableOrder({ id: activeTableOrder.id, tableId: selectedTable.id, tableName: selectedTable.name });
+            setDialog(null);
+            navigate('/pos');
+        } catch (error) {
+            console.error('Could not move table order', error);
+            setToast(error instanceof Error ? error.message : 'Could not move the table order.');
+            await refreshTableOrders();
+        } finally {
+            setIsProcessingOrder(false);
+        }
+    };
+
+    const handleConfirmDiscardOrder = async () => {
+        if (!selectedTable?.order || selectedTable.order.status !== 'open') return;
+        setIsProcessingOrder(true);
+        try {
+            await tableOrderService.discardOpenOrder(selectedTable.order.id);
+            if (activeTableOrder?.id === selectedTable.order.id) clearActiveTableOrder();
+            setDialog(null);
+            setSelectedTableId(null);
+            setToast(`${selectedTable.name} is available again.`);
+            await refreshTableOrders();
+        } catch (error) {
+            console.error('Could not discard table order', error);
+            setToast(error instanceof Error ? error.message : 'Could not discard the table order.');
+        } finally {
+            setIsProcessingOrder(false);
+        }
+    };
+
+    const handleParkCurrentOrder = async () => {
+        if (!activeTableOrder) return;
+        setIsProcessingOrder(true);
+        try {
+            const order = await tableOrderService.getById(activeTableOrder.id);
+            if (!order || order.status !== 'open') {
+                throw new Error('This table order is no longer available to park.');
+            }
+            // POS flushes an active table immediately before navigating here;
+            // leave that persisted snapshot intact, then clear only the live
+            // working cart so another table can be opened.
+            clearCart();
+            clearActiveTableOrder();
+            setSelectedTableId(null);
+            setToast(`${order.table_name} is parked and ready to reopen later.`);
+        } catch (error) {
+            console.error('Could not park the current table order', error);
+            setToast(error instanceof Error ? error.message : 'Could not park the current table order.');
+        } finally {
+            setIsProcessingOrder(false);
+        }
     };
 
     return (
@@ -393,7 +636,18 @@ const Tables: React.FC = () => {
             {!isEditing ? (
                 <section className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
                     <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                        <h1 className="text-3xl font-bold tracking-tight text-neutral-950">Tables</h1>
+                        <div>
+                            <h1 className="text-3xl font-bold tracking-tight text-neutral-950">Tables</h1>
+                            <p className="mt-1 text-sm text-neutral-500">
+                                {isLoadingOrders
+                                    ? 'Loading open table orders…'
+                                    : activeTableOrder
+                                        ? `Current order: ${activeTableOrder.tableName}`
+                                        : cart.length > 0
+                                            ? 'Tap an available table to assign the current order.'
+                                            : 'Tap an available table to start a dine-in order.'}
+                            </p>
+                        </div>
                         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap xl:justify-end">
                             <label className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
                                 <span className="sr-only">Search table name</span>
@@ -441,6 +695,36 @@ const Tables: React.FC = () => {
                         </div>
                     </div>
 
+                    {activeTableOrder && (
+                        <div
+                            className="mb-5 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                            data-testid="active-table-order"
+                        >
+                            <div>
+                                <p className="font-semibold text-emerald-900">Order assigned to {activeTableOrder.tableName}</p>
+                                <p className="mt-0.5 text-sm text-emerald-700">Choose another available table to move it, or return to keep taking items.</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => void handleParkCurrentOrder()}
+                                    disabled={isProcessingOrder}
+                                    className="min-h-touch-xs rounded-xl border border-emerald-300 bg-white px-4 font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 disabled:opacity-40"
+                                >
+                                    Park order
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/pos')}
+                                    disabled={isProcessingOrder}
+                                    className="min-h-touch-xs rounded-xl bg-emerald-600 px-4 font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-40"
+                                >
+                                    Return to order
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid min-h-[40rem] gap-5 xl:grid-cols-[minmax(17rem,0.32fr)_minmax(0,1fr)]">
                         <aside className="min-h-0 rounded-2xl border border-neutral-200 bg-white p-3 xl:max-h-[42rem] xl:overflow-y-auto">
                             {visibleTables.length === 0 ? (
@@ -457,12 +741,25 @@ const Tables: React.FC = () => {
                                                 onClick={() => handleSelectTable(table.id)}
                                                 className={`flex min-h-touch-sm w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-neutral-50 ${selectedTableId === table.id ? 'bg-emerald-50' : ''}`}
                                             >
-                                                <span className={`h-2.5 w-2.5 rounded-full ${table.status === 'available' ? 'bg-emerald-500' : 'bg-orange-500'}`} aria-hidden="true" />
+                                                <span className={`h-2.5 w-2.5 rounded-full ${table.status === 'available' ? 'bg-emerald-500' : table.status === 'settling' ? 'bg-amber-500' : 'bg-orange-500'}`} aria-hidden="true" />
                                                 <span className="min-w-0 flex-1">
                                                     <span className="block truncate font-semibold text-neutral-900">{table.name}</span>
                                                     <span className="block text-sm text-neutral-500">{capacityLabels[table.capacity]}</span>
+                                                    {table.order && (
+                                                        <span
+                                                            className="block text-xs font-medium text-neutral-600"
+                                                            data-testid={`table-order-total-${table.id}`}
+                                                        >
+                                                            {table.order.lines.length} items · {formatCurrency(tableOrderTotal(table.order))}
+                                                        </span>
+                                                    )}
                                                 </span>
-                                                <span className="rounded-full bg-neutral-100 px-2 py-1 text-xs font-bold text-neutral-600">{table.status}</span>
+                                                <span
+                                                    className="rounded-full bg-neutral-100 px-2 py-1 text-xs font-bold text-neutral-600"
+                                                    data-testid={`table-status-${table.id}`}
+                                                >
+                                                    {table.status === 'settling' ? 'paying' : table.status}
+                                                </span>
                                             </button>
                                         </li>
                                     ))}
@@ -484,6 +781,7 @@ const Tables: React.FC = () => {
                                     <div className="absolute left-5 top-5 z-10 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-white/90 px-3 py-2 text-sm font-medium text-neutral-800 shadow-sm">
                                         <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-neutral-200 bg-white" />Available</span>
                                         <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-neutral-200" style={{ backgroundImage: 'repeating-linear-gradient(-45deg, #fff 0, #fff 3px, #e5e7eb 3px, #e5e7eb 6px)' }} />Used</span>
+                                        <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full bg-amber-500" />Paying</span>
                                         <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full bg-emerald-500" />Selected</span>
                                     </div>
                                     {activeLayout.showCashier && (
@@ -563,7 +861,7 @@ const Tables: React.FC = () => {
                         {draft.showCashier && (
                             <div className="absolute left-[10%] top-[55%] flex h-44 w-20 -translate-y-1/2 items-center justify-center border border-neutral-200 bg-neutral-50 text-sm font-semibold tracking-wide text-neutral-500 [writing-mode:vertical-rl]">Cashier</div>
                         )}
-                        {draft.tables.map(table => (
+                        {displayTables.map(table => (
                             <FloorTable
                                 key={table.id}
                                 table={table}
@@ -705,6 +1003,92 @@ const Tables: React.FC = () => {
                         <div className="mt-6 grid grid-cols-2 gap-3">
                             <button type="button" onClick={() => setDialog(null)} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50">Cancel</button>
                             <button type="button" onClick={handleConfirmDelete} className="min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700">Yes, delete</button>
+                        </div>
+                    </div>
+                </Dialog>
+            )}
+
+            {dialog === 'assign-order' && selectedTable && (
+                <Dialog title={`Assign ${selectedTable.name}?`} onClose={() => setDialog(null)}>
+                    <div className="text-center">
+                        <AlertCircle className="mx-auto mb-4 h-12 w-12 text-emerald-500" />
+                        {cart.length > 0 ? (
+                            <p className="text-neutral-600">
+                                Save the current {cart.length === 1 ? 'item' : 'items'} to <strong className="text-neutral-900">{selectedTable.name}</strong>?
+                                No fiscal document or stock movement is created until payment.
+                            </p>
+                        ) : (
+                            <p className="text-neutral-600">
+                                Start a new dine-in order at <strong className="text-neutral-900">{selectedTable.name}</strong>?
+                            </p>
+                        )}
+                        <div className="mt-6 grid grid-cols-2 gap-3">
+                            <button type="button" onClick={() => setDialog(null)} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40">Cancel</button>
+                            <button type="button" onClick={() => void handleConfirmAssignOrder()} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">
+                                {isProcessingOrder ? 'Saving…' : 'Assign order'}
+                            </button>
+                        </div>
+                    </div>
+                </Dialog>
+            )}
+
+            {dialog === 'open-order' && selectedTable?.order && (
+                <Dialog title={`Open ${selectedTable.name}?`} onClose={() => setDialog(null)}>
+                    <div className="text-center">
+                        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 text-xl font-bold text-orange-700">
+                            {selectedTable.order.lines.length}
+                        </div>
+                        <p className="text-neutral-600">
+                            This order has {selectedTable.order.lines.length === 1 ? '1 item' : `${selectedTable.order.lines.length} items`} totaling <strong className="text-neutral-900">{formatCurrency(tableOrderTotal(selectedTable.order))}</strong>.
+                        </p>
+                        {selectedTable.order.customer && (
+                            <p className="mt-2 text-sm text-neutral-500">Customer: {selectedTable.order.customer.name}</p>
+                        )}
+                        <div className="mt-6 grid grid-cols-2 gap-3">
+                            <button type="button" onClick={() => setDialog(null)} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50">Cancel</button>
+                            <button type="button" onClick={handleConfirmOpenOrder} className="min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700">Open order</button>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setDialog('discard-order')}
+                            className="mt-4 min-h-touch-xs px-4 text-sm font-semibold text-red-600 transition-colors hover:text-red-700"
+                        >
+                            Discard unbilled order
+                        </button>
+                    </div>
+                </Dialog>
+            )}
+
+            {dialog === 'move-order' && selectedTable && activeTableOrder && (
+                <Dialog title={`Move order to ${selectedTable.name}?`} onClose={() => setDialog(null)}>
+                    <div className="text-center">
+                        <AlertCircle className="mx-auto mb-4 h-12 w-12 text-amber-500" />
+                        <p className="text-neutral-600">
+                            Move the saved order from <strong className="text-neutral-900">{activeTableOrder.tableName}</strong> to <strong className="text-neutral-900">{selectedTable.name}</strong>?
+                            The order remains unbilled until payment.
+                        </p>
+                        <div className="mt-6 grid grid-cols-2 gap-3">
+                            <button type="button" onClick={() => setDialog(null)} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40">Cancel</button>
+                            <button type="button" onClick={() => void handleConfirmMoveOrder()} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">
+                                {isProcessingOrder ? 'Moving…' : 'Move order'}
+                            </button>
+                        </div>
+                    </div>
+                </Dialog>
+            )}
+
+            {dialog === 'discard-order' && selectedTable?.order && (
+                <Dialog title={`Discard ${selectedTable.name}'s order?`} onClose={() => setDialog('open-order')}>
+                    <div className="text-center">
+                        <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
+                        <p className="text-neutral-600">
+                            This permanently removes the unbilled table order. It does not cancel or change any fiscal document.
+                        </p>
+                        <div className="mt-6 grid grid-cols-2 gap-3">
+                            <button type="button" onClick={() => setDialog('open-order')} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40">Keep order</button>
+                            <button type="button" onClick={() => void handleConfirmDiscardOrder()} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700 disabled:opacity-40">
+                                {isProcessingOrder ? 'Discarding…' : 'Yes, discard'}
+                            </button>
                         </div>
                     </div>
                 </Dialog>

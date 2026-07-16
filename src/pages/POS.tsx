@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateQRCodeImage } from '../utils/qrCode';
 import {
@@ -22,7 +22,7 @@ import { queueTicketService } from '../services/queueTicketService';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useProducts } from '../contexts/ProductsContext';
-import OrderSummaryPanel from '../components/OrderSummaryPanel';
+import OrderSummaryPanel, { type ServiceType } from '../components/OrderSummaryPanel';
 import DiscountDialog from '../components/DiscountDialog';
 import WeighDialog from '../components/WeighDialog';
 import ScaleStatusIndicator from '../components/ScaleStatusIndicator';
@@ -51,6 +51,7 @@ import { useLayoutNav } from '../contexts/LayoutNavContext';
 import { OPEN_MY_PROFILE_EVENT } from '../components/HR/MyProfileDialog';
 import { cashDrawerAuditService } from '../services/cashDrawerAuditService';
 import { recipeService } from '../services/recipeService';
+import { tableOrderService } from '../services/tableOrderService';
 import '../styles/design-system-2-scope.css';
 
 // Icon mapping for categories
@@ -68,7 +69,19 @@ const POSInner: React.FC = () => {
   const navigate = useNavigate();
   const { toggleNavSidebar } = useLayoutNav();
   const { visualStyle, prefs } = useDesignSystem2Customization();
-  const { cart, addToCart, addWeighedToCart, clearCart, updateQuantity, selectedCustomer, selectCustomer, processTransaction } = usePOS();
+  const {
+    cart,
+    addToCart,
+    addWeighedToCart,
+    clearCart,
+    updateQuantity,
+    selectedCustomer,
+    selectCustomer,
+    processTransaction,
+    activeTableOrder,
+    restoreCart,
+    clearActiveTableOrder,
+  } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
   const { settings, updateSettings } = useSettings();
   const {
@@ -225,15 +238,141 @@ const POSInner: React.FC = () => {
   // Quantity increases from product grid; order panel line tap removes one unit
   const [showPayment, setShowPayment] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  const [serviceType, setServiceType] = useState<ServiceType>('dine-in');
   const [discount, setDiscount] = useState({ type: 'none' as 'none' | 'percentage' | 'fixed', value: 0 });
   const [pointsRedemption, setPointsRedemption] = useState<{
     customerId: string;
     points: number;
   } | null>(null);
   const [showDiscountDialog, setShowDiscountDialog] = useState(false);
+  const [tableOrderReady, setTableOrderReady] = useState(false);
+  const settlingTableOrderId = useRef<string | null>(null);
+  const activeTableOrderRef = useRef(activeTableOrder);
+  const tableOrderReadyRef = useRef(tableOrderReady);
+  const tableOrderSnapshotRef = useRef({
+    lines: cart,
+    customer: selectedCustomer,
+    globalDiscount: discount,
+    pointsRedemption,
+  });
 
   const [cashReceived, setCashReceived] = useState(0);
   const [showCashDrawer, setShowCashDrawer] = useState(false);
+
+  // Rehydrate a table order whenever this POS screen is entered with an
+  // active table session. The stored product snapshots retain the exact
+  // price/VAT/weight data that was present when the order was parked.
+  useEffect(() => {
+    let cancelled = false;
+    const tableOrderId = activeTableOrder?.id;
+
+    if (!tableOrderId) {
+      setTableOrderReady(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setTableOrderReady(false);
+    void tableOrderService.getById(tableOrderId)
+      .then(order => {
+        if (cancelled) return;
+        if (!order || order.status !== 'open') {
+          clearActiveTableOrder();
+          return;
+        }
+
+        restoreCart(order.lines, order.customer);
+        setDiscount(order.global_discount);
+        setPointsRedemption(order.points_redemption);
+        setServiceType('dine-in');
+        setTableOrderReady(true);
+      })
+      .catch(error => {
+        console.error('Could not restore the active table order', error);
+        if (!cancelled) clearActiveTableOrder();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTableOrder?.id, clearActiveTableOrder, restoreCart]);
+
+  // Persist a parked order after cart, customer or sale modifiers change.
+  // A short debounce keeps product-grid taps responsive while still making
+  // navigation away from the POS safe (the navigation handler flushes too).
+  useEffect(() => {
+    const tableOrderId = activeTableOrder?.id;
+    if (!tableOrderId || !tableOrderReady || settlingTableOrderId.current === tableOrderId) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void tableOrderService.updateOpenOrder(tableOrderId, {
+        lines: cart,
+        customer: selectedCustomer,
+        globalDiscount: discount,
+        pointsRedemption,
+      }).catch(error => {
+        // Do not clear the live cart if persistence fails; the operator can
+        // retry from Tables and no fiscal transaction has been touched.
+        console.error('Could not save the table order', error);
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [activeTableOrder?.id, cart, discount, pointsRedemption, selectedCustomer, tableOrderReady]);
+
+  // The table action flushes explicitly, but sidebar navigation and logout can
+  // unmount this page directly. Preserve the latest parked snapshot in those
+  // cases as well; a failed write leaves the existing saved order untouched.
+  useEffect(() => {
+    activeTableOrderRef.current = activeTableOrder;
+    tableOrderReadyRef.current = tableOrderReady;
+    tableOrderSnapshotRef.current = {
+      lines: cart,
+      customer: selectedCustomer,
+      globalDiscount: discount,
+      pointsRedemption,
+    };
+  }, [activeTableOrder, cart, discount, pointsRedemption, selectedCustomer, tableOrderReady]);
+
+  useEffect(() => () => {
+    const tableOrder = activeTableOrderRef.current;
+    if (!tableOrder || !tableOrderReadyRef.current || settlingTableOrderId.current === tableOrder.id) {
+      return;
+    }
+    void tableOrderService.updateOpenOrder(tableOrder.id, tableOrderSnapshotRef.current).catch(error => {
+      console.error('Could not save the table order while leaving the POS', error);
+    });
+  }, []);
+
+  const handleOpenTables = async () => {
+    setServiceType('dine-in');
+    const tableOrderId = activeTableOrder?.id;
+    if (tableOrderId && tableOrderReady && settlingTableOrderId.current !== tableOrderId) {
+      try {
+        await tableOrderService.updateOpenOrder(tableOrderId, {
+          lines: cart,
+          customer: selectedCustomer,
+          globalDiscount: discount,
+          pointsRedemption,
+        });
+      } catch (error) {
+        console.error('Could not save the table order before opening Tables', error);
+        alert('The table order could not be saved. Please try again.');
+        return;
+      }
+    }
+    navigate('/tables', {
+      state: {
+        tableOrderSnapshot: {
+          globalDiscount: discount,
+          pointsRedemption,
+        },
+      },
+    });
+  };
 
   // Auto-logout states
   const [showAutoLogoutWarning, setShowAutoLogoutWarning] = useState(false);
@@ -431,7 +570,14 @@ const POSInner: React.FC = () => {
   // Auto-clear cart timer management
   useEffect(() => {
     // Skip auto-clear if disabled or timeout is 0 (NEVER)
-    if (!settings.pos.autoClearCart.enabled || settings.pos.autoClearCart.timeoutMinutes === 0 || cart.length === 0) {
+    // An active table has its own persisted order and must never be silently
+    // emptied by the temporary walk-in-cart timer.
+    if (
+      activeTableOrder ||
+      !settings.pos.autoClearCart.enabled ||
+      settings.pos.autoClearCart.timeoutMinutes === 0 ||
+      cart.length === 0
+    ) {
       setCartClearCountdown(0);
       return;
     }
@@ -454,7 +600,7 @@ const POSInner: React.FC = () => {
     const interval = setInterval(checkAutoClearCart, 1000); // Check every second
 
     return () => clearInterval(interval);
-  }, [lastCartActivity, cart.length, settings.pos.autoClearCart, clearCart]);
+  }, [activeTableOrder, lastCartActivity, cart.length, settings.pos.autoClearCart, clearCart]);
 
   // Track cart activity when cart is modified
   useEffect(() => {
@@ -775,9 +921,12 @@ const POSInner: React.FC = () => {
             : undefined
         }
         onProfile={() => window.dispatchEvent(new Event(OPEN_MY_PROFILE_EVENT))}
-        onTables={() => navigate('/tables')}
+        onTables={handleOpenTables}
         onCashDrawer={() => setShowCashDrawer(true)}
         onProcess={() => setShowPayment(true)}
+        serviceType={serviceType}
+        onServiceTypeChange={setServiceType}
+        tableName={activeTableOrder?.tableName}
         totalsOverride={{
           subtotal: Number(subtotal.toFixed(2)),
           tax: Number(adjustedFinalTax.toFixed(2)),
@@ -871,8 +1020,23 @@ const POSInner: React.FC = () => {
             const paymentMethod = cashReceived > 0 ? 'cash' : 'card' as const;
             const employeeId = employee?.id || 'unknown-employee';
             const employeeName = employee?.name || 'Employee';
+            const tableOrderId = activeTableOrder?.id;
+            let fiscalSaleWasIssued = false;
+            let tableSettlementNeedsReview = false;
 
             try {
+              if (tableOrderId && !tableOrderReady) {
+                throw new Error('The table order is still loading. Please wait a moment and try again.');
+              }
+
+              if (tableOrderId) {
+                // Persist the safety state before fiscal issuance. A crash in
+                // the narrow window after issuance cannot make the table
+                // payable again; it stays blocked for reconciliation instead.
+                settlingTableOrderId.current = tableOrderId;
+                await tableOrderService.beginSettlement(tableOrderId);
+              }
+
               const { fiscal, receiptNumber, transactionId } = await processTransaction(
                 {
                   paymentMethod,
@@ -896,7 +1060,27 @@ const POSInner: React.FC = () => {
                   pointsPerEuroEarned: settings.loyalty.pointsPerEuroEarned,
                   pointsRedeemed: actualPointsRedeemed,
                   customerId: pointsRedemption?.customerId,
-                }
+                },
+                undefined,
+                tableOrderId
+                  ? {
+                    onFiscalDocumentPersisted: async issuedFiscal => {
+                      fiscalSaleWasIssued = true;
+                      try {
+                        await tableOrderService.markSettled(tableOrderId, issuedFiscal.transactionId);
+                        clearActiveTableOrder();
+                      } catch (settlementError) {
+                        // Never reopen a table after fiscal issuance. The order
+                        // remains "payment in progress" until it is reconciled.
+                        tableSettlementNeedsReview = true;
+                        clearActiveTableOrder();
+                        console.error('Fiscal sale completed, but table settlement could not be recorded', settlementError);
+                      } finally {
+                        settlingTableOrderId.current = null;
+                      }
+                    },
+                  }
+                  : undefined
               );
 
               if (paymentMethod === 'cash' && employee) {
@@ -1019,8 +1203,21 @@ const POSInner: React.FC = () => {
               }
               setShowReceiptPreview(true);
             } catch (e) {
+              if (tableOrderId && !fiscalSaleWasIssued) {
+                try {
+                  await tableOrderService.restoreOpen(tableOrderId);
+                } catch (restoreError) {
+                  console.error('Could not reopen the table order after a failed checkout', restoreError);
+                }
+                settlingTableOrderId.current = null;
+              }
               console.error('Checkout failed', e);
               alert(e instanceof Error ? e.message : 'Pagamento falhou');
+              return;
+            }
+
+            if (tableSettlementNeedsReview) {
+              alert('The sale was completed, but the table is locked for review to prevent a duplicate payment.');
             }
           }}
         />

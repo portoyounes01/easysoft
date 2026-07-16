@@ -21,11 +21,19 @@ export interface CartLine {
   discount: number;
 }
 
+/** The mutable table-order session currently loaded into the POS cart. */
+export interface ActiveTableOrder {
+  id: string;
+  tableId: string;
+  tableName: string;
+}
+
 interface POSState {
   currentTransaction: Partial<Transaction> | null;
   cart: CartLine[];
   cashDrawer: CashDrawer | null;
   selectedCustomer: LocalCustomer | null;
+  activeTableOrder: ActiveTableOrder | null;
 }
 
 interface POSContextType extends POSState {
@@ -36,6 +44,10 @@ interface POSContextType extends POSState {
   updateQuantity: (lineId: string, quantity: number) => void;
   applyDiscount: (lineId: string, discount: number) => void;
   clearCart: () => void;
+  /** Replaces the live cart from a saved, non-fiscal table order snapshot. */
+  restoreCart: (cart: CartLine[], customer: LocalCustomer | null) => void;
+  setActiveTableOrder: (order: ActiveTableOrder) => void;
+  clearActiveTableOrder: () => void;
   selectCustomer: (customer: LocalCustomer | null) => void;
   openDrawer: (initialFloat: number) => void;
   closeDrawer: (finalCount: number) => void;
@@ -62,6 +74,10 @@ interface POSContextType extends POSState {
     overrides?: {
       cart: FiscalCartLine[];
       customer: LocalCustomer | null;
+    },
+    lifecycle?: {
+      /** Runs immediately after the fiscal document is durably persisted. */
+      onFiscalDocumentPersisted?: (fiscal: FiscalCheckoutResult) => void | Promise<void>;
     }
   ) => Promise<{ receiptNumber: string; transactionId?: string; fiscal?: FiscalCheckoutResult }>;
 }
@@ -74,6 +90,8 @@ type POSAction =
   | { type: 'UPDATE_QUANTITY'; payload: { lineId: string; quantity: number } }
   | { type: 'APPLY_DISCOUNT'; payload: { lineId: string; discount: number } }
   | { type: 'CLEAR_CART' }
+  | { type: 'RESTORE_CART'; payload: { cart: CartLine[]; customer: LocalCustomer | null } }
+  | { type: 'SET_ACTIVE_TABLE_ORDER'; payload: ActiveTableOrder | null }
   | { type: 'SELECT_CUSTOMER'; payload: LocalCustomer | null }
   | { type: 'OPEN_DRAWER'; payload: CashDrawer }
   | { type: 'CLOSE_DRAWER'; payload: { finalCount: number } };
@@ -125,6 +143,16 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
     }
     case 'CLEAR_CART':
       return { ...state, cart: [], selectedCustomer: null };
+    case 'RESTORE_CART':
+      return {
+        ...state,
+        // Copy every line so the live cart cannot mutate a saved table-order
+        // snapshot by reference. Weighed lines retain their distinct lineId.
+        cart: action.payload.cart.map(item => ({ ...item, product: { ...item.product } })),
+        selectedCustomer: action.payload.customer ? { ...action.payload.customer } : null,
+      };
+    case 'SET_ACTIVE_TABLE_ORDER':
+      return { ...state, activeTableOrder: action.payload };
     case 'SELECT_CUSTOMER':
       return { ...state, selectedCustomer: action.payload };
     case 'OPEN_DRAWER':
@@ -149,7 +177,8 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     currentTransaction: null,
     cart: [],
     cashDrawer: null,
-    selectedCustomer: null
+    selectedCustomer: null,
+    activeTableOrder: null,
   });
 
   const stateRef = useRef(state);
@@ -194,6 +223,18 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     dispatchPos({ type: 'CLEAR_CART' });
   };
 
+  const restoreCart = useCallback((cart: CartLine[], customer: LocalCustomer | null) => {
+    dispatchPos({ type: 'RESTORE_CART', payload: { cart, customer } });
+  }, [dispatchPos]);
+
+  const setActiveTableOrder = useCallback((order: ActiveTableOrder) => {
+    dispatchPos({ type: 'SET_ACTIVE_TABLE_ORDER', payload: order });
+  }, [dispatchPos]);
+
+  const clearActiveTableOrder = useCallback(() => {
+    dispatchPos({ type: 'SET_ACTIVE_TABLE_ORDER', payload: null });
+  }, [dispatchPos]);
+
   const selectCustomer = (customer: LocalCustomer | null) => {
     dispatchPos({ type: 'SELECT_CUSTOMER', payload: customer });
   };
@@ -237,6 +278,9 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     overrides?: {
       cart: FiscalCartLine[];
       customer: LocalCustomer | null;
+    },
+    lifecycle?: {
+      onFiscalDocumentPersisted?: (fiscal: FiscalCheckoutResult) => void | Promise<void>;
     }
   ): Promise<{ receiptNumber: string; transactionId?: string; fiscal?: FiscalCheckoutResult }> => {
     try {
@@ -258,6 +302,11 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           payment: paymentData,
           globalDiscount,
         });
+
+        // Consumers that carry non-fiscal workflow state (for example a
+        // restaurant table) can lock it down as soon as the immutable
+        // fiscal document exists, before any best-effort stock/sync work.
+        await lifecycle?.onFiscalDocumentPersisted?.(fiscalRes);
 
         if (fiscalRes.invoiceTypeSaft === 'FS' || fiscalRes.invoiceTypeSaft === 'FT') {
           fiscalContext.updateSettings({
@@ -586,6 +635,9 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateQuantity,
       applyDiscount,
       clearCart,
+      restoreCart,
+      setActiveTableOrder,
+      clearActiveTableOrder,
       selectCustomer,
       openDrawer,
       closeDrawer,
