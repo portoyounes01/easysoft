@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -338,7 +339,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         </div>
       </div>
 
-      {showLogoutConfirm && (
+      {showLogoutConfirm && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-96 max-w-md rounded-xl bg-white p-6 shadow-2xl">
             <div className="mb-6 text-center">
@@ -371,7 +372,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
