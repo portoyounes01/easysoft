@@ -70,6 +70,12 @@
     background-image: linear-gradient(to right, var(--ds2-ui-to), var(--ds2-ui-from)) !important;
 }
 
+/* Active tab/nav pills (buttons only — not dialog headers): keep the pill visible on
+   dark rails when the secondary color is at/below the rail's own luminance (black). */
+.ds2-visual-scope button.bg-gradient-to-r.from-blue-600.to-blue-500 {
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
+}
+
 /* Pairing primary */
 .ds2-visual-scope .bg-gradient-to-r.from-blue-500.to-purple-600 {
     background-image: linear-gradient(to right, var(--ds2-pair-from), var(--ds2-pair-to)) !important;

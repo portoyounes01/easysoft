@@ -93,8 +93,10 @@ const DesignSystem2Customizer: React.FC = () => {
                 { value: 'sharp', label: 'Sharp' },
                 { value: 'default', label: 'Default' },
                 { value: 'soft', label: 'Soft' },
+                // Set via the Appearances slider/field; selecting it re-applies the stored px.
+                { value: 'custom', label: `Custom (${prefs.radiusCustomPx}px)` },
             ] as TabToggleOption<DesignSystem2RadiusPreset>[],
-        []
+        [prefs.radiusCustomPx]
     );
 
     const onChangeDensity = useCallback(

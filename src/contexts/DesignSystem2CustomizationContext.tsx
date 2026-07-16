@@ -13,6 +13,9 @@ import {
     getSecondaryCssVars,
     getPairingCssVars,
     getRadiusCssVars,
+    DS2_RADIUS_BASE_PX,
+    DS2_RADIUS_MIN_PX,
+    DS2_RADIUS_MAX_PX,
     type DesignSystem2ColorChoiceId,
     type DesignSystem2RadiusPreset,
     type DesignSystem2BaseColorId,
@@ -51,6 +54,8 @@ export interface DesignSystem2Prefs {
     /** Which gray family maps `neutral-*` utilities in the preview scope */
     neutralFamilyId: DesignSystem2NeutralFamilyId;
     radiusPreset: DesignSystem2RadiusPreset;
+    /** Base radius in px used when radiusPreset === 'custom' (the 'default' preset ≙ 10px). */
+    radiusCustomPx: number;
     schemaVersion: number;
 }
 
@@ -64,6 +69,7 @@ const defaultPrefs: DesignSystem2Prefs = {
     baseColorId: 'gray50',
     neutralFamilyId: 'gray',
     radiusPreset: 'default',
+    radiusCustomPx: DS2_RADIUS_BASE_PX,
     schemaVersion: PREFS_SCHEMA_VERSION,
 };
 
@@ -76,13 +82,14 @@ const COLOR_IDS = new Set<DesignSystem2ColorChoiceId>([
     'rose',
     'teal',
     'slate',
+    'black',
 ]);
 
 const BASE_IDS = new Set<DesignSystem2BaseColorId>(['white', 'stone50', 'slate50', 'zinc50', 'gray50']);
 
 const NEUTRAL_IDS = new Set<DesignSystem2NeutralFamilyId>(['gray', 'slate', 'stone', 'zinc']);
 
-const RADIUS_ALLOWED: DesignSystem2RadiusPreset[] = ['none', 'sharp', 'default', 'soft'];
+const RADIUS_ALLOWED: DesignSystem2RadiusPreset[] = ['none', 'sharp', 'default', 'soft', 'custom'];
 
 /** Legacy stored keys from earlier iterations */
 type LegacyPartial = Partial<DesignSystem2Prefs> & {
@@ -117,6 +124,9 @@ function normalizePrefs(raw: LegacyPartial): DesignSystem2Prefs {
     if (!BASE_IDS.has(m.baseColorId)) m.baseColorId = defaultPrefs.baseColorId;
     if (!NEUTRAL_IDS.has(m.neutralFamilyId)) m.neutralFamilyId = defaultPrefs.neutralFamilyId;
     if (!RADIUS_ALLOWED.includes(m.radiusPreset)) m.radiusPreset = defaultPrefs.radiusPreset;
+    m.radiusCustomPx = Number.isFinite(m.radiusCustomPx)
+        ? Math.min(DS2_RADIUS_MAX_PX, Math.max(DS2_RADIUS_MIN_PX, Math.round(m.radiusCustomPx)))
+        : defaultPrefs.radiusCustomPx;
 
     return m;
 }
@@ -126,7 +136,7 @@ function buildVisualStyle(prefs: DesignSystem2Prefs): CSSProperties {
         ...getPrimaryCssVars(prefs.primaryColorId),
         ...getSecondaryCssVars(prefs.secondaryColorId),
         ...getPairingCssVars(prefs.primaryColorId, prefs.secondaryColorId),
-        ...getRadiusCssVars(prefs.radiusPreset),
+        ...getRadiusCssVars(prefs.radiusPreset, prefs.radiusCustomPx),
     } as CSSProperties;
 }
 

@@ -30,6 +30,9 @@ import {
     DESIGN_SYSTEM_2_ACCENTS,
     DESIGN_SYSTEM_2_BASE_OPTIONS,
     DESIGN_SYSTEM_2_NEUTRAL_OPTIONS,
+    DS2_RADIUS_MIN_PX,
+    DS2_RADIUS_MAX_PX,
+    radiusBasePxForPreset,
 } from '../theme/designSystem2VisualTokens';
 import '../styles/design-system-2-scope.css';
 
@@ -78,15 +81,19 @@ interface AppearancePreviewProps {
     onPreviewTabChange: (tab: PreviewTab) => void;
 }
 
-const COLOR_SWATCH_CLASSES: Record<DesignSystem2ColorChoiceId, string> = {
-    green: 'bg-green-500',
-    blue: 'bg-blue-500',
-    indigo: 'bg-indigo-500',
-    violet: 'bg-violet-500',
-    orange: 'bg-orange-500',
-    rose: 'bg-rose-500',
-    teal: 'bg-teal-500',
-    slate: 'bg-slate-600',
+/** Fixed hex values (not Tailwind classes): inside .ds2-visual-scope, bg-green-500 /
+ *  bg-blue-500 utilities are remapped to the live theme vars, which would make those
+ *  swatches mirror the current selection instead of their own hue. */
+const COLOR_SWATCH_HEX: Record<DesignSystem2ColorChoiceId, string> = {
+    green: '#22c55e',
+    blue: '#3b82f6',
+    indigo: '#6366f1',
+    violet: '#a855f7',
+    orange: '#f97316',
+    rose: '#f43f5e',
+    teal: '#14b8a6',
+    slate: '#475569',
+    black: '#000000',
 };
 
 const BASE_CANVAS_CLASSES: Record<DesignSystem2BaseColorId, string> = {
@@ -158,7 +165,10 @@ const ColorSwatchButton: React.FC<ColorSwatchButtonProps> = ({ color, selected, 
             : 'border-neutral-200 hover:border-blue-200 hover:bg-blue-50'
             }`}
     >
-        <span className={`flex h-11 w-11 items-center justify-center rounded-full ${COLOR_SWATCH_CLASSES[color.id]}`}>
+        <span
+            className="flex h-11 w-11 items-center justify-center rounded-full"
+            style={{ backgroundColor: COLOR_SWATCH_HEX[color.id] }}
+        >
             {selected && <Check className="h-5 w-5 text-white" />}
         </span>
         <span className="hidden text-sm font-semibold text-neutral-700 sm:inline">{color.label}</span>
@@ -373,6 +383,16 @@ const Appearances: React.FC = () => {
     const { prefs, setPrefs, resetPrefs, layoutClasses, visualStyle } = useDesignSystem2Customization();
     const { t } = useTranslation();
     const [previewTab, setPreviewTab] = useState<PreviewTab>('order');
+    /** In-progress text of the custom radius field (allows clearing while typing). */
+    const [radiusDraft, setRadiusDraft] = useState<string | null>(null);
+
+    // Base radius the slider/field represent: preset-derived, or the custom px value.
+    const radiusBasePx = radiusBasePxForPreset(prefs.radiusPreset, prefs.radiusCustomPx);
+
+    const setCustomRadius = (px: number) => {
+        const clamped = Math.min(DS2_RADIUS_MAX_PX, Math.max(DS2_RADIUS_MIN_PX, Math.round(px)));
+        setPrefs({ radiusPreset: 'custom', radiusCustomPx: clamped });
+    };
 
     const densityOptions = useMemo<SegmentOption<DesignSystem2Density>[]>(
         () => [
@@ -531,9 +551,49 @@ const Appearances: React.FC = () => {
                                     <SegmentedControl
                                         options={radiusOptions}
                                         value={prefs.radiusPreset}
-                                        onChange={(radiusPreset) => setPrefs({ radiusPreset })}
+                                        onChange={(radiusPreset) => {
+                                            setRadiusDraft(null);
+                                            setPrefs({ radiusPreset });
+                                        }}
                                         columnsClassName="grid-cols-2 lg:grid-cols-4"
                                     />
+                                    <div className="mt-3 flex items-center gap-3">
+                                        <input
+                                            type="range"
+                                            min={DS2_RADIUS_MIN_PX}
+                                            max={DS2_RADIUS_MAX_PX}
+                                            step={1}
+                                            value={radiusBasePx}
+                                            onChange={(e) => {
+                                                setRadiusDraft(null);
+                                                setCustomRadius(Number(e.target.value));
+                                            }}
+                                            className="h-2 min-w-0 flex-1 cursor-pointer accent-green-500"
+                                            aria-label={t('appearances.customRadiusLabel')}
+                                        />
+                                        <label className="flex shrink-0 items-center gap-2">
+                                            <span className="sr-only">{t('appearances.customRadiusLabel')}</span>
+                                            <input
+                                                type="number"
+                                                min={DS2_RADIUS_MIN_PX}
+                                                max={DS2_RADIUS_MAX_PX}
+                                                step={1}
+                                                inputMode="numeric"
+                                                value={radiusDraft ?? String(radiusBasePx)}
+                                                onChange={(e) => {
+                                                    const raw = e.target.value;
+                                                    setRadiusDraft(raw);
+                                                    const parsed = Number(raw);
+                                                    if (raw !== '' && Number.isFinite(parsed)) {
+                                                        setCustomRadius(parsed);
+                                                    }
+                                                }}
+                                                onBlur={() => setRadiusDraft(null)}
+                                                className="w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-center text-sm font-semibold text-neutral-900 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                                            />
+                                            <span className="text-sm font-semibold text-neutral-500">px</span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </SectionCard>

@@ -110,8 +110,12 @@ const ColorPalette: React.FC<ColorPaletteProps> = ({
         </div>
     );
 
-    const primaryMono = customizationPrimaryHue;
-    const secondaryMono = customizationSecondaryHue;
+    // 'black' borrows the neutral ramp (no bg-black-* Tailwind scale exists), so label
+    // its swatches with the class names that actually produce the shown hexes.
+    const monoPrefixForHue = (hue?: DesignSystem2ColorChoiceId): string | undefined =>
+        hue === 'black' ? 'neutral' : hue;
+    const primaryMono = monoPrefixForHue(customizationPrimaryHue);
+    const secondaryMono = monoPrefixForHue(customizationSecondaryHue);
     const neutralMono = customizationNeutralFamily;
 
     return (
@@ -167,7 +171,12 @@ const ColorPalette: React.FC<ColorPaletteProps> = ({
                             style={
                                 customizationPrimaryHue !== undefined
                                     ? {
-                                          backgroundImage: `linear-gradient(135.7deg, ${primaryScale['500']} -33%, ${primaryScale['700']} 100%)`,
+                                          // Black's brand gradient lives at the dark end of the
+                                          // neutral ramp, not at the 500/700 mid-grays.
+                                          backgroundImage:
+                                              customizationPrimaryHue === 'black'
+                                                  ? `linear-gradient(135.7deg, ${primaryScale['900']} -33%, ${primaryScale['950']} 100%)`
+                                                  : `linear-gradient(135.7deg, ${primaryScale['500']} -33%, ${primaryScale['700']} 100%)`,
                                       }
                                     : undefined
                             }

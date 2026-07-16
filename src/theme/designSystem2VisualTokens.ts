@@ -10,12 +10,14 @@ export type DesignSystem2ColorChoiceId =
     | 'orange'
     | 'rose'
     | 'teal'
-    | 'slate';
+    | 'slate'
+    | 'black';
 
 /** @deprecated use DesignSystem2ColorChoiceId */
 export type DesignSystem2AccentId = DesignSystem2ColorChoiceId;
 
-export type DesignSystem2RadiusPreset = 'none' | 'sharp' | 'default' | 'soft';
+/** 'custom' uses the user-chosen base radius (px) instead of a preset multiplier. */
+export type DesignSystem2RadiusPreset = 'none' | 'sharp' | 'default' | 'soft' | 'custom';
 
 export type DesignSystem2BaseColorId = 'white' | 'stone50' | 'slate50' | 'zinc50' | 'gray50';
 
@@ -35,6 +37,7 @@ export const DESIGN_SYSTEM_2_COLOR_CHOICES: DesignSystem2ColorOption[] = [
     { id: 'rose', label: 'Rose' },
     { id: 'teal', label: 'Teal' },
     { id: 'slate', label: 'Slate' },
+    { id: 'black', label: 'Black' },
 ];
 
 /** @deprecated use DESIGN_SYSTEM_2_COLOR_CHOICES */
@@ -214,6 +217,29 @@ const PALETTE: Record<DesignSystem2ColorChoiceId, CssVarMap> = {
         '--ds2-confirm-bg': '#64748b',
         '--ds2-confirm-hover': '#475569',
     },
+    black: {
+        /* Pure black brand — hover/gradient counterparts lift toward neutral-800/900
+           since black itself cannot get darker. */
+        '--ds2-brand-from': '#171717',
+        '--ds2-brand-to': '#000000',
+        '--ds2-brand-solid': '#000000',
+        '--ds2-brand-text-900': '#000000',
+        '--ds2-ui-from': '#171717',
+        '--ds2-ui-to': '#000000',
+        '--ds2-ui-from-hover': '#262626',
+        '--ds2-ui-to-hover': '#171717',
+        '--ds2-ui-solid': '#000000',
+        '--ds2-ui-hover-solid': '#262626',
+        '--ds2-ui-tint-bg': '#f5f5f5',
+        '--ds2-ui-tint-text': '#000000',
+        '--ds2-cash-bg': '#f5f5f5',
+        '--ds2-cash-border': '#404040',
+        '--ds2-cash-icon': '#000000',
+        '--ds2-focus-ring': '#404040',
+        '--ds2-focus-border': '#000000',
+        '--ds2-confirm-bg': '#000000',
+        '--ds2-confirm-hover': '#262626',
+    },
 };
 
 const PRIMARY_KEYS = [
@@ -277,15 +303,30 @@ export function getAccentCssVars(id: DesignSystem2ColorChoiceId): CssVarMap {
     return { ...getPrimaryCssVars(id), ...getSecondaryCssVars(id), ...getPairingCssVars(id, id) };
 }
 
-const RADIUS_MULT: Record<DesignSystem2RadiusPreset, number> = {
+const RADIUS_MULT: Record<Exclude<DesignSystem2RadiusPreset, 'custom'>, number> = {
     none: 0,
     sharp: 0.72,
     default: 1,
     soft: 1.28,
 };
 
-export function getRadiusCssVars(preset: DesignSystem2RadiusPreset): CssVarMap {
-    const mult = RADIUS_MULT[preset] ?? 1;
+/** The 'default' preset's base radius: multipliers/custom px are expressed against it. */
+export const DS2_RADIUS_BASE_PX = 10;
+export const DS2_RADIUS_MIN_PX = 0;
+export const DS2_RADIUS_MAX_PX = 24;
+
+/** Base radius (px) a preset resolves to — drives the customizer slider position. */
+export function radiusBasePxForPreset(preset: DesignSystem2RadiusPreset, customPx: number = DS2_RADIUS_BASE_PX): number {
+    if (preset === 'custom') {
+        return Math.min(DS2_RADIUS_MAX_PX, Math.max(DS2_RADIUS_MIN_PX, Math.round(customPx)));
+    }
+    return Math.round((RADIUS_MULT[preset] ?? 1) * DS2_RADIUS_BASE_PX);
+}
+
+export function getRadiusCssVars(preset: DesignSystem2RadiusPreset, customPx: number = DS2_RADIUS_BASE_PX): CssVarMap {
+    const mult = preset === 'custom'
+        ? radiusBasePxForPreset(preset, customPx) / DS2_RADIUS_BASE_PX
+        : RADIUS_MULT[preset] ?? 1;
     const r = (px: number) => `${Math.round(px * mult * 100) / 100}px`;
     return {
         '--ds2-radius-sm': r(6),
