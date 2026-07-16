@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { Archive, Table, Save, Minus, Plus, UserRound } from 'lucide-react';
+import { Archive, Table, Minus, Plus, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LocalProduct } from '../types/supabase';
 import { activeProfile } from '../lib/countryProfile';
@@ -28,9 +28,7 @@ export interface OrderSummaryPanelProps {
     onProfile?: () => void;
     onTables?: () => void;
     onCashDrawer?: () => void;
-    onSaveBill?: () => void;
     onProcess?: () => void;
-    canSaveBill?: boolean;
     className?: string;
     totalsOverride?: {
         subtotal: number;
@@ -62,9 +60,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     onProfile,
     onTables,
     onCashDrawer,
-    onSaveBill,
     onProcess,
-    canSaveBill = false,
     className = '',
     totalsOverride,
     discountInfo,
@@ -153,30 +149,14 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                         style={{ padding: '0.5vh', height: '6vh' }}
                         className="w-full"
                     />
-                    {/* AGENTS: Do not delete the block below (false && …) — 2.ª via + Mesas UI preserved until implemented. Remove only if explicitly requested by a human. */}
-                    {false && (
-                        <>
-                            <POSActionButton
-                                icon={Save}
-                                label={t('pos.saveBill')}
-                                onClick={onSaveBill}
-                                disabled={!canSaveBill}
-                                variant={!canSaveBill ? 'disabled' : 'default'}
-                                title={!canSaveBill ? 'Disponível após completar a venda' : undefined}
-                                style={{ padding: '0.3vh', height: '6vh' }}
-                                className="w-full"
-                            />
-                            <POSActionButton
-                                icon={Table}
-                                label={t('pos.tables')}
-                                onClick={onTables}
-                                disabled={true}
-                                variant="disabled"
-                                title={t('pos.paymentDisabled')}
-                                style={{ padding: '0.5vh', height: '6vh' }}
-                                className="w-full"
-                            />
-                        </>
+                    {onTables && (
+                        <POSActionButton
+                            icon={Table}
+                            label={t('pos.tables')}
+                            onClick={onTables}
+                            style={{ padding: '0.5vh', height: '6vh' }}
+                            className="w-full"
+                        />
                     )}
                 </div>
             </div>
@@ -354,4 +334,3 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
 };
 
 export default React.memo(OrderSummaryPanel);
-

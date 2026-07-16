@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { generateQRCodeImage } from '../utils/qrCode';
 import {
   Grid,
@@ -64,6 +65,7 @@ const iconMap = {
 
 const POSInner: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { toggleNavSidebar } = useLayoutNav();
   const { visualStyle, prefs } = useDesignSystem2Customization();
   const { cart, addToCart, addWeighedToCart, clearCart, updateQuantity, selectedCustomer, selectCustomer, processTransaction } = usePOS();
@@ -773,6 +775,7 @@ const POSInner: React.FC = () => {
             : undefined
         }
         onProfile={() => window.dispatchEvent(new Event(OPEN_MY_PROFILE_EVENT))}
+        onTables={() => navigate('/tables')}
         onCashDrawer={() => setShowCashDrawer(true)}
         onProcess={() => setShowPayment(true)}
         totalsOverride={{

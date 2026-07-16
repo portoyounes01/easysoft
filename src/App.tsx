@@ -10,6 +10,7 @@ import LoginFormPwa from './components/Auth/LoginFormPwa';
 import { HostRoute, PWA_LANDING } from './components/routing/HostRoute';
 import { isPwaHost } from './lib/host';
 import POS from './pages/POS';
+import Tables from './pages/Tables';
 import POS2 from './pages/POS2';
 import Products from './pages/Products';
 import Customers from './pages/Customers';
@@ -159,6 +160,16 @@ const AppContent: React.FC = () => {
                       <HostRoute host="till">
                         <PermissionRoute permission="sales">
                           <POS />
+                        </PermissionRoute>
+                      </HostRoute>
+                    }
+                  />
+                  <Route
+                    path="/tables"
+                    element={
+                      <HostRoute host="till">
+                        <PermissionRoute permission="sales">
+                          <Tables />
                         </PermissionRoute>
                       </HostRoute>
                     }

@@ -28,6 +28,7 @@ import {
   LineChart,
   MonitorSmartphone,
   Sparkles,
+  Armchair,
 } from "lucide-react";
 import { useSupabaseAuth } from "../../contexts/SupabaseAuthContext";
 import { isPwaHost } from "../../lib/host";
@@ -58,7 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
   const { employee, principal, signOut, hasPermission } = useSupabaseAuth();
   // Till-only nav items — never shown on the PWA (browser) host (docs/pwa-plan.md §2.3);
   // HostRoute also blocks them at the route level.
-  const TILL_ONLY_PATHS = new Set(["/pos", "/queue", "/cash-drawer-audit"]);
+  const TILL_ONLY_PATHS = new Set(["/pos", "/tables", "/queue", "/cash-drawer-audit"]);
   // Human-session-only nav items — the assistant edge fns reject device JWTs, so a
   // till employee (even a system admin) would only get backend 403s. PermissionRoute
   // enforces the same at the route level (humanOnly).
@@ -74,6 +75,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         path: "/pos",
         icon: ShoppingCart,
         labelKey: "sidebar.menu.pos",
+        permission: "sales",
+      },
+      {
+        path: "/tables",
+        icon: Armchair,
+        labelKey: "sidebar.menu.tables",
         permission: "sales",
       },
       {
