@@ -168,9 +168,18 @@
 
 .pos2-pill-row {
     gap: calc(var(--pos2-u) * 13);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+}
+
+.pos2-pill-row::-webkit-scrollbar {
+    display: none;
 }
 
 .pos2-category-pill {
+    flex: 1 0 calc((100% - (var(--pos2-u) * 52)) / 5);
+    min-width: calc(var(--pos2-u) * 130);
     font-weight: 400;
     height: calc(var(--pos2-u) * 70);
     padding: 0 calc(var(--pos2-u) * 14);
@@ -180,11 +189,13 @@
 
 .pos2-product-grid {
     margin-top: calc(var(--pos2-u) * 31);
+    grid-template-columns: repeat(auto-fill, minmax(calc(var(--pos2-u) * 220), 1fr));
     column-gap: calc(var(--pos2-u) * 14.5);
     row-gap: calc(var(--pos2-u) * 26.5);
 }
 
 .pos2-product-card {
+    aspect-ratio: 1 / 1;
     border-radius: calc(var(--pos2-u) * 24);
     padding: calc(var(--pos2-u) * 13);
 }
@@ -192,6 +203,11 @@
 .pos2-product-thumb {
     height: calc(var(--pos2-u) * 122);
     border-radius: calc(var(--pos2-u) * 16);
+}
+
+.pos2-product-fallback {
+    width: calc(var(--pos2-u) * 58);
+    height: calc(var(--pos2-u) * 58);
 }
 
 .pos2-product-name {

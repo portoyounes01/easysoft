@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Home,
@@ -11,43 +11,24 @@ import {
   MoreHorizontal,
   Wifi,
   BatteryFull,
+  Package,
 } from 'lucide-react';
+import { useProducts } from '../contexts/ProductsContext';
 import '../styles/pos2.css';
 
 interface Pos2Product {
   id: string;
-  nameKey: string;
+  name: string;
   price: number;
-  image: string;
+  imageUrl: string | null;
+  soldByWeight: boolean;
 }
 
 interface Pos2Category {
   id: string;
-  labelKey: string;
+  label: string;
   products: Pos2Product[];
 }
-
-const CATEGORIES: Pos2Category[] = [
-  {
-    id: 'favorites',
-    labelKey: 'pos2.categoryFavorites',
-    products: [
-      { id: 'double-cheeseburger', nameKey: 'pos2.productDoubleCheeseburger', price: 5.49, image: '/assets/pos2/double-cheeseburger.png' },
-      { id: 'chicken-burger', nameKey: 'pos2.productChickenBurger', price: 5.49, image: '/assets/pos2/chicken-burger.png' },
-      { id: 'veggie-burger', nameKey: 'pos2.productVeggieBurger', price: 5.49, image: '/assets/pos2/veggie-burger.png' },
-      { id: 'fries', nameKey: 'pos2.productFries', price: 2.49, image: '/assets/pos2/fries.png' },
-      { id: 'onion-rings', nameKey: 'pos2.productOnionRings', price: 2.49, image: '/assets/pos2/onion-rings.png' },
-      { id: 'chicken-nuggets', nameKey: 'pos2.productChickenNuggets', price: 3.49, image: '/assets/pos2/chicken-nuggets.png' },
-      { id: 'lemonade', nameKey: 'pos2.productLemonade', price: 2.29, image: '/assets/pos2/lemonade.png' },
-      { id: 'iced-coffee', nameKey: 'pos2.productIcedCoffee', price: 2.49, image: '/assets/pos2/iced-coffee.png' },
-      { id: 'apple-pie', nameKey: 'pos2.productApplePie', price: 1.99, image: '/assets/pos2/apple-pie.png' },
-    ],
-  },
-  { id: 'burgers', labelKey: 'pos2.categoryBurgers', products: [] },
-  { id: 'sides', labelKey: 'pos2.categorySides', products: [] },
-  { id: 'drinks', labelKey: 'pos2.categoryDrinks', products: [] },
-  { id: 'desserts', labelKey: 'pos2.categoryDesserts', products: [] },
-];
 
 interface Pos2OrderLine {
   id: string;
@@ -72,7 +53,7 @@ const NAV_ITEMS = [
   { id: 'settings', labelKey: 'pos2.navSettings', icon: Settings },
 ];
 
-const formatMoney = (value: number) => `$${value.toFixed(2)}`;
+const formatMoney = (value: number) => `€${value.toFixed(2)}`;
 
 const Pos2StatusBar: React.FC = () => (
   <div className="pos2-statusbar flex w-full shrink-0 items-start justify-between text-neutral-900">
@@ -197,7 +178,9 @@ const Pos2Menu: React.FC<{
   categories: Pos2Category[];
   activeCategoryId: string;
   onSelectCategory: (id: string) => void;
-}> = ({ categories, activeCategoryId, onSelectCategory }) => {
+  isLoading: boolean;
+  error: string | null;
+}> = ({ categories, activeCategoryId, onSelectCategory, isLoading, error }) => {
   const { t } = useTranslation();
   const activeCategory = categories.find((c) => c.id === activeCategoryId) ?? categories[0];
 
@@ -211,33 +194,61 @@ const Pos2Menu: React.FC<{
               key={category.id}
               type="button"
               onClick={() => onSelectCategory(category.id)}
-              className={`pos2-category-pill flex-1 basis-0 truncate transition-colors ${
+              className={`pos2-category-pill truncate transition-colors ${
                 isActive ? 'pos2-btn-dark' : 'pos2-btn-light'
               }`}
+              title={category.label}
             >
-              {t(category.labelKey)}
+              {category.label}
             </button>
           );
         })}
       </div>
 
-      <div className="pos2-product-grid grid flex-1 auto-rows-min grid-cols-3 overflow-y-auto">
-        {activeCategory.products.map((product) => (
+      <div className="pos2-product-grid grid flex-1 auto-rows-min overflow-y-auto">
+        {isLoading && (
+          <div className="pos2-order-line col-span-full flex items-center justify-center text-neutral-400">
+            {t('app.loading')}
+          </div>
+        )}
+        {!isLoading && error && (
+          <div className="pos2-order-line col-span-full flex items-center justify-center text-red-500" role="alert">
+            {error}
+          </div>
+        )}
+        {!isLoading && !error && activeCategory.products.map((product) => (
           <button
             key={product.id}
             type="button"
-            className="pos2-product-card flex flex-col items-center border border-neutral-200/50 bg-white text-center shadow-[0_1px_3px_rgba(0,0,0,0.05)] transition-transform hover:-translate-y-0.5 hover:shadow-md"
+            className="pos2-product-card flex flex-col items-center overflow-hidden border border-neutral-200/50 bg-white text-center shadow-[0_1px_3px_rgba(0,0,0,0.05)] transition-transform hover:-translate-y-0.5 hover:shadow-md"
           >
-            <div className="pos2-product-thumb flex w-full items-center justify-center bg-white">
-              <img src={product.image} alt="" className="h-full w-full object-contain" draggable={false} />
+            <div className="pos2-product-thumb relative flex w-full items-center justify-center bg-white">
+              <Package className="pos2-product-fallback text-neutral-300" aria-hidden />
+              {product.imageUrl && (
+                <img
+                  src={product.imageUrl}
+                  alt={product.name}
+                  className="absolute inset-0 h-full w-full object-contain"
+                  draggable={false}
+                  onError={(event) => {
+                    event.currentTarget.style.display = 'none';
+                  }}
+                />
+              )}
             </div>
-            <p className="pos2-product-name font-semibold text-neutral-900">{t(product.nameKey)}</p>
-            <p className="pos2-product-price text-neutral-500">{formatMoney(product.price)}</p>
+            <p className="pos2-product-name w-full truncate font-semibold text-neutral-900" title={product.name}>
+              {product.name}
+            </p>
+            <p className="pos2-product-price text-neutral-500">
+              {formatMoney(product.price)}{product.soldByWeight ? '/kg' : ''}
+            </p>
           </button>
         ))}
-        {activeCategory.products.length === 0 && (
-          <div className="pos2-order-line col-span-3 flex flex-1 items-center justify-center text-neutral-400">
-            {t('pos2.emptyCategory', { category: t(activeCategory.labelKey) })}
+        {!isLoading && !error && activeCategory.products.length === 0 && (
+          <div className="pos2-order-line col-span-full flex flex-1 items-center justify-center text-neutral-400">
+            {activeCategory.id === 'all'
+              ? t('pos.noCatalogProductsTitle')
+              : t('pos2.emptyCategory', { category: activeCategory.label })}
           </div>
         )}
       </div>
@@ -255,8 +266,44 @@ const Pos2Menu: React.FC<{
 };
 
 const POS2: React.FC = () => {
+  const { t } = useTranslation();
+  const { products, categories, isLoading, error } = useProducts();
   const [activeNav, setActiveNav] = useState('home');
-  const [activeCategoryId, setActiveCategoryId] = useState('favorites');
+  const [activeCategoryId, setActiveCategoryId] = useState('all');
+
+  const catalogCategories = useMemo<Pos2Category[]>(() => {
+    const activeProducts = products
+      .filter((product) => product.is_active && product.deleted_at === null)
+      .sort((a, b) => a.display_order - b.display_order || a.name.localeCompare(b.name));
+
+    const toPos2Product = (product: (typeof activeProducts)[number]): Pos2Product => ({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      imageUrl: product.image_url,
+      soldByWeight: product.sold_by_weight ?? false,
+    });
+
+    const realCategories = categories
+      .filter((category) => category.is_active && category.deleted_at === null)
+      .sort((a, b) => a.display_order - b.display_order || a.name.localeCompare(b.name))
+      .map((category) => ({
+        id: category.id,
+        label: category.name,
+        products: activeProducts
+          .filter((product) => product.category_id === category.id)
+          .map(toPos2Product),
+      }));
+
+    return [
+      {
+        id: 'all',
+        label: t('pos2.categoryAll'),
+        products: activeProducts.map(toPos2Product),
+      },
+      ...realCategories,
+    ];
+  }, [categories, products, t]);
 
   return (
     <div className="pos2-route-host fixed inset-0 z-0 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden">
@@ -265,9 +312,11 @@ const POS2: React.FC = () => {
         <Pos2Sidebar active={activeNav} onSelect={setActiveNav} />
         <Pos2OrderPanel lines={ORDER_LINES} />
         <Pos2Menu
-          categories={CATEGORIES}
+          categories={catalogCategories}
           activeCategoryId={activeCategoryId}
           onSelectCategory={setActiveCategoryId}
+          isLoading={isLoading}
+          error={error}
         />
       </div>
     </div>
