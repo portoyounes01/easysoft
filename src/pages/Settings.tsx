@@ -761,25 +761,32 @@ const Settings: React.FC = () => {
                             : t('settings.saftMonthly')
                     );
                 }
-                const xml =
-                    settings.fiscal.issuer === 'invoicexpress'
-                        ? await (await import('../fiscal/invoicexpressFiscalIssuer')).fetchInvoiceXpressSaftXml({
-                              settings,
-                              year: startYear,
-                              month: startMonth,
-                          })
-                        : await (await import('../fiscal/fiskalyFiscalIssuer')).fetchFiskalySaftXml({
-                              settings,
-                              year: startYear,
-                              month: startMonth,
-                          });
-                const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+                // fiskaly (unified API) delivers SAF-T as a zip artifact; InvoiceXpress as bare XML.
+                let blob: Blob;
+                let extension: 'xml' | 'zip';
+                if (settings.fiscal.issuer === 'invoicexpress') {
+                    const xml = await (await import('../fiscal/invoicexpressFiscalIssuer')).fetchInvoiceXpressSaftXml({
+                        settings,
+                        year: startYear,
+                        month: startMonth,
+                    });
+                    blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+                    extension = 'xml';
+                } else {
+                    const archive = await (await import('../fiscal/fiskalyFiscalIssuer')).fetchFiskalySaftArchive({
+                        settings,
+                        year: startYear,
+                        month: startMonth,
+                    });
+                    blob = new Blob([archive.bytes], { type: archive.mimeType });
+                    extension = archive.mimeType.includes('zip') ? 'zip' : 'xml';
+                }
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = isSystemAdmin
-                    ? `SAFT_${settings.fiscal.issuer.toUpperCase()}_${startYear}_${String(startMonth).padStart(2, '0')}.xml`
-                    : `SAFT_${startYear}_${String(startMonth).padStart(2, '0')}.xml`;
+                    ? `SAFT_${settings.fiscal.issuer.toUpperCase()}_${startYear}_${String(startMonth).padStart(2, '0')}.${extension}`
+                    : `SAFT_${startYear}_${String(startMonth).padStart(2, '0')}.${extension}`;
                 a.click();
                 URL.revokeObjectURL(url);
                 setSaftMessage(

@@ -352,17 +352,24 @@ export interface InvoiceXpressFiscalSettings {
 }
 
 /**
- * Fiskaly SIGN PT (cloud, AT-certified). API key/secret live in the `fiskaly-fiscal`
- * edge function env (FISKALY_API_KEY / FISKALY_API_SECRET); routing config is stored here.
+ * Fiskaly SIGN PT — the Portugal service of fiskaly's UNIFIED API (shared hosts,
+ * not a specialized per-country API like SIGN ES). API key/secret live in the
+ * `fiskaly-fiscal` edge function env (FISKALY_API_KEY / FISKALY_API_SECRET);
+ * routing config is stored here. ⚠️ fiskaly claims AT certification but publishes
+ * no certificate number (REGISTER B5/B14) — `local_at` stays the PT primary issuer.
  */
 export interface FiskalyFiscalSettings {
     enabled: boolean;
     /** `test` → test.api.fiskaly.com, `live` → live.api.fiskaly.com. */
     environment: 'test' | 'live';
-    /** Fiskaly resource hierarchy: taxpayer → location → system → series. */
+    /** Fiskaly unified-API resource hierarchy: taxpayer → location → system. */
     taxpayerId: string;
     locationId: string;
     systemId: string;
+    /**
+     * Client-chosen series LABEL (there is no series resource in the unified API —
+     * document numbers/series are taxpayer-generated, charset [0-9A-Z_/\-.]).
+     */
     seriesId?: string;
     documentType: 'FT' | 'FS' | 'FR';
     exemptTax: {

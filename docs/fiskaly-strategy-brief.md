@@ -3,8 +3,8 @@
 ## What the email changes
 
 - Spain is the urgent track: SIGN ES (test/live.es.sign.fiskaly.com) — enabled on org group1, TEST auth already verified.
-- Portugal + Belgium route via the "API UNIFICADA" (UAPI). Research reconciles the naming: SIGN PT IS the UAPI's Portugal service (launched 2026-05-21 on api.fiskaly.com) — "UAPI, not SIGN PT" was naming confusion, not a dead product.
-- Consequence: the existing `pos-checkout` edge fn already targets the right host family for PT (api.fiskaly.com, X-Api-Version 2026-06-01) but stays parked (response contract ASSUMED, SIGN PT not enabled on our account); ES needs a net-new integration — different host, auth shape (`content.access_token.bearer`), and resource model (taxpayer → signer → client → invoices).
+- Portugal + Belgium route via the "API UNIFICADA" (UAPI). Research reconciles the naming: SIGN PT IS the UAPI's Portugal service (launched 2026-05-21 on api.fiskaly.com) — "UAPI, not SIGN PT" was naming confusion, not a dead product. **Re-verified 2026-07-19 (B16): "SIGN PT" is the official product name (fiskaly.com/signpt, spec `info.title`), delivered on the shared unified hosts `test/live.api.fiskaly.com`.**
+- Consequence: the existing `pos-checkout` edge fn already targets the right host family for PT (test/live.api.fiskaly.com, X-Api-Version 2026-06-01) but stays parked (SIGN PT not enabled on our account). **2026-07-19: the full PT contract — request AND response — is now schema-verified from the official OpenAPI and all PT fiskaly code was fixed to it (`docs/fiskaly-pt-contract-capture.md`); only runtime values remain unverified.** ES needs a net-new integration — different host, auth shape (`content.access_token.bearer`), and resource model (taxpayer → signer → client → invoices).
 - Belgium today = E-INVOICE BE only (Peppol B2B, Beta). No POS/cash-register fiscalization product exists for BE.
 - Portugal stays on the working `local_at` path (REGISTER B14) — see Section 3 for why switching is blocked anyway.
 
@@ -40,7 +40,7 @@
 - Account blocker: SIGN PT is visible but not enabled on org group1; enabling requires fiskaly action (terms/lead time unknown).
 - Belgium: E-INVOICE BE only (Peppol B2B e-invoicing + 10-year archiving, Beta). No GKS/POS fiscalization product — Belgium POS fiscalization via fiskaly is not currently possible.
 
-**Implication:** `local_at` remains the Portugal issuer (confirms REGISTER B14). Switch preconditions, in order: (1) fiskaly provides its AT certificate number in writing and we verify it in the register; (2) SIGN PT enabled on our account; (3) an ES-0-style contract-verification pass against TEST (the `pos-checkout` response shape is still ASSUMED). None met today. Belgium is parked entirely.
+**Implication:** `local_at` remains the Portugal issuer (confirms REGISTER B14). Switch preconditions, in order: (1) fiskaly provides its AT certificate number in writing and we verify it in the register; (2) SIGN PT enabled on our account; (3) an ES-0-style contract-verification pass against TEST — **the schema-level contract is verified as of 2026-07-19 (B16) and the code matches it, but runtime values (real ATCUD/QR, VAT-code mapping, timing) still need one live TEST issuance.** (1) and (2) not met today. Belgium is parked entirely.
 
 ## Recommended sequence
 
@@ -52,7 +52,7 @@ Portugal keeps `local_at` untouched throughout; all ES work is additive via the 
 - **ES-3 — Till/PWA surface (M).** Issuer union + settings gating; ES tax entry UI; ThermalReceipt country branch (AEAT QR + VERI*FACTU legend, drop ATCUD/"/AT" legend for ES tenants); add 'es' receipt language; "add buyer NIF → COMPLETE invoice" flow. *Blocked on ES-2.*
 - **ES-4 — Rectificativas + operations (M).** CORRECTING branch in creditNoteCheckout dispatch (replaces PT NC semantics), cancellation/anulación, REMEDY handling for REQUIRES_CORRECTION/INSPECTION, /exports retrieval. **DEFERRED-eligible for ES v1 only with a loud REGISTER entry** per project policy.
 - **ES-LIVE gate (external).** fiskaly sales enablement of LIVE for the merchant org + signed social-collaboration agreement uploaded + our own declaración responsable published (vendor deadline already passed — this is a legal precondition to selling into Spain, not a nice-to-have).
-- **PT/UAPI track — parked.** Reopen only when fiskaly's AT certificate number is verified in the register AND SIGN PT is enabled on our account; then run a PT equivalent of ES-0 against the real UAPI before touching the parked pos-checkout. Belgium: no action possible.
+- **PT/UAPI track — parked (code now contract-correct).** As of 2026-07-19 (B16) every PT fiskaly path (`pos-checkout`, legacy `fiskaly-fiscal` proxy, client issuer) matches the schema-verified SIGN PT contract. Reopen only when fiskaly's AT certificate number is verified in the register AND SIGN PT is enabled on our account; then run a PT equivalent of ES-0 (live TEST issuance) to close the runtime unknowns in `docs/fiskaly-pt-contract-capture.md` §6. Belgium: no action possible.
 
 ## Decisions needed from the founder
 

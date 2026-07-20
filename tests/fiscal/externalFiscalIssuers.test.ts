@@ -92,6 +92,8 @@ function fiskalySettings(): SystemSettings {
     const s = baseSettings();
     s.fiscal.issuer = 'fiskaly';
     s.fiscal.fiskaly.enabled = true;
+    // FS = RECEIPT path; FT (INVOICE) requires a full BUSINESS recipient with NIF+address
+    s.fiscal.fiskaly.documentType = 'FS';
     return s;
 }
 
@@ -187,16 +189,20 @@ describe('External fiscal issuers', () => {
     });
 
     it('issues a Fiskaly sale through the Edge Function and persists the provider', async () => {
+        // RecordResource.content shape per the verified SIGN PT OpenAPI 2026-06-01
         invokeMock.mockResolvedValueOnce({
             data: {
-                document: {
-                    id: 'rec-abc',
-                    number: 'FT SIGN/1',
-                    atcud: 'WXYZ9876-1',
-                    hash: 'FHASH',
-                    signature: 'sig-data',
-                    qr_code: 'A:509999999*B:999999990',
-                    issued_at: '2026-06-11T10:00:00',
+                record: {
+                    id: '01890000-0000-7000-8000-000000000abc',
+                    state: 'COMPLETED',
+                    mode: 'FINISHED',
+                    journal: { signature: 'full-journal-signature', signed_at: '2026-06-11T10:00:00Z' },
+                    compliance: {
+                        data: 'WXYZ9876-1',
+                        qr_code: 'A:509999999*B:999999990',
+                        signature_hash: 'AbCd',
+                        software_certificate: '0000',
+                    },
                 },
             },
             error: null,
@@ -209,22 +215,128 @@ describe('External fiscal issuers', () => {
             payment,
         });
 
+        const expectedSeries = `FS-T01-${new Date().getFullYear()}`;
         expect(result.fiscalProvider).toBe('fiskaly');
-        expect(result.invoiceNo).toBe('FT SIGN/1');
+        // document numbers are client-generated (taxpayer-generated per spec)
+        expect(result.invoiceNo).toBe(`${expectedSeries}/1`);
 
         const call = invokeMock.mock.calls[0];
         expect(call[0]).toBe('fiskaly-fiscal');
-        const body = call[1] as { body: { action: string; systemId: string; record: Record<string, unknown> } };
+        const body = call[1] as {
+            body: {
+                action: string;
+                systemId: string;
+                checkoutId: string;
+                operation: {
+                    type: string;
+                    document: { number: string; series: string; simplified_invoice: boolean };
+                    entries: Array<{ type: string; data: { vat: { type: string; code: string; percentage: string } } }>;
+                    totals: { vat: { amount: string; exclusive: string; inclusive: string } };
+                    payments: Array<{ type: string; details: { amount: string } }>;
+                };
+            };
+        };
         expect(body.body.action).toBe('issue_document');
         expect(body.body.systemId).toBe('sys-1');
+        expect(body.body.checkoutId).toMatch(/^[0-9a-f-]{36}$/);
+        expect(body.body.operation.type).toBe('RECEIPT');
+        expect(body.body.operation.document.series).toBe(expectedSeries);
+        expect(body.body.operation.document.simplified_invoice).toBe(true);
+        // money values are decimal STRINGS; iva_rate fraction 0.23 -> "23.0" STANDARD
+        expect(body.body.operation.entries[0].data.vat).toMatchObject({ type: 'VAT_RATE', code: 'STANDARD', percentage: '23.0' });
+        expect(body.body.operation.totals.vat.inclusive).toBe('12.30');
+        expect(body.body.operation.payments[0]).toMatchObject({ type: 'CASH', details: { amount: '12.30' } });
+        // Product is a discriminated oneOf — SKU variant requires type+number+details.name
+        expect((body.body.operation.entries[0].data as { product?: unknown }).product).toEqual({
+            type: 'SKU',
+            number: 'CAF1',
+            details: { name: 'Café' },
+        });
 
         const fiscal = await localDb.fiscalDocuments.get(result.fiscalId);
         expect(fiscal?.fiscal_provider).toBe('fiskaly');
-        expect(fiscal?.external_document_id).toBe('rec-abc');
+        expect(fiscal?.external_document_id).toBe('01890000-0000-7000-8000-000000000abc');
+        expect(fiscal?.atcud_body).toBe('WXYZ9876-1');
+        // printed 4-char hash element comes from compliance.signature_hash
+        expect(fiscal?.hash_four_chars).toBe('AbCd');
+        expect(fiscal?.qr_payload).toBe('A:509999999*B:999999990');
 
         const attempts = await localDb.vendusIssueAttempts.toArray();
         expect(attempts[0].provider).toBe('fiskaly');
         expect(attempts[0].status).toBe('persisted');
+    });
+
+    it('rejects a Fiskaly record that comes back REJECTED (HTTP 200 is not success)', async () => {
+        invokeMock.mockResolvedValueOnce({
+            data: {
+                record: {
+                    id: '01890000-0000-7000-8000-000000000def',
+                    state: 'REJECTED',
+                    mode: 'FINISHED',
+                    logs: [{ severity: 'ERROR', message: 'validation failed' }],
+                },
+            },
+            error: null,
+        });
+
+        await expect(
+            issueFiskalySale({ settings: fiskalySettings(), cart: cart(), selectedCustomer: null, payment })
+        ).rejects.toThrow(/REJECTED/);
+
+        const attempts = await localDb.vendusIssueAttempts.toArray();
+        expect(attempts).toHaveLength(1);
+        expect(attempts[0].status).toBe('failed');
+        expect(await localDb.fiscalDocuments.count()).toBe(0);
+    });
+
+    it('converges an identical Fiskaly retry onto the same checkoutId and number', async () => {
+        invokeMock.mockResolvedValueOnce({
+            data: {
+                record: { id: '01890000-0000-7000-8000-000000000aaa', state: 'REJECTED', mode: 'FINISHED', logs: [] },
+            },
+            error: null,
+        });
+        await expect(
+            issueFiskalySale({ settings: fiskalySettings(), cart: cart(), selectedCustomer: null, payment })
+        ).rejects.toThrow(/REJECTED/);
+        const firstAttempt = (await localDb.vendusIssueAttempts.toArray())[0];
+        expect(firstAttempt.status).toBe('failed');
+
+        // identical sale retried: same checkoutId (fiskaly replays via the derived
+        // idempotency keys) and the SAME document number — no duplicate, no gap
+        invokeMock.mockResolvedValueOnce({
+            data: {
+                record: {
+                    id: '01890000-0000-7000-8000-000000000bbb',
+                    state: 'COMPLETED',
+                    mode: 'FINISHED',
+                    journal: { signature: 'sig', signed_at: '2026-06-11T10:00:00Z' },
+                    compliance: { data: 'WXYZ9876-1', qr_code: 'A:509999999*B:999999990', signature_hash: 'AbCd' },
+                },
+            },
+            error: null,
+        });
+        const result = await issueFiskalySale({ settings: fiskalySettings(), cart: cart(), selectedCustomer: null, payment });
+        expect(result.invoiceNo).toBe(`FS-T01-${new Date().getFullYear()}/1`);
+
+        const secondBody = invokeMock.mock.calls[1][1] as { body: { checkoutId: string } };
+        expect(secondBody.body.checkoutId).toBe(firstAttempt.id);
+        const attempts = await localDb.vendusIssueAttempts.toArray();
+        expect(attempts).toHaveLength(1);
+        expect(attempts[0].status).toBe('persisted');
+    });
+
+    it('blocks Fiskaly sales carrying a global discount (loud, not silently wrong totals)', async () => {
+        await expect(
+            issueFiskalySale({
+                settings: fiskalySettings(),
+                cart: cart(),
+                selectedCustomer: null,
+                payment,
+                globalDiscount: { type: 'percentage', value: 10, amount: 1.23 },
+            })
+        ).rejects.toThrow(/Desconto global/);
+        expect(invokeMock).not.toHaveBeenCalled();
     });
 
     it('blocks external issuance when Supabase/provider is offline', async () => {
