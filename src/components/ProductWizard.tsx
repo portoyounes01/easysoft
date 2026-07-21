@@ -1,0 +1,636 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Check, ChevronDown, ChevronUp, Package, Plus, Search, Trash2, X } from 'lucide-react';
+
+import { useSettings } from '../contexts/SettingsContext';
+import { getCountryProfile } from '../lib/countryProfile';
+import { ivaRatesForCountry, type LocalCategory, type ProductModifier, type ProductVariantAttribute } from '../types/supabase';
+import type { LocalRawMaterial } from '../types/rawMaterial';
+import { categoryService, DEFAULT_GENERAL_CATEGORY_ID, productService } from '../services/productService';
+import { rawMaterialService } from '../services/rawMaterialService';
+import { recipeService } from '../services/recipeService';
+import { generateUUID } from '../utils/uuid';
+import ImageUploader from './ImageUploader';
+import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import {
+    DIALOG_CONTROL_CLASSES,
+    DIALOG_TOGGLE_ON_CLASS,
+    dialogButtonClasses,
+    useAppliedDialogStyle,
+} from '../theme/dialogStyle';
+
+/**
+ * Multi-step "Add Product" wizard (products reference kit):
+ *   1 Product Info  → image, status, name, SKU, description, category
+ *   2 Pricing       → price, takeaway price, tax (country-aware dropdown)
+ *   3 Variants & Modifiers
+ *   4 Ingredients   → recipe lines against raw materials + availability
+ * Creation is confirmed ("Add Product?"); "Save as Draft" stores the product
+ * inactive at any step. Editing existing products still uses ProductForm.
+ */
+
+interface ProductWizardProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSuccess: () => void;
+}
+
+interface IngredientRow {
+    material: LocalRawMaterial;
+    qty: number;
+}
+
+const STEP_KEYS = ['info', 'pricing', 'variants', 'ingredients'] as const;
+
+const legacyInput = 'min-h-touch-sm w-full rounded-xl border border-gray-300 px-4 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500';
+
+function suggestSku(name: string): string {
+    const slug = name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 14);
+    if (!slug) return '';
+    return `${slug}-${String(Math.floor(Math.random() * 900) + 100)}`;
+}
+
+const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSuccess }) => {
+    const { t } = useTranslation();
+    const applied = useAppliedDialogStyle();
+    const { settings } = useSettings();
+    const currency = settings.pos.currencySymbol;
+    const ivaRates = ivaRatesForCountry(settings.operatingCountry);
+    const defaultIvaRate = getCountryProfile(settings.operatingCountry).defaultVatRate;
+
+    const [step, setStep] = useState(0);
+    const [categories, setCategories] = useState<LocalCategory[]>([]);
+    const [materials, setMaterials] = useState<LocalRawMaterial[]>([]);
+
+    const [imageUrl, setImageUrl] = useState('');
+    const [isActive, setIsActive] = useState(true);
+    const [name, setName] = useState('');
+    const [sku, setSku] = useState('');
+    const [skuTouched, setSkuTouched] = useState(false);
+    const [description, setDescription] = useState('');
+    const [categoryId, setCategoryId] = useState('');
+
+    const [price, setPrice] = useState<number | null>(null);
+    const [takeawayPrice, setTakeawayPrice] = useState<number | null>(null);
+    const [ivaRate, setIvaRate] = useState<number>(defaultIvaRate);
+
+    const [variants, setVariants] = useState<ProductVariantAttribute[]>([]);
+    const [expandedAttrs, setExpandedAttrs] = useState<Set<string>>(new Set());
+    const [modifiers, setModifiers] = useState<ProductModifier[]>([]);
+
+    const [unlimited, setUnlimited] = useState(false);
+    const [ingredients, setIngredients] = useState<IngredientRow[]>([]);
+    const [ingredientSearch, setIngredientSearch] = useState('');
+
+    const [errors, setErrors] = useState<{ name?: string; sku?: string; price?: string }>({});
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
+
+    useEffect(() => {
+        if (!isOpen) return;
+        // Fresh run every time the wizard opens.
+        setStep(0);
+        setImageUrl(''); setIsActive(true); setName(''); setSku(''); setSkuTouched(false);
+        setDescription(''); setCategoryId('');
+        setPrice(null); setTakeawayPrice(null); setIvaRate(defaultIvaRate);
+        setVariants([]); setExpandedAttrs(new Set()); setModifiers([]);
+        setUnlimited(false); setIngredients([]); setIngredientSearch('');
+        setErrors({}); setConfirmOpen(false); setSaveError('');
+        void (async () => {
+            await categoryService.ensureDefaultGeneralCategory();
+            setCategories((await categoryService.getAllCategories()).filter((c: LocalCategory) => c.deleted_at === null && c.is_active));
+            setMaterials(await rawMaterialService.list());
+        })();
+    }, [isOpen, defaultIvaRate]);
+
+    const fieldClass = applied
+        ? `w-full bg-white outline-none ${DIALOG_CONTROL_CLASSES[applied.controls]}`
+        : legacyInput;
+    const buttons = applied ? dialogButtonClasses(applied) : null;
+
+    const searchResults = useMemo(() => {
+        const needle = ingredientSearch.trim().toLowerCase();
+        if (!needle) return [];
+        const usedIds = new Set(ingredients.map(row => row.material.id));
+        return materials.filter(m => !usedIds.has(m.id) && m.name.toLowerCase().includes(needle)).slice(0, 6);
+    }, [ingredientSearch, materials, ingredients]);
+
+    const availability = useMemo(() => {
+        if (unlimited || ingredients.length === 0) return null;
+        const counts = ingredients
+            .filter(row => row.qty > 0)
+            .map(row => Math.floor(row.material.stock / row.qty));
+        return counts.length ? Math.max(0, Math.min(...counts)) : null;
+    }, [ingredients, unlimited]);
+
+    if (!isOpen) return null;
+
+    const validateStep = (target: number): boolean => {
+        if (step === 0 && target > 0) {
+            const next: typeof errors = {};
+            if (!name.trim()) next.name = t('products.wizard.errorName');
+            if (!sku.trim()) next.sku = t('products.wizard.errorSku');
+            setErrors(next);
+            if (next.name || next.sku) return false;
+        }
+        if (step === 1 && target > 1) {
+            if (!(price && price > 0)) {
+                setErrors(prev => ({ ...prev, price: t('products.wizard.errorPrice') }));
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const goTo = (target: number) => {
+        if (target > step && !validateStep(target)) return;
+        setStep(Math.max(0, Math.min(STEP_KEYS.length - 1, target)));
+    };
+
+    const persist = async (asDraft: boolean) => {
+        setSaving(true);
+        setSaveError('');
+        try {
+            const category = categories.find(c => c.id === (categoryId || DEFAULT_GENERAL_CATEGORY_ID));
+            const productId = await productService.createProduct({
+                name: name.trim(),
+                description: description.trim() || null,
+                sku: sku.trim(),
+                barcode: null,
+                category_id: category?.id ?? null,
+                category_name: category?.name ?? null,
+                price: price ?? 0,
+                cost: 0,
+                iva_rate: ivaRate,
+                stock: 0,
+                min_stock: 0,
+                track_stock: false,
+                sold_by_weight: false,
+                image_url: imageUrl || null,
+                supplier: null,
+                location: null,
+                is_active: asDraft ? false : isActive,
+                display_order: 0,
+                deleted_at: null,
+                takeaway_price: takeawayPrice,
+                variants: variants.length ? variants : null,
+                modifiers: modifiers.length ? modifiers : null,
+            });
+            if (!unlimited) {
+                for (const row of ingredients) {
+                    if (row.qty > 0) {
+                        await recipeService.upsertLine(productId, row.material.id, row.qty);
+                    }
+                }
+                if (ingredients.length) await recipeService.syncProductCost(productId);
+            }
+            setConfirmOpen(false);
+            onSuccess();
+            onClose();
+        } catch (persistError) {
+            setConfirmOpen(false);
+            setSaveError(persistError instanceof Error ? persistError.message : t('products.wizard.errorSave'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const saveDraft = () => {
+        if (!name.trim()) {
+            setStep(0);
+            setErrors(prev => ({ ...prev, name: t('products.wizard.errorName') }));
+            return;
+        }
+        if (!sku.trim()) setSku(suggestSku(name));
+        void persist(true);
+    };
+
+    // ---- Stepper -----------------------------------------------------------
+
+    const doneClass = `bg-[var(--ds2-confirm-bg,#22c55e)] text-white`;
+    const stepper = (
+        <div className="border-b border-slate-200 px-6 pb-4 pt-2">
+            <div className="grid grid-cols-4 gap-2">
+                {STEP_KEYS.map((key, index) => {
+                    const state = index < step ? 'done' : index === step ? 'current' : 'todo';
+                    return (
+                        <button type="button" key={key} onClick={() => goTo(index)} className="group text-center">
+                            <div className="relative mb-2 flex items-center justify-center">
+                                {index > 0 && (
+                                    <span className={`absolute right-1/2 top-1/2 -z-10 h-0.5 w-full -translate-y-1/2 ${index <= step ? 'bg-[var(--ds2-confirm-bg,#22c55e)]' : 'bg-slate-200'}`} />
+                                )}
+                                <span
+                                    className={`flex h-6 w-6 items-center justify-center rounded-full border-2 bg-white text-xs ${
+                                        state === 'done'
+                                            ? `border-transparent ${doneClass}`
+                                            : state === 'current'
+                                                ? 'border-[var(--ds2-confirm-bg,#22c55e)]'
+                                                : 'border-slate-200'
+                                    }`}
+                                >
+                                    {state === 'done' ? <Check className="h-3.5 w-3.5" /> : state === 'current' ? <span className="h-2 w-2 rounded-full bg-[var(--ds2-confirm-bg,#22c55e)]" /> : null}
+                                </span>
+                            </div>
+                            <p className="text-sm font-bold text-slate-950">{t(`products.wizard.step_${key}`)}</p>
+                            <p className="hidden text-xs text-slate-500 sm:block">{t(`products.wizard.step_${key}_sub`)}</p>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+
+    // ---- Step bodies -------------------------------------------------------
+
+    const labelClass = 'mb-1.5 block text-sm font-semibold text-slate-700';
+
+    const infoStep = (
+        <div className="space-y-4">
+            <div>
+                <span className={labelClass}>{t('products.wizard.imageLabel')}</span>
+                <ImageUploader value={imageUrl} onChange={setImageUrl} onError={() => undefined} />
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div>
+                    <p className="text-sm font-semibold text-slate-950">{t('products.wizard.statusLabel')}</p>
+                    <p className="text-sm text-slate-500">{t('products.wizard.statusHelp')}</p>
+                </div>
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isActive}
+                    aria-label={t('products.wizard.statusLabel')}
+                    onClick={() => setIsActive(v => !v)}
+                    className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${isActive ? DIALOG_TOGGLE_ON_CLASS : 'bg-slate-300'}`}
+                >
+                    <span className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${isActive ? 'translate-x-5' : ''}`} />
+                </button>
+            </div>
+            <div>
+                <span className={labelClass}>{t('products.wizard.nameLabel')} *</span>
+                <input
+                    value={name}
+                    onChange={e => {
+                        setName(e.target.value);
+                        setErrors(prev => ({ ...prev, name: undefined }));
+                        if (!skuTouched) setSku(suggestSku(e.target.value));
+                    }}
+                    className={fieldClass}
+                    placeholder={t('products.wizard.namePlaceholder')}
+                />
+                {errors.name && <p className="mt-1.5 text-xs text-red-600">{errors.name}</p>}
+            </div>
+            <div>
+                <span className={labelClass}>SKU *</span>
+                <input
+                    value={sku}
+                    onChange={e => { setSku(e.target.value); setSkuTouched(true); setErrors(prev => ({ ...prev, sku: undefined })); }}
+                    className={fieldClass}
+                    placeholder={t('products.wizard.skuPlaceholder')}
+                />
+                {errors.sku && <p className="mt-1.5 text-xs text-red-600">{errors.sku}</p>}
+            </div>
+            <div>
+                <span className={labelClass}>{t('products.wizard.descriptionLabel')}</span>
+                <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className={`${fieldClass} min-h-20 py-3`} placeholder={t('products.wizard.descriptionPlaceholder')} />
+            </div>
+            <div>
+                <span className={labelClass}>{t('products.wizard.categoryLabel')}</span>
+                <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className={fieldClass}>
+                    <option value="">{t('products.wizard.categoryPlaceholder')}</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+            </div>
+        </div>
+    );
+
+    const pricingStep = (
+        <div className="space-y-4">
+            <div>
+                <span className={labelClass}>{t('products.wizard.priceLabel', { currency })} *</span>
+                <input
+                    type="number" step="any" min="0"
+                    value={price ?? ''}
+                    onChange={e => { setPrice(e.target.value === '' ? null : Number(e.target.value)); setErrors(prev => ({ ...prev, price: undefined })); }}
+                    className={fieldClass}
+                    placeholder="0.00"
+                />
+                {errors.price && <p className="mt-1.5 text-xs text-red-600">{errors.price}</p>}
+            </div>
+            <div>
+                <span className={labelClass}>{t('products.wizard.takeawayPriceLabel', { currency })}</span>
+                <input
+                    type="number" step="any" min="0"
+                    value={takeawayPrice ?? ''}
+                    onChange={e => setTakeawayPrice(e.target.value === '' ? null : Number(e.target.value))}
+                    className={fieldClass}
+                    placeholder="0.00"
+                />
+                <p className="mt-1.5 text-xs text-slate-400">{t('products.wizard.takeawayPriceHint')}</p>
+            </div>
+            <div>
+                <span className={labelClass}>{t('products.wizard.taxLabel')}</span>
+                <select value={ivaRate} onChange={e => setIvaRate(parseFloat(e.target.value))} className={fieldClass}>
+                    {(() => {
+                        const opts = ivaRates.map(r => ({ value: r.value as number, label: r.label as string }));
+                        if (!opts.some(o => o.value === ivaRate)) {
+                            opts.unshift({ value: ivaRate, label: `${Math.round(ivaRate * 100)}%` });
+                        }
+                        return opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>);
+                    })()}
+                </select>
+            </div>
+        </div>
+    );
+
+    const toggle = (on: boolean, onClick: () => void, label: string) => (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={on}
+            aria-label={label}
+            onClick={onClick}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${on ? DIALOG_TOGGLE_ON_CLASS : 'bg-slate-300'}`}
+        >
+            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : ''}`} />
+        </button>
+    );
+
+    const setAttr = (id: string, patch: Partial<ProductVariantAttribute>) =>
+        setVariants(prev => prev.map(attr => (attr.id === id ? { ...attr, ...patch } : attr)));
+
+    const variantsStep = (
+        <div className="space-y-6">
+            <div>
+                <h4 className="mb-3 font-bold text-slate-950">{t('products.wizard.variantHeading')}</h4>
+                <div className="space-y-3">
+                    {variants.map(attr => {
+                        const expanded = expandedAttrs.has(attr.id);
+                        return (
+                            <div key={attr.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                                <div className="flex items-center gap-3">
+                                    {toggle(attr.enabled, () => setAttr(attr.id, { enabled: !attr.enabled }), attr.name || t('products.wizard.attributeName'))}
+                                    <input
+                                        value={attr.name}
+                                        onChange={e => setAttr(attr.id, { name: e.target.value })}
+                                        className={fieldClass}
+                                        placeholder={t('products.wizard.attributeName')}
+                                    />
+                                    <button type="button" aria-label={t('common.delete')} onClick={() => setVariants(prev => prev.filter(a => a.id !== attr.id))} className="flex min-h-touch-xs min-w-[2.5rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600">
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        aria-label={expanded ? t('products.wizard.collapse') : t('products.wizard.expand')}
+                                        onClick={() => setExpandedAttrs(prev => { const next = new Set(prev); if (expanded) next.delete(attr.id); else next.add(attr.id); return next; })}
+                                        className="flex min-h-touch-xs min-w-[2.5rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100"
+                                    >
+                                        {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                    </button>
+                                </div>
+                                {expanded && (
+                                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                                        {attr.options.map(option => (
+                                            <div key={option.id} className="flex items-center gap-3">
+                                                {toggle(option.enabled, () => setAttr(attr.id, { options: attr.options.map(o => o.id === option.id ? { ...o, enabled: !o.enabled } : o) }), option.name || t('products.wizard.variantName'))}
+                                                <input
+                                                    value={option.name}
+                                                    onChange={e => setAttr(attr.id, { options: attr.options.map(o => o.id === option.id ? { ...o, name: e.target.value } : o) })}
+                                                    className={fieldClass}
+                                                    placeholder={t('products.wizard.variantName')}
+                                                />
+                                                <div className="relative w-36 shrink-0">
+                                                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">{currency}</span>
+                                                    <input
+                                                        type="number" step="any"
+                                                        value={option.price_delta}
+                                                        onChange={e => setAttr(attr.id, { options: attr.options.map(o => o.id === option.id ? { ...o, price_delta: Number(e.target.value) || 0 } : o) })}
+                                                        className={`${fieldClass} pl-8`}
+                                                    />
+                                                </div>
+                                                <button type="button" aria-label={t('common.delete')} onClick={() => setAttr(attr.id, { options: attr.options.filter(o => o.id !== option.id) })} className="flex min-h-touch-xs min-w-[2.5rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600">
+                                                    <Trash2 className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={() => setAttr(attr.id, { options: [...attr.options, { id: generateUUID(), name: '', price_delta: 0, enabled: true }] })}
+                                            className="flex min-h-touch-xs items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+                                        >
+                                            <Plus className="h-4 w-4" /> {t('products.wizard.addVariant')}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const id = generateUUID();
+                            setVariants(prev => [...prev, { id, name: '', enabled: true, options: [{ id: generateUUID(), name: '', price_delta: 0, enabled: true }] }]);
+                            setExpandedAttrs(prev => new Set(prev).add(id));
+                        }}
+                        className="flex min-h-touch-sm w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                        <Plus className="h-4 w-4" /> {t('products.wizard.addAttribute')}
+                    </button>
+                </div>
+            </div>
+            <div>
+                <h4 className="mb-3 font-bold text-slate-950">{t('products.wizard.modifiersHeading')}</h4>
+                <div className="space-y-2">
+                    {modifiers.map(modifier => (
+                        <div key={modifier.id} className="flex items-center gap-3">
+                            {toggle(modifier.enabled, () => setModifiers(prev => prev.map(m => m.id === modifier.id ? { ...m, enabled: !m.enabled } : m)), modifier.name || t('products.wizard.modifierName'))}
+                            <input
+                                value={modifier.name}
+                                onChange={e => setModifiers(prev => prev.map(m => m.id === modifier.id ? { ...m, name: e.target.value } : m))}
+                                className={fieldClass}
+                                placeholder={t('products.wizard.modifierName')}
+                            />
+                            <button type="button" aria-label={t('common.delete')} onClick={() => setModifiers(prev => prev.filter(m => m.id !== modifier.id))} className="flex min-h-touch-xs min-w-[2.5rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600">
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+                        </div>
+                    ))}
+                    <button
+                        type="button"
+                        onClick={() => setModifiers(prev => [...prev, { id: generateUUID(), name: '', enabled: true }])}
+                        className="flex min-h-touch-sm w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                        <Plus className="h-4 w-4" /> {t('products.wizard.addModifier')}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
+    const ingredientsStep = (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <p className="font-semibold text-slate-950">{t('products.wizard.unlimitedLabel')}</p>
+                    <p className="text-sm text-slate-500">{t('products.wizard.unlimitedHelp')}</p>
+                </div>
+                {toggle(unlimited, () => setUnlimited(v => !v), t('products.wizard.unlimitedLabel'))}
+            </div>
+            <div className={unlimited ? 'pointer-events-none opacity-50' : ''}>
+                <div className="relative">
+                    <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                        value={ingredientSearch}
+                        onChange={e => setIngredientSearch(e.target.value)}
+                        className={`${fieldClass} pl-11`}
+                        placeholder={t('products.wizard.searchIngredient')}
+                    />
+                    {searchResults.length > 0 && (
+                        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                            {searchResults.map(material => (
+                                <button
+                                    key={material.id}
+                                    type="button"
+                                    onClick={() => { setIngredients(prev => [...prev, { material, qty: 1 }]); setIngredientSearch(''); }}
+                                    className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-slate-50"
+                                >
+                                    <span className="font-semibold text-slate-950">{material.name}</span>
+                                    <span className="text-xs text-slate-400">{material.stock} {material.unit}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <div className="mt-3 space-y-2">
+                    {ingredients.map(row => (
+                        <div key={row.material.id} className="flex items-center gap-3">
+                            <div className="flex-1 rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">{row.material.name}</div>
+                            <div className="relative w-40 shrink-0">
+                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold uppercase text-slate-400">{t('products.wizard.qty')}</span>
+                                <input
+                                    type="number" step="any" min="0"
+                                    value={row.qty}
+                                    onChange={e => setIngredients(prev => prev.map(r => r.material.id === row.material.id ? { ...r, qty: Number(e.target.value) || 0 } : r))}
+                                    className={`${fieldClass} pl-12`}
+                                />
+                            </div>
+                            <button type="button" aria-label={t('common.delete')} onClick={() => setIngredients(prev => prev.filter(r => r.material.id !== row.material.id))} className="flex min-h-touch-xs min-w-[2.5rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600">
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+                        </div>
+                    ))}
+                    {ingredients.length === 0 && (
+                        <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">{t('products.wizard.noIngredients')}</p>
+                    )}
+                </div>
+                {ingredients.length > 0 && (
+                    <div className="mt-3 text-sm text-slate-500">
+                        {t('products.wizard.availabilityLabel')}
+                        <span className="ml-1 text-xl font-bold text-slate-950">{unlimited || availability === null ? '—' : availability}</span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
+    const stepBodies = [infoStep, pricingStep, variantsStep, ingredientsStep];
+
+    const body = (
+        <div>
+            {stepper}
+            <div className="px-6 py-5">
+                {saveError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{saveError}</div>}
+                {stepBodies[step]}
+            </div>
+        </div>
+    );
+
+    const isLast = step === STEP_KEYS.length - 1;
+    const primaryAction = () => {
+        if (isLast) {
+            setConfirmOpen(true);
+        } else {
+            goTo(step + 1);
+        }
+    };
+
+    const legacyBtn = {
+        text: 'min-h-touch-sm px-4 font-semibold text-gray-700 hover:bg-gray-100 rounded-xl',
+        outline: 'min-h-touch-sm rounded-xl border border-gray-300 px-4 font-semibold text-gray-700 hover:bg-gray-50',
+        primary: 'min-h-touch-sm rounded-xl bg-green-600 px-6 font-semibold text-white hover:bg-green-700',
+    };
+
+    const footer = (
+        <div className={buttons ? buttons.container : 'flex justify-end gap-3'}>
+            <button type="button" onClick={onClose} className={buttons ? buttons.secondary : legacyBtn.text}>{t('common.cancel')}</button>
+            <button type="button" disabled={saving} onClick={saveDraft} className={`${buttons ? buttons.secondary : legacyBtn.outline} disabled:cursor-not-allowed disabled:opacity-50`}>
+                {t('products.wizard.saveDraft')}
+            </button>
+            {step > 0 && (
+                <button type="button" onClick={() => goTo(step - 1)} className={buttons ? buttons.secondary : legacyBtn.outline}>{t('products.wizard.back')}</button>
+            )}
+            <button type="button" disabled={saving} onClick={primaryAction} className={`${buttons ? buttons.primary : legacyBtn.primary} disabled:cursor-not-allowed disabled:opacity-50`}>
+                {isLast ? t('products.wizard.add') : t('products.wizard.next')}
+            </button>
+        </div>
+    );
+
+    const confirm = confirmOpen && (
+        <ConfirmDialog
+            tone="warning"
+            title={t('products.wizard.confirmTitle')}
+            message={t('products.wizard.confirmBody')}
+            cancelLabel={t('common.cancel')}
+            confirmLabel={t('products.wizard.add')}
+            busy={saving}
+            onCancel={() => setConfirmOpen(false)}
+            onConfirm={() => void persist(false)}
+            overlayClassName="z-[95]"
+        />
+    );
+
+    if (applied) {
+        return (
+            <>
+                <ConfiguredDialogShell
+                    config={applied}
+                    title={t('products.wizard.title')}
+                    icon={Package}
+                    onClose={onClose}
+                    overlayClassName="z-[80]"
+                    footer={footer}
+                >
+                    {body}
+                </ConfiguredDialogShell>
+                {confirm}
+            </>
+        );
+    }
+
+    return (
+        <>
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={onClose} role="presentation">
+                <div
+                    className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+                    role="dialog"
+                    aria-modal
+                    onClick={event => event.stopPropagation()}
+                >
+                    <div className="relative border-b bg-gray-100 px-6 py-4">
+                        <h2 className="text-center text-xl font-bold text-gray-900">{t('products.wizard.title')}</h2>
+                        <button type="button" onClick={onClose} aria-label={t('common.cancel')} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-gray-500 hover:bg-gray-200">
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+                    <div className="border-t border-gray-200 px-6 py-4">{footer}</div>
+                </div>
+            </div>
+            {confirm}
+        </>
+    );
+};
+
+export default ProductWizard;

@@ -6,6 +6,8 @@ import { useSettings } from '../contexts/SettingsContext';
 import { ivaRatesForCountry } from '../types/supabase';
 import { getCountryProfile } from '../lib/countryProfile';
 import { rawMaterialService, type RawMaterialInput } from '../services/rawMaterialService';
+import { categoryService, DEFAULT_GENERAL_CATEGORY_ID } from '../services/productService';
+import type { LocalCategory } from '../types/supabase';
 import { RAW_MATERIAL_UNITS, type LocalRawMaterial, type RawMaterialUnit } from '../types/rawMaterial';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -31,6 +33,7 @@ const emptyForm: RawMaterialInput = {
     sell_enabled: false,
     sale_price: null,
     sale_iva_rate: null,
+    sale_category_id: null,
 };
 
 const IMAGE_MAX_BYTES = 2 * 1024 * 1024;
@@ -69,6 +72,7 @@ const Inventory: React.FC = () => {
     const defaultIvaRate = getCountryProfile(settings.operatingCountry).defaultVatRate;
 
     const [materials, setMaterials] = useState<LocalRawMaterial[]>([]);
+    const [categories, setCategories] = useState<LocalCategory[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
@@ -94,6 +98,7 @@ const Inventory: React.FC = () => {
         setError('');
         try {
             setMaterials(await rawMaterialService.list(true));
+            setCategories((await categoryService.getAllCategories()).filter((c: LocalCategory) => c.deleted_at === null && c.is_active));
         } catch (loadError) {
             setError(loadError instanceof Error ? loadError.message : t('inventory.errorLoad'));
         } finally {
@@ -142,6 +147,7 @@ const Inventory: React.FC = () => {
             sell_enabled: material.sell_enabled ?? false,
             sale_price: material.sale_price ?? null,
             sale_iva_rate: material.sale_iva_rate ?? null,
+            sale_category_id: material.sale_category_id ?? null,
         });
         setFormErrors({});
         setImageMode(material.image_url && !material.image_url.startsWith('data:') ? 'url' : 'upload');
@@ -438,8 +444,36 @@ const Inventory: React.FC = () => {
                             })()}
                         </select>
                     </Field>
+                    <Field label={t('inventory.saleCategory')} className="sm:col-span-2">
+                        <select
+                            value={form.sale_category_id ?? ''}
+                            onChange={e => setForm({ ...form, sale_category_id: e.target.value || null })}
+                            className={fieldClass}
+                        >
+                            <option value="">{t('inventory.saleCategoryDefault')}</option>
+                            {categories
+                                .filter(c => c.id !== DEFAULT_GENERAL_CATEGORY_ID)
+                                .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                    </Field>
                 </>
             )}
+            <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+                <div>
+                    <p className="text-sm font-semibold text-slate-950">{t('inventory.activeLabel')}</p>
+                    <p className="text-sm text-slate-500">{t('inventory.activeHelp')}</p>
+                </div>
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={form.is_active}
+                    aria-label={t('inventory.activeLabel')}
+                    onClick={() => setForm({ ...form, is_active: !form.is_active })}
+                    className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${form.is_active ? toggleOnClass : 'bg-slate-300'}`}
+                >
+                    <span className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${form.is_active ? 'translate-x-5' : ''}`} />
+                </button>
+            </div>
             <Field label={t('inventory.stockWithUnit', { unit: form.unit })}>
                 <input type="number" step="any" min="0" value={form.stock} onChange={e => setForm({ ...form, stock: Number(e.target.value) || 0 })} className={fieldClass} />
             </Field>

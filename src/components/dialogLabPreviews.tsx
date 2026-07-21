@@ -360,7 +360,7 @@ const UpdateItemBody: React.FC = () => {
 };
 
 const CategoryBody: React.FC = () => {
-    const { input, p } = useTokens();
+    const { input } = useTokens();
     const gradients = ['from-orange-400 to-orange-600', 'from-sky-400 to-blue-600', 'from-yellow-400 to-amber-500', 'from-pink-400 to-rose-600', 'from-green-400 to-emerald-600', 'from-purple-400 to-violet-600', 'from-red-400 to-red-600', 'from-teal-400 to-cyan-600'];
     return (
         <div className="space-y-4 px-6 py-5">

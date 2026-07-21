@@ -18,6 +18,7 @@ import { useProducts } from '../contexts/ProductsContext';
 import { LocalProduct, calculateStockStatus } from '../types/supabase';
 // import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage'; // AGENTS: do not delete — used with stock UI when re-enabled
 import ProductForm from '../components/ProductForm';
+import ProductWizard from '../components/ProductWizard';
 import PurchaseReceiptImportDialog from '../components/PurchaseReceiptImportDialog';
 import { useTranslation } from 'react-i18next';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
@@ -43,6 +44,7 @@ const ProductsInner: React.FC = () => {
   // but kept out of this catalog page (managed from the Inventory page instead).
   const [linkedProductIds, setLinkedProductIds] = useState<Set<string>>(new Set());
   const [showProductForm, setShowProductForm] = useState(false);
+  const [showProductWizard, setShowProductWizard] = useState(false);
   const [editingProduct, setEditingProduct] = useState<LocalProduct | null>(null);
   const [viewingProduct, setViewingProduct] = useState<LocalProduct | null>(null);
   const [showCategoryAlert, setShowCategoryAlert] = useState(false);
@@ -379,7 +381,7 @@ const ProductsInner: React.FC = () => {
                     setShowCategoryAlert(true);
                     setTimeout(() => setShowCategoryAlert(false), 3000);
                   } else {
-                    setShowProductForm(true);
+                    setShowProductWizard(true);
                   }
                 }}
                 className={`${toolbarBtn} w-full sm:w-auto !px-4`}
@@ -699,6 +701,12 @@ const ProductsInner: React.FC = () => {
         onClose={() => setShowProductForm(false)}
         product={editingProduct}
         onSuccess={handleFormSuccess}
+      />
+
+      <ProductWizard
+        isOpen={showProductWizard}
+        onClose={() => setShowProductWizard(false)}
+        onSuccess={() => { setShowProductWizard(false); void refreshData(); }}
       />
 
       {viewingProduct && (() => {

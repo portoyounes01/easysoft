@@ -482,6 +482,29 @@ export interface LocalCategory extends Omit<CategoryRow, 'created_at' | 'updated
     is_conflicted: boolean;
 }
 
+/** One selectable option of a variant attribute (e.g. Size -> Large, +2.00). */
+export interface ProductVariantOption {
+    id: string;
+    name: string;
+    price_delta: number;
+    enabled: boolean;
+}
+
+/** A variant attribute group (e.g. Size, Spicy) configured on a product. */
+export interface ProductVariantAttribute {
+    id: string;
+    name: string;
+    enabled: boolean;
+    options: ProductVariantOption[];
+}
+
+/** A toggleable modifier (e.g. Cheese, Sauce) configured on a product. */
+export interface ProductModifier {
+    id: string;
+    name: string;
+    enabled: boolean;
+}
+
 export interface LocalProduct extends Omit<ProductRow, 'created_at' | 'updated_at' | 'last_synced_at' | 'deleted_at'> {
     // Local specific fields
     created_at: Date;
@@ -492,6 +515,13 @@ export interface LocalProduct extends Omit<ProductRow, 'created_at' | 'updated_a
     // Sync flags
     needs_push: boolean;
     is_conflicted: boolean;
+
+    // ⚠ Add Product wizard fields — LOCAL-ONLY until the products table gains
+    // matching columns (they ride along in queued sync payloads, where the
+    // upsert RPC ignores unknown keys, but are NOT persisted in Supabase).
+    takeaway_price?: number | null;
+    variants?: ProductVariantAttribute[] | null;
+    modifiers?: ProductModifier[] | null;
 }
 
 // Sync operation queue items

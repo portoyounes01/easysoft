@@ -42,6 +42,8 @@ export interface LocalRawMaterial {
     /** Selling price incl. IVA; €/kg for weight units (kg, g). */
     sale_price?: number | null;
     sale_iva_rate?: number | null;
+    /** Category for the linked product; null → the "Geral" default category. */
+    sale_category_id?: string | null;
     /** The auto-managed catalogue product this item sells through. */
     linked_product_id?: string | null;
     created_at: Date;

@@ -2,7 +2,7 @@ import { initializeLocalDatabase, localDb } from '../lib/localDatabase';
 import type { LocalRawMaterial, RawMaterialUnit } from '../types/rawMaterial';
 import { generateUUID } from '../utils/uuid';
 import { recipeService } from './recipeService';
-import { productService } from './productService';
+import { categoryService, DEFAULT_GENERAL_CATEGORY_ID, productService } from './productService';
 
 export interface RawMaterialInput {
     name: string;
@@ -19,6 +19,7 @@ export interface RawMaterialInput {
     sell_enabled?: boolean;
     sale_price?: number | null;
     sale_iva_rate?: number | null;
+    sale_category_id?: string | null;
 }
 
 /** Units where the POS sells by weight: price and cart quantity are per kg. */
@@ -70,6 +71,7 @@ class RawMaterialService {
             sell_enabled: input.sell_enabled ?? false,
             sale_price: input.sale_price ?? null,
             sale_iva_rate: input.sale_iva_rate ?? null,
+            sale_category_id: input.sale_category_id ?? null,
             linked_product_id: null,
             created_at: now,
             updated_at: now,
@@ -162,6 +164,8 @@ class RawMaterialService {
         }
 
         const soldByWeight = isWeightUnit(material.unit);
+        const categoryId = await this.resolveSaleCategory(material.sale_category_id ?? null);
+        const category = categoryId ? await localDb.categories.get(categoryId) : undefined;
         const syncedFields = {
             name: material.name,
             description: material.description ?? null,
@@ -171,6 +175,8 @@ class RawMaterialService {
             sold_by_weight: soldByWeight,
             is_active: material.is_active,
             supplier: material.supplier,
+            category_id: categoryId,
+            category_name: category?.name ?? null,
         };
 
         let productId = existingId;
@@ -182,8 +188,6 @@ class RawMaterialService {
                 ...syncedFields,
                 sku: `INV-${material.id.slice(0, 8).toUpperCase()}`,
                 barcode: null,
-                category_id: null,
-                category_name: null,
                 cost: 0,
                 stock: 0,
                 min_stock: 0,
@@ -198,6 +202,24 @@ class RawMaterialService {
         await recipeService.upsertLine(productId as string, material.id, recipeQtyPerUnit(material.unit));
         await recipeService.syncProductCost(productId as string);
         return productId;
+    }
+
+    /**
+     * Explicit choice wins; otherwise fall back to the "Geral" default
+     * category (created when the catalog is empty), then any active category.
+     */
+    private async resolveSaleCategory(saleCategoryId: string | null): Promise<string | null> {
+        if (saleCategoryId) {
+            const chosen = await localDb.categories.get(saleCategoryId);
+            if (chosen && chosen.deleted_at === null) return saleCategoryId;
+        }
+        const general = await localDb.categories.get(DEFAULT_GENERAL_CATEGORY_ID);
+        if (general && general.deleted_at === null) return DEFAULT_GENERAL_CATEGORY_ID;
+        await categoryService.ensureDefaultGeneralCategory();
+        const ensured = await localDb.categories.get(DEFAULT_GENERAL_CATEGORY_ID);
+        if (ensured && ensured.deleted_at === null) return DEFAULT_GENERAL_CATEGORY_ID;
+        const firstActive = await localDb.categories.filter(c => c.deleted_at === null).first();
+        return firstActive?.id ?? null;
     }
 
     private async removeLinkedProduct(productId: string): Promise<void> {

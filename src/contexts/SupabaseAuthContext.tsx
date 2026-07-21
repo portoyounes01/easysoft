@@ -50,7 +50,11 @@ interface AuthContextType extends AuthState {
   clearError: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Exported ONLY for the dev POS harness (src/dev/PosDevApp.tsx), which injects a
+// fake operator session to run the POS without pairing/login. App code must keep
+// using SupabaseAuthProvider + useSupabaseAuth.
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export type { AuthContextType };
 
 // Sentinel matched by LoginForm2 to offer the "Re-pair this till" action (kiosk has no
 // URL bar, so this failure must carry its own way back to /pair-device).
