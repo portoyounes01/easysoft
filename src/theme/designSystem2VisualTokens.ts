@@ -4,6 +4,7 @@
  */
 export type DesignSystem2ColorChoiceId =
     | 'green'
+    | 'emerald'
     | 'blue'
     | 'indigo'
     | 'violet'
@@ -30,6 +31,7 @@ export interface DesignSystem2ColorOption {
 
 export const DESIGN_SYSTEM_2_COLOR_CHOICES: DesignSystem2ColorOption[] = [
     { id: 'green', label: 'Green' },
+    { id: 'emerald', label: 'Emerald' },
     { id: 'blue', label: 'Blue' },
     { id: 'indigo', label: 'Indigo' },
     { id: 'violet', label: 'Violet' },
@@ -68,6 +70,27 @@ const PALETTE: Record<DesignSystem2ColorChoiceId, CssVarMap> = {
         '--ds2-focus-border': '#16a34a',
         '--ds2-confirm-bg': '#22c55e',
         '--ds2-confirm-hover': '#16a34a',
+    },
+    emerald: {
+        '--ds2-brand-from': '#10b981',
+        '--ds2-brand-to': '#047857',
+        '--ds2-brand-solid': '#059669',
+        '--ds2-brand-text-900': '#064e3b',
+        '--ds2-ui-from': '#059669',
+        '--ds2-ui-to': '#047857',
+        '--ds2-ui-from-hover': '#047857',
+        '--ds2-ui-to-hover': '#065f46',
+        '--ds2-ui-solid': '#059669',
+        '--ds2-ui-hover-solid': '#047857',
+        '--ds2-ui-tint-bg': '#ecfdf5',
+        '--ds2-ui-tint-text': '#064e3b',
+        '--ds2-cash-bg': '#ecfdf5',
+        '--ds2-cash-border': '#10b981',
+        '--ds2-cash-icon': '#059669',
+        '--ds2-focus-ring': '#10b981',
+        '--ds2-focus-border': '#059669',
+        '--ds2-confirm-bg': '#10b981',
+        '--ds2-confirm-hover': '#059669',
     },
     blue: {
         '--ds2-brand-from': '#3b82f6',

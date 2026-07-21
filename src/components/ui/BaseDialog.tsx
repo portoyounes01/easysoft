@@ -1,4 +1,6 @@
 import React from 'react';
+import { useAppliedDialogStyle } from '../../theme/dialogStyle';
+import { ConfiguredDialogShell } from './ConfiguredDialogShell';
 
 interface BaseDialogProps {
     open: boolean;
@@ -24,7 +26,24 @@ export const BaseDialog: React.FC<BaseDialogProps> = ({
     height = '60vh',
     overlayClassName = 'z-50',
 }) => {
+    const applied = useAppliedDialogStyle();
+
     if (!open) return null;
+
+    if (applied) {
+        return (
+            <ConfiguredDialogShell
+                config={applied}
+                title={title}
+                onClose={onClose}
+                overlayClassName={overlayClassName}
+                footer={footer}
+                vwvhSize={{ width, height }}
+            >
+                {children}
+            </ConfiguredDialogShell>
+        );
+    }
 
     return (
         <div className={`fixed inset-0 bg-black/50 flex items-center justify-center ${overlayClassName}`} onClick={onClose}>

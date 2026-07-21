@@ -7,6 +7,8 @@ import type {
     CashDrawerReasonCode,
     LocalCashDrawerEvent,
 } from '../types/cashDrawer';
+import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 
 interface CashDrawerDialogProps {
     open: boolean;
@@ -39,6 +41,7 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
     onClose,
 }) => {
     const { t } = useTranslation();
+    const applied = useAppliedDialogStyle();
     const [latestEvent, setLatestEvent] = useState<LocalCashDrawerEvent>();
     const [reasonCode, setReasonCode] = useState<Exclude<CashDrawerReasonCode, 'sale'>>('make_change');
     const [justification, setJustification] = useState('');
@@ -103,6 +106,94 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
     if (!open) return null;
     const consideredOpen = latestEvent?.action === 'open' && latestEvent.success;
 
+    // Interior shared between the original panel and the applied-style shell.
+    const interior = (
+        <>
+            <div className={`mt-6 flex items-center gap-3 rounded-2xl p-4 ${
+                consideredOpen ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-900'
+            }`}>
+                {consideredOpen ? <Unlock className="h-6 w-6" /> : <Lock className="h-6 w-6" />}
+                <div>
+                    <p className="font-semibold">
+                        {consideredOpen ? t('cashDrawerDialog.stateOpen') : t('cashDrawerDialog.stateClosed')}
+                    </p>
+                    <p className="text-sm opacity-75">
+                        {latestEvent
+                            ? `${latestEvent.employee_name} · ${latestEvent.timestamp.toLocaleString()}`
+                            : t('cashDrawerDialog.noActionsRecorded')}
+                    </p>
+                </div>
+            </div>
+
+            <div className="mt-6 space-y-4">
+                <label className="block text-sm font-semibold text-slate-700">
+                    {t('cashDrawerDialog.reasonLabel')}
+                    <select
+                        value={reasonCode}
+                        onChange={event => setReasonCode(event.target.value as Exclude<CashDrawerReasonCode, 'sale'>)}
+                        className="mt-2 min-h-touch-sm w-full rounded-2xl border border-slate-300 bg-white px-4"
+                    >
+                        {reasonOptions.map(option => (
+                            <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
+                        ))}
+                    </select>
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">
+                    {t('cashDrawerDialog.justificationLabel')}
+                    <textarea
+                        value={justification}
+                        onChange={event => setJustification(event.target.value)}
+                        placeholder={t('cashDrawerDialog.justificationPlaceholder')}
+                        className="mt-2 min-h-28 w-full rounded-2xl border border-slate-300 p-4 font-normal outline-none focus:ring-4 focus:ring-slate-200"
+                    />
+                </label>
+            </div>
+
+            {message && (
+                <div className="mt-4 flex items-center gap-2 rounded-2xl bg-emerald-50 p-3 text-sm text-emerald-800">
+                    <CheckCircle className="h-5 w-5" /> {message}
+                </div>
+            )}
+            {error && <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+        </>
+    );
+
+    if (applied) {
+        const buttons = dialogButtonClasses(applied);
+        return (
+            <ConfiguredDialogShell
+                config={applied}
+                title={t('cashDrawerDialog.title')}
+                subtitle={terminalLabel}
+                icon={Archive}
+                onClose={onClose}
+                overlayClassName="z-[85]"
+                footer={
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <button
+                            type="button"
+                            disabled={busy || !consideredOpen}
+                            onClick={() => void handleConfirmClosed()}
+                            className={`${buttons.secondary} disabled:opacity-40`}
+                        >
+                            {t('cashDrawerDialog.confirmClosedButton')}
+                        </button>
+                        <button
+                            type="button"
+                            disabled={busy || !justification.trim()}
+                            onClick={() => void handleManualOpen()}
+                            className={`${buttons.primary} disabled:opacity-50`}
+                        >
+                            {busy ? t('cashDrawerDialog.recording') : t('cashDrawerDialog.openWithoutSaleButton')}
+                        </button>
+                    </div>
+                }
+            >
+                <div className="px-6 pb-5">{interior}</div>
+            </ConfiguredDialogShell>
+        );
+    }
+
     return (
         <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/55 p-4">
             <div className="w-full max-w-xl rounded-[2rem] bg-white p-6 shadow-2xl">
@@ -126,52 +217,7 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
                     </button>
                 </div>
 
-                <div className={`mt-6 flex items-center gap-3 rounded-2xl p-4 ${
-                    consideredOpen ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-900'
-                }`}>
-                    {consideredOpen ? <Unlock className="h-6 w-6" /> : <Lock className="h-6 w-6" />}
-                    <div>
-                        <p className="font-semibold">
-                            {consideredOpen ? t('cashDrawerDialog.stateOpen') : t('cashDrawerDialog.stateClosed')}
-                        </p>
-                        <p className="text-sm opacity-75">
-                            {latestEvent
-                                ? `${latestEvent.employee_name} · ${latestEvent.timestamp.toLocaleString()}`
-                                : t('cashDrawerDialog.noActionsRecorded')}
-                        </p>
-                    </div>
-                </div>
-
-                <div className="mt-6 space-y-4">
-                    <label className="block text-sm font-semibold text-slate-700">
-                        {t('cashDrawerDialog.reasonLabel')}
-                        <select
-                            value={reasonCode}
-                            onChange={event => setReasonCode(event.target.value as Exclude<CashDrawerReasonCode, 'sale'>)}
-                            className="mt-2 min-h-touch-sm w-full rounded-2xl border border-slate-300 bg-white px-4"
-                        >
-                            {reasonOptions.map(option => (
-                                <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
-                            ))}
-                        </select>
-                    </label>
-                    <label className="block text-sm font-semibold text-slate-700">
-                        {t('cashDrawerDialog.justificationLabel')}
-                        <textarea
-                            value={justification}
-                            onChange={event => setJustification(event.target.value)}
-                            placeholder={t('cashDrawerDialog.justificationPlaceholder')}
-                            className="mt-2 min-h-28 w-full rounded-2xl border border-slate-300 p-4 font-normal outline-none focus:ring-4 focus:ring-slate-200"
-                        />
-                    </label>
-                </div>
-
-                {message && (
-                    <div className="mt-4 flex items-center gap-2 rounded-2xl bg-emerald-50 p-3 text-sm text-emerald-800">
-                        <CheckCircle className="h-5 w-5" /> {message}
-                    </div>
-                )}
-                {error && <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+                {interior}
 
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
                     <button

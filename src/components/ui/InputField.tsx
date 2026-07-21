@@ -1,5 +1,6 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useContext } from 'react';
 import { LucideIcon } from 'lucide-react';
+import { DIALOG_CONTROL_CLASSES, DialogShellStyleContext } from '../../theme/dialogStyle';
 
 export interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
     label?: string;
@@ -25,9 +26,22 @@ export const InputField = forwardRef<HTMLInputElement, InputFieldProps>(({
     disabled,
     ...props
 }, ref) => {
+    // Non-null only when rendered inside an applied ConfiguredDialogShell.
+    const shellStyle = useContext(DialogShellStyleContext);
+
     const baseInputClasses = "w-full bg-white border rounded-xl focus:outline-none focus:ring-1 transition-all disabled:bg-gray-100 disabled:text-gray-400";
     const defaultBorderClasses = "border-gray-300 focus:ring-green-500 focus:border-green-500";
     const errorBorderClasses = "border-red-500 focus:ring-red-500 focus:border-red-500";
+
+    // Applied dialog style: reuse the configured control's shape + focus classes,
+    // keeping this component's icon-aware paddings and error state.
+    const styledTokens = shellStyle ? DIALOG_CONTROL_CLASSES[shellStyle.controls].split(' ') : [];
+    const styledShape = styledTokens
+        .filter((t) => t === 'border' || t.startsWith('rounded') || t.startsWith('min-h'))
+        .join(' ');
+    const styledFocus = styledTokens
+        .filter((t) => t.startsWith('focus:') || (t.startsWith('border-') && t !== 'border'))
+        .join(' ');
 
     // Padding calculation based on icons / text affixes
     const paddingLeft = Icon ? 'pl-10' : prefixText ? 'pl-9' : 'pl-4';
@@ -54,7 +68,16 @@ export const InputField = forwardRef<HTMLInputElement, InputFieldProps>(({
                 <input
                     ref={ref}
                     disabled={disabled}
-                    className={`
+                    className={shellStyle ? `
+                        w-full bg-white focus:outline-none transition-all disabled:bg-gray-100 disabled:text-gray-400
+                        ${styledShape}
+                        ${error ? errorBorderClasses : styledFocus}
+                        ${paddingLeft}
+                        ${paddingRight}
+                        py-3
+                        text-sm
+                        ${className}
+                    ` : `
                         ${baseInputClasses}
                         ${error ? errorBorderClasses : defaultBorderClasses}
                         ${paddingLeft}

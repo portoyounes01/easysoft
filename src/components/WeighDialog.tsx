@@ -6,6 +6,8 @@ import { useScaleStatus } from '../hooks/useScaleStatus';
 import manualWeightAuditService from '../services/manualWeightAuditService';
 import type { LocalProduct } from '../types/supabase';
 import type { ScaleReading } from '../types/electron';
+import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
+import { useAppliedDialogStyle } from '../theme/dialogStyle';
 
 interface WeighDialogProps {
   product: LocalProduct | null;
@@ -49,6 +51,7 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
   onClose,
 }) => {
   const { t } = useTranslation();
+  const applied = useAppliedDialogStyle();
   const open = product !== null;
   const status = useScaleStatus();
   const [reading, setReading] = useState<ScaleReading | null>(null);
@@ -161,31 +164,9 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
-              <Weight className="h-6 w-6" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">{product.name}</h2>
-              <p className="text-sm text-slate-500">
-                {t('weighDialog.pricePerKg', { price: product.price.toFixed(2) })}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t('common.close')}
-            className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
+  // Interior shared between the original panel and the applied-style shell.
+  const interior = (
+    <>
         {connected || statusPending ? (
           <>
             <div className="mt-6 rounded-2xl bg-slate-50 p-6 text-center">
@@ -346,6 +327,49 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
             </div>
           </>
         )}
+    </>
+  );
+
+  if (applied) {
+    return (
+      <ConfiguredDialogShell
+        config={applied}
+        title={product.name}
+        subtitle={t('weighDialog.pricePerKg', { price: product.price.toFixed(2) })}
+        icon={Weight}
+        onClose={onClose}
+      >
+        <div className="px-6 pb-5">{interior}</div>
+      </ConfiguredDialogShell>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+      <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
+              <Weight className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">{product.name}</h2>
+              <p className="text-sm text-slate-500">
+                {t('weighDialog.pricePerKg', { price: product.price.toFixed(2) })}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('common.close')}
+            className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {interior}
       </div>
     </div>
   );

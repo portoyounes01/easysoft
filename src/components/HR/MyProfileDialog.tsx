@@ -5,6 +5,8 @@ import { Clock, KeyRound, LogIn, LogOut, X } from 'lucide-react';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { hrService } from '../../services/hrService';
 import type { LocalAttendanceEntry } from '../../types/hr';
+import { ConfiguredDialogShell } from '../ui/ConfiguredDialogShell';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../../theme/dialogStyle';
 
 export const OPEN_MY_PROFILE_EVENT = 'pos:open-my-profile';
 
@@ -19,6 +21,7 @@ const formatClock = (date: Date): string =>
 
 const MyProfileDialog: React.FC = () => {
     const { t } = useTranslation();
+    const applied = useAppliedDialogStyle();
     const { employee, signOut } = useSupabaseAuth();
     const [open, setOpen] = useState(false);
     const [openShift, setOpenShift] = useState<LocalAttendanceEntry>();
@@ -78,6 +81,125 @@ const MyProfileDialog: React.FC = () => {
 
     if (!open || !employee) return null;
 
+    // Interior shared between the original panel and the applied-style shell.
+    const profileBody = (
+        <>
+            <div className="text-center">
+                <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 text-3xl font-bold text-white">
+                    {employee.name.split(' ').map(part => part[0]).join('').slice(0, 2)}
+                </div>
+                <h3 className="mt-4 text-xl font-semibold text-slate-950">{employee.name}</h3>
+                <p className="text-sm text-slate-500">{employee.employee_number}</p>
+            </div>
+
+            <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-950">{t('hr.shiftStatus')}</span>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        openShift ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                        {openShift ? t('hr.clockedIn') : t('hr.notClockedIn')}
+                    </span>
+                </div>
+                {!openShift && (
+                    <div className="mt-4 flex flex-col items-center rounded-2xl bg-slate-50 py-3">
+                        <Clock className="h-5 w-5 text-slate-400" />
+                        <span className="mt-1 text-3xl font-semibold tabular-nums tracking-wide text-slate-950">
+                            {formatClock(now)}
+                        </span>
+                    </div>
+                )}
+                <button
+                    type="button"
+                    onClick={() => {
+                        setClockError('');
+                        setPin('');
+                        setClockAction(openShift ? 'clock-out' : 'clock-in');
+                    }}
+                    className={`mt-4 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-semibold text-white ${
+                        openShift
+                            ? 'bg-red-500 hover:bg-red-600'
+                            : 'bg-green-500 hover:bg-green-600'
+                    }`}
+                >
+                    {openShift ? <LogOut className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
+                    {openShift ? t('hr.clockOut') : t('hr.clockIn')}
+                </button>
+            </div>
+        </>
+    );
+
+    const pinPrompt = clockAction && (
+        <>
+            <div className="text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+                    <KeyRound className="h-7 w-7 text-slate-700" />
+                </div>
+                <p className="mt-2 text-slate-500">{t('hr.enterPinPrompt')}</p>
+            </div>
+            <input
+                type="password"
+                autoFocus
+                value={pin}
+                onChange={event => setPin(event.target.value)}
+                onKeyDown={event => {
+                    if (event.key === 'Enter') void handleClock();
+                }}
+                placeholder={t('hr.pinPlaceholder')}
+                className="mt-6 min-h-touch w-full rounded-2xl border border-slate-300 px-4 text-center text-2xl tracking-[0.4em] outline-none focus:border-slate-500 focus:ring-4 focus:ring-slate-200"
+            />
+            {clockError && <p className="mt-3 rounded-2xl bg-red-50 p-3 text-sm text-red-700">{clockError}</p>}
+        </>
+    );
+
+    if (applied) {
+        const buttons = dialogButtonClasses(applied);
+        return (
+            <>
+                <ConfiguredDialogShell
+                    config={applied}
+                    title={t('hr.myProfileTitle')}
+                    subtitle={t('hr.myProfileSubtitle')}
+                    icon={Clock}
+                    onClose={() => setOpen(false)}
+                    overlayClassName="z-[80]"
+                >
+                    <div className="px-6 py-5">{profileBody}</div>
+                </ConfiguredDialogShell>
+                {clockAction && (
+                    <ConfiguredDialogShell
+                        config={applied}
+                        title={clockAction === 'clock-in' ? t('hr.clockIn') : t('hr.clockOutNow')}
+                        icon={KeyRound}
+                        onClose={() => setClockAction(undefined)}
+                        overlayClassName="z-[90]"
+                        footer={
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setClockAction(undefined)}
+                                    className={buttons.secondary}
+                                >
+                                    {t('common.cancel')}
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={busy || !pin}
+                                    onClick={() => void handleClock()}
+                                    className={`${buttons.primary} disabled:cursor-not-allowed disabled:opacity-50`}
+                                >
+                                    {busy ? t('hr.recording') : clockAction === 'clock-out' ? t('hr.clockOut') : t('hr.clockIn')}
+                                </button>
+                            </div>
+                        }
+                    >
+                        <div className="px-6 py-5">{pinPrompt}</div>
+                    </ConfiguredDialogShell>
+                )}
+            </>
+        );
+    }
+
     return (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4">
             <div className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl">
@@ -96,50 +218,7 @@ const MyProfileDialog: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="bg-slate-50 p-5">
-                    <div className="text-center">
-                        <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 text-3xl font-bold text-white">
-                            {employee.name.split(' ').map(part => part[0]).join('').slice(0, 2)}
-                        </div>
-                        <h3 className="mt-4 text-xl font-semibold text-slate-950">{employee.name}</h3>
-                        <p className="text-sm text-slate-500">{employee.employee_number}</p>
-                    </div>
-
-                    <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-4">
-                        <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-950">{t('hr.shiftStatus')}</span>
-                            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                                openShift ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
-                            }`}>
-                                {openShift ? t('hr.clockedIn') : t('hr.notClockedIn')}
-                            </span>
-                        </div>
-                        {!openShift && (
-                            <div className="mt-4 flex flex-col items-center rounded-2xl bg-slate-50 py-3">
-                                <Clock className="h-5 w-5 text-slate-400" />
-                                <span className="mt-1 text-3xl font-semibold tabular-nums tracking-wide text-slate-950">
-                                    {formatClock(now)}
-                                </span>
-                            </div>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setClockError('');
-                                setPin('');
-                                setClockAction(openShift ? 'clock-out' : 'clock-in');
-                            }}
-                            className={`mt-4 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-semibold text-white ${
-                                openShift
-                                    ? 'bg-red-500 hover:bg-red-600'
-                                    : 'bg-green-500 hover:bg-green-600'
-                            }`}
-                        >
-                            {openShift ? <LogOut className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
-                            {openShift ? t('hr.clockOut') : t('hr.clockIn')}
-                        </button>
-                    </div>
-                </div>
+                <div className="bg-slate-50 p-5">{profileBody}</div>
             </div>
 
             {clockAction && (

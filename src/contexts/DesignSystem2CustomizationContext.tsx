@@ -75,6 +75,7 @@ const defaultPrefs: DesignSystem2Prefs = {
 
 const COLOR_IDS = new Set<DesignSystem2ColorChoiceId>([
     'green',
+    'emerald',
     'blue',
     'indigo',
     'violet',

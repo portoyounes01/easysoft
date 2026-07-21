@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
     Check,
+    FlaskConical,
     Image as ImageIcon,
     Info,
     LayoutPanelLeft,
@@ -15,6 +16,7 @@ import {
     Type,
 } from 'lucide-react';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import DialogLab from '../components/DialogLab';
 import {
     useDesignSystem2Customization,
     type DesignSystem2BaseColorId,
@@ -86,6 +88,7 @@ interface AppearancePreviewProps {
  *  swatches mirror the current selection instead of their own hue. */
 const COLOR_SWATCH_HEX: Record<DesignSystem2ColorChoiceId, string> = {
     green: '#22c55e',
+    emerald: '#10b981',
     blue: '#3b82f6',
     indigo: '#6366f1',
     violet: '#a855f7',
@@ -645,6 +648,16 @@ const Appearances: React.FC = () => {
                     <div className="xl:sticky xl:top-4">
                         <AppearancePreview previewTab={previewTab} onPreviewTabChange={setPreviewTab} />
                     </div>
+                </div>
+
+                <div className="mt-6">
+                    <SectionCard
+                        icon={FlaskConical}
+                        title={t('appearances.dialogLabTitle')}
+                        description={t('appearances.dialogLabDescription')}
+                    >
+                        <DialogLab />
+                    </SectionCard>
                 </div>
             </div>
         </div>

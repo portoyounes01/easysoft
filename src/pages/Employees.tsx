@@ -31,6 +31,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { ActionButton } from '../components/ui/ActionButton';
 import { BaseDialog } from '../components/ui/BaseDialog';
+import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
+import { DIALOG_SECONDARY_RADIUS, dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -87,6 +89,7 @@ const EmployeesInner: React.FC = () => {
     const { t } = useTranslation();
     const { language } = useLanguage();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+    const appliedDialogStyle = useAppliedDialogStyle();
 
     const toolbarBtn =
         'ds2-control-radius-lg ds2-toolbar-control-h !px-3 text-sm font-medium gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
@@ -1277,7 +1280,39 @@ const EmployeesInner: React.FC = () => {
                         </div>
 
                         {/* Discard-changes confirmation (web modal — native confirm is unavailable in Electron) */}
-                        {showDiscardConfirm && (
+                        {showDiscardConfirm && (appliedDialogStyle ? (
+                            <ConfiguredDialogShell
+                                config={appliedDialogStyle}
+                                title={t('employees.form.discardTitle')}
+                                subtitle={t('employees.form.discardBody')}
+                                icon={AlertCircle}
+                                onClose={() => setShowDiscardConfirm(false)}
+                                overlayClassName="z-[80]"
+                                footer={
+                                    <div className="space-y-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowDiscardConfirm(false)}
+                                            className={`w-full ${dialogButtonClasses(appliedDialogStyle).secondary}`}
+                                        >
+                                            {t('employees.form.keepEditing')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowDiscardConfirm(false);
+                                                handleCloseForm();
+                                            }}
+                                            className={`min-h-touch-sm w-full bg-red-600 px-4 font-semibold text-white transition-colors hover:bg-red-700 ${DIALOG_SECONDARY_RADIUS[appliedDialogStyle.primaryCta]}`}
+                                        >
+                                            {t('employees.form.discard')}
+                                        </button>
+                                    </div>
+                                }
+                            >
+                                <p className="px-6 py-5 text-sm text-gray-600">{t('employees.form.discardBody')}</p>
+                            </ConfiguredDialogShell>
+                        ) : (
                             <div
                                 className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-6"
                                 onClick={() => setShowDiscardConfirm(false)}
@@ -1306,13 +1341,41 @@ const EmployeesInner: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                        )}
+                        ))}
                     </div>
                 );
             })()}
 
             {/* Delete Confirmation Modal */}
-            {showDeleteConfirm && (
+            {showDeleteConfirm && (appliedDialogStyle ? (
+                <ConfiguredDialogShell
+                    config={appliedDialogStyle}
+                    title={t('employees.confirm.title')}
+                    subtitle={t('employees.confirm.subtitle')}
+                    icon={Trash2}
+                    onClose={() => setShowDeleteConfirm(null)}
+                    footer={
+                        <div className="flex space-x-3">
+                            <button
+                                onClick={() => setShowDeleteConfirm(null)}
+                                className={`flex-1 ${dialogButtonClasses(appliedDialogStyle).secondary}`}
+                            >
+                                {t('employees.confirm.cancel')}
+                            </button>
+                            <button
+                                onClick={handleDeleteEmployee}
+                                className={`min-h-touch-sm flex-1 bg-red-600 px-4 font-semibold text-white transition-colors hover:bg-red-700 ${DIALOG_SECONDARY_RADIUS[appliedDialogStyle.primaryCta]}`}
+                            >
+                                {t('employees.confirm.delete')}
+                            </button>
+                        </div>
+                    }
+                >
+                    <p className="px-6 py-5 text-gray-700">
+                        {t('employees.confirm.deleteQuestion', { name: showDeleteConfirm.name })}
+                    </p>
+                </ConfiguredDialogShell>
+            ) : (
                 <>
                     {/* Backdrop */}
                     <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowDeleteConfirm(null)} />
@@ -1351,7 +1414,7 @@ const EmployeesInner: React.FC = () => {
                         </div>
                     </div>
                 </>
-            )}
+            ))}
         </div>
         </div>
     );

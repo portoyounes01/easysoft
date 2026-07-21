@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { usePOS } from '../contexts/POSContext';
 import { tableOrderService } from '../services/tableOrderService';
+import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
+import { useAppliedDialogStyle } from '../theme/dialogStyle';
 import type {
     LocalTableOrder,
     TableOrderGlobalDiscount,
@@ -230,30 +232,42 @@ const FloorTable: React.FC<FloorTableProps> = ({ table, selected, editable, onSe
     );
 };
 
-const Dialog: React.FC<DialogProps> = ({ children, onClose, title }) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation" onMouseDown={onClose}>
-        <div
-            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="tables-dialog-title"
-            onMouseDown={event => event.stopPropagation()}
-        >
-            <div className="mb-5 flex items-start justify-between gap-4">
-                <h2 id="tables-dialog-title" className="text-xl font-bold text-neutral-950">{title}</h2>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                    aria-label="Close dialog"
-                >
-                    <X className="h-5 w-5" />
-                </button>
+const Dialog: React.FC<DialogProps> = ({ children, onClose, title }) => {
+    const applied = useAppliedDialogStyle();
+
+    if (applied) {
+        return (
+            <ConfiguredDialogShell config={applied} title={title} onClose={onClose} icon={LayoutGrid}>
+                <div className="px-6 py-5">{children}</div>
+            </ConfiguredDialogShell>
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation" onMouseDown={onClose}>
+            <div
+                className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="tables-dialog-title"
+                onMouseDown={event => event.stopPropagation()}
+            >
+                <div className="mb-5 flex items-start justify-between gap-4">
+                    <h2 id="tables-dialog-title" className="text-xl font-bold text-neutral-950">{title}</h2>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                        aria-label="Close dialog"
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+                {children}
             </div>
-            {children}
         </div>
-    </div>
-);
+    );
+};
 
 const tableOrderTotal = (order: LocalTableOrder): number => {
     const subtotal = order.lines.reduce((sum, line) => {

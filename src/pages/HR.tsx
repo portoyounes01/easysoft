@@ -18,6 +18,8 @@ import {
 
 import { useSettings } from '../contexts/SettingsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
+import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { employeeLocalService, initializeLocalDatabase } from '../lib/localDatabase';
 import { computeHolidayEntitlement, hrService } from '../services/hrService';
 import type {
@@ -90,6 +92,7 @@ const roleToneClasses: Record<string, string> = {
 
 const HR: React.FC = () => {
     const { t } = useTranslation();
+    const appliedDialogStyle = useAppliedDialogStyle();
     const { employee: signedInEmployee } = useSupabaseAuth();
     const { settings } = useSettings();
     const [employees, setEmployees] = useState<LocalEmployee[]>([]);
@@ -643,23 +646,9 @@ const HR: React.FC = () => {
                 </div>
             </section>
 
-            {selectedEmployee && editingProfile && (
-                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4">
-                    <div className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl">
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <h2 className="text-2xl font-semibold text-slate-950">{selectedEmployee.name}</h2>
-                                <p className="text-sm text-slate-500">{t('hr.contractPolicySubtitle')}</p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={closeEmployee}
-                                className="flex min-h-touch-xs min-w-[2.75rem] items-center justify-center rounded-2xl bg-slate-100"
-                            >
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
-
+            {selectedEmployee && editingProfile && (() => {
+                const profileEditorBody = (
+                    <>
                         <div className="mt-6 grid gap-5 sm:grid-cols-2">
                             <Field label={t('hr.contractStart')}>
                                 <input
@@ -852,20 +841,71 @@ const HR: React.FC = () => {
                                 className="mt-2 min-h-28 w-full rounded-2xl border border-slate-300 p-4"
                             />
                         </Field>
-                        <div className="mt-6 flex justify-end">
-                            <button
-                                type="button"
-                                disabled={saving}
-                                onClick={() => void saveProfile()}
-                                className="flex min-h-touch items-center gap-2 rounded-2xl bg-slate-950 px-6 font-semibold text-white disabled:bg-slate-300"
-                            >
-                                <FilePenLine className="h-5 w-5" />
-                                {saving ? t('common.saving') : t('hr.saveProfile')}
-                            </button>
+                    </>
+                );
+
+                if (appliedDialogStyle) {
+                    return (
+                        <ConfiguredDialogShell
+                            config={appliedDialogStyle}
+                            title={selectedEmployee.name}
+                            subtitle={t('hr.contractPolicySubtitle')}
+                            icon={FilePenLine}
+                            onClose={closeEmployee}
+                            overlayClassName="z-[80]"
+                            footer={
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        disabled={saving}
+                                        onClick={() => void saveProfile()}
+                                        className={`${dialogButtonClasses(appliedDialogStyle).primary} flex items-center gap-2 px-6 disabled:cursor-not-allowed disabled:opacity-50`}
+                                    >
+                                        <FilePenLine className="h-5 w-5" />
+                                        {saving ? t('common.saving') : t('hr.saveProfile')}
+                                    </button>
+                                </div>
+                            }
+                        >
+                            <div className="px-6 pb-6">{profileEditorBody}</div>
+                        </ConfiguredDialogShell>
+                    );
+                }
+
+                return (
+                    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4">
+                        <div className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl">
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    <h2 className="text-2xl font-semibold text-slate-950">{selectedEmployee.name}</h2>
+                                    <p className="text-sm text-slate-500">{t('hr.contractPolicySubtitle')}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={closeEmployee}
+                                    className="flex min-h-touch-xs min-w-[2.75rem] items-center justify-center rounded-2xl bg-slate-100"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            {profileEditorBody}
+
+                            <div className="mt-6 flex justify-end">
+                                <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() => void saveProfile()}
+                                    className="flex min-h-touch items-center gap-2 rounded-2xl bg-slate-950 px-6 font-semibold text-white disabled:bg-slate-300"
+                                >
+                                    <FilePenLine className="h-5 w-5" />
+                                    {saving ? t('common.saving') : t('hr.saveProfile')}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
         </div>
         </div>
     );

@@ -27,6 +27,8 @@ import type {
     PurchaseLineResolution,
 } from '../types/purchaseReceipt';
 import { RAW_MATERIAL_UNITS, type LocalRawMaterial, type RawMaterialUnit } from '../types/rawMaterial';
+import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
+import { useAppliedDialogStyle } from '../theme/dialogStyle';
 
 interface PurchaseReceiptImportDialogProps {
     open: boolean;
@@ -43,6 +45,7 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
     onApplied,
 }) => {
     const { t } = useTranslation();
+    const applied = useAppliedDialogStyle();
     const { employee } = useSupabaseAuth();
     const { products, categories } = useProducts();
     const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -188,29 +191,8 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
 
     if (!open) return null;
 
-    return (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-3">
-            <div className="flex max-h-[96vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl">
-                <header className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-                    <div className="flex items-center gap-3">
-                        <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
-                            <ScanLine className="h-7 w-7" />
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-semibold text-slate-950">{t('purchaseReceiptImport.title')}</h2>
-                            <p className="text-sm text-slate-500">{t('purchaseReceiptImport.subtitle')}</p>
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex min-h-touch-xs min-w-[2.75rem] items-center justify-center rounded-2xl bg-slate-100"
-                        aria-label={t('purchaseReceiptImport.closeAria')}
-                    >
-                        <X className="h-5 w-5" />
-                    </button>
-                </header>
-
+    // Interior shared between the original panel and the applied-style shell.
+    const interior = (
                 <div className="grid min-h-0 flex-1 lg:grid-cols-[22rem_minmax(0,1fr)]">
                     <aside className="overflow-y-auto border-b border-slate-200 bg-slate-50 p-5 lg:border-b-0 lg:border-r">
                         <input
@@ -368,6 +350,46 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                         </footer>
                     </main>
                 </div>
+    );
+
+    if (applied) {
+        return (
+            <ConfiguredDialogShell
+                config={applied}
+                title={t('purchaseReceiptImport.title')}
+                subtitle={t('purchaseReceiptImport.subtitle')}
+                icon={ScanLine}
+                onClose={onClose}
+                overlayClassName="z-[80]"
+            >
+                {interior}
+            </ConfiguredDialogShell>
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-3">
+            <div className="flex max-h-[96vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+                <header className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+                    <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
+                            <ScanLine className="h-7 w-7" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-semibold text-slate-950">{t('purchaseReceiptImport.title')}</h2>
+                            <p className="text-sm text-slate-500">{t('purchaseReceiptImport.subtitle')}</p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex min-h-touch-xs min-w-[2.75rem] items-center justify-center rounded-2xl bg-slate-100"
+                        aria-label={t('purchaseReceiptImport.closeAria')}
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                </header>
+                {interior}
             </div>
         </div>
     );

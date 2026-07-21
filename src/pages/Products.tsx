@@ -21,6 +21,8 @@ import ProductForm from '../components/ProductForm';
 import PurchaseReceiptImportDialog from '../components/PurchaseReceiptImportDialog';
 import { useTranslation } from 'react-i18next';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 
@@ -29,6 +31,7 @@ const ProductsInner: React.FC = () => {
   // AGENTS: Do not delete — stock catalog flag preserved for re-enable with stock table column.
   // const catalogTracksInventory = readPosTrackInventoryFromStorage();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+  const appliedDialogStyle = useAppliedDialogStyle();
 
   const { t } = useTranslation();
 
@@ -682,34 +685,8 @@ const ProductsInner: React.FC = () => {
         onSuccess={handleFormSuccess}
       />
 
-      {viewingProduct && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/40 z-40"
-              aria-hidden
-              onClick={() => setViewingProduct(null)}
-            />
-
-            <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl z-50 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white p-6 rounded-t-2xl shrink-0">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-white/20 rounded-xl">
-                      <Package className="w-6 h-6" />
-                    </div>
-                    <h2 className="text-xl font-bold">{t('products.viewModal.title')}</h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setViewingProduct(null)}
-                    className="min-h-touch-sm min-w-touch-sm p-2 hover:bg-white/20 rounded-xl transition-colors flex items-center justify-center"
-                    aria-label={t('common.close')}
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
+      {viewingProduct && (() => {
+        const productBody = (
               <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-6">
                 {viewingProduct.image_url && (
                   <div>
@@ -911,20 +888,77 @@ const ProductsInner: React.FC = () => {
                   </div>
                 </div>
               </div>
+        );
+
+        const editButton = (
+          <AdminActionButton
+            variant="primary"
+            type="button"
+            icon={Edit}
+            label={t('products.viewModal.editProduct')}
+            onClick={() => {
+              setViewingProduct(null);
+              handleEditProduct(viewingProduct);
+            }}
+            className="min-h-touch ds2-modal-primary-action shadow-lg"
+          />
+        );
+
+        if (appliedDialogStyle) {
+          const buttons = dialogButtonClasses(appliedDialogStyle);
+          return (
+            <ConfiguredDialogShell
+              config={appliedDialogStyle}
+              title={t('products.viewModal.title')}
+              icon={Package}
+              onClose={() => setViewingProduct(null)}
+              footer={
+                <div className="flex justify-between items-center gap-4 flex-wrap">
+                  {editButton}
+                  <button type="button" onClick={() => setViewingProduct(null)} className={buttons.secondary}>
+                    {t('products.viewModal.close')}
+                  </button>
+                </div>
+              }
+            >
+              {productBody}
+            </ConfiguredDialogShell>
+          );
+        }
+
+        return (
+          <>
+            <div
+              className="fixed inset-0 bg-black/40 z-40"
+              aria-hidden
+              onClick={() => setViewingProduct(null)}
+            />
+
+            <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl shadow-2xl z-50 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white p-6 rounded-t-2xl shrink-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-white/20 rounded-xl">
+                      <Package className="w-6 h-6" />
+                    </div>
+                    <h2 className="text-xl font-bold">{t('products.viewModal.title')}</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setViewingProduct(null)}
+                    className="min-h-touch-sm min-w-touch-sm p-2 hover:bg-white/20 rounded-xl transition-colors flex items-center justify-center"
+                    aria-label={t('common.close')}
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {productBody}
 
               <div className="bg-neutral-50 px-6 py-4 rounded-b-2xl border-t border-gray-100 shrink-0">
                 <div className="flex justify-between items-center gap-4 flex-wrap">
-                  <AdminActionButton
-                    variant="primary"
-                    type="button"
-                    icon={Edit}
-                    label={t('products.viewModal.editProduct')}
-                    onClick={() => {
-                      setViewingProduct(null);
-                      handleEditProduct(viewingProduct);
-                    }}
-                    className="min-h-touch ds2-modal-primary-action shadow-lg"
-                  />
+                  {editButton}
                   <button
                     type="button"
                     onClick={() => setViewingProduct(null)}
@@ -936,7 +970,8 @@ const ProductsInner: React.FC = () => {
               </div>
             </div>
           </>
-        )}
+        );
+      })()}
     </div>
   );
 };

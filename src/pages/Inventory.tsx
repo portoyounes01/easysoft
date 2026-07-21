@@ -5,6 +5,8 @@ import { AlertTriangle, Boxes, Pencil, Plus, Search, SlidersHorizontal, X } from
 import { useSettings } from '../contexts/SettingsContext';
 import { rawMaterialService, type RawMaterialInput } from '../services/rawMaterialService';
 import { RAW_MATERIAL_UNITS, type LocalRawMaterial, type RawMaterialUnit } from '../types/rawMaterial';
+import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 
 const emptyForm: RawMaterialInput = {
     name: '',
@@ -18,6 +20,7 @@ const emptyForm: RawMaterialInput = {
 
 const Inventory: React.FC = () => {
     const { t } = useTranslation();
+    const applied = useAppliedDialogStyle();
     const { settings } = useSettings();
     const currency = settings.pos.currencySymbol;
 
@@ -128,6 +131,52 @@ const Inventory: React.FC = () => {
     if (loading) {
         return <div className="flex min-h-96 items-center justify-center text-slate-500">{t('inventory.loadingInventory')}</div>;
     }
+
+    // Dialog interiors shared between the original panels and the applied-style shell.
+    const formFields = (
+        <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={t('inventory.nameLabel')} className="sm:col-span-2">
+                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder={t('inventory.namePlaceholder')} />
+            </Field>
+            <Field label={t('inventory.unitLabel')}>
+                <select value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value as RawMaterialUnit })} className={inputClass}>
+                    {RAW_MATERIAL_UNITS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                </select>
+            </Field>
+            <Field label={t('inventory.onHandWithUnit', { unit: form.unit })}>
+                <input type="number" step="any" min="0" value={form.stock} onChange={e => setForm({ ...form, stock: Number(e.target.value) || 0 })} className={inputClass} />
+            </Field>
+            <Field label={t('inventory.costWithUnit', { unit: form.unit, currency })}>
+                <input type="number" step="any" min="0" value={form.cost} onChange={e => setForm({ ...form, cost: Number(e.target.value) || 0 })} className={inputClass} />
+            </Field>
+            <Field label={t('inventory.lowStockAlertWithUnit', { unit: form.unit })}>
+                <input type="number" step="any" min="0" value={form.min_stock} onChange={e => setForm({ ...form, min_stock: Number(e.target.value) || 0 })} className={inputClass} />
+            </Field>
+            <Field label={t('inventory.supplierLabel')} className="sm:col-span-2">
+                <input value={form.supplier ?? ''} onChange={e => setForm({ ...form, supplier: e.target.value })} className={inputClass} placeholder={t('inventory.optionalPlaceholder')} />
+            </Field>
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
+                <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="h-4 w-4" />
+                {t('common.active')}
+            </label>
+        </div>
+    );
+
+    const adjustField = adjusting ? (
+        <Field label={t('inventory.newQuantityWithUnit', { unit: adjusting.unit })}>
+            <input
+                type="number"
+                step="any"
+                min="0"
+                autoFocus
+                value={adjustValue}
+                onChange={e => setAdjustValue(e.target.value)}
+                className={inputClass}
+            />
+        </Field>
+    ) : null;
+
+    const shellButtons = applied ? dialogButtonClasses(applied) : null;
 
     return (
         <div className="mx-auto max-w-[1500px] space-y-6 pt-6">
@@ -280,7 +329,25 @@ const Inventory: React.FC = () => {
             </section>
 
             {/* Add / edit modal */}
-            {showForm && (
+            {showForm && (applied && shellButtons ? (
+                <ConfiguredDialogShell
+                    config={applied}
+                    title={editing ? t('inventory.editRawItem') : t('inventory.newRawItem')}
+                    icon={Boxes}
+                    onClose={() => setShowForm(false)}
+                    overlayClassName="z-[80]"
+                    footer={
+                        <div className="flex justify-end gap-3">
+                            <button type="button" onClick={() => setShowForm(false)} className={shellButtons.secondary}>{t('common.cancel')}</button>
+                            <button type="button" disabled={saving} onClick={() => void saveForm()} className={`${shellButtons.primary} disabled:cursor-not-allowed disabled:opacity-50`}>
+                                {saving ? t('common.saving') : t('inventory.save')}
+                            </button>
+                        </div>
+                    }
+                >
+                    <div className="px-6 py-5">{formFields}</div>
+                </ConfiguredDialogShell>
+            ) : (
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4">
                     <div className="w-full max-w-lg rounded-[2rem] bg-white p-6 shadow-2xl">
                         <div className="flex items-start justify-between">
@@ -289,32 +356,7 @@ const Inventory: React.FC = () => {
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
-                        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                            <Field label={t('inventory.nameLabel')} className="sm:col-span-2">
-                                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className={inputClass} placeholder={t('inventory.namePlaceholder')} />
-                            </Field>
-                            <Field label={t('inventory.unitLabel')}>
-                                <select value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value as RawMaterialUnit })} className={inputClass}>
-                                    {RAW_MATERIAL_UNITS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
-                                </select>
-                            </Field>
-                            <Field label={t('inventory.onHandWithUnit', { unit: form.unit })}>
-                                <input type="number" step="any" min="0" value={form.stock} onChange={e => setForm({ ...form, stock: Number(e.target.value) || 0 })} className={inputClass} />
-                            </Field>
-                            <Field label={t('inventory.costWithUnit', { unit: form.unit, currency })}>
-                                <input type="number" step="any" min="0" value={form.cost} onChange={e => setForm({ ...form, cost: Number(e.target.value) || 0 })} className={inputClass} />
-                            </Field>
-                            <Field label={t('inventory.lowStockAlertWithUnit', { unit: form.unit })}>
-                                <input type="number" step="any" min="0" value={form.min_stock} onChange={e => setForm({ ...form, min_stock: Number(e.target.value) || 0 })} className={inputClass} />
-                            </Field>
-                            <Field label={t('inventory.supplierLabel')} className="sm:col-span-2">
-                                <input value={form.supplier ?? ''} onChange={e => setForm({ ...form, supplier: e.target.value })} className={inputClass} placeholder={t('inventory.optionalPlaceholder')} />
-                            </Field>
-                            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 sm:col-span-2">
-                                <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="h-4 w-4" />
-                                {t('common.active')}
-                            </label>
-                        </div>
+                        <div className="mt-5">{formFields}</div>
                         <div className="mt-6 flex justify-end gap-3">
                             <button type="button" onClick={() => setShowForm(false)} className="min-h-touch rounded-2xl bg-slate-100 px-5 font-semibold text-slate-700 hover:bg-slate-200">{t('common.cancel')}</button>
                             <button type="button" disabled={saving} onClick={() => void saveForm()} className="min-h-touch rounded-2xl bg-slate-950 px-6 font-semibold text-white disabled:bg-slate-300">
@@ -323,10 +365,29 @@ const Inventory: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            )}
+            ))}
 
             {/* Adjust stock modal */}
-            {adjusting && (
+            {adjusting && (applied && shellButtons ? (
+                <ConfiguredDialogShell
+                    config={applied}
+                    title={t('inventory.adjustStock')}
+                    subtitle={adjusting.name}
+                    icon={SlidersHorizontal}
+                    onClose={() => setAdjusting(null)}
+                    overlayClassName="z-[80]"
+                    footer={
+                        <div className="flex justify-end gap-3">
+                            <button type="button" onClick={() => setAdjusting(null)} className={shellButtons.secondary}>{t('common.cancel')}</button>
+                            <button type="button" disabled={saving} onClick={() => void applyAdjust()} className={`${shellButtons.primary} disabled:cursor-not-allowed disabled:opacity-50`}>
+                                {saving ? t('common.saving') : t('inventory.setQuantity')}
+                            </button>
+                        </div>
+                    }
+                >
+                    <div className="px-6 py-5">{adjustField}</div>
+                </ConfiguredDialogShell>
+            ) : (
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4">
                     <div className="w-full max-w-sm rounded-[2rem] bg-white p-6 shadow-2xl">
                         <div className="flex items-start justify-between">
@@ -338,17 +399,7 @@ const Inventory: React.FC = () => {
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
-                        <Field label={t('inventory.newQuantityWithUnit', { unit: adjusting.unit })} className="mt-5">
-                            <input
-                                type="number"
-                                step="any"
-                                min="0"
-                                autoFocus
-                                value={adjustValue}
-                                onChange={e => setAdjustValue(e.target.value)}
-                                className={inputClass}
-                            />
-                        </Field>
+                        <div className="mt-5">{adjustField}</div>
                         <div className="mt-6 flex justify-end gap-3">
                             <button type="button" onClick={() => setAdjusting(null)} className="min-h-touch rounded-2xl bg-slate-100 px-5 font-semibold text-slate-700 hover:bg-slate-200">{t('common.cancel')}</button>
                             <button type="button" disabled={saving} onClick={() => void applyAdjust()} className="min-h-touch rounded-2xl bg-slate-950 px-6 font-semibold text-white disabled:bg-slate-300">
@@ -357,7 +408,7 @@ const Inventory: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            )}
+            ))}
         </div>
     );
 };

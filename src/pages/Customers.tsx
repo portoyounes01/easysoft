@@ -15,6 +15,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import CustomerForm from '../components/CustomerForm';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import {
   customerLocalService,
@@ -27,6 +29,7 @@ import '../styles/design-system-2-scope.css';
 const CustomersInner: React.FC = () => {
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
   const { t } = useTranslation();
+  const appliedDialogStyle = useAppliedDialogStyle();
   const [customers, setCustomers] = useState<LocalCustomer[]>([]);
   const [latestPurchases, setLatestPurchases] = useState<Record<string, Date>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -440,53 +443,81 @@ const CustomersInner: React.FC = () => {
         onSuccess={handleFormSuccess}
       />
 
-      {viewingCustomer && (
-        <>
-          <div className="fixed inset-0 z-40 bg-black/40" aria-hidden onClick={() => setViewingCustomer(null)} />
-          <div className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between bg-gradient-to-r from-blue-600 to-blue-500 p-6 text-white">
-              <h2 className="text-xl font-bold">{t('customers.viewModal.title')}</h2>
-              <button type="button" onClick={() => setViewingCustomer(null)} className="min-h-touch-sm min-w-touch-sm rounded-xl p-2 hover:bg-white/20">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="grid flex-1 grid-cols-1 gap-4 overflow-y-auto p-6 md:grid-cols-2">
-              {[
-                [t('customers.viewModal.name'), viewingCustomer.name],
-                [t('customers.viewModal.taxId'), viewingCustomer.tax_number ?? '—'],
-                [t('customers.viewModal.email'), viewingCustomer.email ?? '—'],
-                [t('customers.viewModal.phone'), viewingCustomer.phone ?? '—'],
-                [t('customers.viewModal.city'), viewingCustomer.city ?? '—'],
-                [t('customers.table.points'), `${viewingCustomer.loyalty_points.toLocaleString()} pts`],
-                [t('customers.table.enrolled'), formatDate(viewingCustomer.created_at)],
-                [t('customers.table.lastPurchase'), formatLastPurchase(latestPurchases[viewingCustomer.id])],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-xl bg-neutral-50 p-4">
-                  <span className="mb-1 block text-sm font-medium text-gray-500">{label}</span>
-                  <p className="font-semibold text-gray-900">{value}</p>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-between border-t border-gray-100 bg-neutral-50 px-6 py-4">
-              <AdminActionButton
-                variant="primary"
-                type="button"
-                icon={Edit}
-                label={t('customers.viewModal.editCustomer')}
-                onClick={() => {
-                  const customer = viewingCustomer;
-                  setViewingCustomer(null);
-                  handleEditCustomer(customer);
-                }}
-                className="min-h-touch"
-              />
-              <button type="button" onClick={() => setViewingCustomer(null)} className="min-h-touch rounded-xl bg-gray-200 px-6 py-3 font-semibold text-gray-700">
-                {t('customers.viewModal.close')}
-              </button>
-            </div>
+      {viewingCustomer && (() => {
+        const infoCards = [
+          [t('customers.viewModal.name'), viewingCustomer.name],
+          [t('customers.viewModal.taxId'), viewingCustomer.tax_number ?? '—'],
+          [t('customers.viewModal.email'), viewingCustomer.email ?? '—'],
+          [t('customers.viewModal.phone'), viewingCustomer.phone ?? '—'],
+          [t('customers.viewModal.city'), viewingCustomer.city ?? '—'],
+          [t('customers.table.points'), `${viewingCustomer.loyalty_points.toLocaleString()} pts`],
+          [t('customers.table.enrolled'), formatDate(viewingCustomer.created_at)],
+          [t('customers.table.lastPurchase'), formatLastPurchase(latestPurchases[viewingCustomer.id])],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-xl bg-neutral-50 p-4">
+            <span className="mb-1 block text-sm font-medium text-gray-500">{label}</span>
+            <p className="font-semibold text-gray-900">{value}</p>
           </div>
-        </>
-      )}
+        ));
+
+        const editButton = (
+          <AdminActionButton
+            variant="primary"
+            type="button"
+            icon={Edit}
+            label={t('customers.viewModal.editCustomer')}
+            onClick={() => {
+              const customer = viewingCustomer;
+              setViewingCustomer(null);
+              handleEditCustomer(customer);
+            }}
+            className="min-h-touch"
+          />
+        );
+
+        if (appliedDialogStyle) {
+          const buttons = dialogButtonClasses(appliedDialogStyle);
+          return (
+            <ConfiguredDialogShell
+              config={appliedDialogStyle}
+              title={t('customers.viewModal.title')}
+              icon={Edit}
+              onClose={() => setViewingCustomer(null)}
+              footer={
+                <div className="flex justify-between">
+                  {editButton}
+                  <button type="button" onClick={() => setViewingCustomer(null)} className={buttons.secondary}>
+                    {t('customers.viewModal.close')}
+                  </button>
+                </div>
+              }
+            >
+              <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">{infoCards}</div>
+            </ConfiguredDialogShell>
+          );
+        }
+
+        return (
+          <>
+            <div className="fixed inset-0 z-40 bg-black/40" aria-hidden onClick={() => setViewingCustomer(null)} />
+            <div className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between bg-gradient-to-r from-blue-600 to-blue-500 p-6 text-white">
+                <h2 className="text-xl font-bold">{t('customers.viewModal.title')}</h2>
+                <button type="button" onClick={() => setViewingCustomer(null)} className="min-h-touch-sm min-w-touch-sm rounded-xl p-2 hover:bg-white/20">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="grid flex-1 grid-cols-1 gap-4 overflow-y-auto p-6 md:grid-cols-2">{infoCards}</div>
+              <div className="flex justify-between border-t border-gray-100 bg-neutral-50 px-6 py-4">
+                {editButton}
+                <button type="button" onClick={() => setViewingCustomer(null)} className="min-h-touch rounded-xl bg-gray-200 px-6 py-3 font-semibold text-gray-700">
+                  {t('customers.viewModal.close')}
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 };
