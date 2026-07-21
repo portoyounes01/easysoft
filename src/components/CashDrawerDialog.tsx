@@ -169,7 +169,7 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
                 onClose={onClose}
                 overlayClassName="z-[85]"
                 footer={
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className={buttons.container}>
                         <button
                             type="button"
                             disabled={busy || !consideredOpen}

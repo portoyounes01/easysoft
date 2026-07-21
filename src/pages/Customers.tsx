@@ -484,7 +484,7 @@ const CustomersInner: React.FC = () => {
               icon={Edit}
               onClose={() => setViewingCustomer(null)}
               footer={
-                <div className="flex justify-between">
+                <div className={buttons.container}>
                   {editButton}
                   <button type="button" onClick={() => setViewingCustomer(null)} className={buttons.secondary}>
                     {t('customers.viewModal.close')}

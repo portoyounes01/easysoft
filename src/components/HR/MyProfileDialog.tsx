@@ -174,7 +174,7 @@ const MyProfileDialog: React.FC = () => {
                         onClose={() => setClockAction(undefined)}
                         overlayClassName="z-[90]"
                         footer={
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className={buttons.container}>
                                 <button
                                     type="button"
                                     onClick={() => setClockAction(undefined)}

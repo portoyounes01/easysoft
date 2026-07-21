@@ -328,3 +328,12 @@ export function useDesignSystem2Customization(): DesignSystem2CustomizationConte
     }
     return ctx;
 }
+
+/**
+ * Non-throwing variant for components that may render outside the provider
+ * (e.g. ConfiguredDialogShell): returns the CSS-var style when available so
+ * var-driven tokens resolve, undefined otherwise (their fallbacks apply).
+ */
+export function useDesignSystem2VisualStyleSafe(): CSSProperties | undefined {
+    return useContext(DesignSystem2CustomizationContext)?.visualStyle;
+}

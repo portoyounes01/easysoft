@@ -28,6 +28,22 @@ export interface LocalRawMaterial {
     min_stock: number;
     supplier: string | null;
     is_active: boolean;
+    // Optional because rows created before these fields existed return
+    // `undefined` from Dexie (non-indexed fields need no schema migration).
+    description?: string | null;
+    /** Data URL (local upload, downscaled) or a remote image URL. */
+    image_url?: string | null;
+    image_name?: string | null;
+    /** Original file size in bytes, for redisplay in the form. */
+    image_size?: number | null;
+    /** Expose this item as a sellable product in the POS grid (POS only —
+     *  the linked product is filtered out of the Products page catalog). */
+    sell_enabled?: boolean;
+    /** Selling price incl. IVA; €/kg for weight units (kg, g). */
+    sale_price?: number | null;
+    sale_iva_rate?: number | null;
+    /** The auto-managed catalogue product this item sells through. */
+    linked_product_id?: string | null;
     created_at: Date;
     updated_at: Date;
 }

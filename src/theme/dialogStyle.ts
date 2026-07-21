@@ -22,6 +22,8 @@ export type DialogControlsVariant = 'legacyGreen' | 'roundedLgBlue' | 'roundedXl
 export type DialogPrimaryCta = 'greenGradient' | 'green500' | 'emerald600' | 'slate950' | 'blue600' | 'orange500';
 export type DialogFooterVariant = 'inBody' | 'borderedBar' | 'tintedBar';
 export type DialogBodyTint = 'white' | 'soft';
+/** How action buttons are laid out inside the footer row. */
+export type DialogFooterButtons = 'end' | 'stretch' | 'between';
 
 export interface DialogStyleConfig {
     overlayOpacity: DialogOverlayOpacity;
@@ -36,6 +38,7 @@ export interface DialogStyleConfig {
     primaryCta: DialogPrimaryCta;
     footer: DialogFooterVariant;
     bodyTint: DialogBodyTint;
+    footerButtons: DialogFooterButtons;
 }
 
 const AXIS_VALUES: { [K in keyof DialogStyleConfig]: readonly DialogStyleConfig[K][] } = {
@@ -51,6 +54,15 @@ const AXIS_VALUES: { [K in keyof DialogStyleConfig]: readonly DialogStyleConfig[
     primaryCta: ['greenGradient', 'green500', 'emerald600', 'slate950', 'blue600', 'orange500'],
     footer: ['inBody', 'borderedBar', 'tintedBar'],
     bodyTint: ['white', 'soft'],
+    footerButtons: ['end', 'stretch', 'between'],
+};
+
+/**
+ * Defaults for axes added after configs were first persisted — merged into
+ * stored configs before validation so an older saved style keeps working.
+ */
+export const DIALOG_AXIS_FALLBACKS: Partial<DialogStyleConfig> = {
+    footerButtons: 'stretch',
 };
 
 export function isValidDialogStyleConfig(raw: unknown): raw is DialogStyleConfig {
@@ -100,14 +112,23 @@ export const DIALOG_CONTROL_CLASSES: Record<DialogControlsVariant, string> = {
     rounded2xlSlate: 'min-h-touch-sm rounded-2xl border border-slate-300 px-4 text-sm focus:border-slate-500 focus:ring-4 focus:ring-slate-200',
 };
 
+/**
+ * Primary CTA colour always comes from the Appearances primary colour
+ * (`--ds2-confirm-bg` / `--ds2-confirm-hover`, injected by ConfiguredDialogShell);
+ * the variant only decides the shape: gradient · 12px, flat · rounded-xl, or
+ * flat · rounded-2xl. Fallback hexes match the default green palette.
+ */
 export const DIALOG_CTA_CLASSES: Record<DialogPrimaryCta, string> = {
-    greenGradient: 'rounded-[12px] bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700',
-    green500: 'rounded-2xl bg-green-500 text-white hover:bg-green-600',
-    emerald600: 'rounded-xl bg-emerald-600 text-white hover:bg-emerald-700',
-    slate950: 'rounded-2xl bg-slate-950 text-white hover:bg-slate-800',
-    blue600: 'rounded-xl bg-blue-600 text-white hover:bg-blue-700',
-    orange500: 'rounded-2xl bg-orange-500 text-white hover:bg-orange-600',
+    greenGradient: 'rounded-[12px] bg-gradient-to-r from-[var(--ds2-brand-from,#22c55e)] to-[var(--ds2-brand-to,#15803d)] text-white hover:brightness-105',
+    green500: 'rounded-2xl bg-[var(--ds2-confirm-bg,#22c55e)] text-white hover:bg-[var(--ds2-confirm-hover,#16a34a)]',
+    emerald600: 'rounded-xl bg-[var(--ds2-confirm-bg,#22c55e)] text-white hover:bg-[var(--ds2-confirm-hover,#16a34a)]',
+    slate950: 'rounded-2xl bg-[var(--ds2-confirm-bg,#22c55e)] text-white hover:bg-[var(--ds2-confirm-hover,#16a34a)]',
+    blue600: 'rounded-xl bg-[var(--ds2-confirm-bg,#22c55e)] text-white hover:bg-[var(--ds2-confirm-hover,#16a34a)]',
+    orange500: 'rounded-2xl bg-[var(--ds2-confirm-bg,#22c55e)] text-white hover:bg-[var(--ds2-confirm-hover,#16a34a)]',
 };
+
+/** On-state track colour for toggle switches — the Appearances primary colour. */
+export const DIALOG_TOGGLE_ON_CLASS = 'bg-[var(--ds2-confirm-bg,#22c55e)]';
 
 /** Secondary button mirrors the primary CTA's corner radius so the pair reads as one system. */
 export const DIALOG_SECONDARY_RADIUS: Record<DialogPrimaryCta, string> = {
@@ -140,11 +161,35 @@ export const DIALOG_OVERLAY_PAD: Record<DialogOverlayPadding, string> = {
     'p-6': 'p-6',
 };
 
-/** Primary/secondary action classes for dialogs composing their own footer buttons. */
-export function dialogButtonClasses(config: DialogStyleConfig): { primary: string; secondary: string } {
+/** Footer action-row layout per the footerButtons axis. */
+export const DIALOG_FOOTER_BUTTONS_CLASSES: Record<DialogFooterButtons, { container: string; button: string }> = {
+    end: { container: 'flex justify-end gap-3', button: '' },
+    stretch: { container: 'flex gap-3', button: 'flex-1' },
+    between: { container: 'flex justify-between gap-3', button: '' },
+};
+
+/**
+ * Action classes for dialogs composing their own footer buttons.
+ * `container` carries the footerButtons layout; the button classes already
+ * include the per-layout width behaviour, so consumers only place them.
+ * `danger`/`dangerOutline` are semantic red (delete, stock out) and ignore the
+ * Appearances primary colour on purpose.
+ */
+export function dialogButtonClasses(config: DialogStyleConfig): {
+    container: string;
+    primary: string;
+    secondary: string;
+    danger: string;
+    dangerOutline: string;
+} {
+    const layout = DIALOG_FOOTER_BUTTONS_CLASSES[config.footerButtons];
+    const radius = DIALOG_SECONDARY_RADIUS[config.primaryCta];
     return {
-        primary: `min-h-touch-sm px-4 font-semibold ${DIALOG_CTA_CLASSES[config.primaryCta]}`,
-        secondary: `min-h-touch-sm px-4 font-semibold ${DIALOG_PALETTES[config.palette].secondaryBtn} ${DIALOG_SECONDARY_RADIUS[config.primaryCta]}`,
+        container: layout.container,
+        primary: `min-h-touch-sm px-4 font-semibold ${DIALOG_CTA_CLASSES[config.primaryCta]} ${layout.button}`,
+        secondary: `min-h-touch-sm px-4 font-semibold ${DIALOG_PALETTES[config.palette].secondaryBtn} ${radius} ${layout.button}`,
+        danger: `min-h-touch-sm px-4 font-semibold bg-red-600 text-white hover:bg-red-700 ${radius} ${layout.button}`,
+        dangerOutline: `min-h-touch-sm px-4 font-semibold border border-red-300 text-red-600 hover:bg-red-50 ${radius} ${layout.button}`,
     };
 }
 
@@ -164,7 +209,10 @@ function loadApplied(): DialogStyleConfig | null {
         const raw = localStorage.getItem(APPLIED_KEY);
         if (!raw) return null;
         const parsed: unknown = JSON.parse(raw);
-        return isValidDialogStyleConfig(parsed) ? parsed : null;
+        if (typeof parsed !== 'object' || parsed === null) return null;
+        // Backfill axes added after this config was saved, then validate.
+        const merged = { ...DIALOG_AXIS_FALLBACKS, ...(parsed as Partial<DialogStyleConfig>) };
+        return isValidDialogStyleConfig(merged) ? merged : null;
     } catch {
         return null;
     }

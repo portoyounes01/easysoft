@@ -32,7 +32,7 @@ import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { ActionButton } from '../components/ui/ActionButton';
 import { BaseDialog } from '../components/ui/BaseDialog';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
-import { DIALOG_SECONDARY_RADIUS, dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -1303,7 +1303,7 @@ const EmployeesInner: React.FC = () => {
                                                 setShowDiscardConfirm(false);
                                                 handleCloseForm();
                                             }}
-                                            className={`min-h-touch-sm w-full bg-red-600 px-4 font-semibold text-white transition-colors hover:bg-red-700 ${DIALOG_SECONDARY_RADIUS[appliedDialogStyle.primaryCta]}`}
+                                            className={`w-full ${dialogButtonClasses(appliedDialogStyle).danger}`}
                                         >
                                             {t('employees.form.discard')}
                                         </button>
@@ -1355,16 +1355,16 @@ const EmployeesInner: React.FC = () => {
                     icon={Trash2}
                     onClose={() => setShowDeleteConfirm(null)}
                     footer={
-                        <div className="flex space-x-3">
+                        <div className={dialogButtonClasses(appliedDialogStyle).container}>
                             <button
                                 onClick={() => setShowDeleteConfirm(null)}
-                                className={`flex-1 ${dialogButtonClasses(appliedDialogStyle).secondary}`}
+                                className={dialogButtonClasses(appliedDialogStyle).secondary}
                             >
                                 {t('employees.confirm.cancel')}
                             </button>
                             <button
                                 onClick={handleDeleteEmployee}
-                                className={`min-h-touch-sm flex-1 bg-red-600 px-4 font-semibold text-white transition-colors hover:bg-red-700 ${DIALOG_SECONDARY_RADIUS[appliedDialogStyle.primaryCta]}`}
+                                className={dialogButtonClasses(appliedDialogStyle).danger}
                             >
                                 {t('employees.confirm.delete')}
                             </button>

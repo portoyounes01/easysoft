@@ -8,6 +8,7 @@ import {
     DialogShellStyleContext,
     type DialogStyleConfig,
 } from '../../theme/dialogStyle';
+import { useDesignSystem2VisualStyleSafe } from '../../contexts/DesignSystem2CustomizationContext';
 
 interface ConfiguredDialogShellProps {
     config: DialogStyleConfig;
@@ -41,6 +42,9 @@ export const ConfiguredDialogShell: React.FC<ConfiguredDialogShellProps> = ({
     vwvhSize = { width: '50vw', height: '60vh' },
 }) => {
     const p = DIALOG_PALETTES[config.palette];
+    // Appearances colour vars (--ds2-*) so the primary CTA follows the user's
+    // primary colour inside any dialog, even outside a .ds2-visual-scope page.
+    const ds2Vars = useDesignSystem2VisualStyleSafe();
     const sheet = config.centering === 'bottomSheet';
     const radius = sheet
         ? DIALOG_PANEL_RADIUS_CLASSES[config.panelRadius].sheet
@@ -194,7 +198,7 @@ export const ConfiguredDialogShell: React.FC<ConfiguredDialogShellProps> = ({
         >
             <div
                 className={`flex max-h-full flex-col overflow-hidden bg-white shadow-2xl ${radius} ${panelWidth} ${config.centering === 'transform' && !sheet ? 'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2' : ''}`}
-                style={panelSizing}
+                style={{ ...ds2Vars, ...panelSizing }}
                 role="dialog"
                 aria-modal={!embedded || undefined}
                 onClick={(event) => event.stopPropagation()}

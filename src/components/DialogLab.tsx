@@ -12,12 +12,18 @@ import {
     applyDialogStyle,
     dialogButtonClasses,
     DIALOG_CONTROL_CLASSES,
+    DIALOG_OVERLAY_BG,
+    DIALOG_OVERLAY_PAD,
     DIALOG_PALETTES,
+    DIALOG_PANEL_RADIUS_CLASSES,
+    DialogShellStyleContext,
     isValidDialogStyleConfig,
     resetDialogStyle,
     useAppliedDialogStyle,
     type DialogStyleConfig,
 } from '../theme/dialogStyle';
+import { DIALOG_PREVIEWS, type DialogPreviewSpec } from './dialogLabPreviews';
+import { useDesignSystem2VisualStyleSafe } from '../contexts/DesignSystem2CustomizationContext';
 
 /**
  * Internal design tool: composes a dialog style from one variant per axis
@@ -43,6 +49,21 @@ const DEFAULT_CONFIG: DialogStyleConfig = {
     primaryCta: 'greenGradient',
     footer: 'borderedBar',
     bodyTint: 'soft',
+    footerButtons: 'stretch',
+};
+
+/**
+ * The CTA colour now always comes from the Appearances primary colour, so the
+ * six historical values collapse into three visible shapes; legacy values in
+ * saved configs stay valid and map onto their shape twin for display.
+ */
+const CTA_SHAPE_CANONICAL: Record<DialogStyleConfig['primaryCta'], DialogStyleConfig['primaryCta']> = {
+    greenGradient: 'greenGradient',
+    green500: 'green500',
+    slate950: 'green500',
+    orange500: 'green500',
+    emerald600: 'emerald600',
+    blue600: 'emerald600',
 };
 
 const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
@@ -52,6 +73,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '55', overlayPadding: 'p-4', centering: 'flex', panelRadius: '2rem',
             sizing: 'max-w-xl', header: 'chipLeft', closeButton: 'slateSquare', palette: 'slate',
             controls: 'rounded2xlSlate', primaryCta: 'orange500', footer: 'inBody', bodyTint: 'white',
+            footerButtons: 'stretch',
         },
     },
     B: {
@@ -60,6 +82,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '55', overlayPadding: 'p-4', centering: 'flex', panelRadius: '2rem',
             sizing: 'max-w-md', header: 'borderedLeft', closeButton: 'slateSquare', palette: 'slate',
             controls: 'rounded2xlSlate', primaryCta: 'green500', footer: 'inBody', bodyTint: 'soft',
+            footerButtons: 'stretch',
         },
     },
     C: {
@@ -72,6 +95,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '55', overlayPadding: 'p-4', centering: 'flex', panelRadius: '2rem',
             sizing: 'max-w-lg', header: 'bareLeft', closeButton: 'slateSquare', palette: 'slate',
             controls: 'rounded2xlSlate', primaryCta: 'slate950', footer: 'inBody', bodyTint: 'white',
+            footerButtons: 'end',
         },
     },
     E: {
@@ -80,6 +104,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '40', overlayPadding: 'none', centering: 'transform', panelRadius: '2xl',
             sizing: 'max-w-2xl', header: 'gradientBar', closeButton: 'whiteGhost', palette: 'neutral',
             controls: 'roundedXlEmerald', primaryCta: 'blue600', footer: 'tintedBar', bodyTint: 'soft',
+            footerButtons: 'between',
         },
     },
     F: {
@@ -88,6 +113,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '55', overlayPadding: 'p-4', centering: 'flex', panelRadius: '2xl',
             sizing: 'max-w-3xl', header: 'borderedChip', closeButton: 'graySquare', palette: 'gray',
             controls: 'roundedLgBlue', primaryCta: 'blue600', footer: 'tintedBar', bodyTint: 'white',
+            footerButtons: 'between',
         },
     },
     G: {
@@ -96,6 +122,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '50', overlayPadding: 'p-4', centering: 'flex', panelRadius: '3xl',
             sizing: 'max-w-md', header: 'bareBold', closeButton: 'ghostRound', palette: 'neutral',
             controls: 'roundedXlEmerald', primaryCta: 'emerald600', footer: 'inBody', bodyTint: 'white',
+            footerButtons: 'stretch',
         },
     },
 };
@@ -154,13 +181,60 @@ interface SamplePreviewProps {
     config: DialogStyleConfig;
     embedded: boolean;
     onClose?: () => void;
+    /** A replica from the preview gallery; null renders the default sample. */
+    spec?: DialogPreviewSpec | null;
 }
 
-/** Sample "Edit table" content rendered through the real shared shell. */
-const SamplePreview: React.FC<SamplePreviewProps> = ({ config, embedded, onClose }) => {
+/** Sample "Edit table" content (or a gallery replica) rendered through the real shared shell. */
+const SamplePreview: React.FC<SamplePreviewProps> = ({ config, embedded, onClose, spec = null }) => {
     const p = DIALOG_PALETTES[config.palette];
     const inputClass = `w-full bg-white outline-none transition ${DIALOG_CONTROL_CLASSES[config.controls]}`;
     const buttons = dialogButtonClasses(config);
+    // Bare cards skip ConfiguredDialogShell, so inject the Appearances colour vars here.
+    const ds2Vars = useDesignSystem2VisualStyleSafe();
+
+    if (spec?.bare) {
+        // Confirm-style card: no shell chrome, just the centred panel.
+        const Body = spec.Body;
+        const Footer = spec.Footer;
+        return (
+            <div
+                className={`${embedded ? 'absolute inset-0' : 'fixed inset-0 z-[95]'} flex items-center justify-center ${DIALOG_OVERLAY_BG[config.overlayOpacity]} ${DIALOG_OVERLAY_PAD[config.overlayPadding] || 'p-4'}`}
+                onClick={onClose}
+                role="presentation"
+            >
+                <div
+                    className={`w-full max-w-sm bg-white shadow-2xl ${DIALOG_PANEL_RADIUS_CLASSES[config.panelRadius].panel}`}
+                    style={ds2Vars}
+                    onClick={(event) => event.stopPropagation()}
+                >
+                    <DialogShellStyleContext.Provider value={config}>
+                        <Body />
+                        {Footer && <div className="px-6 pb-6"><Footer buttons={buttons} /></div>}
+                    </DialogShellStyleContext.Provider>
+                </div>
+            </div>
+        );
+    }
+
+    if (spec) {
+        const Body = spec.Body;
+        const Footer = spec.Footer;
+        return (
+            <ConfiguredDialogShell
+                config={config}
+                title={spec.title}
+                subtitle={spec.subtitle}
+                icon={spec.icon}
+                onClose={onClose ?? (() => undefined)}
+                overlayClassName={embedded ? '' : 'z-[95]'}
+                embedded={embedded}
+                footer={Footer ? <Footer buttons={buttons} /> : undefined}
+            >
+                <Body />
+            </ConfiguredDialogShell>
+        );
+    }
 
     return (
         <ConfiguredDialogShell
@@ -172,7 +246,7 @@ const SamplePreview: React.FC<SamplePreviewProps> = ({ config, embedded, onClose
             overlayClassName={embedded ? '' : 'z-[95]'}
             embedded={embedded}
             footer={
-                <div className="grid grid-cols-2 gap-3">
+                <div className={buttons.container}>
                     <button type="button" onClick={onClose} className={buttons.secondary}>Cancel</button>
                     <button type="button" className={buttons.primary}>Save</button>
                 </div>
@@ -203,7 +277,9 @@ const SamplePreview: React.FC<SamplePreviewProps> = ({ config, embedded, onClose
 const DialogLab: React.FC = () => {
     const [config, setConfig] = useState<DialogStyleConfig>(() => loadDraft());
     const [fullscreenOpen, setFullscreenOpen] = useState(false);
+    const [previewKey, setPreviewKey] = useState('sample');
     const applied = useAppliedDialogStyle();
+    const previewSpec = DIALOG_PREVIEWS.find((entry) => entry.key === previewKey) ?? null;
 
     useEffect(() => {
         try {
@@ -352,16 +428,13 @@ const DialogLab: React.FC = () => {
                         ]}
                     />
                     <AxisRow
-                        label="Primary CTA"
-                        value={config.primaryCta}
+                        label="Primary CTA shape (colour follows the Appearances primary colour)"
+                        value={CTA_SHAPE_CANONICAL[config.primaryCta]}
                         onChange={(value) => set('primaryCta', value)}
                         options={[
-                            { value: 'greenGradient', label: 'green gradient' },
-                            { value: 'green500', label: 'green-500 flat' },
-                            { value: 'emerald600', label: 'emerald-600' },
-                            { value: 'slate950', label: 'slate-950' },
-                            { value: 'blue600', label: 'blue-600' },
-                            { value: 'orange500', label: 'orange-500' },
+                            { value: 'greenGradient', label: 'gradient · 12px' },
+                            { value: 'emerald600', label: 'flat · rounded-xl' },
+                            { value: 'green500', label: 'flat · rounded-2xl' },
                         ]}
                     />
                     <AxisRow
@@ -372,6 +445,16 @@ const DialogLab: React.FC = () => {
                             { value: 'inBody', label: 'buttons in body' },
                             { value: 'borderedBar', label: 'bordered bar' },
                             { value: 'tintedBar', label: 'tinted bar' },
+                        ]}
+                    />
+                    <AxisRow
+                        label="Footer buttons"
+                        value={config.footerButtons}
+                        onChange={(value) => set('footerButtons', value)}
+                        options={[
+                            { value: 'stretch', label: 'stretch · equal widths' },
+                            { value: 'end', label: 'right-aligned · compact' },
+                            { value: 'between', label: 'space between' },
                         ]}
                     />
                     <AxisRow
@@ -386,8 +469,21 @@ const DialogLab: React.FC = () => {
                 </div>
 
                 <div className="space-y-3 xl:sticky xl:top-4">
+                    <label className="flex items-center gap-2 text-sm font-bold text-neutral-700">
+                        Preview dialog
+                        <select
+                            value={previewKey}
+                            onChange={(event) => setPreviewKey(event.target.value)}
+                            className="min-h-touch-xs flex-1 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-semibold text-neutral-800 outline-none focus:border-green-500"
+                        >
+                            <option value="sample">Default sample (Edit table)</option>
+                            {DIALOG_PREVIEWS.map((entry) => (
+                                <option key={entry.key} value={entry.key}>{entry.label}</option>
+                            ))}
+                        </select>
+                    </label>
                     <div className="relative h-[30rem] overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100">
-                        <SamplePreview config={config} embedded />
+                        <SamplePreview config={config} embedded spec={previewSpec} />
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <button
@@ -430,7 +526,7 @@ const DialogLab: React.FC = () => {
             </div>
 
             {fullscreenOpen && (
-                <SamplePreview config={config} embedded={false} onClose={() => setFullscreenOpen(false)} />
+                <SamplePreview config={config} embedded={false} onClose={() => setFullscreenOpen(false)} spec={previewSpec} />
             )}
         </>
     );

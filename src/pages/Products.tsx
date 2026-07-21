@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
+import { rawMaterialService } from '../services/rawMaterialService';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 
@@ -38,6 +39,9 @@ const ProductsInner: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [filteredProducts, setFilteredProducts] = useState<LocalProduct[]>([]);
+  // Products auto-managed by sale-enabled inventory items: sold in the POS grid
+  // but kept out of this catalog page (managed from the Inventory page instead).
+  const [linkedProductIds, setLinkedProductIds] = useState<Set<string>>(new Set());
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<LocalProduct | null>(null);
   const [viewingProduct, setViewingProduct] = useState<LocalProduct | null>(null);
@@ -104,11 +108,23 @@ const ProductsInner: React.FC = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    void rawMaterialService.linkedProductIds().then(ids => {
+      if (!cancelled) setLinkedProductIds(ids);
+    });
+    return () => { cancelled = true; };
+  }, [products]);
+
+  useEffect(() => {
     const applyFilters = async () => {
       let result = products;
 
       if (searchTerm) {
         result = await searchProducts(searchTerm);
+      }
+
+      if (linkedProductIds.size > 0) {
+        result = result.filter((product) => !linkedProductIds.has(product.id));
       }
 
       if (selectedCategory !== 'all') {
@@ -125,7 +141,7 @@ const ProductsInner: React.FC = () => {
     };
 
     applyFilters();
-  }, [products, searchTerm, selectedCategory, sortOption, searchProducts]);
+  }, [products, searchTerm, selectedCategory, sortOption, searchProducts, linkedProductIds]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -913,7 +929,7 @@ const ProductsInner: React.FC = () => {
               icon={Package}
               onClose={() => setViewingProduct(null)}
               footer={
-                <div className="flex justify-between items-center gap-4 flex-wrap">
+                <div className={buttons.container}>
                   {editButton}
                   <button type="button" onClick={() => setViewingProduct(null)} className={buttons.secondary}>
                     {t('products.viewModal.close')}

@@ -854,7 +854,7 @@ const HR: React.FC = () => {
                             onClose={closeEmployee}
                             overlayClassName="z-[80]"
                             footer={
-                                <div className="flex justify-end">
+                                <div className={dialogButtonClasses(appliedDialogStyle).container}>
                                     <button
                                         type="button"
                                         disabled={saving}

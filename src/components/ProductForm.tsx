@@ -547,24 +547,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
                         <div className="space-y-4">
                             <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('products.form.pricingTax')}</h3>
 
-                            {/* Sold by weight: lives here (not the disabled inventory block) because
-                                its primary effect is pricing — price becomes €/kg. */}
-                            <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-                                <input
-                                    type="checkbox"
-                                    className="mt-0.5 h-5 w-5 rounded border-gray-300"
-                                    checked={formData.sold_by_weight}
-                                    onChange={(e) => handleFieldChange('sold_by_weight', e.target.checked)}
-                                />
-                                <span>
-                                    <span className="block text-sm font-semibold text-gray-700">
-                                        {t('products.form.soldByWeight')}
-                                    </span>
-                                    <span className="block text-xs text-gray-500">
-                                        {t('products.form.soldByWeightHint')}
-                                    </span>
-                                </span>
-                            </label>
+                            {/* Sold-by-weight is no longer set here: weighed items are inventory
+                                raw materials (unit kg/g) exposed as products from the Inventory
+                                page, which derives the flag automatically. Legacy products keep
+                                their stored value; the €/kg labels below still honour it. */}
 
                             {/* Price */}
                             <div>
