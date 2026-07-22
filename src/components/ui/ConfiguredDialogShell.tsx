@@ -112,7 +112,7 @@ export const ConfiguredDialogShell: React.FC<ConfiguredDialogShellProps> = ({
                     <div className={`flex items-center justify-between gap-3 border-b ${p.border} px-6 py-5`}>
                         <div className="flex min-w-0 items-center gap-3">
                             {Icon && (
-                                <div className="shrink-0 rounded-2xl bg-emerald-100 p-3 text-emerald-700">
+                                <div className="shrink-0 rounded-2xl bg-[var(--ds2-accent-tint-bg,#d1fae5)] p-3 text-[var(--ds2-accent-tint-text,#047857)]">
                                     <Icon className="h-6 w-6" />
                                 </div>
                             )}
@@ -136,7 +136,7 @@ export const ConfiguredDialogShell: React.FC<ConfiguredDialogShellProps> = ({
                 );
             case 'gradientBar':
                 return (
-                    <div className="bg-gradient-to-r from-blue-600 to-blue-500 p-6 text-white">
+                    <div className="bg-gradient-to-r from-[var(--ds2-accent-from,#2563eb)] to-[var(--ds2-accent-to,#3b82f6)] p-6 text-white">
                         <div className="flex items-center justify-between gap-3">
                             <div className="flex min-w-0 items-center gap-3">
                                 {Icon && (
@@ -155,7 +155,7 @@ export const ConfiguredDialogShell: React.FC<ConfiguredDialogShellProps> = ({
                     <div className={`flex items-center justify-between gap-3 border-b ${p.border} px-6 py-4`}>
                         <div className="flex min-w-0 items-center gap-3">
                             {Icon && (
-                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--ds2-accent-tint-bg,#dbeafe)] text-[var(--ds2-accent-tint-text,#2563eb)]">
                                     <Icon className="h-5 w-5" />
                                 </div>
                             )}

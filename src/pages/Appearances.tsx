@@ -536,6 +536,35 @@ const Appearances: React.FC = () => {
                         </SectionCard>
 
                         <SectionCard
+                            icon={Palette}
+                            title={t('appearances.internalColorsTitle')}
+                            description={t('appearances.internalColorsDescription')}
+                        >
+                            <div className="space-y-6">
+                                {([
+                                    ['accentColorId', 'appearances.internalAccentLabel'],
+                                    ['successColorId', 'appearances.internalSuccessLabel'],
+                                    ['warningColorId', 'appearances.internalWarningLabel'],
+                                    ['dangerColorId', 'appearances.internalDangerLabel'],
+                                ] as const).map(([prefKey, labelKey]) => (
+                                    <div key={prefKey}>
+                                        <p className="mb-2 text-sm font-bold text-neutral-700">{t(labelKey)}</p>
+                                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                            {DESIGN_SYSTEM_2_ACCENTS.map((color) => (
+                                                <ColorSwatchButton
+                                                    key={color.id}
+                                                    color={color}
+                                                    selected={prefs[prefKey] === color.id}
+                                                    onClick={() => setPrefs({ [prefKey]: color.id })}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </SectionCard>
+
+                        <SectionCard
                             icon={Type}
                             title={t('appearances.densityCornersTitle')}
                             description={t('appearances.densityCornersDescription')}

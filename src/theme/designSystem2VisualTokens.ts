@@ -309,6 +309,44 @@ export function getSecondaryCssVars(id: DesignSystem2ColorChoiceId): CssVarMap {
     return pickKeys(row, SECONDARY_KEYS);
 }
 
+/**
+ * Internal colours: dialog/header accents (chips, gradient bars, focus rings,
+ * tab indicators) plus the semantic success / warning / danger family used by
+ * banners, confirm dialogs and destructive buttons. Each picks any palette hue.
+ */
+export function getInternalCssVars(
+    accentId: DesignSystem2ColorChoiceId,
+    successId: DesignSystem2ColorChoiceId,
+    warningId: DesignSystem2ColorChoiceId,
+    dangerId: DesignSystem2ColorChoiceId
+): CssVarMap {
+    const a = PALETTE[accentId] ?? PALETTE.green;
+    const su = PALETTE[successId] ?? PALETTE.green;
+    const w = PALETTE[warningId] ?? PALETTE.orange;
+    const d = PALETTE[dangerId] ?? PALETTE.rose;
+    return {
+        '--ds2-accent-solid': a['--ds2-brand-solid'],
+        '--ds2-accent-from': a['--ds2-brand-from'],
+        '--ds2-accent-to': a['--ds2-brand-to'],
+        '--ds2-accent-tint-bg': a['--ds2-ui-tint-bg'],
+        '--ds2-accent-tint-text': a['--ds2-ui-tint-text'],
+        '--ds2-accent-ring': a['--ds2-focus-ring'],
+        '--ds2-success-solid': su['--ds2-brand-solid'],
+        '--ds2-success-tint-bg': su['--ds2-ui-tint-bg'],
+        '--ds2-success-tint-text': su['--ds2-ui-tint-text'],
+        '--ds2-success-border': su['--ds2-cash-border'],
+        '--ds2-warning-solid': w['--ds2-brand-solid'],
+        '--ds2-warning-tint-bg': w['--ds2-ui-tint-bg'],
+        '--ds2-warning-tint-text': w['--ds2-ui-tint-text'],
+        '--ds2-warning-border': w['--ds2-cash-border'],
+        '--ds2-danger-solid': d['--ds2-brand-solid'],
+        '--ds2-danger-hover': d['--ds2-confirm-hover'],
+        '--ds2-danger-tint-bg': d['--ds2-ui-tint-bg'],
+        '--ds2-danger-tint-text': d['--ds2-ui-tint-text'],
+        '--ds2-danger-border': d['--ds2-cash-border'],
+    };
+}
+
 /** Pairing gradient: primary solid → secondary solid */
 export function getPairingCssVars(primaryId: DesignSystem2ColorChoiceId, secondaryId: DesignSystem2ColorChoiceId): CssVarMap {
     const p = PALETTE[primaryId] ?? PALETTE.green;

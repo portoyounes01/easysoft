@@ -105,11 +105,15 @@ export const DIALOG_PALETTES: Record<DialogPalette, DialogPaletteTokens> = {
     },
 };
 
+/**
+ * Control shapes; focus colours follow the Appearances internal accent
+ * (--ds2-accent-*), so every input focuses in the configured accent hue.
+ */
 export const DIALOG_CONTROL_CLASSES: Record<DialogControlsVariant, string> = {
-    legacyGreen: 'rounded-xl border border-gray-300 py-3 px-4 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500',
-    roundedLgBlue: 'min-h-touch-sm rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200',
-    roundedXlEmerald: 'min-h-touch-xs rounded-xl border border-neutral-200 px-4 text-base focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100',
-    rounded2xlSlate: 'min-h-touch-sm rounded-2xl border border-slate-300 px-4 text-sm focus:border-slate-500 focus:ring-4 focus:ring-slate-200',
+    legacyGreen: 'rounded-xl border border-gray-300 py-3 px-4 text-sm focus:border-[var(--ds2-accent-solid,#22c55e)] focus:ring-1 focus:ring-[var(--ds2-accent-ring,#22c55e)]',
+    roundedLgBlue: 'min-h-touch-sm rounded-lg border border-gray-300 px-3 text-sm focus:border-[var(--ds2-accent-solid,#3b82f6)] focus:ring-2 focus:ring-[var(--ds2-accent-ring,#bfdbfe)]',
+    roundedXlEmerald: 'min-h-touch-xs rounded-xl border border-neutral-200 px-4 text-base focus:border-[var(--ds2-accent-solid,#10b981)] focus:ring-4 focus:ring-[var(--ds2-accent-ring,#d1fae5)]',
+    rounded2xlSlate: 'min-h-touch-sm rounded-2xl border border-slate-300 px-4 text-sm focus:border-[var(--ds2-accent-solid,#64748b)] focus:ring-4 focus:ring-[var(--ds2-accent-ring,#e2e8f0)]',
 };
 
 /**
@@ -188,8 +192,8 @@ export function dialogButtonClasses(config: DialogStyleConfig): {
         container: layout.container,
         primary: `min-h-touch-sm px-4 font-semibold ${DIALOG_CTA_CLASSES[config.primaryCta]} ${layout.button}`,
         secondary: `min-h-touch-sm px-4 font-semibold ${DIALOG_PALETTES[config.palette].secondaryBtn} ${radius} ${layout.button}`,
-        danger: `min-h-touch-sm px-4 font-semibold bg-red-600 text-white hover:bg-red-700 ${radius} ${layout.button}`,
-        dangerOutline: `min-h-touch-sm px-4 font-semibold border border-red-300 text-red-600 hover:bg-red-50 ${radius} ${layout.button}`,
+        danger: `min-h-touch-sm px-4 font-semibold bg-[var(--ds2-danger-solid,#dc2626)] text-white hover:bg-[var(--ds2-danger-hover,#b91c1c)] ${radius} ${layout.button}`,
+        dangerOutline: `min-h-touch-sm px-4 font-semibold border border-[var(--ds2-danger-border,#fca5a5)] text-[var(--ds2-danger-solid,#dc2626)] hover:bg-[var(--ds2-danger-tint-bg,#fef2f2)] ${radius} ${layout.button}`,
     };
 }
 

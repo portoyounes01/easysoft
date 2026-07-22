@@ -27,6 +27,12 @@ import {
     DialogInfoCard as InfoCard,
     useDialogTokens,
 } from './ui/dialogParts';
+import { Banknote, CreditCard as CardIcon, Percent, Search, UserSquare } from 'lucide-react';
+import { InputField } from './ui/InputField';
+import { ActionButton } from './ui/ActionButton';
+import { TabToggle } from './ui/TabToggle';
+import { PaymentMethodButton } from './ui/PaymentMethodButton';
+import QuickNumpad from './QuickNumpad';
 
 /**
  * Static replicas of every dialog family in the app, with realistic sample
@@ -57,6 +63,16 @@ const twoButtonFooter = (secondary: string, primary: string): DialogPreviewSpec[
             <div className={buttons.container}>
                 <button type="button" className={buttons.secondary}>{secondary}</button>
                 <button type="button" className={buttons.primary}>{primary}</button>
+            </div>
+        );
+    };
+
+const dangerFooter = (secondary: string, danger: string): DialogPreviewSpec['Footer'] =>
+    function PreviewDangerFooter({ buttons }) {
+        return (
+            <div className={buttons.container}>
+                <button type="button" className={buttons.secondary}>{secondary}</button>
+                <button type="button" className={buttons.danger}>{danger}</button>
             </div>
         );
     };
@@ -106,33 +122,36 @@ const ProfileBody: React.FC = () => {
 };
 
 const PaymentBody: React.FC = () => {
-    const { input, p } = useTokens();
-    const pad = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '×', '0', '⌫'];
+    const { p } = useTokens();
     return (
-        <div className="grid gap-5 px-6 py-5 sm:grid-cols-2">
-            <div className="space-y-3">
-                <F label="Cash Received">
-                    <input className={input} readOnly value="30" />
-                </F>
-                <div className="grid grid-cols-3 gap-2">
-                    {pad.map(k => (
-                        <button key={k} type="button" className={`min-h-touch-sm rounded-xl border ${p.border} bg-white font-semibold ${p.titleText}`}>{k}</button>
-                    ))}
+        <div className="flex flex-row" style={{ minHeight: '24rem' }}>
+            <div className="flex min-w-0 flex-1 flex-col p-5">
+                <InputField label="Cash Received" value="30" onChange={() => undefined} placeholder="0" />
+                <div className="mt-4 min-h-0 flex-1">
+                    <QuickNumpad value="30" onChange={() => undefined} allowDecimal quickValues={[100, 50, 20, 10]} className="h-full" />
                 </div>
             </div>
-            <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                    <button type="button" className="min-h-touch-sm rounded-xl border-2 border-green-500 bg-green-50 font-semibold text-green-700">Cash</button>
-                    <button type="button" className={`min-h-touch-sm rounded-xl border ${p.border} bg-white font-semibold ${p.subText}`}>Card</button>
+            <div className="flex flex-1 flex-col p-5">
+                <div className="mb-4 grid grid-cols-2 gap-3">
+                    <PaymentMethodButton selected method="cash" icon={Banknote} label="Cash" onClick={() => undefined} />
+                    <PaymentMethodButton selected={false} method="card" icon={CardIcon} label="Card" onClick={() => undefined} />
                 </div>
-                <div className={`space-y-2 rounded-xl border ${p.border} bg-white p-4 text-sm`}>
-                    <div className="flex justify-between"><span className={p.subText}>Total</span><b className={p.titleText}>€24.90</b></div>
-                    <div className="flex justify-between"><span className={p.subText}>Cash Received</span><b className={p.titleText}>€30.00</b></div>
-                    <div className="flex justify-between"><span className={p.subText}>Change Due</span><b className="text-green-600">€5.10</b></div>
+                <div className={`mb-4 border-t ${p.border}`} />
+                <div className="flex-1 space-y-3 text-sm">
+                    <div className="flex items-center justify-between"><span className={p.subText}>Total</span><span className={`${p.titleText} text-xl font-bold`}>€24.90</span></div>
+                    <div className="flex items-center justify-between"><span className={p.subText}>Cash Received</span><span className={`${p.titleText} font-semibold`}>€30.00</span></div>
+                    <div className="flex items-center justify-between"><span className={p.subText}>Change Due</span><span className="font-bold text-green-600">€5.10</span></div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                    <button type="button" className={`min-h-touch-xs rounded-xl border ${p.border} bg-white text-sm font-semibold ${p.subText}`}>− €2.50</button>
-                    <button type="button" className={`min-h-touch-xs rounded-xl border ${p.border} bg-white text-sm font-semibold ${p.subText}`}>NIF 123456789</button>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                    <button type="button" className={`flex min-h-touch-sm items-center justify-center gap-2 rounded-lg border ${p.border} bg-white font-semibold ${p.subText}`}>
+                        <Percent className="h-4 w-4" /> Discount
+                    </button>
+                    <button type="button" className={`flex min-h-touch-sm items-center justify-center gap-2 rounded-lg border ${p.border} bg-white font-semibold ${p.subText}`}>
+                        <UserSquare className="h-4 w-4" /> NIF 123456789
+                    </button>
+                </div>
+                <div className="mt-4">
+                    <ActionButton label="Confirm Payment" onClick={() => undefined} />
                 </div>
             </div>
         </div>
@@ -140,48 +159,73 @@ const PaymentBody: React.FC = () => {
 };
 
 const NifBody: React.FC = () => {
-    const { input, p } = useTokens();
+    const { p } = useTokens();
     return (
-        <div className="space-y-4 px-6 py-5">
-            <div className="grid grid-cols-2 gap-2">
-                <button type="button" className="min-h-touch-xs rounded-xl border-b-2 border-green-500 bg-white text-sm font-bold text-green-700">Existing customer</button>
-                <button type="button" className={`min-h-touch-xs rounded-xl bg-white text-sm font-semibold ${p.subText}`}>+ New customer</button>
+        <div className="flex h-full flex-col">
+            <div className="px-6 pb-4 pt-6">
+                <TabToggle
+                    options={[{ value: 'list', label: 'Existing customer' }, { value: 'new', label: '+ New customer' }]}
+                    value="list"
+                    onChange={() => undefined}
+                />
             </div>
-            <F label="Tax number (NIF)">
-                <input className={input} readOnly value="123456789" />
-            </F>
-            <div className={`flex items-center justify-between rounded-xl border ${p.border} bg-white px-4 py-3`}>
-                <div>
-                    <p className={`font-semibold ${p.titleText}`}>123456789</p>
-                    <p className={`text-xs ${p.subText}`}>Maria Silva · 6 orders</p>
+            <div className="space-y-4 px-6 pb-6">
+                <InputField icon={Search} placeholder="Search by NIF or name…" value="123456789" onChange={() => undefined} />
+                <div className={`rounded-xl border ${p.border} bg-white px-4 py-3`}>
+                    <div className="flex items-center justify-between gap-2">
+                        <p className={`truncate font-semibold ${p.titleText}`}>Maria Silva</p>
+                        <p className={`font-semibold ${p.titleText}`}>€342.50</p>
+                    </div>
+                    <div className={`mt-1 flex items-center space-x-3 ${p.subText} text-sm`}>
+                        <span>NIF 123456789</span>
+                        <span>·</span>
+                        <span>912 345 678</span>
+                        <span>·</span>
+                        <span>6 orders</span>
+                    </div>
                 </div>
-                <b className={p.titleText}>€342.50</b>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(k => (
-                    <button key={k} type="button" className={`min-h-touch-sm rounded-xl border ${p.border} bg-white font-semibold ${p.titleText}`}>{k}</button>
-                ))}
+                <div className={`rounded-xl border ${p.border} bg-white px-4 py-3`}>
+                    <div className="flex items-center justify-between gap-2">
+                        <p className={`truncate font-semibold ${p.titleText}`}>João Pereira</p>
+                        <p className={`font-semibold ${p.titleText}`}>€87.20</p>
+                    </div>
+                    <div className={`mt-1 flex items-center space-x-3 ${p.subText} text-sm`}>
+                        <span>NIF 987654321</span>
+                        <span>·</span>
+                        <span>963 456 789</span>
+                        <span>·</span>
+                        <span>2 orders</span>
+                    </div>
+                </div>
             </div>
         </div>
     );
 };
 
 const DiscountBody: React.FC = () => {
-    const { input, p } = useTokens();
+    const { cfg } = useTokens();
     return (
-        <div className="space-y-4 px-6 py-5">
-            <div className="grid grid-cols-4 gap-1.5">
-                {['Redeem', 'Preset', 'Percentage', 'Price'].map((tab, i) => (
-                    <button key={tab} type="button" className={`min-h-touch-xs rounded-xl text-sm font-semibold ${i === 0 ? 'border-b-2 border-green-500 text-green-700' : p.subText}`}>{tab}</button>
-                ))}
+        <div className={`flex flex-1 flex-col ${cfg ? '' : 'bg-gray-100'} px-8 pb-5 pt-6`}>
+            <div className="mb-5">
+                <TabToggle
+                    options={[
+                        { value: 'redeem', label: 'Redeem' },
+                        { value: 'preset', label: 'Preset' },
+                        { value: 'percentage', label: 'Percentage' },
+                        { value: 'fixed', label: 'Price' },
+                    ]}
+                    value="redeem"
+                    onChange={() => undefined}
+                />
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
-                <button type="button" className="min-h-touch-xs rounded-xl border-b-2 border-green-500 bg-white text-sm font-bold text-green-700">Voucher</button>
-                <button type="button" className={`min-h-touch-xs rounded-xl bg-white text-sm font-semibold ${p.subText}`}>Points</button>
+            <div className="space-y-5">
+                <TabToggle
+                    options={[{ value: 'voucher', label: 'Voucher' }, { value: 'points', label: 'Points' }]}
+                    value="voucher"
+                    onChange={() => undefined}
+                />
+                <InputField label="Voucher code" value="SUMMER10" onChange={() => undefined} />
             </div>
-            <F label="Voucher code">
-                <input className={input} readOnly value="SUMMER10" />
-            </F>
         </div>
     );
 };
@@ -516,11 +560,24 @@ const WeighBody: React.FC = () => {
     );
 };
 
+const ConfirmDangerBody: React.FC = () => {
+    const { p } = useTokens();
+    return (
+        <div className="px-6 py-6 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--ds2-danger-solid,#ef4444)] text-white">
+                <span className="text-2xl font-bold">✕</span>
+            </div>
+            <h3 className={`mt-4 text-lg font-bold ${p.titleText}`}>Delete item?</h3>
+            <p className={`mt-1.5 text-sm ${p.subText}`}>Are you sure you want to delete this item? This action cannot be undone.</p>
+        </div>
+    );
+};
+
 const ConfirmBody: React.FC = () => {
     const { p } = useTokens();
     return (
         <div className="px-6 py-6 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-400 text-white">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--ds2-warning-solid,#fbbf24)] text-white">
                 <span className="text-2xl font-bold">!</span>
             </div>
             <h3 className={`mt-4 text-lg font-bold ${p.titleText}`}>Add item?</h3>
@@ -534,7 +591,7 @@ const ConfirmBody: React.FC = () => {
 export const DIALOG_PREVIEWS: DialogPreviewSpec[] = [
     { key: 'cashdrawer', label: 'Cash drawer', title: 'Cash Drawer', subtitle: 'Counter 1', icon: Archive, Body: CashDrawerBody, Footer: twoButtonFooter('Confirm Drawer Closed', 'Open Without Sale') },
     { key: 'profile', label: 'My profile (clock in)', title: 'My Profile', subtitle: 'Clock in and out of your shift', icon: Clock, Body: ProfileBody, Footer: twoButtonFooter('Close', 'Clock In') },
-    { key: 'payment', label: 'Process payment', title: 'Process Payment', icon: CreditCard, Body: PaymentBody, Footer: twoButtonFooter('Cancel', 'Confirm Payment') },
+    { key: 'payment', label: 'Process payment', title: 'Process Payment', icon: CreditCard, Body: PaymentBody },
     { key: 'nif', label: 'Select customer (NIF)', title: 'Select Customer', icon: Users, Body: NifBody, Footer: twoButtonFooter('Cancel', 'Select') },
     { key: 'discount', label: 'Discount', title: 'Discount', icon: Tag, Body: DiscountBody, Footer: twoButtonFooter('Cancel', 'Apply') },
     { key: 'viewproduct', label: 'Product details', title: 'Product Details', icon: Package, Body: ViewProductBody, Footer: twoButtonFooter('Close', 'Edit Product') },
@@ -550,5 +607,6 @@ export const DIALOG_PREVIEWS: DialogPreviewSpec[] = [
     { key: 'invoice', label: 'Custom invoice', title: 'Custom Invoice', subtitle: 'Issue an invoice for free-text items', icon: FileText, Body: InvoiceBody, Footer: InvoiceFooter },
     { key: 'table', label: 'Add table', title: 'Add table', icon: Table2, Body: AddTableBody, Footer: twoButtonFooter('Cancel', 'Add') },
     { key: 'weigh', label: 'Weigh item (scale)', title: 'Queijo da Serra', subtitle: '18.90 €/kg', icon: Scale, Body: WeighBody, Footer: twoButtonFooter('Cancel', 'Authorize & add') },
-    { key: 'confirm', label: 'Confirmation (Add item?)', title: 'Add item?', bare: true, Body: ConfirmBody, Footer: twoButtonFooter('Cancel', 'Add') },
+    { key: 'confirm', label: 'Confirmation — confirm (Add item?)', title: 'Add item?', bare: true, Body: ConfirmBody, Footer: twoButtonFooter('Cancel', 'Add') },
+    { key: 'confirmDanger', label: 'Confirmation — delete (danger)', title: 'Delete item?', bare: true, Body: ConfirmDangerBody, Footer: dangerFooter('Cancel', 'Yes, delete') },
 ];

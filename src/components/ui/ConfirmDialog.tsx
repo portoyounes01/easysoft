@@ -46,7 +46,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     const icon = (
         <div
             className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full text-white ${
-                tone === 'danger' ? 'bg-red-500' : 'bg-amber-400'
+                tone === 'danger' ? 'bg-[var(--ds2-danger-solid,#ef4444)]' : 'bg-[var(--ds2-warning-solid,#fbbf24)]'
             }`}
         >
             {tone === 'danger' ? <X className="h-6 w-6" strokeWidth={3} /> : <span className="text-2xl font-bold">!</span>}
@@ -117,7 +117,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
                         disabled={busy}
                         onClick={onConfirm}
                         className={`min-h-touch-sm rounded-xl px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
-                            tone === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+                            tone === 'danger'
+                                ? 'bg-[var(--ds2-danger-solid,#dc2626)] hover:bg-[var(--ds2-danger-hover,#b91c1c)]'
+                                : 'bg-[var(--ds2-confirm-bg,#16a34a)] hover:bg-[var(--ds2-confirm-hover,#15803d)]'
                         }`}
                     >
                         {confirmLabel}

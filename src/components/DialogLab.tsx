@@ -23,7 +23,8 @@ import {
     type DialogStyleConfig,
 } from '../theme/dialogStyle';
 import { DIALOG_PREVIEWS, type DialogPreviewSpec } from './dialogLabPreviews';
-import { useDesignSystem2VisualStyleSafe } from '../contexts/DesignSystem2CustomizationContext';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 /**
  * Internal design tool: composes a dialog style from one variant per axis
@@ -191,7 +192,7 @@ const SamplePreview: React.FC<SamplePreviewProps> = ({ config, embedded, onClose
     const inputClass = `w-full bg-white outline-none transition ${DIALOG_CONTROL_CLASSES[config.controls]}`;
     const buttons = dialogButtonClasses(config);
     // Bare cards skip ConfiguredDialogShell, so inject the Appearances colour vars here.
-    const ds2Vars = useDesignSystem2VisualStyleSafe();
+    const { visualStyle: ds2Vars } = useDesignSystem2Customization();
 
     if (spec?.bare) {
         // Confirm-style card: no shell chrome, just the centred panel.
@@ -279,6 +280,7 @@ const DialogLab: React.FC = () => {
     const [fullscreenOpen, setFullscreenOpen] = useState(false);
     const [previewKey, setPreviewKey] = useState('sample');
     const applied = useAppliedDialogStyle();
+    const { visualStyle, prefs } = useDesignSystem2Customization();
     const previewSpec = DIALOG_PREVIEWS.find((entry) => entry.key === previewKey) ?? null;
 
     useEffect(() => {
@@ -482,7 +484,11 @@ const DialogLab: React.FC = () => {
                             ))}
                         </select>
                     </label>
-                    <div className="relative h-[30rem] overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100">
+                    <div
+                        className="ds2-visual-scope relative h-[30rem] overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100"
+                        style={visualStyle}
+                        data-ds2-neutral={prefs.neutralFamilyId}
+                    >
                         <SamplePreview config={config} embedded spec={previewSpec} />
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -526,7 +532,9 @@ const DialogLab: React.FC = () => {
             </div>
 
             {fullscreenOpen && (
-                <SamplePreview config={config} embedded={false} onClose={() => setFullscreenOpen(false)} spec={previewSpec} />
+                <div className="ds2-visual-scope" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
+                    <SamplePreview config={config} embedded={false} onClose={() => setFullscreenOpen(false)} spec={previewSpec} />
+                </div>
             )}
         </>
     );
