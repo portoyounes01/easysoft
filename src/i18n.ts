@@ -2542,6 +2542,16 @@ const resources = {
                 },
             },
             pos: {
+                options: {
+                    qty: 'Qty',
+                    increase: 'Increase',
+                    decrease: 'Decrease',
+                    addOns: 'Add-ons',
+                    notes: 'Notes',
+                    notesPlaceholder: 'e.g. Make the cheese more melted',
+                    total: 'Total',
+                    add: 'Add',
+                },
                 allMenu: 'All Menu',
                 myProfile: 'My Profile',
                 lastFiscalDocumentLabel: 'Last doc.:',
@@ -5226,6 +5236,16 @@ const resources = {
                 },
             },
             pos: {
+                options: {
+                    qty: 'Qtd',
+                    increase: 'Aumentar',
+                    decrease: 'Diminuir',
+                    addOns: 'Extras',
+                    notes: 'Notas',
+                    notesPlaceholder: 'ex.: Derreter mais o queijo',
+                    total: 'Total',
+                    add: 'Adicionar',
+                },
                 allMenu: 'Todo o Menu',
                 myProfile: 'O meu perfil',
                 lastFiscalDocumentLabel: 'Último doc.:',
@@ -7907,6 +7927,16 @@ const resources = {
                 }
             },
             "pos": {
+                "options": {
+                    "qty": "Cant.",
+                    "increase": "Aumentar",
+                    "decrease": "Disminuir",
+                    "addOns": "Extras",
+                    "notes": "Notas",
+                    "notesPlaceholder": "p. ej. Derretir más el queso",
+                    "total": "Total",
+                    "add": "Añadir"
+                },
                 "allMenu": "Todo el menú",
                 "myProfile": "Mi perfil",
                 "lastFiscalDocumentLabel": "Últ. doc.:",

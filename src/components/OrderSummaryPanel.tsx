@@ -19,6 +19,12 @@ export interface OrderSummaryItem {
     unit?: 'un' | 'kg';
     /** When false, + is disabled (e.g. stock max reached). Defaults to true if omitted. */
     canIncrement?: boolean;
+    /** Per-unit price including option deltas; defaults to product.price. */
+    unitPrice?: number;
+    /** Compact option summary ("Large, Extra Cheese") shown under the name. */
+    optionsSummary?: string;
+    /** Free-text line note from the item-options dialog. */
+    notes?: string | null;
 }
 
 export interface OrderSummaryPanelProps {
@@ -111,13 +117,13 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
 
     // 3. Computed values
     const subtotal = useMemo(() => {
-        return items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+        return items.reduce((sum, item) => sum + (item.unitPrice ?? item.product.price) * item.quantity, 0);
     }, [items]);
 
     const tax = useMemo(() => {
         return items.reduce((sum, item) => {
             const rate = item.product.iva_rate || 0;
-            const total = item.product.price * item.quantity;
+            const total = (item.unitPrice ?? item.product.price) * item.quantity;
             const taxAmount = total - total / (1 + rate);
             return sum + taxAmount;
         }, 0);
@@ -232,6 +238,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                         const showStepper = Boolean(onDecrementCartLine || onIncrementCartLine);
                                         const isWeighed = ci.unit === 'kg';
                                         const canInc = ci.canIncrement !== false;
+                                        const unitPrice = ci.unitPrice ?? ci.product.price;
                                         const lineDetails = (
                                             <div className="min-w-[7rem] flex-1">
                                                 <div className="flex items-center justify-between gap-2">
@@ -242,11 +249,17 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                                     >
                                                         {ci.product.name}
                                                     </p>
-                                                    <p className="font-semibold text-gray-900 whitespace-nowrap shrink-0" style={{ fontSize: '1.5vh' }}>{formatCurrency(ci.product.price * ci.quantity)}</p>
+                                                    <p className="font-semibold text-gray-900 whitespace-nowrap shrink-0" style={{ fontSize: '1.5vh' }}>{formatCurrency(unitPrice * ci.quantity)}</p>
                                                 </div>
+                                                {ci.optionsSummary && (
+                                                    <p className="text-gray-500" style={{ fontSize: '1.3vh', paddingLeft: '0.5vh' }}>{ci.optionsSummary}</p>
+                                                )}
+                                                {ci.notes && (
+                                                    <p className="italic text-gray-400" style={{ fontSize: '1.25vh', paddingLeft: '0.5vh' }}>“{ci.notes}”</p>
+                                                )}
                                                 <div className="text-gray-500" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '0.5vh' }}>
                                                     <span style={{ fontSize: '1.3vh' }}>
-                                                        {formatCurrency(ci.product.price)}
+                                                        {formatCurrency(unitPrice)}
                                                         {isWeighed ? '/kg' : ''}
                                                     </span>
                                                 </div>

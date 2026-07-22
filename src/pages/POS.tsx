@@ -16,7 +16,7 @@ import {
   RefreshCw,
   Menu,
 } from 'lucide-react';
-import { usePOS } from '../contexts/POSContext';
+import { usePOS, cartLineUnitPrice, cartLineOptionsSummary, type CartLineOptions } from '../contexts/POSContext';
 import { syncManager } from '../services/syncManager';
 import { queueTicketService } from '../services/queueTicketService';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
@@ -25,6 +25,7 @@ import { useProducts } from '../contexts/ProductsContext';
 import OrderSummaryPanel, { type ServiceType } from '../components/OrderSummaryPanel';
 import DiscountDialog from '../components/DiscountDialog';
 import WeighDialog from '../components/WeighDialog';
+import ProductOptionsDialog from '../components/ProductOptionsDialog';
 import ScaleStatusIndicator from '../components/ScaleStatusIndicator';
 import scaleService from '../services/scaleService';
 import { LocalProduct, LocalCustomer } from '../types/supabase';
@@ -72,6 +73,7 @@ const POSInner: React.FC = () => {
   const {
     cart,
     addToCart,
+    addOptionedToCart,
     addWeighedToCart,
     clearCart,
     updateQuantity,
@@ -122,6 +124,7 @@ const POSInner: React.FC = () => {
 
   // Weigh-item dialog (sold-by-weight products)
   const [weighProduct, setWeighProduct] = useState<LocalProduct | null>(null);
+  const [optionsProduct, setOptionsProduct] = useState<LocalProduct | null>(null);
 
   // Till-scoped scale session: the scale is per-till hardware (like the
   // printer), so detection/polling runs from POS mount onward — NOT per
@@ -183,12 +186,24 @@ const POSInner: React.FC = () => {
     return Math.max(0, Number((product.stock - cartQuantityForProduct(product.id)).toFixed(3)));
   };
 
+  /** Variants with at least one enabled option, or enabled add-ons, route
+   *  the tap through the item-options dialog instead of a direct add. */
+  const productHasOptions = (product: LocalProduct): boolean =>
+    (product.variants ?? []).some(attr => attr.enabled && attr.options.some(o => o.enabled)) ||
+    (product.modifiers ?? []).some(m => m.enabled);
+
   // Enhanced addToCart with stock validation
   const handleAddToCart = (product: LocalProduct, quantity = 1) => {
     // Weighed products go through the scale dialog instead of quantity 1.
     if (product.sold_by_weight) {
       if (canAddToCart(product)) {
         setWeighProduct(product);
+      }
+      return;
+    }
+    if (productHasOptions(product)) {
+      if (canAddToCart(product, quantity)) {
+        setOptionsProduct(product);
       }
       return;
     }
@@ -511,7 +526,7 @@ const POSInner: React.FC = () => {
 
 
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const subtotal = cart.reduce((sum, item) => sum + (cartLineUnitPrice(item) * item.quantity), 0);
   const requestedDiscountAmount = discount.type === 'percentage'
     ? (subtotal * discount.value / 100)
     : discount.type === 'fixed'
@@ -523,7 +538,7 @@ const POSInner: React.FC = () => {
 
   // Calculate tax extracted from tax-inclusive prices (European style)
   const tax = cart.reduce((sum, item) => {
-    const itemTotal = item.product.price * item.quantity;
+    const itemTotal = cartLineUnitPrice(item) * item.quantity;
     const taxAmount = itemTotal - (itemTotal / (1 + item.product.iva_rate));
     return sum + taxAmount;
   }, 0);
@@ -903,6 +918,9 @@ const POSInner: React.FC = () => {
           lineId: item.lineId,
           product: item.product,
           quantity: item.quantity,
+          unitPrice: cartLineUnitPrice(item),
+          optionsSummary: item.options ? cartLineOptionsSummary(item.options) : undefined,
+          notes: item.options?.notes ?? null,
           unit: item.product.sold_by_weight ? ('kg' as const) : ('un' as const),
           canIncrement:
             !item.product.sold_by_weight &&
@@ -940,6 +958,14 @@ const POSInner: React.FC = () => {
         }}
         fiscalChainHint={lastFiscalInvoiceNo ?? undefined}
       />
+
+      {optionsProduct && (
+        <ProductOptionsDialog
+          product={optionsProduct}
+          onClose={() => setOptionsProduct(null)}
+          onAdd={(quantity: number, options: CartLineOptions) => addOptionedToCart(optionsProduct, quantity, options)}
+        />
+      )}
 
       <WeighDialog
         product={weighProduct}
@@ -1163,12 +1189,12 @@ const POSInner: React.FC = () => {
                 customer: buildReceiptCustomerProps(selectedCustomer),
                 items: cartSnapshot.map((ci) => ({
                   id: ci.lineId,
-                  description: ci.product.name,
+                  description: ci.options ? `${ci.product.name} (${cartLineOptionsSummary(ci.options)})` : ci.product.name,
                   quantity: ci.quantity,
                   unit: ci.product.sold_by_weight ? ('kg' as const) : ('un' as const),
-                  unitPrice: ci.product.price,
+                  unitPrice: cartLineUnitPrice(ci),
                   vatRate: Math.round((ci.product.iva_rate || 0) * 100),
-                  total: Number((ci.product.price * ci.quantity).toFixed(2)),
+                  total: Number((cartLineUnitPrice(ci) * ci.quantity).toFixed(2)),
                 })),
                 totals: {
                   subtotal: Number(subtotal.toFixed(2)),

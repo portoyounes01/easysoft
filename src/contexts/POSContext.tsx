@@ -11,14 +11,37 @@ import type { SystemSettings, DeepPartial } from './SettingsContext';
 import { runFiscalCheckout, type FiscalCheckoutResult, type FiscalCartLine } from '../fiscal/checkoutOrchestrator';
 import { localTransactionToServerInsert, localTransactionItemsToServerInsert } from '../fiscal/pushServer';
 
+/** Options chosen in the POS item-options dialog for one cart line. */
+export interface CartLineOptions {
+  /** One selected option per enabled variant attribute (e.g. Size -> Large). */
+  selections: { attribute: string; option: string; priceDelta: number }[];
+  /** Chosen priced add-ons (enabled modifiers). */
+  addOns: { name: string; priceDelta: number }[];
+  notes: string | null;
+  /** Per-unit sum of selection + add-on deltas (folded into the unit price). */
+  priceDelta: number;
+}
+
 export interface CartLine {
   /** Line identity. Unit products use product.id (same-product taps merge);
-   *  weighed products get a unique id per weighing (separate lines). */
+   *  weighed products get a unique id per weighing (separate lines);
+   *  optioned products share a line per identical option combination. */
   lineId: string;
   product: LocalProduct;
   /** Units for unit products; kg (3 decimals) for weighed products. */
   quantity: number;
   discount: number;
+  options?: CartLineOptions;
+}
+
+/** Per-unit price of a cart line: product price + selected option deltas. */
+export function cartLineUnitPrice(line: CartLine): number {
+  return line.product.price + (line.options?.priceDelta ?? 0);
+}
+
+/** Compact "Large, Extra Cheese" summary for receipts and the cart panel. */
+export function cartLineOptionsSummary(options: CartLineOptions): string {
+  return [...options.selections.map(sel => sel.option), ...options.addOns.map(a => a.name)].join(', ');
 }
 
 /** The mutable table-order session currently loaded into the POS cart. */
@@ -38,6 +61,7 @@ interface POSState {
 
 interface POSContextType extends POSState {
   addToCart: (product: LocalProduct, quantity?: number) => void;
+  addOptionedToCart: (product: LocalProduct, quantity: number, options: CartLineOptions) => void;
   /** Adds one weighed line (kg). Never merges with existing lines. */
   addWeighedToCart: (product: LocalProduct, weightKg: number) => void;
   removeFromCart: (lineId: string) => void;
@@ -85,7 +109,7 @@ interface POSContextType extends POSState {
 const POSContext = createContext<POSContextType | undefined>(undefined);
 
 type POSAction =
-  | { type: 'ADD_TO_CART'; payload: { product: LocalProduct; quantity: number; lineId: string; merge: boolean } }
+  | { type: 'ADD_TO_CART'; payload: { product: LocalProduct; quantity: number; lineId: string; merge: boolean; options?: CartLineOptions } }
   | { type: 'REMOVE_FROM_CART'; payload: string }
   | { type: 'UPDATE_QUANTITY'; payload: { lineId: string; quantity: number } }
   | { type: 'APPLY_DISCOUNT'; payload: { lineId: string; discount: number } }
@@ -99,7 +123,7 @@ type POSAction =
 const posReducer = (state: POSState, action: POSAction): POSState => {
   switch (action.type) {
     case 'ADD_TO_CART': {
-      const { product, quantity, lineId, merge } = action.payload;
+      const { product, quantity, lineId, merge, options } = action.payload;
       const existingItem = merge ? state.cart.find(item => item.lineId === lineId) : undefined;
       if (existingItem) {
         return {
@@ -113,7 +137,7 @@ const posReducer = (state: POSState, action: POSAction): POSState => {
       }
       return {
         ...state,
-        cart: [...state.cart, { lineId, product, quantity, discount: 0 }]
+        cart: [...state.cart, { lineId, product, quantity, discount: 0, ...(options ? { options } : {}) }]
       };
     }
     case 'REMOVE_FROM_CART':
@@ -193,6 +217,20 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addToCart = (product: LocalProduct, quantity = 1) => {
     // Unit products keep the historical merge-by-product semantics.
     dispatchPos({ type: 'ADD_TO_CART', payload: { product, quantity, lineId: product.id, merge: true } });
+  };
+
+  const addOptionedToCart = (product: LocalProduct, quantity: number, options: CartLineOptions) => {
+    // Identical option combinations merge into one line; the signature is
+    // order-stable because the dialog emits selections/add-ons in config order.
+    const signature = JSON.stringify({
+      s: options.selections.map(sel => sel.option),
+      a: options.addOns.map(a => a.name),
+      n: options.notes,
+    });
+    let hash = 0;
+    for (let i = 0; i < signature.length; i++) hash = (hash * 31 + signature.charCodeAt(i)) | 0;
+    const lineId = `${product.id}::opt${hash}`;
+    dispatchPos({ type: 'ADD_TO_CART', payload: { product, quantity, lineId, merge: true, options } });
   };
 
   const weighedLineSeq = useRef(0);
@@ -290,7 +328,17 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const cartForSale: FiscalCartLine[] = overrides
           ? overrides.cart
           : stateRef.current.cart.map(ci => ({
-              product: ci.product,
+              // Optioned lines snapshot the product with the deltas folded into
+              // the price and the selection appended to the name, so every
+              // fiscal issuer (AT chain, Vendus, fiskaly…) prices and prints
+              // the configured item without knowing about options.
+              product: ci.options
+                ? {
+                    ...ci.product,
+                    price: cartLineUnitPrice(ci),
+                    name: `${ci.product.name} (${cartLineOptionsSummary(ci.options)})`,
+                  }
+                : ci.product,
               quantity: ci.quantity,
               discount: ci.discount,
             }));
@@ -404,19 +452,19 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Calculate transaction totals
       // Subtotal should be the original amount before ANY discounts (individual or global)
       const originalSubtotal = stateRef.current.cart.reduce((sum, item) => {
-        const itemTotal = item.product.price * item.quantity;
+        const itemTotal = cartLineUnitPrice(item) * item.quantity;
         return sum + itemTotal;
       }, 0);
 
       // Calculate after individual item discounts but before global discount
       const subtotalAfterItemDiscounts = stateRef.current.cart.reduce((sum, item) => {
-        const itemTotal = item.product.price * item.quantity;
+        const itemTotal = cartLineUnitPrice(item) * item.quantity;
         const discountAmount = (itemTotal * item.discount) / 100;
         return sum + (itemTotal - discountAmount);
       }, 0);
 
       const totalTax = stateRef.current.cart.reduce((sum, item) => {
-        const itemTotal = item.product.price * item.quantity;
+        const itemTotal = cartLineUnitPrice(item) * item.quantity;
         const discountAmount = (itemTotal * item.discount) / 100;
         const discountedTotal = itemTotal - discountAmount;
         return sum + calculateTaxAmount(discountedTotal, item.product.iva_rate);
@@ -466,22 +514,23 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Create transaction items
       const transactionItems = stateRef.current.cart.map(item => {
-        const itemTotal = item.product.price * item.quantity;
+        const unitPrice = cartLineUnitPrice(item);
+        const itemTotal = unitPrice * item.quantity;
         const discountAmount = (itemTotal * item.discount) / 100;
         const discountedTotal = itemTotal - discountAmount;
         const taxAmount = calculateTaxAmount(discountedTotal, item.product.iva_rate);
-        const basePrice = calculatePriceWithoutTax(item.product.price, item.product.iva_rate);
+        const basePrice = calculatePriceWithoutTax(unitPrice, item.product.iva_rate);
         const profitAmount = (basePrice - item.product.cost) * item.quantity;
 
         return {
           product_id: item.product.id,
-          product_name: item.product.name,
+          product_name: item.options ? `${item.product.name} (${cartLineOptionsSummary(item.options)})` : item.product.name,
           product_sku: item.product.sku,
           category_id: item.product.category_id,
           category_name: item.product.category_name,
           quantity: item.quantity,
           unit: item.product.sold_by_weight ? ('kg' as const) : ('un' as const),
-          unit_price: item.product.price,
+          unit_price: unitPrice,
           unit_cost: item.product.cost,
           iva_rate: item.product.iva_rate,
           line_total: discountedTotal,
@@ -630,6 +679,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <POSContext.Provider value={{
       ...state,
       addToCart,
+      addOptionedToCart,
       addWeighedToCart,
       removeFromCart,
       updateQuantity,

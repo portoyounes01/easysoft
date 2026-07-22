@@ -452,6 +452,15 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                                 className={fieldClass}
                                 placeholder={t('products.wizard.modifierName')}
                             />
+                            <div className="relative w-36 shrink-0">
+                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">{currency}</span>
+                                <input
+                                    type="number" step="any"
+                                    value={modifier.price_delta}
+                                    onChange={e => setModifiers(prev => prev.map(m => m.id === modifier.id ? { ...m, price_delta: Number(e.target.value) || 0 } : m))}
+                                    className={`${fieldClass} pl-8`}
+                                />
+                            </div>
                             <button type="button" aria-label={t('common.delete')} onClick={() => setModifiers(prev => prev.filter(m => m.id !== modifier.id))} className="flex min-h-touch-xs min-w-[2.5rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600">
                                 <Trash2 className="h-4 w-4" />
                             </button>
@@ -459,7 +468,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                     ))}
                     <button
                         type="button"
-                        onClick={() => setModifiers(prev => [...prev, { id: generateUUID(), name: '', enabled: true }])}
+                        onClick={() => setModifiers(prev => [...prev, { id: generateUUID(), name: '', price_delta: 0, enabled: true }])}
                         className="flex min-h-touch-sm w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50"
                     >
                         <Plus className="h-4 w-4" /> {t('products.wizard.addModifier')}

@@ -99,6 +99,26 @@ async function seedDemoCatalog(): Promise<void> {
         supplier: null, location: null, is_active: true, display_order: 2, deleted_at: null,
     });
     await productService.createProduct({
+        name: 'Double Cheeseburger', description: 'Two juicy patties, melted cheese, crisp lettuce and fresh tomatoes.',
+        sku: 'BRG-DBL-004', barcode: null, category_id: bakeryId, category_name: 'Bakery',
+        price: 7.25, cost: 2.4, iva_rate: 0.13, stock: 0, min_stock: 0, track_stock: false,
+        sold_by_weight: false, image_url: null, supplier: null, location: null, is_active: true,
+        display_order: 4, deleted_at: null,
+        takeaway_price: 7.99,
+        variants: [{
+            id: 'attr-size', name: 'Size', enabled: true,
+            options: [
+                { id: 'opt-regular', name: 'Regular', price_delta: 0, enabled: true },
+                { id: 'opt-large', name: 'Large', price_delta: 2, enabled: true },
+            ],
+        }],
+        modifiers: [
+            { id: 'mod-onions', name: 'Extra onions', price_delta: 3, enabled: true },
+            { id: 'mod-cheese', name: 'Extra Cheese', price_delta: 3, enabled: true },
+            { id: 'mod-egg', name: 'Extra Fried Egg', price_delta: 3, enabled: true },
+        ],
+    });
+    await productService.createProduct({
         name: 'Queijo da Serra', description: 'Sold by weight', sku: 'DEL-QDS-003', barcode: null,
         category_id: bakeryId, category_name: 'Bakery', price: 18.9, cost: 9.5, iva_rate: 0.06,
         stock: 0, min_stock: 0, track_stock: false, sold_by_weight: true, image_url: null,

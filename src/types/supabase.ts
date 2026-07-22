@@ -194,6 +194,10 @@ export interface ProductRow {
     location: string | null;
     is_active: boolean;
     display_order: number;
+    /** Optional: rows synced before migration 20260731000000 lack these. */
+    takeaway_price?: number | null;
+    variants?: ProductVariantAttribute[] | null;
+    modifiers?: ProductModifier[] | null;
     created_at: string; // ISO timestamp
     updated_at: string; // ISO timestamp
     last_synced_at: string | null; // ISO timestamp
@@ -498,10 +502,11 @@ export interface ProductVariantAttribute {
     options: ProductVariantOption[];
 }
 
-/** A toggleable modifier (e.g. Cheese, Sauce) configured on a product. */
+/** A toggleable, priced add-on (e.g. Extra Cheese +3.00) configured on a product. */
 export interface ProductModifier {
     id: string;
     name: string;
+    price_delta: number;
     enabled: boolean;
 }
 
@@ -515,13 +520,6 @@ export interface LocalProduct extends Omit<ProductRow, 'created_at' | 'updated_a
     // Sync flags
     needs_push: boolean;
     is_conflicted: boolean;
-
-    // ⚠ Add Product wizard fields — LOCAL-ONLY until the products table gains
-    // matching columns (they ride along in queued sync payloads, where the
-    // upsert RPC ignores unknown keys, but are NOT persisted in Supabase).
-    takeaway_price?: number | null;
-    variants?: ProductVariantAttribute[] | null;
-    modifiers?: ProductModifier[] | null;
 }
 
 // Sync operation queue items
