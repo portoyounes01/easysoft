@@ -4,7 +4,7 @@ import { Check, ChevronDown, ChevronUp, Package, Plus, Search, Trash2, X } from 
 
 import { useSettings } from '../contexts/SettingsContext';
 import { getCountryProfile } from '../lib/countryProfile';
-import { ivaRatesForCountry, type LocalCategory, type ProductModifier, type ProductVariantAttribute } from '../types/supabase';
+import { ivaRatesForCountry, type LocalCategory, type LocalProduct, type ProductModifier, type ProductVariantAttribute } from '../types/supabase';
 import type { LocalRawMaterial } from '../types/rawMaterial';
 import { categoryService, DEFAULT_GENERAL_CATEGORY_ID, productService } from '../services/productService';
 import { rawMaterialService } from '../services/rawMaterialService';
@@ -34,6 +34,8 @@ interface ProductWizardProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    /** When set, the wizard edits this product in place (no draft/confirm step). */
+    product?: LocalProduct | null;
 }
 
 interface IngredientRow {
@@ -51,7 +53,8 @@ function suggestSku(name: string): string {
     return `${slug}-${String(Math.floor(Math.random() * 900) + 100)}`;
 }
 
-const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSuccess }) => {
+const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSuccess, product = null }) => {
+    const editing = product !== null;
     const { t } = useTranslation();
     const applied = useAppliedDialogStyle();
     const { settings } = useSettings();
@@ -73,6 +76,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
 
     const [price, setPrice] = useState<number | null>(null);
     const [takeawayPrice, setTakeawayPrice] = useState<number | null>(null);
+    const [cost, setCost] = useState<number | null>(null);
     const [ivaRate, setIvaRate] = useState<number>(defaultIvaRate);
 
     const [variants, setVariants] = useState<ProductVariantAttribute[]>([]);
@@ -90,20 +94,38 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
 
     useEffect(() => {
         if (!isOpen) return;
-        // Fresh run every time the wizard opens.
+        // Fresh run every time the wizard opens; edit mode prefills from the product.
         setStep(0);
-        setImageUrl(''); setIsActive(true); setName(''); setSku(''); setSkuTouched(false);
-        setDescription(''); setCategoryId('');
-        setPrice(null); setTakeawayPrice(null); setIvaRate(defaultIvaRate);
-        setVariants([]); setExpandedAttrs(new Set()); setModifiers([]);
+        setImageUrl(product?.image_url ?? '');
+        setIsActive(product?.is_active ?? true);
+        setName(product?.name ?? '');
+        setSku(product?.sku ?? '');
+        setSkuTouched(product !== null);
+        setDescription(product?.description ?? '');
+        setCategoryId(product?.category_id ?? '');
+        setPrice(product ? product.price : null);
+        setTakeawayPrice(product?.takeaway_price ?? null);
+        setCost(product ? product.cost : null);
+        setIvaRate(product?.iva_rate ?? defaultIvaRate);
+        setVariants(product?.variants ?? []);
+        setExpandedAttrs(new Set());
+        setModifiers(product?.modifiers ?? []);
         setUnlimited(false); setIngredients([]); setIngredientSearch('');
         setErrors({}); setConfirmOpen(false); setSaveError('');
         void (async () => {
             await categoryService.ensureDefaultGeneralCategory();
             setCategories((await categoryService.getAllCategories()).filter((c: LocalCategory) => c.deleted_at === null && c.is_active));
             setMaterials(await rawMaterialService.list());
+            if (product) {
+                const lines = await recipeService.getForProduct(product.id);
+                setIngredients(
+                    lines
+                        .filter(line => line.material)
+                        .map(line => ({ material: line.material as LocalRawMaterial, qty: line.quantity_per_unit }))
+                );
+            }
         })();
-    }, [isOpen, defaultIvaRate]);
+    }, [isOpen, product, defaultIvaRate]);
 
     const fieldClass = applied
         ? `w-full bg-white outline-none ${DIALOG_CONTROL_CLASSES[applied.controls]}`
@@ -154,38 +176,57 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
         setSaveError('');
         try {
             const category = categories.find(c => c.id === (categoryId || DEFAULT_GENERAL_CATEGORY_ID));
-            const productId = await productService.createProduct({
+            const sharedFields = {
                 name: name.trim(),
                 description: description.trim() || null,
                 sku: sku.trim(),
-                barcode: null,
                 category_id: category?.id ?? null,
                 category_name: category?.name ?? null,
                 price: price ?? 0,
-                cost: 0,
+                cost: cost ?? 0,
                 iva_rate: ivaRate,
-                stock: 0,
-                min_stock: 0,
-                track_stock: false,
-                sold_by_weight: false,
                 image_url: imageUrl || null,
-                supplier: null,
-                location: null,
                 is_active: asDraft ? false : isActive,
-                display_order: 0,
-                deleted_at: null,
                 takeaway_price: takeawayPrice,
                 variants: variants.length ? variants : null,
                 modifiers: modifiers.length ? modifiers : null,
-            });
-            if (!unlimited) {
-                for (const row of ingredients) {
-                    if (row.qty > 0) {
-                        await recipeService.upsertLine(productId, row.material.id, row.qty);
-                    }
-                }
-                if (ingredients.length) await recipeService.syncProductCost(productId);
+            };
+
+            let productId: string;
+            if (editing && product) {
+                productId = product.id;
+                await productService.updateProduct(productId, sharedFields);
+            } else {
+                productId = await productService.createProduct({
+                    ...sharedFields,
+                    barcode: null,
+                    stock: 0,
+                    min_stock: 0,
+                    track_stock: false,
+                    sold_by_weight: false,
+                    supplier: null,
+                    location: null,
+                    display_order: 0,
+                    deleted_at: null,
+                });
             }
+
+            // Reconcile recipe lines with the ingredients step: desired rows are
+            // upserted, rows removed in the dialog (or all, when availability is
+            // unlimited) are deleted, and the recipe cost re-syncs when lines exist.
+            const existingLines = editing ? await recipeService.getForProduct(productId) : [];
+            const desired = unlimited ? [] : ingredients.filter(row => row.qty > 0);
+            const desiredIds = new Set(desired.map(row => row.material.id));
+            for (const line of existingLines) {
+                if (!desiredIds.has(line.raw_material_id)) {
+                    await recipeService.removeLine(line.id);
+                }
+            }
+            for (const row of desired) {
+                await recipeService.upsertLine(productId, row.material.id, row.qty);
+            }
+            if (desired.length) await recipeService.syncProductCost(productId);
+
             setConfirmOpen(false);
             onSuccess();
             onClose();
@@ -209,25 +250,30 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
 
     // ---- Stepper -----------------------------------------------------------
 
-    const doneClass = `bg-[var(--ds2-confirm-bg,#22c55e)] text-white`;
+    const accent = 'bg-[var(--ds2-confirm-bg,#22c55e)]';
     const stepper = (
         <div className="border-b border-slate-200 px-6 pb-4 pt-2">
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4">
                 {STEP_KEYS.map((key, index) => {
                     const state = index < step ? 'done' : index === step ? 'current' : 'todo';
                     return (
-                        <button type="button" key={key} onClick={() => goTo(index)} className="group text-center">
-                            <div className="relative mb-2 flex items-center justify-center">
+                        <button type="button" key={key} onClick={() => goTo(index)} className="group px-1 text-center">
+                            <div className="relative mb-2 flex h-6 items-center justify-center">
+                                {/* connector halves: the segment between steps i-1 and i is
+                                    coloured once step i is reached (reference behaviour) */}
                                 {index > 0 && (
-                                    <span className={`absolute right-1/2 top-1/2 -z-10 h-0.5 w-full -translate-y-1/2 ${index <= step ? 'bg-[var(--ds2-confirm-bg,#22c55e)]' : 'bg-slate-200'}`} />
+                                    <span className={`absolute left-0 right-1/2 top-1/2 h-0.5 -translate-y-1/2 ${index <= step ? accent : 'bg-slate-200'}`} />
+                                )}
+                                {index < STEP_KEYS.length - 1 && (
+                                    <span className={`absolute left-1/2 right-0 top-1/2 h-0.5 -translate-y-1/2 ${index < step ? accent : 'bg-slate-200'}`} />
                                 )}
                                 <span
-                                    className={`flex h-6 w-6 items-center justify-center rounded-full border-2 bg-white text-xs ${
+                                    className={`relative z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 text-xs ${
                                         state === 'done'
-                                            ? `border-transparent ${doneClass}`
+                                            ? `border-transparent text-white ${accent}`
                                             : state === 'current'
-                                                ? 'border-[var(--ds2-confirm-bg,#22c55e)]'
-                                                : 'border-slate-200'
+                                                ? 'border-[var(--ds2-confirm-bg,#22c55e)] bg-white'
+                                                : 'border-slate-200 bg-white'
                                     }`}
                                 >
                                     {state === 'done' ? <Check className="h-3.5 w-3.5" /> : state === 'current' ? <span className="h-2 w-2 rounded-full bg-[var(--ds2-confirm-bg,#22c55e)]" /> : null}
@@ -318,6 +364,17 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                     placeholder="0.00"
                 />
                 {errors.price && <p className="mt-1.5 text-xs text-red-600">{errors.price}</p>}
+            </div>
+            <div>
+                <span className={labelClass}>{t('products.form.cost')} ({currency})</span>
+                <input
+                    type="number" step="any" min="0"
+                    value={cost ?? ''}
+                    onChange={e => setCost(e.target.value === '' ? null : Number(e.target.value))}
+                    className={fieldClass}
+                    placeholder="0.00"
+                />
+                <p className="mt-1.5 text-xs text-slate-400">{t('products.wizard.costHint')}</p>
             </div>
             <div>
                 <span className={labelClass}>{t('products.wizard.takeawayPriceLabel', { currency })}</span>
@@ -558,10 +615,14 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
 
     const isLast = step === STEP_KEYS.length - 1;
     const primaryAction = () => {
-        if (isLast) {
-            setConfirmOpen(true);
-        } else {
+        if (!isLast) {
             goTo(step + 1);
+            return;
+        }
+        if (editing) {
+            void persist(false);
+        } else {
+            setConfirmOpen(true);
         }
     };
 
@@ -574,14 +635,16 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
     const footer = (
         <div className={buttons ? buttons.container : 'flex justify-end gap-3'}>
             <button type="button" onClick={onClose} className={buttons ? buttons.secondary : legacyBtn.text}>{t('common.cancel')}</button>
-            <button type="button" disabled={saving} onClick={saveDraft} className={`${buttons ? buttons.secondary : legacyBtn.outline} disabled:cursor-not-allowed disabled:opacity-50`}>
-                {t('products.wizard.saveDraft')}
-            </button>
+            {!editing && (
+                <button type="button" disabled={saving} onClick={saveDraft} className={`${buttons ? buttons.secondary : legacyBtn.outline} disabled:cursor-not-allowed disabled:opacity-50`}>
+                    {t('products.wizard.saveDraft')}
+                </button>
+            )}
             {step > 0 && (
                 <button type="button" onClick={() => goTo(step - 1)} className={buttons ? buttons.secondary : legacyBtn.outline}>{t('products.wizard.back')}</button>
             )}
             <button type="button" disabled={saving} onClick={primaryAction} className={`${buttons ? buttons.primary : legacyBtn.primary} disabled:cursor-not-allowed disabled:opacity-50`}>
-                {isLast ? t('products.wizard.add') : t('products.wizard.next')}
+                {isLast ? (editing ? t('products.wizard.save') : t('products.wizard.add')) : t('products.wizard.next')}
             </button>
         </div>
     );
@@ -605,7 +668,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
             <>
                 <ConfiguredDialogShell
                     config={applied}
-                    title={t('products.wizard.title')}
+                    title={editing ? t('products.wizard.editTitle') : t('products.wizard.title')}
                     icon={Package}
                     onClose={onClose}
                     overlayClassName="z-[80]"
@@ -628,7 +691,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                     onClick={event => event.stopPropagation()}
                 >
                     <div className="relative border-b bg-gray-100 px-6 py-4">
-                        <h2 className="text-center text-xl font-bold text-gray-900">{t('products.wizard.title')}</h2>
+                        <h2 className="text-center text-xl font-bold text-gray-900">{editing ? t('products.wizard.editTitle') : t('products.wizard.title')}</h2>
                         <button type="button" onClick={onClose} aria-label={t('common.cancel')} className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-gray-500 hover:bg-gray-200">
                             <X className="h-5 w-5" />
                         </button>
