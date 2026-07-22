@@ -33,6 +33,7 @@ import { ActionButton } from './ui/ActionButton';
 import { TabToggle } from './ui/TabToggle';
 import { PaymentMethodButton } from './ui/PaymentMethodButton';
 import QuickNumpad from './QuickNumpad';
+import SimpleNumpad from './SimpleNumpad';
 
 /**
  * Static replicas of every dialog family in the app, with realistic sample
@@ -169,32 +170,35 @@ const NifBody: React.FC = () => {
                     onChange={() => undefined}
                 />
             </div>
-            <div className="space-y-4 px-6 pb-6">
-                <InputField icon={Search} placeholder="Search by NIF or name…" value="123456789" onChange={() => undefined} />
-                <div className={`rounded-xl border ${p.border} bg-white px-4 py-3`}>
-                    <div className="flex items-center justify-between gap-2">
-                        <p className={`truncate font-semibold ${p.titleText}`}>Maria Silva</p>
-                        <p className={`font-semibold ${p.titleText}`}>€342.50</p>
-                    </div>
-                    <div className={`mt-1 flex items-center space-x-3 ${p.subText} text-sm`}>
-                        <span>NIF 123456789</span>
-                        <span>·</span>
-                        <span>912 345 678</span>
-                        <span>·</span>
-                        <span>6 orders</span>
+            <div className="grid gap-5 px-6 pb-6 sm:grid-cols-2">
+                <div className="flex flex-col gap-4">
+                    <InputField icon={Search} placeholder="Search by NIF or name…" value="123456789" onChange={() => undefined} />
+                    <div className="min-h-56 flex-1">
+                        <SimpleNumpad value="123456789" onChange={() => undefined} className="h-full" />
                     </div>
                 </div>
-                <div className={`rounded-xl border ${p.border} bg-white px-4 py-3`}>
-                    <div className="flex items-center justify-between gap-2">
-                        <p className={`truncate font-semibold ${p.titleText}`}>João Pereira</p>
-                        <p className={`font-semibold ${p.titleText}`}>€87.20</p>
+                <div className="space-y-3">
+                    <div className={`rounded-xl border ${p.border} bg-white px-4 py-3`}>
+                        <div className="flex items-center justify-between gap-2">
+                            <p className={`truncate font-semibold ${p.titleText}`}>123456789</p>
+                            <p className={`font-semibold ${p.titleText}`}>€342.50</p>
+                        </div>
+                        <div className={`mt-1 flex items-center space-x-3 ${p.subText} text-sm`}>
+                            <span>Maria Silva</span>
+                            <span>·</span>
+                            <span>6 orders</span>
+                        </div>
                     </div>
-                    <div className={`mt-1 flex items-center space-x-3 ${p.subText} text-sm`}>
-                        <span>NIF 987654321</span>
-                        <span>·</span>
-                        <span>963 456 789</span>
-                        <span>·</span>
-                        <span>2 orders</span>
+                    <div className={`rounded-xl border ${p.border} bg-white px-4 py-3`}>
+                        <div className="flex items-center justify-between gap-2">
+                            <p className={`truncate font-semibold ${p.titleText}`}>987654321</p>
+                            <p className={`font-semibold ${p.titleText}`}>€87.20</p>
+                        </div>
+                        <div className={`mt-1 flex items-center space-x-3 ${p.subText} text-sm`}>
+                            <span>João Pereira</span>
+                            <span>·</span>
+                            <span>2 orders</span>
+                        </div>
                     </div>
                 </div>
             </div>

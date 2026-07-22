@@ -87,45 +87,22 @@ interface AppearancePreviewProps {
 /** Fixed hex values (not Tailwind classes): inside .ds2-visual-scope, bg-green-500 /
  *  bg-blue-500 utilities are remapped to the live theme vars, which would make those
  *  swatches mirror the current selection instead of their own hue. */
-/** Internal-colour hex fields, grouped for the Appearances section. */
+/** Internal-colour hex fields: the colour series + one colour per state. */
 const INTERNAL_COLOR_GROUPS: { titleKey: string; fields: [InternalColorKey, string][] }[] = [
     {
-        titleKey: 'appearances.internalAccentLabel',
+        titleKey: 'appearances.internalSeriesLabel',
         fields: [
-            ['accentChipBg', 'appearances.internal.chipBg'],
-            ['accentChipText', 'appearances.internal.chipText'],
-            ['accentGradientFrom', 'appearances.internal.gradientFrom'],
-            ['accentGradientTo', 'appearances.internal.gradientTo'],
-            ['accentFocusBorder', 'appearances.internal.focusBorder'],
-            ['accentFocusRing', 'appearances.internal.focusRing'],
+            ['secondary', 'appearances.internal.secondary'],
+            ['tertiary', 'appearances.internal.tertiary'],
+            ['quaternary', 'appearances.internal.quaternary'],
         ],
     },
     {
-        titleKey: 'appearances.internalSuccessLabel',
+        titleKey: 'appearances.internalStatesLabel',
         fields: [
-            ['successSolid', 'appearances.internal.solid'],
-            ['successBg', 'appearances.internal.background'],
-            ['successText', 'appearances.internal.text'],
-            ['successBorder', 'appearances.internal.border'],
-        ],
-    },
-    {
-        titleKey: 'appearances.internalWarningLabel',
-        fields: [
-            ['warningSolid', 'appearances.internal.solid'],
-            ['warningBg', 'appearances.internal.background'],
-            ['warningText', 'appearances.internal.text'],
-            ['warningBorder', 'appearances.internal.border'],
-        ],
-    },
-    {
-        titleKey: 'appearances.internalDangerLabel',
-        fields: [
-            ['dangerSolid', 'appearances.internal.solid'],
-            ['dangerHover', 'appearances.internal.hover'],
-            ['dangerBg', 'appearances.internal.background'],
-            ['dangerText', 'appearances.internal.text'],
-            ['dangerBorder', 'appearances.internal.border'],
+            ['success', 'appearances.internal.success'],
+            ['warning', 'appearances.internal.warning'],
+            ['danger', 'appearances.internal.danger'],
         ],
     },
 ];

@@ -310,63 +310,93 @@ export function getSecondaryCssVars(id: DesignSystem2ColorChoiceId): CssVarMap {
 }
 
 /**
- * Internal colours: free-form hex values for the fine-grained accents used
- * inside dialogs and controls. Each key maps to one CSS variable; the
- * Appearances "Internal colors" section edits them as # hex fields.
+ * Internal colours: ONE free-form hex per role. The colour series
+ * (secondary / tertiary / quaternary) drives the dialog internals — icon
+ * chips, gradient headers and focus rings respectively — while success /
+ * warning / danger drive the semantic states. All tints, text shades,
+ * borders and hovers are DERIVED from the single hex, so the Appearances
+ * section stays one #-field per colour.
  */
-export const INTERNAL_COLOR_VARS = {
-    accentChipBg: '--ds2-accent-tint-bg',
-    accentChipText: '--ds2-accent-tint-text',
-    accentGradientFrom: '--ds2-accent-from',
-    accentGradientTo: '--ds2-accent-to',
-    accentFocusBorder: '--ds2-accent-solid',
-    accentFocusRing: '--ds2-accent-ring',
-    successSolid: '--ds2-success-solid',
-    successBg: '--ds2-success-tint-bg',
-    successText: '--ds2-success-tint-text',
-    successBorder: '--ds2-success-border',
-    warningSolid: '--ds2-warning-solid',
-    warningBg: '--ds2-warning-tint-bg',
-    warningText: '--ds2-warning-tint-text',
-    warningBorder: '--ds2-warning-border',
-    dangerSolid: '--ds2-danger-solid',
-    dangerHover: '--ds2-danger-hover',
-    dangerBg: '--ds2-danger-tint-bg',
-    dangerText: '--ds2-danger-tint-text',
-    dangerBorder: '--ds2-danger-border',
-} as const;
+export const INTERNAL_COLOR_KEYS = [
+    'secondary',
+    'tertiary',
+    'quaternary',
+    'success',
+    'warning',
+    'danger',
+] as const;
 
-export type InternalColorKey = keyof typeof INTERNAL_COLOR_VARS;
+export type InternalColorKey = (typeof INTERNAL_COLOR_KEYS)[number];
 
-/** Defaults preserve the pre-customization look (green accent, orange warning, rose danger). */
+/** Defaults preserve the pre-customization look (green internals, orange warning, rose danger). */
 export const INTERNAL_COLOR_DEFAULTS: Record<InternalColorKey, string> = {
-    accentChipBg: '#f0fdf4',
-    accentChipText: '#14532d',
-    accentGradientFrom: '#22c55e',
-    accentGradientTo: '#15803d',
-    accentFocusBorder: '#16a34a',
-    accentFocusRing: '#22c55e',
-    successSolid: '#16a34a',
-    successBg: '#f0fdf4',
-    successText: '#14532d',
-    successBorder: '#22c55e',
-    warningSolid: '#ea580c',
-    warningBg: '#fff7ed',
-    warningText: '#7c2d12',
-    warningBorder: '#f97316',
-    dangerSolid: '#e11d48',
-    dangerHover: '#be123c',
-    dangerBg: '#fff1f2',
-    dangerText: '#881337',
-    dangerBorder: '#f43f5e',
+    secondary: '#16a34a',
+    tertiary: '#22c55e',
+    quaternary: '#16a34a',
+    success: '#16a34a',
+    warning: '#f97316',
+    danger: '#e11d48',
 };
 
+function clamp255(n: number): number {
+    return Math.max(0, Math.min(255, Math.round(n)));
+}
+
+/** Mix `hex` with `other`, keeping `weight` of `hex` (0..1). */
+function hexMix(hex: string, other: string, weight: number): string {
+    const norm = (h: string) => {
+        const v = h.replace('#', '');
+        return v.length === 3 ? v.split('').map(c => c + c).join('') : v;
+    };
+    const a = norm(hex);
+    const b = norm(other);
+    const channel = (offset: number) => {
+        const ca = parseInt(a.slice(offset, offset + 2), 16);
+        const cb = parseInt(b.slice(offset, offset + 2), 16);
+        return clamp255(ca * weight + cb * (1 - weight)).toString(16).padStart(2, '0');
+    };
+    return `#${channel(0)}${channel(2)}${channel(4)}`;
+}
+
+const tintOf = (hex: string) => hexMix(hex, '#ffffff', 0.09);
+const textOf = (hex: string) => hexMix(hex, '#000000', 0.55);
+const borderOf = (hex: string) => hexMix(hex, '#ffffff', 0.55);
+const darkOf = (hex: string) => hexMix(hex, '#000000', 0.78);
+const ringOf = (hex: string) => hexMix(hex, '#ffffff', 0.35);
+
 export function getInternalCssVars(colors: Record<InternalColorKey, string>): CssVarMap {
-    const out: CssVarMap = {};
-    (Object.keys(INTERNAL_COLOR_VARS) as InternalColorKey[]).forEach((key) => {
-        out[INTERNAL_COLOR_VARS[key]] = colors[key] || INTERNAL_COLOR_DEFAULTS[key];
-    });
-    return out;
+    const c = (key: InternalColorKey) => colors[key] || INTERNAL_COLOR_DEFAULTS[key];
+    const secondary = c('secondary');
+    const tertiary = c('tertiary');
+    const quaternary = c('quaternary');
+    const success = c('success');
+    const warning = c('warning');
+    const danger = c('danger');
+    return {
+        // secondary → icon chips
+        '--ds2-accent-tint-bg': tintOf(secondary),
+        '--ds2-accent-tint-text': textOf(secondary),
+        // tertiary → gradient headers
+        '--ds2-accent-from': tertiary,
+        '--ds2-accent-to': darkOf(tertiary),
+        // quaternary → focus rings / borders
+        '--ds2-accent-solid': quaternary,
+        '--ds2-accent-ring': ringOf(quaternary),
+        // semantic states — full shade family from one hex each
+        '--ds2-success-solid': success,
+        '--ds2-success-tint-bg': tintOf(success),
+        '--ds2-success-tint-text': textOf(success),
+        '--ds2-success-border': borderOf(success),
+        '--ds2-warning-solid': warning,
+        '--ds2-warning-tint-bg': tintOf(warning),
+        '--ds2-warning-tint-text': textOf(warning),
+        '--ds2-warning-border': borderOf(warning),
+        '--ds2-danger-solid': danger,
+        '--ds2-danger-hover': darkOf(danger),
+        '--ds2-danger-tint-bg': tintOf(danger),
+        '--ds2-danger-tint-text': textOf(danger),
+        '--ds2-danger-border': borderOf(danger),
+    };
 }
 
 /** Pairing gradient: primary solid → secondary solid */
