@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React from 'react';
 import {
     Archive,
     Boxes,
@@ -19,13 +19,14 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import {
-    DIALOG_CONTROL_CLASSES,
-    DIALOG_PALETTES,
     DIALOG_TOGGLE_ON_CLASS,
-    DialogShellStyleContext,
     dialogButtonClasses,
-    type DialogStyleConfig,
 } from '../theme/dialogStyle';
+import {
+    DialogField as F,
+    DialogInfoCard as InfoCard,
+    useDialogTokens,
+} from './ui/dialogParts';
 
 /**
  * Static replicas of every dialog family in the app, with realistic sample
@@ -46,37 +47,9 @@ export interface DialogPreviewSpec {
     Footer?: React.FC<{ buttons: ReturnType<typeof dialogButtonClasses> }>;
 }
 
-/** Style tokens available to replica bodies (always inside an applied shell). */
-function useTokens() {
-    const cfg = useContext(DialogShellStyleContext) as DialogStyleConfig;
-    const p = DIALOG_PALETTES[cfg.palette];
-    return {
-        cfg,
-        p,
-        input: `w-full bg-white outline-none ${DIALOG_CONTROL_CLASSES[cfg.controls]}`,
-        label: `mb-1.5 block text-sm font-semibold ${p.titleText}`,
-    };
-}
-
-const F: React.FC<{ label: string; children: React.ReactNode; className?: string }> = ({ label, children, className = '' }) => {
-    const { label: labelCls } = useTokens();
-    return (
-        <div className={className}>
-            <span className={labelCls}>{label}</span>
-            {children}
-        </div>
-    );
-};
-
-const InfoCard: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => {
-    const { p } = useTokens();
-    return (
-        <div className={`rounded-xl border ${p.border} bg-white px-4 py-3`}>
-            <p className={`text-xs ${p.subText}`}>{label}</p>
-            <p className={`mt-0.5 font-semibold ${p.titleText}`}>{value}</p>
-        </div>
-    );
-};
+/** Replica bodies restyle from the shared dialog parts (single source of truth
+ *  with the real app dialogs — see ui/dialogParts.tsx). */
+const useTokens = useDialogTokens;
 
 const twoButtonFooter = (secondary: string, primary: string): DialogPreviewSpec['Footer'] =>
     function PreviewFooter({ buttons }) {
@@ -305,6 +278,10 @@ const InventoryFormBody: React.FC = () => {
     return (
         <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
             <F label="Item image" className="sm:col-span-2">
+                <div className={`mb-2 inline-flex rounded-xl ${p.tintBg} p-1`}>
+                    <span className={`rounded-lg bg-white px-4 py-1.5 text-xs font-semibold shadow-sm ${p.titleText}`}>Upload</span>
+                    <span className={`px-4 py-1.5 text-xs font-semibold ${p.subText}`}>URL</span>
+                </div>
                 <div className={`flex flex-col items-center justify-center gap-1 rounded-2xl border border-dashed ${p.border} px-4 py-6 text-center`}>
                     <Upload className={`h-6 w-6 ${p.subText}`} />
                     <span className={`text-sm font-semibold ${p.titleText}`}>Click to upload</span>

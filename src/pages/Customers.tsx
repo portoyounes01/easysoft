@@ -17,6 +17,8 @@ import CustomerForm from '../components/CustomerForm';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
+import { DialogInfoCard } from '../components/ui/dialogParts';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import {
   customerLocalService,
@@ -41,6 +43,7 @@ const CustomersInner: React.FC = () => {
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<LocalCustomer | null>(null);
+  const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<LocalCustomer | null>(null);
   const [openMenuCustomerId, setOpenMenuCustomerId] = useState<string | null>(null);
   const [pageSize, setPageSize] = useState(10);
@@ -109,13 +112,19 @@ const CustomersInner: React.FC = () => {
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }, [currentPage, totalPages]);
 
-  const handleDeleteCustomer = async (customerId: string) => {
-    if (!window.confirm(t('customers.confirm.deleteMessage'))) return;
+  const handleDeleteCustomer = (customerId: string) => {
+    setDeletingCustomerId(customerId);
+  };
+
+  const confirmDeleteCustomer = async () => {
+    if (!deletingCustomerId) return;
     try {
-      await customerLocalService.deleteCustomer(customerId);
+      await customerLocalService.deleteCustomer(deletingCustomerId);
       await reloadCustomers();
     } catch (error) {
       console.error('Failed to delete customer:', error);
+    } finally {
+      setDeletingCustomerId(null);
     }
   };
 
@@ -433,6 +442,18 @@ const CustomersInner: React.FC = () => {
         </div>
       </div>
 
+      {deletingCustomerId && (
+        <ConfirmDialog
+          tone="danger"
+          title={t('customers.confirm.deleteTitle')}
+          message={t('customers.confirm.deleteMessage')}
+          cancelLabel={t('common.cancel')}
+          confirmLabel={t('customers.confirm.deleteCta')}
+          onCancel={() => setDeletingCustomerId(null)}
+          onConfirm={() => void confirmDeleteCustomer()}
+        />
+      )}
+
       <CustomerForm
         isOpen={showCustomerForm}
         onClose={() => {
@@ -454,10 +475,7 @@ const CustomersInner: React.FC = () => {
           [t('customers.table.enrolled'), formatDate(viewingCustomer.created_at)],
           [t('customers.table.lastPurchase'), formatLastPurchase(latestPurchases[viewingCustomer.id])],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-xl bg-neutral-50 p-4">
-            <span className="mb-1 block text-sm font-medium text-gray-500">{label}</span>
-            <p className="font-semibold text-gray-900">{value}</p>
-          </div>
+          <DialogInfoCard key={label} label={label} value={value} />
         ));
 
         const editButton = (

@@ -23,6 +23,8 @@ import { useTranslation } from 'react-i18next';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
+import { DialogInfoCard, DialogSectionTitle } from '../components/ui/dialogParts';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { rawMaterialService } from '../services/rawMaterialService';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
@@ -43,6 +45,7 @@ const ProductsInner: React.FC = () => {
   // but kept out of this catalog page (managed from the Inventory page instead).
   const [linkedProductIds, setLinkedProductIds] = useState<Set<string>>(new Set());
   const [showProductWizard, setShowProductWizard] = useState(false);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<LocalProduct | null>(null);
   const [viewingProduct, setViewingProduct] = useState<LocalProduct | null>(null);
   const [showCategoryAlert, setShowCategoryAlert] = useState(false);
@@ -209,13 +212,18 @@ const ProductsInner: React.FC = () => {
   };
   */
 
-  const handleDeleteProduct = async (productId: string) => {
-    if (window.confirm(t('products.confirm.deleteProductMessage'))) {
-      try {
-        await deleteProduct(productId);
-      } catch (deleteError) {
-        console.error('Failed to delete product:', deleteError);
-      }
+  const handleDeleteProduct = (productId: string) => {
+    setDeletingProductId(productId);
+  };
+
+  const confirmDeleteProduct = async () => {
+    if (!deletingProductId) return;
+    try {
+      await deleteProduct(deletingProductId);
+    } catch (deleteError) {
+      console.error('Failed to delete product:', deleteError);
+    } finally {
+      setDeletingProductId(null);
     }
   };
 
@@ -690,6 +698,18 @@ const ProductsInner: React.FC = () => {
         onApplied={refreshData}
       />
 
+      {deletingProductId && (
+        <ConfirmDialog
+          tone="danger"
+          title={t('products.confirm.deleteTitle')}
+          message={t('products.confirm.deleteProductMessage')}
+          cancelLabel={t('common.cancel')}
+          confirmLabel={t('products.confirm.deleteCta')}
+          onCancel={() => setDeletingProductId(null)}
+          onConfirm={() => void confirmDeleteProduct()}
+        />
+      )}
+
       <ProductWizard
         isOpen={showProductWizard}
         onClose={() => { setShowProductWizard(false); setEditingProduct(null); }}
@@ -702,9 +722,9 @@ const ProductsInner: React.FC = () => {
               <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-6">
                 {viewingProduct.image_url && (
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-4">
+                    <DialogSectionTitle className="mb-4 text-lg">
                       {t('products.viewModal.productImage')}
-                    </h3>
+                    </DialogSectionTitle>
                     <div className="max-w-sm">
                       <div className="aspect-square rounded-2xl overflow-hidden border border-gray-200">
                         <img
@@ -722,83 +742,51 @@ const ProductsInner: React.FC = () => {
                 )}
 
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">{t('products.viewModal.basicInfo')}</h3>
+                  <DialogSectionTitle className="mb-4 text-lg">{t('products.viewModal.basicInfo')}</DialogSectionTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-neutral-50 rounded-xl p-4">
-                      <span className="block text-sm font-medium text-gray-500 mb-1">
-                        {t('products.viewModal.productName')}
-                      </span>
-                      <p className="text-gray-900 font-semibold">{viewingProduct.name}</p>
-                    </div>
-                    <div className="bg-neutral-50 rounded-xl p-4">
-                      <span className="block text-sm font-medium text-gray-500 mb-1">
-                        {t('products.viewModal.sku')}
-                      </span>
-                      <p className="text-gray-900 font-mono">{viewingProduct.sku}</p>
-                    </div>
-                    <div className="bg-neutral-50 rounded-xl p-4">
-                      <span className="block text-sm font-medium text-gray-500 mb-1">
-                        {t('products.viewModal.category')}
-                      </span>
-                      <p className="text-gray-900">
-                        {categoryIdToName.get(viewingProduct.category_id || '') ||
-                          t('products.table.noCategory')}
-                      </p>
-                    </div>
-                    <div className="bg-neutral-50 rounded-xl p-4">
-                      <span className="block text-sm font-medium text-gray-500 mb-1">
-                        {t('products.viewModal.status')}
-                      </span>
-                      <span
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${viewingProduct.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}
-                      >
-                        {viewingProduct.is_active
-                          ? t('products.status.inStock')
-                          : t('products.status.inactive')}
-                      </span>
-                    </div>
+                    <DialogInfoCard label={t('products.viewModal.productName')} value={viewingProduct.name} />
+                    <DialogInfoCard label={t('products.viewModal.sku')} value={<span className="font-mono">{viewingProduct.sku}</span>} />
+                    <DialogInfoCard
+                      label={t('products.viewModal.category')}
+                      value={categoryIdToName.get(viewingProduct.category_id || '') || t('products.table.noCategory')}
+                    />
+                    <DialogInfoCard
+                      label={t('products.viewModal.status')}
+                      value={
+                        <span
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${viewingProduct.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}
+                        >
+                          {viewingProduct.is_active
+                            ? t('products.status.inStock')
+                            : t('products.status.inactive')}
+                        </span>
+                      }
+                    />
                   </div>
                   {viewingProduct.description && (
-                    <div className="mt-4 bg-neutral-50 rounded-xl p-4">
-                      <span className="block text-sm font-medium text-gray-500 mb-1">
-                        {t('products.viewModal.description')}
-                      </span>
-                      <p className="text-gray-900">{viewingProduct.description}</p>
+                    <div className="mt-4">
+                      <DialogInfoCard
+                        label={t('products.viewModal.description')}
+                        value={<span className="font-normal">{viewingProduct.description}</span>}
+                      />
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">{t('products.viewModal.pricingInfo')}</h3>
+                  <DialogSectionTitle className="mb-4 text-lg">{t('products.viewModal.pricingInfo')}</DialogSectionTitle>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-neutral-50 rounded-xl p-4">
-                      <span className="block text-sm font-medium text-gray-500 mb-1">
-                        {t('products.viewModal.costPrice')}
-                      </span>
-                      <p className="text-gray-900 font-bold text-xl">€{viewingProduct.cost.toFixed(2)}</p>
-                    </div>
-                    <div className="bg-neutral-50 rounded-xl p-4">
-                      <span className="block text-sm font-medium text-gray-500 mb-1">
-                        {t('products.viewModal.sellingPriceInclVat')}
-                      </span>
-                      <p className="text-gray-900 font-bold text-xl">€{viewingProduct.price.toFixed(2)}</p>
-                    </div>
-                    <div className="bg-neutral-50 rounded-xl p-4">
-                      <span className="block text-sm font-medium text-gray-500 mb-1">
-                        {t('products.viewModal.vatRate')}
-                      </span>
-                      <p className="text-gray-900 font-bold text-xl">
-                        {(viewingProduct.iva_rate * 100).toFixed(0)}%
-                      </p>
-                    </div>
+                    <DialogInfoCard label={t('products.viewModal.costPrice')} value={<span className="text-xl">€{viewingProduct.cost.toFixed(2)}</span>} />
+                    <DialogInfoCard label={t('products.viewModal.sellingPriceInclVat')} value={<span className="text-xl">€{viewingProduct.price.toFixed(2)}</span>} />
+                    <DialogInfoCard label={t('products.viewModal.vatRate')} value={<span className="text-xl">{(viewingProduct.iva_rate * 100).toFixed(0)}%</span>} />
                   </div>
-                  <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                  <div className="mt-4 p-4 bg-green-50 rounded-xl border border-green-100">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <span className="block text-sm font-medium text-blue-700 mb-1">
+                        <span className="block text-sm font-medium text-green-700 mb-1">
                           {t('products.viewModal.profitMargin')}
                         </span>
-                        <p className="text-blue-900 font-bold">
+                        <p className="text-green-900 font-bold">
                           €{(viewingProduct.price - viewingProduct.cost).toFixed(2)} (
                           {viewingProduct.cost > 0
                             ? (
@@ -810,10 +798,10 @@ const ProductsInner: React.FC = () => {
                         </p>
                       </div>
                       <div>
-                        <span className="block text-sm font-medium text-blue-700 mb-1">
+                        <span className="block text-sm font-medium text-green-700 mb-1">
                           {t('products.viewModal.priceWithoutVat')}
                         </span>
-                        <p className="text-blue-900 font-bold">
+                        <p className="text-green-900 font-bold">
                           €{(viewingProduct.price / (1 + viewingProduct.iva_rate)).toFixed(2)}
                         </p>
                       </div>
@@ -876,9 +864,9 @@ const ProductsInner: React.FC = () => {
                 */}
 
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">
+                  <DialogSectionTitle className="mb-4 text-lg">
                     {t('products.viewModal.additionalInfo')}
-                  </h3>
+                  </DialogSectionTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/*
                       AGENTS: Do not delete — track-inventory view field preserved for re-enable. Remove only if explicitly requested by a human.
@@ -891,12 +879,7 @@ const ProductsInner: React.FC = () => {
                       </p>
                     </div>
                     */}
-                    <div className="bg-neutral-50 rounded-xl p-4">
-                      <span className="block text-sm font-medium text-gray-500 mb-1">
-                        {t('products.viewModal.displayOrder')}
-                      </span>
-                      <p className="text-gray-900 font-semibold">{viewingProduct.display_order}</p>
-                    </div>
+                    <DialogInfoCard label={t('products.viewModal.displayOrder')} value={viewingProduct.display_order} />
                   </div>
                 </div>
               </div>

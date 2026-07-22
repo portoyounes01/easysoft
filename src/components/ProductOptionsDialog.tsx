@@ -11,6 +11,7 @@ import {
     dialogButtonClasses,
     useAppliedDialogStyle,
 } from '../theme/dialogStyle';
+import { useDialogTokens } from './ui/dialogParts';
 
 /**
  * POS item-options dialog (reference kit): quantity stepper, one single-select
@@ -24,6 +25,11 @@ interface ProductOptionsDialogProps {
     onClose: () => void;
     onAdd: (quantity: number, options: CartLineOptions) => void;
 }
+
+const OptionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const t = useDialogTokens();
+    return <p className={`mb-2 text-sm font-semibold ${t.p.titleText}`}>{children}</p>;
+};
 
 const ProductOptionsDialog: React.FC<ProductOptionsDialogProps> = ({ product, onClose, onAdd }) => {
     const { t } = useTranslation();
@@ -130,7 +136,7 @@ const ProductOptionsDialog: React.FC<ProductOptionsDialogProps> = ({ product, on
 
             {attributes.map(attr => (
                 <div key={attr.id}>
-                    <p className="mb-2 text-sm font-semibold text-slate-700">{attr.name}</p>
+                    <OptionLabel>{attr.name}</OptionLabel>
                     <div className="grid gap-2 sm:grid-cols-2">
                         {attr.options.map(option => (
                             <button
@@ -150,7 +156,7 @@ const ProductOptionsDialog: React.FC<ProductOptionsDialogProps> = ({ product, on
 
             {addOns.length > 0 && (
                 <div>
-                    <p className="mb-2 text-sm font-semibold text-slate-700">{t('pos.options.addOns')}</p>
+                    <OptionLabel>{t('pos.options.addOns')}</OptionLabel>
                     <div className="grid gap-2 sm:grid-cols-2">
                         {addOns.map(modifier => (
                             <button
@@ -173,7 +179,7 @@ const ProductOptionsDialog: React.FC<ProductOptionsDialogProps> = ({ product, on
             )}
 
             <div>
-                <p className="mb-2 text-sm font-semibold text-slate-700">{t('pos.options.notes')}</p>
+                <OptionLabel>{t('pos.options.notes')}</OptionLabel>
                 <input
                     value={notes}
                     onChange={e => setNotes(e.target.value)}

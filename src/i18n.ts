@@ -254,6 +254,9 @@ const resources = {
                 confirmDeleteTitle: 'Delete item?',
                 confirmDeleteBody: 'Are you sure you want to delete this item? This action cannot be undone.',
                 confirmDeleteCta: 'Yes, delete',
+                confirmEditTitle: 'Save changes?',
+                confirmEditBody: 'Are you sure you want to save these changes to the item?',
+                confirmEditCta: 'Yes, save',
                 errorDelete: 'Could not delete item.',
                 errorDeleteInUse: 'This item is used in recipes. Remove it from those recipes first, or mark it inactive.',
             },
@@ -863,6 +866,8 @@ const resources = {
                     editTitle: 'Edit Product',
                     costHint: 'Overwritten automatically when the product has recipe ingredients.',
                     confirmTitle: 'Add product?',
+                    confirmEditTitle: 'Save changes?',
+                    confirmEditBody: 'Are you sure you want to save these changes to the product?',
                     confirmBody: 'Are you sure you want to add a new product? Please make sure your data is correct.',
                     errorName: 'Product name is required.',
                     errorSku: 'SKU is required.',
@@ -962,7 +967,9 @@ const resources = {
                 },
                 confirm: {
                     deleteProductTitle: 'Delete Product',
-                    deleteProductMessage: 'Are you sure you want to delete this product?',
+                    deleteProductMessage: 'Are you sure you want to delete this product? This action cannot be undone.',
+                    deleteTitle: 'Delete product?',
+                    deleteCta: 'Yes, delete',
                     failedDelete: 'Failed to delete product. Please try again.',
                 },
                 form: {
@@ -1034,6 +1041,8 @@ const resources = {
                 },
                 confirm: {
                     deleteMessage: 'Remove this customer from the directory? They will be marked inactive and hidden from lists.',
+                    deleteTitle: 'Delete customer?',
+                    deleteCta: 'Yes, delete',
                 },
                 form: {
                     editTitle: 'Edit customer',
@@ -1097,6 +1106,8 @@ const resources = {
                 confirm: {
                     cannotDeleteWithProducts: 'Cannot delete category "{{name}}" because it contains {{count}} products. Please move or delete these products first.',
                     deleteCategoryQuestion: 'Delete the category "{{name}}"? This cannot be undone.',
+                    deleteTitle: 'Delete category?',
+                    deleteCta: 'Yes, delete',
                     failedDelete: 'Failed to delete category. Please try again.',
                 },
                 form: {
@@ -2946,6 +2957,9 @@ const resources = {
                 confirmDeleteTitle: 'Eliminar artigo?',
                 confirmDeleteBody: 'Tem a certeza de que quer eliminar este artigo? Esta ação não pode ser anulada.',
                 confirmDeleteCta: 'Sim, eliminar',
+                confirmEditTitle: 'Guardar alterações?',
+                confirmEditBody: 'Tem a certeza de que quer guardar estas alterações ao artigo?',
+                confirmEditCta: 'Sim, guardar',
                 errorDelete: 'Não foi possível eliminar o artigo.',
                 errorDeleteInUse: 'Este artigo é usado em receitas. Remova-o primeiro dessas receitas ou marque-o como inativo.',
             },
@@ -3556,6 +3570,8 @@ const resources = {
                     editTitle: 'Editar produto',
                     costHint: 'Substituído automaticamente quando o produto tem ingredientes na receita.',
                     confirmTitle: 'Adicionar produto?',
+                    confirmEditTitle: 'Guardar alterações?',
+                    confirmEditBody: 'Tem a certeza de que quer guardar estas alterações ao produto?',
                     confirmBody: 'Tem a certeza de que quer adicionar um novo produto? Confirme que os dados estão corretos.',
                     errorName: 'O nome do produto é obrigatório.',
                     errorSku: 'O SKU é obrigatório.',
@@ -3655,7 +3671,9 @@ const resources = {
                 },
                 confirm: {
                     deleteProductTitle: 'Eliminar Produto',
-                    deleteProductMessage: 'Tem a certeza de que pretende eliminar este produto?',
+                    deleteProductMessage: 'Tem a certeza de que pretende eliminar este produto? Esta ação não pode ser anulada.',
+                    deleteTitle: 'Eliminar produto?',
+                    deleteCta: 'Sim, eliminar',
                     failedDelete: 'Falha ao eliminar o produto. Tente novamente.',
                 },
                 form: {
@@ -3728,6 +3746,8 @@ const resources = {
                 confirm: {
                     deleteMessage:
                         'Remover este cliente do diretório? Ficará inativo e deixará de aparecer nas listas.',
+                    deleteTitle: 'Eliminar cliente?',
+                    deleteCta: 'Sim, eliminar',
                 },
                 form: {
                     editTitle: 'Editar cliente',
@@ -3791,6 +3811,8 @@ const resources = {
                 confirm: {
                     cannotDeleteWithProducts: 'Não é possível eliminar a categoria "{{name}}" porque contém {{count}} produtos. Mova ou elimine estes produtos primeiro.',
                     deleteCategoryQuestion: 'Eliminar a categoria "{{name}}"? Esta ação não pode ser desfeita.',
+                    deleteTitle: 'Eliminar categoria?',
+                    deleteCta: 'Sim, eliminar',
                     failedDelete: 'Falha ao eliminar a categoria. Tente novamente.',
                 },
                 form: {
@@ -5643,6 +5665,9 @@ const resources = {
                 "confirmDeleteTitle": "¿Eliminar artículo?",
                 "confirmDeleteBody": "¿Seguro que quieres eliminar este artículo? Esta acción no se puede deshacer.",
                 "confirmDeleteCta": "Sí, eliminar",
+                "confirmEditTitle": "¿Guardar cambios?",
+                "confirmEditBody": "¿Seguro que quieres guardar estos cambios en el artículo?",
+                "confirmEditCta": "Sí, guardar",
                 "errorDelete": "No se pudo eliminar el artículo.",
                 "errorDeleteInUse": "Este artículo se usa en recetas. Quítalo primero de esas recetas o márcalo como inactivo."
             },
@@ -6243,6 +6268,8 @@ const resources = {
                     "editTitle": "Editar producto",
                     "costHint": "Se sobrescribe automáticamente cuando el producto tiene ingredientes en la receta.",
                     "confirmTitle": "¿Añadir producto?",
+                    "confirmEditTitle": "¿Guardar cambios?",
+                    "confirmEditBody": "¿Seguro que quieres guardar estos cambios en el producto?",
                     "confirmBody": "¿Seguro que quieres añadir un nuevo producto? Comprueba que los datos sean correctos.",
                     "errorName": "El nombre del producto es obligatorio.",
                     "errorSku": "El SKU es obligatorio.",
@@ -6342,7 +6369,9 @@ const resources = {
                 },
                 "confirm": {
                     "deleteProductTitle": "Eliminar producto",
-                    "deleteProductMessage": "¿Seguro que quieres eliminar este producto?",
+                    "deleteProductMessage": "¿Seguro que quieres eliminar este producto? Esta acción no se puede deshacer.",
+                    "deleteTitle": "¿Eliminar producto?",
+                    "deleteCta": "Sí, eliminar",
                     "failedDelete": "No se pudo eliminar el producto. Inténtalo de nuevo."
                 },
                 "form": {
@@ -6413,7 +6442,9 @@ const resources = {
                     "nextPage": "Página siguiente"
                 },
                 "confirm": {
-                    "deleteMessage": "¿Eliminar este cliente del directorio? Se marcará como inactivo y se ocultará de las listas."
+                    "deleteMessage": "¿Eliminar este cliente del directorio? Se marcará como inactivo y se ocultará de las listas.",
+                    "deleteTitle": "¿Eliminar cliente?",
+                    "deleteCta": "Sí, eliminar"
                 },
                 "form": {
                     "editTitle": "Editar cliente",
@@ -6477,6 +6508,8 @@ const resources = {
                 "confirm": {
                     "cannotDeleteWithProducts": "No se puede eliminar la categoría \"{{name}}\" porque contiene {{count}} productos. Mueve o elimina primero estos productos.",
                     "deleteCategoryQuestion": "¿Eliminar la categoría \"{{name}}\"? Esta acción no se puede deshacer.",
+                    "deleteTitle": "¿Eliminar categoría?",
+                    "deleteCta": "Sí, eliminar",
                     "failedDelete": "No se pudo eliminar la categoría. Inténtalo de nuevo."
                 },
                 "form": {

@@ -15,10 +15,10 @@ import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import {
     DIALOG_CONTROL_CLASSES,
-    DIALOG_TOGGLE_ON_CLASS,
     dialogButtonClasses,
     useAppliedDialogStyle,
 } from '../theme/dialogStyle';
+import { DialogSectionTitle, DialogSwitch, DialogToggleRow } from './ui/dialogParts';
 
 /**
  * Multi-step "Add Product" wizard (products reference kit):
@@ -298,22 +298,12 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                 <span className={labelClass}>{t('products.wizard.imageLabel')}</span>
                 <ImageUploader value={imageUrl} onChange={setImageUrl} onError={() => undefined} />
             </div>
-            <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div>
-                    <p className="text-sm font-semibold text-slate-950">{t('products.wizard.statusLabel')}</p>
-                    <p className="text-sm text-slate-500">{t('products.wizard.statusHelp')}</p>
-                </div>
-                <button
-                    type="button"
-                    role="switch"
-                    aria-checked={isActive}
-                    aria-label={t('products.wizard.statusLabel')}
-                    onClick={() => setIsActive(v => !v)}
-                    className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${isActive ? DIALOG_TOGGLE_ON_CLASS : 'bg-slate-300'}`}
-                >
-                    <span className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${isActive ? 'translate-x-5' : ''}`} />
-                </button>
-            </div>
+            <DialogToggleRow
+                title={t('products.wizard.statusLabel')}
+                help={t('products.wizard.statusHelp')}
+                checked={isActive}
+                onChange={() => setIsActive(v => !v)}
+            />
             <div>
                 <span className={labelClass}>{t('products.wizard.nameLabel')} *</span>
                 <input
@@ -403,16 +393,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
     );
 
     const toggle = (on: boolean, onClick: () => void, label: string) => (
-        <button
-            type="button"
-            role="switch"
-            aria-checked={on}
-            aria-label={label}
-            onClick={onClick}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${on ? DIALOG_TOGGLE_ON_CLASS : 'bg-slate-300'}`}
-        >
-            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-5' : ''}`} />
-        </button>
+        <DialogSwitch small checked={on} onChange={onClick} label={label} />
     );
 
     const setAttr = (id: string, patch: Partial<ProductVariantAttribute>) =>
@@ -421,7 +402,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
     const variantsStep = (
         <div className="space-y-6">
             <div>
-                <h4 className="mb-3 font-bold text-slate-950">{t('products.wizard.variantHeading')}</h4>
+                <DialogSectionTitle className="mb-3">{t('products.wizard.variantHeading')}</DialogSectionTitle>
                 <div className="space-y-3">
                     {variants.map(attr => {
                         const expanded = expandedAttrs.has(attr.id);
@@ -498,7 +479,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                 </div>
             </div>
             <div>
-                <h4 className="mb-3 font-bold text-slate-950">{t('products.wizard.modifiersHeading')}</h4>
+                <DialogSectionTitle className="mb-3">{t('products.wizard.modifiersHeading')}</DialogSectionTitle>
                 <div className="space-y-2">
                     {modifiers.map(modifier => (
                         <div key={modifier.id} className="flex items-center gap-3">
@@ -619,11 +600,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
             goTo(step + 1);
             return;
         }
-        if (editing) {
-            void persist(false);
-        } else {
-            setConfirmOpen(true);
-        }
+        setConfirmOpen(true);
     };
 
     const legacyBtn = {
@@ -652,10 +629,10 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
     const confirm = confirmOpen && (
         <ConfirmDialog
             tone="warning"
-            title={t('products.wizard.confirmTitle')}
-            message={t('products.wizard.confirmBody')}
+            title={editing ? t('products.wizard.confirmEditTitle') : t('products.wizard.confirmTitle')}
+            message={editing ? t('products.wizard.confirmEditBody') : t('products.wizard.confirmBody')}
             cancelLabel={t('common.cancel')}
-            confirmLabel={t('products.wizard.add')}
+            confirmLabel={editing ? t('products.wizard.save') : t('products.wizard.add')}
             busy={saving}
             onCancel={() => setConfirmOpen(false)}
             onConfirm={() => void persist(false)}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Plus, Tag, Trash2, Package, AlertTriangle, Loader2 } from 'lucide-react';
 import { useProducts } from '../contexts/ProductsContext';
 import { LocalCategory, LocalProduct } from '../types/supabase';
@@ -18,6 +19,7 @@ const CategoriesInner: React.FC = () => {
 
     const [showCategoryForm, setShowCategoryForm] = useState(false);
     const [editingCategory, setEditingCategory] = useState<LocalCategory | null>(null);
+    const [deletingCategory, setDeletingCategory] = useState<{ id: string; name: string } | null>(null);
 
     const headerPrimaryBtn =
         'ds2-control-radius-lg ds2-toolbar-control-h !px-4 text-sm font-semibold gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
@@ -37,7 +39,7 @@ const CategoriesInner: React.FC = () => {
         setEditingCategory(null);
     };
 
-    const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
+    const handleDeleteCategory = (categoryId: string, categoryName: string) => {
         const productsInCategory = products.filter(
             (p: LocalProduct) => p.category_id === categoryId && p.is_active && !p.deleted_at
         );
@@ -52,13 +54,18 @@ const CategoriesInner: React.FC = () => {
             return;
         }
 
-        if (window.confirm(t('categories.confirm.deleteCategoryQuestion', { name: categoryName }))) {
-            try {
-                await deleteCategory(categoryId);
-            } catch (e) {
-                console.error('Failed to delete category:', e);
-                alert(t('categories.confirm.failedDelete'));
-            }
+        setDeletingCategory({ id: categoryId, name: categoryName });
+    };
+
+    const confirmDeleteCategory = async () => {
+        if (!deletingCategory) return;
+        try {
+            await deleteCategory(deletingCategory.id);
+        } catch (e) {
+            console.error('Failed to delete category:', e);
+            alert(t('categories.confirm.failedDelete'));
+        } finally {
+            setDeletingCategory(null);
         }
     };
 
@@ -357,7 +364,19 @@ const CategoriesInner: React.FC = () => {
                     </div>
                 </div>
 
-                <CategoryForm
+                {deletingCategory && (
+                <ConfirmDialog
+                    tone="danger"
+                    title={t('categories.confirm.deleteTitle')}
+                    message={t('categories.confirm.deleteCategoryQuestion', { name: deletingCategory.name })}
+                    cancelLabel={t('common.cancel')}
+                    confirmLabel={t('categories.confirm.deleteCta')}
+                    onCancel={() => setDeletingCategory(null)}
+                    onConfirm={() => void confirmDeleteCategory()}
+                />
+            )}
+
+            <CategoryForm
                     isOpen={showCategoryForm}
                     onClose={() => setShowCategoryForm(false)}
                     category={editingCategory}

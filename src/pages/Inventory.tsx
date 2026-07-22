@@ -11,9 +11,9 @@ import type { LocalCategory } from '../types/supabase';
 import { RAW_MATERIAL_UNITS, type LocalRawMaterial, type RawMaterialUnit } from '../types/rawMaterial';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { DialogField, DialogToggleRow } from '../components/ui/dialogParts';
 import {
     DIALOG_CONTROL_CLASSES,
-    DIALOG_TOGGLE_ON_CLASS,
     dialogButtonClasses,
     useAppliedDialogStyle,
 } from '../theme/dialogStyle';
@@ -90,6 +90,7 @@ const Inventory: React.FC = () => {
     const [stockQty, setStockQty] = useState(0);
     // Pending confirmation steps (reference kit: every mutation confirms first).
     const [confirmAdd, setConfirmAdd] = useState(false);
+    const [confirmEdit, setConfirmEdit] = useState(false);
     const [confirmStock, setConfirmStock] = useState<'in' | 'out' | 'reset' | null>(null);
     const [deleting, setDeleting] = useState<LocalRawMaterial | null>(null);
 
@@ -189,15 +190,22 @@ const Inventory: React.FC = () => {
         }
         if (!editing) {
             setConfirmAdd(true);
-            return;
+        } else {
+            setConfirmEdit(true);
         }
+    };
+
+    const confirmUpdate = async () => {
+        if (!editing) return;
         setSaving(true);
         setError('');
         try {
             await rawMaterialService.update(editing.id, form);
+            setConfirmEdit(false);
             setShowForm(false);
             await load();
         } catch (saveError) {
+            setConfirmEdit(false);
             setError(saveError instanceof Error ? saveError.message : t('inventory.errorSave'));
         } finally {
             setSaving(false);
@@ -284,7 +292,6 @@ const Inventory: React.FC = () => {
     const fieldClass = applied
         ? `w-full bg-white outline-none ${DIALOG_CONTROL_CLASSES[applied.controls]}`
         : inputClass;
-    const toggleOnClass = DIALOG_TOGGLE_ON_CLASS;
     // Error state must strip the variant's own border/focus colour tokens, or they
     // tie on specificity and stylesheet order decides which border wins.
     const nameFieldClass = formErrors.name
@@ -387,29 +394,20 @@ const Inventory: React.FC = () => {
                     placeholder={t('inventory.descriptionPlaceholder')}
                 />
             </Field>
-            <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
-                <div>
-                    <p className="text-sm font-semibold text-slate-950">{t('inventory.statusLabel')}</p>
-                    <p className="text-sm text-slate-500">{t('inventory.statusHelp')}</p>
-                </div>
-                <button
-                    type="button"
-                    role="switch"
-                    aria-checked={form.sell_enabled ?? false}
-                    aria-label={t('inventory.statusLabel')}
-                    onClick={() =>
-                        setForm(prev => ({
-                            ...prev,
-                            sell_enabled: !prev.sell_enabled,
-                            // Sensible defaults the first time selling is enabled.
-                            sale_iva_rate: !prev.sell_enabled && prev.sale_iva_rate == null ? defaultIvaRate : prev.sale_iva_rate,
-                        }))
-                    }
-                    className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${form.sell_enabled ? toggleOnClass : 'bg-slate-300'}`}
-                >
-                    <span className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${form.sell_enabled ? 'translate-x-5' : ''}`} />
-                </button>
-            </div>
+            <DialogToggleRow
+                className="sm:col-span-2"
+                title={t('inventory.statusLabel')}
+                help={t('inventory.statusHelp')}
+                checked={form.sell_enabled ?? false}
+                onChange={() =>
+                    setForm(prev => ({
+                        ...prev,
+                        sell_enabled: !prev.sell_enabled,
+                        // Sensible defaults the first time selling is enabled.
+                        sale_iva_rate: !prev.sell_enabled && prev.sale_iva_rate == null ? defaultIvaRate : prev.sale_iva_rate,
+                    }))
+                }
+            />
             {form.sell_enabled && (
                 <>
                     <Field label={isWeightUnitForm ? t('inventory.salePricePerKg', { currency }) : t('inventory.salePrice', { currency })}>
@@ -458,22 +456,13 @@ const Inventory: React.FC = () => {
                     </Field>
                 </>
             )}
-            <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
-                <div>
-                    <p className="text-sm font-semibold text-slate-950">{t('inventory.activeLabel')}</p>
-                    <p className="text-sm text-slate-500">{t('inventory.activeHelp')}</p>
-                </div>
-                <button
-                    type="button"
-                    role="switch"
-                    aria-checked={form.is_active}
-                    aria-label={t('inventory.activeLabel')}
-                    onClick={() => setForm({ ...form, is_active: !form.is_active })}
-                    className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${form.is_active ? toggleOnClass : 'bg-slate-300'}`}
-                >
-                    <span className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${form.is_active ? 'translate-x-5' : ''}`} />
-                </button>
-            </div>
+            <DialogToggleRow
+                className="sm:col-span-2"
+                title={t('inventory.activeLabel')}
+                help={t('inventory.activeHelp')}
+                checked={form.is_active}
+                onChange={() => setForm({ ...form, is_active: !form.is_active })}
+            />
             <Field label={t('inventory.stockWithUnit', { unit: form.unit })}>
                 <input type="number" step="any" min="0" value={form.stock} onChange={e => setForm({ ...form, stock: Number(e.target.value) || 0 })} className={fieldClass} />
             </Field>
@@ -844,6 +833,18 @@ const Inventory: React.FC = () => {
                     onConfirm={() => void confirmCreate()}
                 />
             )}
+            {confirmEdit && (
+                <ConfirmDialog
+                    tone="warning"
+                    title={t('inventory.confirmEditTitle')}
+                    message={t('inventory.confirmEditBody')}
+                    cancelLabel={t('common.cancel')}
+                    confirmLabel={t('inventory.confirmEditCta')}
+                    busy={saving}
+                    onCancel={() => setConfirmEdit(false)}
+                    onConfirm={() => void confirmUpdate()}
+                />
+            )}
             {confirmStock && (
                 <ConfirmDialog
                     tone="warning"
@@ -883,12 +884,8 @@ const MaterialThumb: React.FC<{ material: LocalRawMaterial }> = ({ material }) =
         </span>
     );
 
-const Field: React.FC<{ label: string; className?: string; children: React.ReactNode }> = ({ label, className = '', children }) => (
-    <label className={`block text-sm font-semibold text-slate-700 ${className}`}>
-        {label}
-        <div className="mt-2">{children}</div>
-    </label>
-);
+// Canonical field wrapper shared with the dialog-lab previews (ui/dialogParts).
+const Field = DialogField;
 
 const SummaryCard: React.FC<{ icon: React.ComponentType<{ className?: string }>; label: string; value: string; warning?: boolean }> = ({ icon: Icon, label, value, warning = false }) => (
     <div className={`rounded-[2rem] border p-5 shadow-lg ${warning ? 'border-amber-200 bg-amber-50' : 'border-white bg-white/85'}`}>
