@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { INTERNAL_COLOR_DEFAULTS, type InternalColorKey } from '../theme/designSystem2VisualTokens';
 import { useTranslation } from 'react-i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -86,6 +87,86 @@ interface AppearancePreviewProps {
 /** Fixed hex values (not Tailwind classes): inside .ds2-visual-scope, bg-green-500 /
  *  bg-blue-500 utilities are remapped to the live theme vars, which would make those
  *  swatches mirror the current selection instead of their own hue. */
+/** Internal-colour hex fields, grouped for the Appearances section. */
+const INTERNAL_COLOR_GROUPS: { titleKey: string; fields: [InternalColorKey, string][] }[] = [
+    {
+        titleKey: 'appearances.internalAccentLabel',
+        fields: [
+            ['accentChipBg', 'appearances.internal.chipBg'],
+            ['accentChipText', 'appearances.internal.chipText'],
+            ['accentGradientFrom', 'appearances.internal.gradientFrom'],
+            ['accentGradientTo', 'appearances.internal.gradientTo'],
+            ['accentFocusBorder', 'appearances.internal.focusBorder'],
+            ['accentFocusRing', 'appearances.internal.focusRing'],
+        ],
+    },
+    {
+        titleKey: 'appearances.internalSuccessLabel',
+        fields: [
+            ['successSolid', 'appearances.internal.solid'],
+            ['successBg', 'appearances.internal.background'],
+            ['successText', 'appearances.internal.text'],
+            ['successBorder', 'appearances.internal.border'],
+        ],
+    },
+    {
+        titleKey: 'appearances.internalWarningLabel',
+        fields: [
+            ['warningSolid', 'appearances.internal.solid'],
+            ['warningBg', 'appearances.internal.background'],
+            ['warningText', 'appearances.internal.text'],
+            ['warningBorder', 'appearances.internal.border'],
+        ],
+    },
+    {
+        titleKey: 'appearances.internalDangerLabel',
+        fields: [
+            ['dangerSolid', 'appearances.internal.solid'],
+            ['dangerHover', 'appearances.internal.hover'],
+            ['dangerBg', 'appearances.internal.background'],
+            ['dangerText', 'appearances.internal.text'],
+            ['dangerBorder', 'appearances.internal.border'],
+        ],
+    },
+];
+
+const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/** Hex input with a live colour chip; commits valid values, reverts on blur otherwise. */
+const InternalColorField: React.FC<{
+    label: string;
+    value: string;
+    fallback: string;
+    onChange: (hex: string) => void;
+}> = ({ label, value, fallback, onChange }) => {
+    const [draft, setDraft] = React.useState(value);
+    React.useEffect(() => setDraft(value), [value]);
+    const valid = HEX_RE.test(draft.trim());
+    return (
+        <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-neutral-500">{label}</span>
+            <span className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2 ${valid ? 'border-neutral-200' : 'border-red-400'}`}>
+                <span
+                    className="h-5 w-5 shrink-0 rounded-md border border-neutral-200"
+                    style={{ backgroundColor: valid ? draft.trim() : fallback }}
+                />
+                <input
+                    value={draft}
+                    onChange={(event) => {
+                        const next = event.target.value;
+                        setDraft(next);
+                        if (HEX_RE.test(next.trim())) onChange(next.trim());
+                    }}
+                    onBlur={() => { if (!valid) setDraft(value); }}
+                    spellCheck={false}
+                    className="w-full bg-transparent font-mono text-sm text-neutral-800 outline-none"
+                    placeholder={fallback}
+                />
+            </span>
+        </label>
+    );
+};
+
 const COLOR_SWATCH_HEX: Record<DesignSystem2ColorChoiceId, string> = {
     green: '#22c55e',
     emerald: '#10b981',
@@ -541,21 +622,19 @@ const Appearances: React.FC = () => {
                             description={t('appearances.internalColorsDescription')}
                         >
                             <div className="space-y-6">
-                                {([
-                                    ['accentColorId', 'appearances.internalAccentLabel'],
-                                    ['successColorId', 'appearances.internalSuccessLabel'],
-                                    ['warningColorId', 'appearances.internalWarningLabel'],
-                                    ['dangerColorId', 'appearances.internalDangerLabel'],
-                                ] as const).map(([prefKey, labelKey]) => (
-                                    <div key={prefKey}>
-                                        <p className="mb-2 text-sm font-bold text-neutral-700">{t(labelKey)}</p>
-                                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                                            {DESIGN_SYSTEM_2_ACCENTS.map((color) => (
-                                                <ColorSwatchButton
-                                                    key={color.id}
-                                                    color={color}
-                                                    selected={prefs[prefKey] === color.id}
-                                                    onClick={() => setPrefs({ [prefKey]: color.id })}
+                                {INTERNAL_COLOR_GROUPS.map((group) => (
+                                    <div key={group.titleKey}>
+                                        <p className="mb-2 text-sm font-bold text-neutral-700">{t(group.titleKey)}</p>
+                                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                            {group.fields.map(([key, labelKey]) => (
+                                                <InternalColorField
+                                                    key={key}
+                                                    label={t(labelKey)}
+                                                    value={prefs.internalColors[key]}
+                                                    fallback={INTERNAL_COLOR_DEFAULTS[key]}
+                                                    onChange={(hex) =>
+                                                        setPrefs({ internalColors: { ...prefs.internalColors, [key]: hex } })
+                                                    }
                                                 />
                                             ))}
                                         </div>

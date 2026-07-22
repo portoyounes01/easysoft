@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { useDialogTokens } from './ui/dialogParts';
+import React, { useCallback, useContext } from 'react';
+import { DialogShellStyleContext, DIALOG_PALETTES } from '../theme/dialogStyle';
 import { Delete, X } from 'lucide-react';
 
 export interface QuickNumpadProps {
@@ -19,8 +19,10 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
     className = '',
     disabled = false
 }) => {
-    const tk = useDialogTokens();
-    // 1. Hooks - none
+    // Inside an applied dialog shell the numpad follows the style's numpad
+    // axis; 'keys' renders the simple bordered grid, 'legacy' (and page
+    // surfaces / unstyled dialogs) keep the original framed grid below.
+    const shellStyle = useContext(DialogShellStyleContext);
 
     // 2. Event handlers
     const appendToken = useCallback((token: string) => {
@@ -47,8 +49,34 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
     // 4. Effects - none
 
     // 5. Render
+    if (shellStyle && shellStyle.numpad === 'keys') {
+        const p = DIALOG_PALETTES[shellStyle.palette];
+        const key = `flex min-h-touch-sm items-center justify-center rounded-xl border ${p.border} bg-white font-semibold ${p.titleText} ${disabled ? 'cursor-not-allowed opacity-50' : `hover:${p.tintBg}`}`;
+        const quickKey = `flex min-h-touch-sm items-center justify-center rounded-xl border ${p.border} ${p.tintBg} font-semibold ${p.titleText} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`;
+        return (
+            <div className={`grid grid-cols-4 gap-2 ${className}`}>
+                {['1', '2', '3'].map(d => (
+                    <button key={d} type="button" disabled={disabled} onClick={() => appendToken(d)} className={key}>{d}</button>
+                ))}
+                <button type="button" disabled={disabled} onClick={() => handleQuickSet(quickValues[0])} className={quickKey}>{quickValues[0]}</button>
+                {['4', '5', '6'].map(d => (
+                    <button key={d} type="button" disabled={disabled} onClick={() => appendToken(d)} className={key}>{d}</button>
+                ))}
+                <button type="button" disabled={disabled} onClick={() => handleQuickSet(quickValues[1])} className={quickKey}>{quickValues[1]}</button>
+                {['7', '8', '9'].map(d => (
+                    <button key={d} type="button" disabled={disabled} onClick={() => appendToken(d)} className={key}>{d}</button>
+                ))}
+                <button type="button" disabled={disabled} onClick={() => handleQuickSet(quickValues[2])} className={quickKey}>{quickValues[2]}</button>
+                <button type="button" disabled={disabled} onClick={handleClear} className={key} aria-label="Clear">×</button>
+                <button type="button" disabled={disabled} onClick={() => appendToken('0')} className={key}>0</button>
+                <button type="button" disabled={disabled} onClick={handleDelete} className={key} aria-label="Delete">⌫</button>
+                <button type="button" disabled={disabled} onClick={() => handleQuickSet(quickValues[3])} className={quickKey}>{quickValues[3]}</button>
+            </div>
+        );
+    }
+
     return (
-        <div className={`rounded-2xl ring-2 ${tk.cfg ? 'ring-transparent border ' + tk.p.border : 'ring-gray-300'} overflow-hidden ${className}`}>
+        <div className={`rounded-2xl ring-2 ring-gray-300 overflow-hidden ${className}`}>
             <div className="grid grid-cols-4 h-full">
                 {/* Left 3x3 + bottom row */}
                 <div className="col-span-3 h-full">
@@ -60,7 +88,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
                             const colIndex = index % 3;
                             const withTop = rowIndex > 0;
                             const withLeft = colIndex > 0;
-                            const dividerClasses = `${withTop ? 'border-t' : ''} ${withLeft ? 'border-l' : ''} ${withTop || withLeft ? (tk.cfg ? tk.p.border : 'border-gray-300') : ''}`.trim();
+                            const dividerClasses = `${withTop ? 'border-t' : ''} ${withLeft ? 'border-l' : ''} ${withTop || withLeft ? 'border-gray-300' : ''}`.trim();
 
                             if (token === 'delete') {
                                 return (
@@ -68,7 +96,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
                                         key={token}
                                         onClick={handleDelete}
                                         disabled={disabled}
-                                        className={`bg-white ${tk.p.titleText} flex items-center justify-center ${dividerClasses} ${disabled ? 'cursor-not-allowed' : `hover:${tk.p.tintBg}`}`}
+                                        className={`bg-white text-gray-900 flex items-center justify-center ${dividerClasses} ${disabled ? 'cursor-not-allowed' : 'hover:bg-gray-50'}`}
                                     >
                                         <Delete className="text-gray-800" style={{ width: '2.2vh', height: '2.2vh' }} />
                                     </button>
@@ -81,7 +109,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
                                         key={token}
                                         onClick={handleClear}
                                         disabled={disabled}
-                                        className={`${tk.cfg ? tk.p.tintBg : 'bg-gray-50'} ${tk.p.titleText} flex items-center justify-center ${dividerClasses} ${disabled ? 'cursor-not-allowed' : ''}`}
+                                        className={`bg-gray-50 text-gray-900 flex items-center justify-center ${dividerClasses} ${disabled ? 'cursor-not-allowed' : 'hover:bg-gray-100'}`}
                                     >
                                         <X className="text-gray-800" style={{ width: '2.2vh', height: '2.2vh' }} />
                                     </button>
@@ -93,7 +121,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
                                     key={token}
                                     onClick={() => appendToken(String(token))}
                                     disabled={disabled}
-                                    className={`${tk.p.titleText} flex items-center justify-center bg-white ${dividerClasses} ${disabled ? 'cursor-not-allowed' : `hover:${tk.p.tintBg}`}`}
+                                    className={`text-gray-900 flex items-center justify-center bg-white ${dividerClasses} ${disabled ? 'cursor-not-allowed' : 'hover:bg-gray-50'}`}
                                     style={{ fontSize: '2vh' }}
                                 >
                                     {token}
@@ -104,7 +132,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
                 </div>
 
                 {/* Right quick values column */}
-                <div className={`${tk.cfg ? tk.p.tintBg : 'bg-gray-100'} h-full grid grid-rows-4 border-l ${tk.cfg ? tk.p.border : 'border-gray-300'}`}>
+                <div className="bg-gray-100 h-full grid grid-rows-4 border-l border-gray-300">
                     {quickValues.map((q, idx) => (
                         <button
                             key={q}

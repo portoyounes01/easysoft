@@ -310,41 +310,63 @@ export function getSecondaryCssVars(id: DesignSystem2ColorChoiceId): CssVarMap {
 }
 
 /**
- * Internal colours: dialog/header accents (chips, gradient bars, focus rings,
- * tab indicators) plus the semantic success / warning / danger family used by
- * banners, confirm dialogs and destructive buttons. Each picks any palette hue.
+ * Internal colours: free-form hex values for the fine-grained accents used
+ * inside dialogs and controls. Each key maps to one CSS variable; the
+ * Appearances "Internal colors" section edits them as # hex fields.
  */
-export function getInternalCssVars(
-    accentId: DesignSystem2ColorChoiceId,
-    successId: DesignSystem2ColorChoiceId,
-    warningId: DesignSystem2ColorChoiceId,
-    dangerId: DesignSystem2ColorChoiceId
-): CssVarMap {
-    const a = PALETTE[accentId] ?? PALETTE.green;
-    const su = PALETTE[successId] ?? PALETTE.green;
-    const w = PALETTE[warningId] ?? PALETTE.orange;
-    const d = PALETTE[dangerId] ?? PALETTE.rose;
-    return {
-        '--ds2-accent-solid': a['--ds2-brand-solid'],
-        '--ds2-accent-from': a['--ds2-brand-from'],
-        '--ds2-accent-to': a['--ds2-brand-to'],
-        '--ds2-accent-tint-bg': a['--ds2-ui-tint-bg'],
-        '--ds2-accent-tint-text': a['--ds2-ui-tint-text'],
-        '--ds2-accent-ring': a['--ds2-focus-ring'],
-        '--ds2-success-solid': su['--ds2-brand-solid'],
-        '--ds2-success-tint-bg': su['--ds2-ui-tint-bg'],
-        '--ds2-success-tint-text': su['--ds2-ui-tint-text'],
-        '--ds2-success-border': su['--ds2-cash-border'],
-        '--ds2-warning-solid': w['--ds2-brand-solid'],
-        '--ds2-warning-tint-bg': w['--ds2-ui-tint-bg'],
-        '--ds2-warning-tint-text': w['--ds2-ui-tint-text'],
-        '--ds2-warning-border': w['--ds2-cash-border'],
-        '--ds2-danger-solid': d['--ds2-brand-solid'],
-        '--ds2-danger-hover': d['--ds2-confirm-hover'],
-        '--ds2-danger-tint-bg': d['--ds2-ui-tint-bg'],
-        '--ds2-danger-tint-text': d['--ds2-ui-tint-text'],
-        '--ds2-danger-border': d['--ds2-cash-border'],
-    };
+export const INTERNAL_COLOR_VARS = {
+    accentChipBg: '--ds2-accent-tint-bg',
+    accentChipText: '--ds2-accent-tint-text',
+    accentGradientFrom: '--ds2-accent-from',
+    accentGradientTo: '--ds2-accent-to',
+    accentFocusBorder: '--ds2-accent-solid',
+    accentFocusRing: '--ds2-accent-ring',
+    successSolid: '--ds2-success-solid',
+    successBg: '--ds2-success-tint-bg',
+    successText: '--ds2-success-tint-text',
+    successBorder: '--ds2-success-border',
+    warningSolid: '--ds2-warning-solid',
+    warningBg: '--ds2-warning-tint-bg',
+    warningText: '--ds2-warning-tint-text',
+    warningBorder: '--ds2-warning-border',
+    dangerSolid: '--ds2-danger-solid',
+    dangerHover: '--ds2-danger-hover',
+    dangerBg: '--ds2-danger-tint-bg',
+    dangerText: '--ds2-danger-tint-text',
+    dangerBorder: '--ds2-danger-border',
+} as const;
+
+export type InternalColorKey = keyof typeof INTERNAL_COLOR_VARS;
+
+/** Defaults preserve the pre-customization look (green accent, orange warning, rose danger). */
+export const INTERNAL_COLOR_DEFAULTS: Record<InternalColorKey, string> = {
+    accentChipBg: '#f0fdf4',
+    accentChipText: '#14532d',
+    accentGradientFrom: '#22c55e',
+    accentGradientTo: '#15803d',
+    accentFocusBorder: '#16a34a',
+    accentFocusRing: '#22c55e',
+    successSolid: '#16a34a',
+    successBg: '#f0fdf4',
+    successText: '#14532d',
+    successBorder: '#22c55e',
+    warningSolid: '#ea580c',
+    warningBg: '#fff7ed',
+    warningText: '#7c2d12',
+    warningBorder: '#f97316',
+    dangerSolid: '#e11d48',
+    dangerHover: '#be123c',
+    dangerBg: '#fff1f2',
+    dangerText: '#881337',
+    dangerBorder: '#f43f5e',
+};
+
+export function getInternalCssVars(colors: Record<InternalColorKey, string>): CssVarMap {
+    const out: CssVarMap = {};
+    (Object.keys(INTERNAL_COLOR_VARS) as InternalColorKey[]).forEach((key) => {
+        out[INTERNAL_COLOR_VARS[key]] = colors[key] || INTERNAL_COLOR_DEFAULTS[key];
+    });
+    return out;
 }
 
 /** Pairing gradient: primary solid → secondary solid */

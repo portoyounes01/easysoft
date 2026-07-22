@@ -24,6 +24,8 @@ export type DialogFooterVariant = 'inBody' | 'borderedBar' | 'tintedBar';
 export type DialogBodyTint = 'white' | 'soft';
 /** How action buttons are laid out inside the footer row. */
 export type DialogFooterButtons = 'end' | 'stretch' | 'between';
+/** Numpad look: simple bordered key grid, or the legacy framed grid with dividers. */
+export type DialogNumpadVariant = 'keys' | 'legacy';
 
 export interface DialogStyleConfig {
     overlayOpacity: DialogOverlayOpacity;
@@ -39,6 +41,7 @@ export interface DialogStyleConfig {
     footer: DialogFooterVariant;
     bodyTint: DialogBodyTint;
     footerButtons: DialogFooterButtons;
+    numpad: DialogNumpadVariant;
 }
 
 const AXIS_VALUES: { [K in keyof DialogStyleConfig]: readonly DialogStyleConfig[K][] } = {
@@ -55,6 +58,7 @@ const AXIS_VALUES: { [K in keyof DialogStyleConfig]: readonly DialogStyleConfig[
     footer: ['inBody', 'borderedBar', 'tintedBar'],
     bodyTint: ['white', 'soft'],
     footerButtons: ['end', 'stretch', 'between'],
+    numpad: ['keys', 'legacy'],
 };
 
 /**
@@ -63,6 +67,7 @@ const AXIS_VALUES: { [K in keyof DialogStyleConfig]: readonly DialogStyleConfig[
  */
 export const DIALOG_AXIS_FALLBACKS: Partial<DialogStyleConfig> = {
     footerButtons: 'stretch',
+    numpad: 'keys',
 };
 
 export function isValidDialogStyleConfig(raw: unknown): raw is DialogStyleConfig {

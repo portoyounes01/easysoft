@@ -10,6 +10,8 @@ import React, {
 } from 'react';
 import {
     getInternalCssVars,
+    INTERNAL_COLOR_DEFAULTS,
+    type InternalColorKey,
     getPrimaryCssVars,
     getSecondaryCssVars,
     getPairingCssVars,
@@ -50,12 +52,9 @@ export interface DesignSystem2Prefs {
     primaryColorId: DesignSystem2ColorChoiceId;
     /** Admin chrome, table actions, sidebar nav gradients */
     secondaryColorId: DesignSystem2ColorChoiceId;
-    /** Internal accents: dialog chips / gradient headers / focus rings / tab indicators */
-    accentColorId: DesignSystem2ColorChoiceId;
-    /** Semantic states (banners, confirm dialogs, destructive buttons) */
-    successColorId: DesignSystem2ColorChoiceId;
-    warningColorId: DesignSystem2ColorChoiceId;
-    dangerColorId: DesignSystem2ColorChoiceId;
+    /** Free-form hex values for internal accents + semantic states (dialog
+     *  chips, gradient headers, focus rings, success / warning / danger). */
+    internalColors: Record<InternalColorKey, string>;
     /** Page canvas behind preview — distinct from neutral text scale */
     baseColorId: DesignSystem2BaseColorId;
     /** Which gray family maps `neutral-*` utilities in the preview scope */
@@ -73,10 +72,7 @@ const defaultPrefs: DesignSystem2Prefs = {
     sidebarWidth: 'md',
     primaryColorId: 'green',
     secondaryColorId: 'green',
-    accentColorId: 'green',
-    successColorId: 'green',
-    warningColorId: 'orange',
-    dangerColorId: 'rose',
+    internalColors: { ...INTERNAL_COLOR_DEFAULTS },
     baseColorId: 'gray50',
     neutralFamilyId: 'gray',
     radiusPreset: 'default',
@@ -132,10 +128,17 @@ function normalizePrefs(raw: LegacyPartial): DesignSystem2Prefs {
 
     if (!COLOR_IDS.has(m.primaryColorId)) m.primaryColorId = defaultPrefs.primaryColorId;
     if (!COLOR_IDS.has(m.secondaryColorId)) m.secondaryColorId = defaultPrefs.secondaryColorId;
-    if (!COLOR_IDS.has(m.accentColorId)) m.accentColorId = defaultPrefs.accentColorId;
-    if (!COLOR_IDS.has(m.successColorId)) m.successColorId = defaultPrefs.successColorId;
-    if (!COLOR_IDS.has(m.warningColorId)) m.warningColorId = defaultPrefs.warningColorId;
-    if (!COLOR_IDS.has(m.dangerColorId)) m.dangerColorId = defaultPrefs.dangerColorId;
+    // Internal colours: keep only valid hex entries; anything else falls back.
+    {
+        const hexRe = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+        const raw2 = (m.internalColors ?? {}) as Partial<Record<InternalColorKey, string>>;
+        const cleaned = { ...INTERNAL_COLOR_DEFAULTS };
+        (Object.keys(INTERNAL_COLOR_DEFAULTS) as InternalColorKey[]).forEach((key) => {
+            const v = raw2[key];
+            if (typeof v === 'string' && hexRe.test(v.trim())) cleaned[key] = v.trim();
+        });
+        m.internalColors = cleaned;
+    }
     m.schemaVersion = PREFS_SCHEMA_VERSION;
     if (!BASE_IDS.has(m.baseColorId)) m.baseColorId = defaultPrefs.baseColorId;
     if (!NEUTRAL_IDS.has(m.neutralFamilyId)) m.neutralFamilyId = defaultPrefs.neutralFamilyId;
@@ -150,7 +153,7 @@ function normalizePrefs(raw: LegacyPartial): DesignSystem2Prefs {
 function buildVisualStyle(prefs: DesignSystem2Prefs): CSSProperties {
     return {
         ...getPrimaryCssVars(prefs.primaryColorId),
-        ...getInternalCssVars(prefs.accentColorId, prefs.successColorId, prefs.warningColorId, prefs.dangerColorId),
+        ...getInternalCssVars(prefs.internalColors),
         ...getSecondaryCssVars(prefs.secondaryColorId),
         ...getPairingCssVars(prefs.primaryColorId, prefs.secondaryColorId),
         ...getRadiusCssVars(prefs.radiusPreset, prefs.radiusCustomPx),

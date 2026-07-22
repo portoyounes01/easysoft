@@ -51,6 +51,7 @@ const DEFAULT_CONFIG: DialogStyleConfig = {
     footer: 'borderedBar',
     bodyTint: 'soft',
     footerButtons: 'stretch',
+    numpad: 'keys',
 };
 
 /**
@@ -74,6 +75,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '55', overlayPadding: 'p-4', centering: 'flex', panelRadius: '2rem',
             sizing: 'max-w-xl', header: 'chipLeft', closeButton: 'slateSquare', palette: 'slate',
             controls: 'rounded2xlSlate', primaryCta: 'orange500', footer: 'inBody', bodyTint: 'white',
+            numpad: 'keys',
             footerButtons: 'stretch',
         },
     },
@@ -83,6 +85,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '55', overlayPadding: 'p-4', centering: 'flex', panelRadius: '2rem',
             sizing: 'max-w-md', header: 'borderedLeft', closeButton: 'slateSquare', palette: 'slate',
             controls: 'rounded2xlSlate', primaryCta: 'green500', footer: 'inBody', bodyTint: 'soft',
+            numpad: 'keys',
             footerButtons: 'stretch',
         },
     },
@@ -96,6 +99,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '55', overlayPadding: 'p-4', centering: 'flex', panelRadius: '2rem',
             sizing: 'max-w-lg', header: 'bareLeft', closeButton: 'slateSquare', palette: 'slate',
             controls: 'rounded2xlSlate', primaryCta: 'slate950', footer: 'inBody', bodyTint: 'white',
+            numpad: 'keys',
             footerButtons: 'end',
         },
     },
@@ -105,6 +109,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '40', overlayPadding: 'none', centering: 'transform', panelRadius: '2xl',
             sizing: 'max-w-2xl', header: 'gradientBar', closeButton: 'whiteGhost', palette: 'neutral',
             controls: 'roundedXlEmerald', primaryCta: 'blue600', footer: 'tintedBar', bodyTint: 'soft',
+            numpad: 'keys',
             footerButtons: 'between',
         },
     },
@@ -114,6 +119,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '55', overlayPadding: 'p-4', centering: 'flex', panelRadius: '2xl',
             sizing: 'max-w-3xl', header: 'borderedChip', closeButton: 'graySquare', palette: 'gray',
             controls: 'roundedLgBlue', primaryCta: 'blue600', footer: 'tintedBar', bodyTint: 'white',
+            numpad: 'legacy',
             footerButtons: 'between',
         },
     },
@@ -123,6 +129,7 @@ const PRESETS: Record<string, { label: string; config: DialogStyleConfig }> = {
             overlayOpacity: '50', overlayPadding: 'p-4', centering: 'flex', panelRadius: '3xl',
             sizing: 'max-w-md', header: 'bareBold', closeButton: 'ghostRound', palette: 'neutral',
             controls: 'roundedXlEmerald', primaryCta: 'emerald600', footer: 'inBody', bodyTint: 'white',
+            numpad: 'keys',
             footerButtons: 'stretch',
         },
     },
@@ -457,6 +464,15 @@ const DialogLab: React.FC = () => {
                             { value: 'stretch', label: 'stretch · equal widths' },
                             { value: 'end', label: 'right-aligned · compact' },
                             { value: 'between', label: 'space between' },
+                        ]}
+                    />
+                    <AxisRow
+                        label="Numpad"
+                        value={config.numpad}
+                        onChange={(value) => set('numpad', value)}
+                        options={[
+                            { value: 'keys', label: 'key grid · bordered' },
+                            { value: 'legacy', label: 'framed grid · dividers' },
                         ]}
                     />
                     <AxisRow
