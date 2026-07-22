@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { WithDialogTokens } from './ui/dialogParts';
 import { useTranslation } from 'react-i18next';
 import { Search, Plus, Users, Check, AlertCircle, CreditCard as TaxIcon } from 'lucide-react';
 import { BaseDialog } from './ui/BaseDialog';
@@ -247,6 +248,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             open={open}
             onClose={onClose}
             title={t('pos.selectCustomerTitle')}
+            icon={Users}
             width="55vw"
             height="80vh"
             footer={
@@ -291,6 +293,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 ) : undefined
             }
         >
+            <WithDialogTokens>{tk => (
             <div className="flex flex-col h-full">
                 {/* View Toggle */}
                 <div className="px-6 pt-6 pb-4">
@@ -345,14 +348,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                                 style={{ paddingTop: index === 0 ? '2vh' : '1.5vh', paddingBottom: '1vh' }}
                                             >
                                                 <div className="flex items-center justify-between px-2">
-                                                    <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>
+                                                    <p className={`font-semibold ${tk.p.titleText} truncate`} style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>
                                                         {customer.tax_number || 'N/A'}
                                                     </p>
-                                                    <p className="font-semibold text-gray-900" style={{ fontSize: '1.5vh' }}>
+                                                    <p className={`font-semibold ${tk.p.titleText}`} style={{ fontSize: '1.5vh' }}>
                                                         €{(customer.total_spent || 0).toFixed(2)}
                                                     </p>
                                                 </div>
-                                                <div className="flex items-center space-x-3 text-gray-500 px-2" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
+                                                <div className={`flex items-center space-x-3 ${tk.p.subText} px-2`} style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
                                                     <span className="font-medium truncate" style={{ fontSize: '1.3vh' }}>{customer.name}</span>
                                                     <span style={{ fontSize: '1.3vh' }}>•</span>
                                                     <span style={{ fontSize: '1.3vh' }}>{customer.transaction_count || 0} orders</span>
@@ -364,12 +367,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             ) : (
                                 <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
                                     <Users className="w-16 h-16 text-gray-300 mb-4" />
-                                    <p className="text-xl font-semibold text-gray-700 mb-2">
+                                    <p className={`text-xl font-semibold ${tk.p.titleText} mb-2`}>
                                         {searchTerm.trim().length === 0
                                             ? t('pos.startSearchTitle')
                                             : t('pos.noCustomersFoundTitle')}
                                     </p>
-                                    <p className="text-gray-500 mb-6">
+                                    <p className={`${tk.p.subText} mb-6`}>
                                         {searchTerm.trim().length === 0
                                             ? t('pos.startSearchMessage')
                                             : t('pos.noCustomersFoundMessage')}
@@ -486,6 +489,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     </div>
                 )}
             </div>
+            )}</WithDialogTokens>
         </BaseDialog>
     );
 };

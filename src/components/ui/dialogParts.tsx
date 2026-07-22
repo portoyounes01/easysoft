@@ -52,6 +52,11 @@ export function useDialogTokens(): DialogTokens {
     };
 }
 
+/** Render-prop consumer for bodies that need raw token classes. */
+export const WithDialogTokens: React.FC<{ children: (t: DialogTokens) => React.ReactNode }> = ({ children }) => (
+    <>{children(useDialogTokens())}</>
+);
+
 /** Label + control wrapper. */
 export const DialogField: React.FC<{ label: string; children: React.ReactNode; className?: string }> = ({ label, children, className = '' }) => {
     const t = useDialogTokens();

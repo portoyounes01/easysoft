@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { WithDialogTokens } from './ui/dialogParts';
 import { Archive, CheckCircle, Lock, Unlock, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -108,6 +109,7 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
 
     // Interior shared between the original panel and the applied-style shell.
     const interior = (
+        <WithDialogTokens>{tk => (<>
         <>
             <div className={`mt-6 flex items-center gap-3 rounded-2xl p-4 ${
                 consideredOpen ? 'bg-amber-50 text-amber-900' : 'bg-emerald-50 text-emerald-900'
@@ -126,25 +128,25 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
             </div>
 
             <div className="mt-6 space-y-4">
-                <label className="block text-sm font-semibold text-slate-700">
+                <label className={`block text-sm font-semibold ${tk.p.titleText}`}>
                     {t('cashDrawerDialog.reasonLabel')}
                     <select
                         value={reasonCode}
                         onChange={event => setReasonCode(event.target.value as Exclude<CashDrawerReasonCode, 'sale'>)}
-                        className="mt-2 min-h-touch-sm w-full rounded-2xl border border-slate-300 bg-white px-4"
+                        className={`mt-2 ${tk.cfg ? tk.input : "min-h-touch-sm w-full rounded-2xl border border-slate-300 bg-white px-4"}`}
                     >
                         {reasonOptions.map(option => (
                             <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
                         ))}
                     </select>
                 </label>
-                <label className="block text-sm font-semibold text-slate-700">
+                <label className={`block text-sm font-semibold ${tk.p.titleText}`}>
                     {t('cashDrawerDialog.justificationLabel')}
                     <textarea
                         value={justification}
                         onChange={event => setJustification(event.target.value)}
                         placeholder={t('cashDrawerDialog.justificationPlaceholder')}
-                        className="mt-2 min-h-28 w-full rounded-2xl border border-slate-300 p-4 font-normal outline-none focus:ring-4 focus:ring-slate-200"
+                        className={`mt-2 min-h-28 font-normal ${tk.cfg ? tk.input : "w-full rounded-2xl border border-slate-300 p-4 outline-none focus:ring-4 focus:ring-slate-200"} ${tk.cfg ? "py-3" : ""}`}
                     />
                 </label>
             </div>
@@ -156,6 +158,7 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
             )}
             {error && <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
         </>
+        </>)}</WithDialogTokens>
     );
 
     if (applied) {

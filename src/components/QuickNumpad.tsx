@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react';
+import { useDialogTokens } from './ui/dialogParts';
 import { Delete, X } from 'lucide-react';
 
 export interface QuickNumpadProps {
@@ -18,6 +19,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
     className = '',
     disabled = false
 }) => {
+    const tk = useDialogTokens();
     // 1. Hooks - none
 
     // 2. Event handlers
@@ -46,7 +48,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
 
     // 5. Render
     return (
-        <div className={`rounded-2xl ring-2 ring-gray-300 overflow-hidden ${className}`}>
+        <div className={`rounded-2xl ring-2 ${tk.cfg ? 'ring-transparent border ' + tk.p.border : 'ring-gray-300'} overflow-hidden ${className}`}>
             <div className="grid grid-cols-4 h-full">
                 {/* Left 3x3 + bottom row */}
                 <div className="col-span-3 h-full">
@@ -58,7 +60,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
                             const colIndex = index % 3;
                             const withTop = rowIndex > 0;
                             const withLeft = colIndex > 0;
-                            const dividerClasses = `${withTop ? 'border-t' : ''} ${withLeft ? 'border-l' : ''} ${withTop || withLeft ? 'border-gray-300' : ''}`.trim();
+                            const dividerClasses = `${withTop ? 'border-t' : ''} ${withLeft ? 'border-l' : ''} ${withTop || withLeft ? (tk.cfg ? tk.p.border : 'border-gray-300') : ''}`.trim();
 
                             if (token === 'delete') {
                                 return (
@@ -66,7 +68,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
                                         key={token}
                                         onClick={handleDelete}
                                         disabled={disabled}
-                                        className={`bg-white text-gray-900 flex items-center justify-center ${dividerClasses} ${disabled ? 'cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                                        className={`bg-white ${tk.p.titleText} flex items-center justify-center ${dividerClasses} ${disabled ? 'cursor-not-allowed' : `hover:${tk.p.tintBg}`}`}
                                     >
                                         <Delete className="text-gray-800" style={{ width: '2.2vh', height: '2.2vh' }} />
                                     </button>
@@ -79,7 +81,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
                                         key={token}
                                         onClick={handleClear}
                                         disabled={disabled}
-                                        className={`bg-gray-50 text-gray-900 flex items-center justify-center ${dividerClasses} ${disabled ? 'cursor-not-allowed' : 'hover:bg-gray-100'}`}
+                                        className={`${tk.cfg ? tk.p.tintBg : 'bg-gray-50'} ${tk.p.titleText} flex items-center justify-center ${dividerClasses} ${disabled ? 'cursor-not-allowed' : ''}`}
                                     >
                                         <X className="text-gray-800" style={{ width: '2.2vh', height: '2.2vh' }} />
                                     </button>
@@ -91,7 +93,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
                                     key={token}
                                     onClick={() => appendToken(String(token))}
                                     disabled={disabled}
-                                    className={`text-gray-900 flex items-center justify-center bg-white ${dividerClasses} ${disabled ? 'cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                                    className={`${tk.p.titleText} flex items-center justify-center bg-white ${dividerClasses} ${disabled ? 'cursor-not-allowed' : `hover:${tk.p.tintBg}`}`}
                                     style={{ fontSize: '2vh' }}
                                 >
                                     {token}
@@ -102,7 +104,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
                 </div>
 
                 {/* Right quick values column */}
-                <div className="bg-gray-100 h-full grid grid-rows-4 border-l border-gray-300">
+                <div className={`${tk.cfg ? tk.p.tintBg : 'bg-gray-100'} h-full grid grid-rows-4 border-l ${tk.cfg ? tk.p.border : 'border-gray-300'}`}>
                     {quickValues.map((q, idx) => (
                         <button
                             key={q}

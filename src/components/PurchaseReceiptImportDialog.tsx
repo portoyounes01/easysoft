@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { WithDialogTokens } from './ui/dialogParts';
 import { useTranslation } from 'react-i18next';
 import {
     AlertTriangle,
@@ -193,8 +194,9 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
 
     // Interior shared between the original panel and the applied-style shell.
     const interior = (
+        <WithDialogTokens>{tk => (<>
                 <div className="grid min-h-0 flex-1 lg:grid-cols-[22rem_minmax(0,1fr)]">
-                    <aside className="overflow-y-auto border-b border-slate-200 bg-slate-50 p-5 lg:border-b-0 lg:border-r">
+                    <aside className={`overflow-y-auto border-b ${tk.p.border} ${tk.p.tintBg} p-5 lg:border-b-0 lg:border-r`}>
                         <input
                             ref={uploadInputRef}
                             type="file"
@@ -221,13 +223,13 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                             <button
                                 type="button"
                                 onClick={() => uploadInputRef.current?.click()}
-                                className="flex min-h-touch flex-col items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700"
+                                className={`flex min-h-touch flex-col items-center justify-center gap-2 rounded-2xl border ${tk.p.border} bg-white px-3 text-sm font-semibold ${tk.p.subText}`}
                             >
                                 <Upload className="h-5 w-5" /> {t('purchaseReceiptImport.upload')}
                             </button>
                         </div>
 
-                        <label className="mt-5 block text-sm font-semibold text-slate-700">
+                        <label className={`mt-5 block text-sm font-semibold ${tk.p.titleText}`}>
                             {t('purchaseReceiptImport.documentType')}
                             <select
                                 value={documentType}
@@ -240,9 +242,9 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                             </select>
                         </label>
 
-                        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                        <div className={`mt-5 overflow-hidden rounded-2xl border ${tk.p.border} bg-white`}>
                             {!file ? (
-                                <div className="flex min-h-64 flex-col items-center justify-center p-5 text-center text-slate-400">
+                                <div className={`flex min-h-64 flex-col items-center justify-center p-5 text-center ${tk.p.subText}`}>
                                     <FileText className="h-12 w-12" />
                                     <p className="mt-3 text-sm">{t('purchaseReceiptImport.uploadHint')}</p>
                                 </div>
@@ -254,9 +256,9 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                                 <img src={previewUrl} alt={t('purchaseReceiptImport.previewAlt')} className="max-h-72 w-full object-contain" />
                             )}
                             {file && (
-                                <div className="border-t border-slate-200 p-3">
-                                    <p className="truncate text-sm font-semibold text-slate-800">{file.name}</p>
-                                    <p className="text-xs text-slate-400">{t('purchaseReceiptImport.fileSizeKb', { size: (file.size / 1024).toFixed(0) })}</p>
+                                <div className={`border-t ${tk.p.border} p-3`}>
+                                    <p className={`truncate text-sm font-semibold ${tk.p.titleText}`}>{file.name}</p>
+                                    <p className={`text-xs ${tk.p.subText}`}>{t('purchaseReceiptImport.fileSizeKb', { size: (file.size / 1024).toFixed(0) })}</p>
                                 </div>
                             )}
                         </div>
@@ -285,14 +287,14 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                     <main className="flex min-h-0 flex-col p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
-                                <h3 className="text-xl font-semibold text-slate-950">{t('purchaseReceiptImport.purchaseLines')}</h3>
-                                <p className="text-sm text-slate-500">{t('purchaseReceiptImport.purchaseLinesHint')}</p>
+                                <h3 className={`text-xl font-semibold ${tk.p.titleText}`}>{t('purchaseReceiptImport.purchaseLines')}</h3>
+                                <p className={`text-sm ${tk.p.subText}`}>{t('purchaseReceiptImport.purchaseLinesHint')}</p>
                             </div>
                             <button
                                 type="button"
                                 onClick={addManualLine}
                                 disabled={!extraction}
-                                className="min-h-touch-xs rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 disabled:opacity-40"
+                                className={`min-h-touch-xs rounded-xl ${tk.p.tintBg} px-4 text-sm font-semibold ${tk.p.subText} disabled:opacity-40`}
                             >
                                 {t('purchaseReceiptImport.addManualLine')}
                             </button>
@@ -324,7 +326,7 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                                     />
                                 ))}
                                 {!extraction && (
-                                    <div className="flex min-h-72 flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 text-center text-slate-400">
+                                    <div className={`flex min-h-72 flex-col items-center justify-center rounded-3xl border-2 border-dashed ${tk.p.border} text-center ${tk.p.subText}`}>
                                         <PackagePlus className="h-14 w-14" />
                                         <p className="mt-3 font-semibold">{t('purchaseReceiptImport.emptyState')}</p>
                                     </div>
@@ -332,7 +334,7 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                             </div>
                         </div>
 
-                        <footer className="mt-5 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                        <footer className={`mt-5 flex flex-col gap-4 border-t ${tk.p.border} pt-5 sm:flex-row sm:items-center sm:justify-between`}>
                             <div className="flex flex-wrap gap-5 text-sm">
                                 <Info label={t('purchaseReceiptImport.includedLines')} value={String(includedLines.length)} />
                                 <Info label={t('purchaseReceiptImport.unitsToAdd')} value={String(stockUnits)} />
@@ -350,6 +352,7 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                         </footer>
                     </main>
                 </div>
+        </>)}</WithDialogTokens>
     );
 
     if (applied) {

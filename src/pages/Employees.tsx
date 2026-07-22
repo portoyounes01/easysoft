@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { WithDialogTokens } from '../components/ui/dialogParts';
 import {
     Plus,
     Search,
@@ -1012,9 +1013,10 @@ const EmployeesInner: React.FC = () => {
                 // mobile wraps the same children in a full-screen sheet (X top-left + sticky
                 // full-width "Save Changes", per the mobile form pattern).
                 const formShellChildren = (
+                    <WithDialogTokens>{tk => (
                     <div className="flex h-full flex-col">
                         {formData.employee_number && (
-                            <div className="px-6 pt-5 text-sm font-medium text-gray-600">
+                            <div className={`px-6 pt-5 text-sm font-medium ${tk.p.subText}`}>
                                 {t('employees.form.employeeNumber')} {formData.employee_number}
                             </div>
                         )}
@@ -1023,11 +1025,11 @@ const EmployeesInner: React.FC = () => {
                         <form id="employee-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
                                     {/* Basic Information */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.basicInfo')}</h3>
+                                        <h3 className={`text-lg font-semibold ${tk.p.titleText} mb-4`}>{t('employees.form.basicInfo')}</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {/* 1. Full Name */}
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.fullName')} *</label>
+                                                <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.fullName')} *</label>
                                                 <input
                                                     type="text"
                                                     value={formData.name}
@@ -1046,7 +1048,7 @@ const EmployeesInner: React.FC = () => {
 
                                             {/* 2. Hire Date */}
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.hireDate')} *</label>
+                                                <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.hireDate')} *</label>
                                                 <div className="relative">
                                                     <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                                                     <input
@@ -1067,7 +1069,7 @@ const EmployeesInner: React.FC = () => {
 
                                             {/* 3. Role */}
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.role')} *</label>
+                                                <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.role')} *</label>
                                                 <select
                                                     value={formData.role}
                                                     onChange={(e) => handleFormChange('role', e.target.value as EmployeeRole)}
@@ -1089,7 +1091,7 @@ const EmployeesInner: React.FC = () => {
                                             {/* 4. Phone field - only for managers and admins */}
                                             {(formData.role === 'manager' || formData.role === 'admin') && (
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.phone')}</label>
+                                                    <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.phone')}</label>
                                                     <div className="relative">
                                                         <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                                                         <input
@@ -1107,12 +1109,12 @@ const EmployeesInner: React.FC = () => {
 
                                     {/* Security */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.security')}</h3>
+                                        <h3 className={`text-lg font-semibold ${tk.p.titleText} mb-4`}>{t('employees.form.security')}</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {/* Password field - only for admins */}
                                             {formData.role === 'admin' && (
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.password')} {!editingEmployee && '*'}</label>
+                                                    <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.password')} {!editingEmployee && '*'}</label>
                                                     <div className="relative">
                                                         <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                                                         <input
@@ -1142,7 +1144,7 @@ const EmployeesInner: React.FC = () => {
                                             {/* PIN field - for managers and cashiers */}
                                             {(formData.role === 'manager' || formData.role === 'cashier') && (
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.pin')} {!editingEmployee && '*'}</label>
+                                                    <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.pin')} {!editingEmployee && '*'}</label>
                                                     <input
                                                         type="text"
                                                         value={formData.pin}
@@ -1164,7 +1166,7 @@ const EmployeesInner: React.FC = () => {
                                     </div>
 
                                     <div>
-                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.accessLevels')}</h3>
+                                            <h3 className={`text-lg font-semibold ${tk.p.titleText} mb-4`}>{t('employees.form.accessLevels')}</h3>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 {accessLevels.map((level) => (
                                                     <label
@@ -1194,7 +1196,7 @@ const EmployeesInner: React.FC = () => {
 
                                     {/* Status */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.status')}</h3>
+                                        <h3 className={`text-lg font-semibold ${tk.p.titleText} mb-4`}>{t('employees.form.status')}</h3>
                                         <label className="flex items-center space-x-3">
                                             <input
                                                 type="checkbox"
@@ -1208,6 +1210,7 @@ const EmployeesInner: React.FC = () => {
 
                                 </form>
                     </div>
+                    )}</WithDialogTokens>
                 );
 
                 if (!isMobileViewport) {

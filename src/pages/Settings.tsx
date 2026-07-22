@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useSearchParams } from 'react-router-dom';
 import {
     AlertTriangle,
@@ -503,10 +504,20 @@ const Settings: React.FC = () => {
         [settings.loyalty.vouchers, updateVouchers]
     );
 
+    const [pendingTrainingMode, setPendingTrainingMode] = useState<boolean | null>(null);
+
     const handleTrainingModeChange = useCallback(
         (next: boolean) => {
-            const msg = next ? t('settings.confirm.trainingOn') : t('settings.confirm.trainingOff');
-            if (!window.confirm(msg)) return;
+            setPendingTrainingMode(next);
+        },
+        []
+    );
+
+    const confirmTrainingModeChange = useCallback(
+        () => {
+            if (pendingTrainingMode === null) return;
+            const next = pendingTrainingMode;
+            setPendingTrainingMode(null);
             try {
                 if (next) {
                     localStorage.setItem('pos_dexie_slot', 'training');
@@ -520,7 +531,7 @@ const Settings: React.FC = () => {
             setPendingChanges(false);
             window.setTimeout(() => window.location.reload(), 200);
         },
-        [t, updateSettings]
+        [pendingTrainingMode, updateSettings]
     );
 
     const handleFiscalIssuerChange = useCallback(
@@ -2426,6 +2437,17 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
             </div>
+            {pendingTrainingMode !== null && (
+                <ConfirmDialog
+                    tone="warning"
+                    title={t('settings.fiscalAT.trainingTitle')}
+                    message={pendingTrainingMode ? t('settings.confirm.trainingOn') : t('settings.confirm.trainingOff')}
+                    cancelLabel={t('common.cancel')}
+                    confirmLabel={t('common.confirm')}
+                    onCancel={() => setPendingTrainingMode(null)}
+                    onConfirm={confirmTrainingModeChange}
+                />
+            )}
         </div>
     );
 };

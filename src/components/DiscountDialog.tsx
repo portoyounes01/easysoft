@@ -1,4 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
+import { Tag } from 'lucide-react';
+import { WithDialogTokens } from './ui/dialogParts';
 import { useTranslation } from 'react-i18next';
 import type { LoyaltyVoucher, SystemSettings } from '../contexts/SettingsContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -196,6 +198,7 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
             open={open}
             onClose={onClose}
             title={t('pos.discountDialog.title')}
+            icon={Tag}
             width="36vw"
             height="76vh"
             footer={
@@ -217,7 +220,8 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
                 </div>
             }
         >
-            <div className="flex flex-1 flex-col bg-gray-100 px-8 pb-5 pt-6">
+            <WithDialogTokens>{tk => (
+            <div className={`flex flex-1 flex-col ${tk.cfg ? '' : 'bg-gray-100'} px-8 pb-5 pt-6`}>
                 <div className="mb-5">
                     <TabToggle
                         options={[
@@ -300,7 +304,7 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
                                                 {t('pos.discountDialog.redeem.useMaximum')} ({maxRedeemablePoints})
                                             </button>
                                             {requestedPoints > 0 && (
-                                                <div className="rounded-2xl bg-white p-4 text-sm text-gray-700">
+                                                <div className={`rounded-2xl bg-white p-4 text-sm ${tk.p.subText}`}>
                                                     {requestedPoints.toLocaleString()} points = €{pointsDiscount.toFixed(2)}
                                                 </div>
                                             )}
@@ -320,7 +324,7 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
                     {activeTab === 'preset' && (
                         <div className="h-full overflow-y-auto">
                             {presets.length === 0 ? (
-                                <div className="flex h-full items-center justify-center text-gray-500">
+                                <div className={`flex h-full items-center justify-center ${tk.p.subText}`}>
                                     {t('pos.discountDialog.noPresets')}
                                 </div>
                             ) : (
@@ -330,10 +334,10 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
                                             <button
                                                 type="button"
                                                 onClick={() => setSelectedPresetId(preset.id)}
-                                                className={`w-full px-5 py-4 text-left transition-all ${selectedPresetId === preset.id ? 'bg-green-100' : 'hover:bg-gray-50'}`}
+                                                className={`w-full px-5 py-4 text-left transition-all ${selectedPresetId === preset.id ? 'bg-green-100' : `hover:${tk.p.tintBg}`}`}
                                             >
                                                 <div className="flex items-center justify-between">
-                                                    <span className="font-semibold text-gray-900">{preset.name}</span>
+                                                    <span className={`font-semibold ${tk.p.titleText}`}>{preset.name}</span>
                                                     <span className="font-semibold text-red-500">
                                                         {preset.type === 'percentage'
                                                             ? `-${preset.value}%`
@@ -341,7 +345,7 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
                                                     </span>
                                                 </div>
                                                 {preset.description && (
-                                                    <div className="mt-1 text-sm text-gray-600">{preset.description}</div>
+                                                    <div className={`mt-1 text-sm ${tk.p.subText}`}>{preset.description}</div>
                                                 )}
                                             </button>
                                         </li>
@@ -385,6 +389,7 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
                     )}
                 </div>
             </div>
+            )}</WithDialogTokens>
         </BaseDialog>
     );
 };

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { WithDialogTokens } from '../components/ui/dialogParts';
 import { useTranslation } from 'react-i18next';
 import {
     AlertTriangle,
@@ -648,6 +649,7 @@ const HR: React.FC = () => {
 
             {selectedEmployee && editingProfile && (() => {
                 const profileEditorBody = (
+                    <WithDialogTokens>{tk => (<>
                     <>
                         <div className="mt-6 grid gap-5 sm:grid-cols-2">
                             <Field label={t('hr.contractStart')}>
@@ -655,7 +657,7 @@ const HR: React.FC = () => {
                                     type="date"
                                     value={editingProfile.contract_start_date}
                                     onChange={event => setEditingProfile({ ...editingProfile, contract_start_date: event.target.value })}
-                                    className="min-h-touch-sm w-full rounded-2xl border border-slate-300 px-4"
+                                    className={tk.cfg ? tk.input : "min-h-touch-sm w-full rounded-2xl border border-slate-300 px-4"}
                                 />
                             </Field>
                             <Field label={t('hr.contractEnd')}>
@@ -663,7 +665,7 @@ const HR: React.FC = () => {
                                     type="date"
                                     value={editingProfile.contract_end_date ?? ''}
                                     onChange={event => setEditingProfile({ ...editingProfile, contract_end_date: event.target.value || null })}
-                                    className="min-h-touch-sm w-full rounded-2xl border border-slate-300 px-4"
+                                    className={tk.cfg ? tk.input : "min-h-touch-sm w-full rounded-2xl border border-slate-300 px-4"}
                                 />
                             </Field>
                             <Field label={t('hr.carriedDays')}>
@@ -672,15 +674,15 @@ const HR: React.FC = () => {
                                     step="0.5"
                                     value={editingProfile.carried_holiday_days}
                                     onChange={event => setEditingProfile({ ...editingProfile, carried_holiday_days: Number(event.target.value) })}
-                                    className="min-h-touch-sm w-full rounded-2xl border border-slate-300 px-4"
+                                    className={tk.cfg ? tk.input : "min-h-touch-sm w-full rounded-2xl border border-slate-300 px-4"}
                                 />
                             </Field>
                             <Field label={t('hr.holidayEntitlement')}>
-                                <div className="flex min-h-touch-sm flex-col justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2">
-                                    <span className="text-lg font-semibold text-slate-950">
+                                <div className={`flex min-h-touch-sm flex-col justify-center rounded-2xl border ${tk.p.border} ${tk.p.tintBg} px-4 py-2`}>
+                                    <span className={`text-lg font-semibold ${tk.p.titleText}`}>
                                         {t('hr.entitlementDays', { count: computeHolidayEntitlement(editingProfile, accrualRate) })}
                                     </span>
-                                    <span className="text-xs text-slate-500">
+                                    <span className={`text-xs ${tk.p.subText}`}>
                                         {t('hr.accruedSince', { rate: accrualRate, date: editingProfile.contract_start_date })}
                                         {summaries[selectedEmployee.id]
                                             ? t('hr.accruedTakenLeft', { taken: summaries[selectedEmployee.id].holiday_taken, remaining: summaries[selectedEmployee.id].holiday_remaining })
@@ -717,13 +719,13 @@ const HR: React.FC = () => {
                             </Field>
                         </div>
 
-                        <div className="mt-5 rounded-3xl border border-slate-200 p-5">
+                        <div className={`mt-5 rounded-3xl border ${tk.p.border} p-5`}>
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div className="flex items-center gap-2">
                                     <CalendarPlus className="h-5 w-5 text-slate-700" />
-                                    <h3 className="font-semibold text-slate-950">{t('hr.bookHoliday')}</h3>
+                                    <h3 className={`font-semibold ${tk.p.titleText}`}>{t('hr.bookHoliday')}</h3>
                                 </div>
-                                <div className="inline-flex rounded-2xl bg-slate-100 p-1 text-sm font-semibold">
+                                <div className={`inline-flex rounded-2xl ${tk.p.tintBg} p-1 text-sm font-semibold`}>
                                     <button
                                         type="button"
                                         onClick={() => { setBookingMode('range'); setRangeAnchor(null); }}
@@ -842,6 +844,7 @@ const HR: React.FC = () => {
                             />
                         </Field>
                     </>
+                    </>)}</WithDialogTokens>
                 );
 
                 if (appliedDialogStyle) {

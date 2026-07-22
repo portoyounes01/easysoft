@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { WithDialogTokens } from './ui/dialogParts';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, KeyRound, RefreshCw, Weight, X } from 'lucide-react';
 import scaleService from '../services/scaleService';
@@ -166,15 +167,16 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
 
   // Interior shared between the original panel and the applied-style shell.
   const interior = (
+    <WithDialogTokens>{tk => (<>
     <>
         {connected || statusPending ? (
           <>
-            <div className="mt-6 rounded-2xl bg-slate-50 p-6 text-center">
+            <div className={`mt-6 rounded-2xl ${tk.p.tintBg} p-6 text-center`}>
               <div className="flex items-baseline justify-center gap-2">
-                <span className="text-6xl font-extrabold tabular-nums text-slate-900">
+                <span className={`text-6xl font-extrabold tabular-nums ${tk.p.titleText}`}>
                   {weightKg !== null ? weightKg.toFixed(3) : '–.–––'}
                 </span>
-                <span className="text-2xl font-semibold text-slate-500">kg</span>
+                <span className={`text-2xl font-semibold ${tk.p.subText}`}>kg</span>
               </div>
               <div className="mt-3 flex items-center justify-center gap-2">
                 {reading && weightKg !== null ? (
@@ -196,7 +198,7 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
                   {t('weighDialog.overStock', { max: (maxWeightKg ?? 0).toFixed(3) })}
                 </p>
               )}
-              <p className="mt-4 text-lg font-semibold text-slate-700">
+              <p className={`mt-4 text-lg font-semibold ${tk.p.titleText}`}>
                 {t('weighDialog.lineTotal', { total: lineTotal.toFixed(2) })}
               </p>
             </div>
@@ -205,7 +207,7 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="min-h-touch flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                className={`min-h-touch flex-1 rounded-2xl border ${tk.p.border} bg-white px-4 py-3 font-semibold ${tk.p.subText} transition-colors hover:${tk.p.tintBg}`}
               >
                 {t('common.cancel')}
               </button>
@@ -253,22 +255,22 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
             </div>
 
             {/* PIN-gated, audit-logged manual weight entry (D-SC3). */}
-            <div className="mt-4 rounded-2xl border border-slate-200 p-4">
+            <div className={`mt-4 rounded-2xl border ${tk.p.border} p-4`}>
               <div className="flex items-center gap-2">
-                <KeyRound className="h-4 w-4 text-slate-500" />
-                <h3 className="text-sm font-bold text-slate-800">{t('weighDialog.manualTitle')}</h3>
+                <KeyRound className={`h-4 w-4 ${tk.p.subText.replace("text-", "text-")}`} />
+                <h3 className={`text-sm font-bold ${tk.p.titleText}`}>{t('weighDialog.manualTitle')}</h3>
               </div>
-              <p className="mt-1 text-xs text-slate-500">{t('weighDialog.manualHint')}</p>
+              <p className={`mt-1 text-xs ${tk.p.subText}`}>{t('weighDialog.manualHint')}</p>
 
               <div className="mt-3 grid gap-3">
-                <label className="block text-sm font-medium text-slate-700">
+                <label className={`block text-sm font-medium ${tk.p.titleText}`}>
                   <span className="mb-1 block">{t('weighDialog.manualWeightLabel')}</span>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={manualWeight}
                     onChange={(e) => setManualWeight(e.target.value)}
-                    className={fieldClass}
+                    className={tk.cfg ? tk.input : fieldClass}
                     placeholder="0.000"
                   />
                 </label>
@@ -280,24 +282,24 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
                   </p>
                 )}
                 <div className="grid grid-cols-2 gap-3">
-                  <label className="block text-sm font-medium text-slate-700">
+                  <label className={`block text-sm font-medium ${tk.p.titleText}`}>
                     <span className="mb-1 block">{t('weighDialog.managerNumberLabel')}</span>
                     <input
                       type="text"
                       value={managerNumber}
                       onChange={(e) => setManagerNumber(e.target.value)}
-                      className={fieldClass}
+                      className={tk.cfg ? tk.input : fieldClass}
                       autoComplete="off"
                     />
                   </label>
-                  <label className="block text-sm font-medium text-slate-700">
+                  <label className={`block text-sm font-medium ${tk.p.titleText}`}>
                     <span className="mb-1 block">{t('weighDialog.managerPinLabel')}</span>
                     <input
                       type="password"
                       inputMode="numeric"
                       value={managerPin}
                       onChange={(e) => setManagerPin(e.target.value)}
-                      className={fieldClass}
+                      className={tk.cfg ? tk.input : fieldClass}
                       autoComplete="off"
                     />
                   </label>
@@ -312,7 +314,7 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="min-h-touch flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                className={`min-h-touch flex-1 rounded-2xl border ${tk.p.border} bg-white px-4 py-3 font-semibold ${tk.p.subText} transition-colors hover:${tk.p.tintBg}`}
               >
                 {t('common.cancel')}
               </button>
@@ -328,6 +330,7 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
           </>
         )}
     </>
+    </>)}</WithDialogTokens>
   );
 
   if (applied) {

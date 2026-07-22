@@ -1,4 +1,5 @@
 import React, { useCallback, useState, useEffect } from 'react';
+import { WithDialogTokens } from './ui/dialogParts';
 import {
     AlertCircle,
     Tag,
@@ -270,12 +271,13 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                 {/* Form - Scrollable Content */}
                 <div className="flex-1 overflow-y-auto">
                     <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                <WithDialogTokens>{tk => (<>
 
                         {/* Basic Information */}
                         <div className="space-y-4">
                             {/* Category Name */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.nameLabel')}
                                 </label>
                                 <div className="relative">
@@ -300,7 +302,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                             {/* Description */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.description')}
                                 </label>
                                 <textarea
@@ -317,11 +319,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                         {/* Visual Appearance */}
                         <div className="space-y-4">
-                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('categories.form.visualAppearance')}</h3>
+                            <h3 className={`text-md font-semibold ${tk.p.titleText} border-b ${tk.p.border} pb-2`}>{t('categories.form.visualAppearance')}</h3>
 
                             {/* Color Selection */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.colorGradient')}
                                 </label>
                                 <div className="grid grid-cols-2 gap-2">
@@ -350,7 +352,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                             {/* Icon Selection */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.categoryIcon')}
                                 </label>
                                 <div className="grid grid-cols-5 gap-2">
@@ -383,7 +385,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                             {/* Preview */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.preview')}
                                 </label>
                                 <div className={`w-full p-4 rounded-lg bg-gradient-to-r ${formData.color} text-white flex items-center space-x-3`}>
@@ -398,11 +400,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                         {/* Settings */}
                         <div className="space-y-4">
-                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('categories.form.settingsHeading')}</h3>
+                            <h3 className={`text-md font-semibold ${tk.p.titleText} border-b ${tk.p.border} pb-2`}>{t('categories.form.settingsHeading')}</h3>
 
                             {/* Display Order */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.displayOrder')}
                                 </label>
                                 <div className="relative">
@@ -423,7 +425,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                             {/* Active Status */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.statusLabel')}
                                 </label>
                                 <button
@@ -443,7 +445,8 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                 </button>
                             </div>
                         </div>
-                    </form>
+                    </>)}</WithDialogTokens>
+                </form>
                 </div>
 
                 {/* Virtual Keyboard */}

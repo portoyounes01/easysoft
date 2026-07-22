@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import {
   AlertCircle,
   Ban,
@@ -61,6 +62,7 @@ const Devices: React.FC = () => {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const [busyDeviceId, setBusyDeviceId] = useState<string | null>(null);
+  const [revokingDevice, setRevokingDevice] = useState<ManagedDevice | null>(null);
 
   const credentials = useMemo<DeviceAdminCredentials>(() => ({
     employeeNumber: employee?.employee_number ?? '',
@@ -130,8 +132,14 @@ const Devices: React.FC = () => {
     }
   };
 
-  const handleRevoke = async (device: ManagedDevice) => {
-    if (!window.confirm(`Revoke “${device.label}”? This till will lose access and cannot be restored from this screen.`)) return;
+  const handleRevoke = (device: ManagedDevice) => {
+    setRevokingDevice(device);
+  };
+
+  const confirmRevoke = async () => {
+    if (!revokingDevice) return;
+    const device = revokingDevice;
+    setRevokingDevice(null);
     setBusyDeviceId(device.id);
     setError(null);
     try {
@@ -438,6 +446,17 @@ const Devices: React.FC = () => {
           </div>
         )}
       </div>
+      {revokingDevice && (
+        <ConfirmDialog
+          tone="danger"
+          title="Revoke till?"
+          message={`Revoke “${revokingDevice.label}”? This till will lose access and cannot be restored from this screen.`}
+          cancelLabel="Cancel"
+          confirmLabel="Yes, revoke"
+          onCancel={() => setRevokingDevice(null)}
+          onConfirm={() => void confirmRevoke()}
+        />
+      )}
     </div>
   );
 };

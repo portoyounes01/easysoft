@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { WithDialogTokens } from '../ui/dialogParts';
 import { useTranslation } from 'react-i18next';
 import { Clock, KeyRound, LogIn, LogOut, X } from 'lucide-react';
 
@@ -83,28 +84,29 @@ const MyProfileDialog: React.FC = () => {
 
     // Interior shared between the original panel and the applied-style shell.
     const profileBody = (
+        <WithDialogTokens>{tk => (<>
         <>
             <div className="text-center">
                 <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 text-3xl font-bold text-white">
                     {employee.name.split(' ').map(part => part[0]).join('').slice(0, 2)}
                 </div>
-                <h3 className="mt-4 text-xl font-semibold text-slate-950">{employee.name}</h3>
-                <p className="text-sm text-slate-500">{employee.employee_number}</p>
+                <h3 className={`mt-4 text-xl font-semibold ${tk.p.titleText}`}>{employee.name}</h3>
+                <p className={`text-sm ${tk.p.subText}`}>{employee.employee_number}</p>
             </div>
 
-            <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-4">
+            <div className={`mt-6 rounded-3xl border ${tk.p.border} bg-white p-4`}>
                 <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-950">{t('hr.shiftStatus')}</span>
+                    <span className={`font-semibold ${tk.p.titleText}`}>{t('hr.shiftStatus')}</span>
                     <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        openShift ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                        openShift ? 'bg-emerald-100 text-emerald-700' : `${tk.p.tintBg} ${tk.p.subText}`
                     }`}>
                         {openShift ? t('hr.clockedIn') : t('hr.notClockedIn')}
                     </span>
                 </div>
                 {!openShift && (
-                    <div className="mt-4 flex flex-col items-center rounded-2xl bg-slate-50 py-3">
+                    <div className={`mt-4 flex flex-col items-center rounded-2xl ${tk.p.tintBg} py-3`}>
                         <Clock className="h-5 w-5 text-slate-400" />
-                        <span className="mt-1 text-3xl font-semibold tabular-nums tracking-wide text-slate-950">
+                        <span className={`mt-1 text-3xl font-semibold tabular-nums tracking-wide ${tk.p.titleText}`}>
                             {formatClock(now)}
                         </span>
                     </div>
@@ -127,15 +129,17 @@ const MyProfileDialog: React.FC = () => {
                 </button>
             </div>
         </>
+        </>)}</WithDialogTokens>
     );
 
     const pinPrompt = clockAction && (
+        <WithDialogTokens>{tk => (<>
         <>
             <div className="text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+                <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full ${tk.p.tintBg}`}>
                     <KeyRound className="h-7 w-7 text-slate-700" />
                 </div>
-                <p className="mt-2 text-slate-500">{t('hr.enterPinPrompt')}</p>
+                <p className={`mt-2 ${tk.p.subText}`}>{t('hr.enterPinPrompt')}</p>
             </div>
             <input
                 type="password"
@@ -146,10 +150,11 @@ const MyProfileDialog: React.FC = () => {
                     if (event.key === 'Enter') void handleClock();
                 }}
                 placeholder={t('hr.pinPlaceholder')}
-                className="mt-6 min-h-touch w-full rounded-2xl border border-slate-300 px-4 text-center text-2xl tracking-[0.4em] outline-none focus:border-slate-500 focus:ring-4 focus:ring-slate-200"
+                className={`mt-6 text-center text-2xl tracking-[0.4em] ${tk.cfg ? tk.input + " min-h-touch" : "min-h-touch w-full rounded-2xl border border-slate-300 px-4 outline-none focus:border-slate-500 focus:ring-4 focus:ring-slate-200"}`}
             />
             {clockError && <p className="mt-3 rounded-2xl bg-red-50 p-3 text-sm text-red-700">{clockError}</p>}
         </>
+        </>)}</WithDialogTokens>
     );
 
     if (applied) {
