@@ -257,8 +257,8 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                 {STEP_KEYS.map((key, index) => {
                     const state = index < step ? 'done' : index === step ? 'current' : 'todo';
                     return (
-                        <button type="button" key={key} onClick={() => goTo(index)} className="group px-1 text-center">
-                            <div className="relative mb-2 flex h-6 items-center justify-center">
+                        <button type="button" key={key} onClick={() => goTo(index)} className="group flex flex-col justify-start text-center">
+                            <div className="relative mb-2 flex h-6 w-full items-center justify-center">
                                 {/* connector halves: the segment between steps i-1 and i is
                                     coloured once step i is reached (reference behaviour) */}
                                 {index > 0 && (
