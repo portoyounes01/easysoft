@@ -11,7 +11,6 @@ import { HostRoute, PWA_LANDING } from './components/routing/HostRoute';
 import { isPwaHost } from './lib/host';
 import POS from './pages/POS';
 import Tables from './pages/Tables';
-import POS2 from './pages/POS2';
 import Products from './pages/Products';
 import Customers from './pages/Customers';
 import Categories from './pages/Categories';
@@ -144,7 +143,6 @@ const AppContent: React.FC = () => {
       <Route path="/pair-device" element={<DevicePairing />} />
 
       {/* Standalone UI-redesign preview — dev-only (unauthenticated); not registered in production builds */}
-      {DEV_TOOLS && <Route path="/pos2" element={<POS2 />} />}
 
       {/* App routes — shared Layout + Sidebar (including POS) */}
       <Route

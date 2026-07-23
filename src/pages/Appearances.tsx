@@ -9,6 +9,7 @@ import {
     Info,
     LayoutPanelLeft,
     Monitor,
+    MousePointerClick,
     Palette,
     RotateCcw,
     ShoppingBag,
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import DialogLab from '../components/DialogLab';
+import ButtonLab from '../components/ButtonLab';
 import {
     useDesignSystem2Customization,
     type DesignSystem2BaseColorId,
@@ -512,11 +514,15 @@ const Appearances: React.FC = () => {
     );
 
     return (
-        <div
-            className={`ds2-visual-scope min-h-full ${layoutClasses.rootBg} px-4 py-6 sm:px-6 lg:px-8`}
-            style={visualStyle}
-            data-ds2-neutral={prefs.neutralFamilyId}
-        >
+        <div className={`min-h-full ${layoutClasses.rootBg} px-4 py-6 sm:px-6 lg:px-8`}>
+            {/* Page scope wraps everything EXCEPT the Button lab: its specimen
+                cards apply (or omit) the scope themselves to mirror each
+                button's real screen, so a scoped ancestor here would lie. */}
+            <div
+                className="ds2-visual-scope"
+                style={visualStyle}
+                data-ds2-neutral={prefs.neutralFamilyId}
+            >
             <div className={`${layoutClasses.contentColumnMaxW} mx-auto`}>
                 <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex min-w-0 items-start gap-4">
@@ -744,6 +750,18 @@ const Appearances: React.FC = () => {
                         <DialogLab />
                     </SectionCard>
                 </div>
+            </div>
+            </div>
+
+            {/* Outside the page scope — see comment on the wrapper above. */}
+            <div className={`${layoutClasses.contentColumnMaxW} mx-auto mt-6`}>
+                <SectionCard
+                    icon={MousePointerClick}
+                    title={t('appearances.buttonLabTitle')}
+                    description={t('appearances.buttonLabDescription')}
+                >
+                    <ButtonLab />
+                </SectionCard>
             </div>
         </div>
     );
