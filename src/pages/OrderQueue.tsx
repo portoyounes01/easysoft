@@ -5,10 +5,13 @@ import { useSettings } from '../contexts/SettingsContext';
 import { initializeLocalDatabase } from '../lib/localDatabase';
 import { queueTicketService } from '../services/queueTicketService';
 import type { LocalQueueTicket } from '../types/supabase';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 const OrderQueue: React.FC = () => {
   const { t } = useTranslation();
   const { settings } = useSettings();
+  const { visualStyle, prefs } = useDesignSystem2Customization();
   const [tickets, setTickets] = useState<LocalQueueTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -50,7 +53,7 @@ const OrderQueue: React.FC = () => {
   const ready = tickets.filter(ticket => ticket.status === 'ready');
 
   return (
-    <div className="space-y-6">
+    <div className="ds2-visual-scope space-y-6" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
       <div className="flex flex-col gap-4 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">{t('orderQueue.serviceQueueEyebrow')}</p>

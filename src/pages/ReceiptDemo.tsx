@@ -9,11 +9,14 @@ import { transactionLocalService } from '../lib/localDatabase';
 import { generateQRCodeImage } from '../utils/qrCode';
 import type { FiscalTransactionMetadata } from '../fiscal/types';
 import { receiptProfileForDefaultDocumentType } from '../fiscal/receiptSeriesProfile';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 const ReceiptDemoPage: React.FC = () => {
   const location = useLocation();
   const params = useParams();
   const { settings } = useSettings();
+  const { visualStyle, prefs } = useDesignSystem2Customization();
   const state = location.state as { receiptData?: ReceiptProps } | null;
   const [initialData, setInitialData] = useState<ReceiptProps | undefined>(state?.receiptData);
 
@@ -127,7 +130,7 @@ const ReceiptDemoPage: React.FC = () => {
   }, [params.id, state?.receiptData]);
 
   return (
-    <div>
+    <div className="ds2-visual-scope" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
       <ReceiptDemo {...(initialData ? { initialData } : {})} />
     </div>
   );

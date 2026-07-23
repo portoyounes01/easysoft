@@ -4,6 +4,8 @@ import { QrCode, MonitorSmartphone, HelpCircle, Loader2, CheckCircle2, AlertCirc
 import { PairingButton } from '../components/ui/PairingButton';
 import { supabase } from '../lib/supabase';
 import { saveDevicePairingScope, hasDevicePairingScope } from '../utils/devicePairingStorage';
+import { useDesignSystem2VisualStyleSafe } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 type PairStatus = 'idle' | 'pairing' | 'success' | 'error';
 
@@ -28,6 +30,7 @@ const DevicePairing: React.FC = () => {
   const [deviceName, setDeviceName] = useState('');
   const [status, setStatus] = useState<PairStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const visualStyle = useDesignSystem2VisualStyleSafe();
 
   // 2. Event handlers
   const handlePair = async () => {
@@ -74,7 +77,7 @@ const DevicePairing: React.FC = () => {
   // 5. Render
   const pairing = status === 'pairing';
   return (
-    <div className="min-h-screen bg-gray-50 py-10">
+    <div className="ds2-visual-scope min-h-screen bg-gray-50 py-10" style={visualStyle}>
       <div className="max-w-2xl mx-auto px-6">
         <div className="text-center mb-10">
           <h1 className="text-6xl font-bold text-gray-900 mb-3">Pair this till</h1>

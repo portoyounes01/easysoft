@@ -16,6 +16,8 @@ import { usePOS } from '../contexts/POSContext';
 import { tableOrderService } from '../services/tableOrderService';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { useAppliedDialogStyle } from '../theme/dialogStyle';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 import type {
     LocalTableOrder,
     TableOrderGlobalDiscount,
@@ -300,6 +302,7 @@ const Tables: React.FC = () => {
         setActiveTableOrder,
         clearActiveTableOrder,
     } = usePOS();
+    const { visualStyle, prefs } = useDesignSystem2Customization();
     const [layout, setLayout] = useState<TableLayoutState>(loadLayout);
     const [draft, setDraft] = useState<TableLayoutState>(cloneLayout(layout));
     const [isEditing, setIsEditing] = useState(false);
@@ -646,7 +649,7 @@ const Tables: React.FC = () => {
     };
 
     return (
-        <div className="mx-auto w-full max-w-[1600px]">
+        <div className="ds2-visual-scope mx-auto w-full max-w-[1600px]" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
             {!isEditing ? (
                 <section className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
                     <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">

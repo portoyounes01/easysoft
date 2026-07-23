@@ -17,6 +17,8 @@ import {
     dialogButtonClasses,
     useAppliedDialogStyle,
 } from '../theme/dialogStyle';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 const emptyForm: RawMaterialInput = {
     name: '',
@@ -65,6 +67,7 @@ async function readImageAsDataUrl(file: File): Promise<string> {
 const Inventory: React.FC = () => {
     const { t } = useTranslation();
     const applied = useAppliedDialogStyle();
+    const { visualStyle, prefs } = useDesignSystem2Customization();
     const { settings } = useSettings();
     const currency = settings.pos.currencySymbol;
     // Country-aware IVA list + standard-rate default for sale-enabled items.
@@ -285,7 +288,7 @@ const Inventory: React.FC = () => {
     };
 
     if (loading) {
-        return <div className="flex min-h-96 items-center justify-center text-slate-500">{t('inventory.loadingInventory')}</div>;
+        return <div className="ds2-visual-scope flex min-h-96 items-center justify-center text-slate-500" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>{t('inventory.loadingInventory')}</div>;
     }
 
     // Inputs follow the applied dialog style's controls axis; legacy class otherwise.
@@ -543,7 +546,7 @@ const Inventory: React.FC = () => {
     const shellButtons = applied ? dialogButtonClasses(applied) : null;
 
     return (
-        <div className="mx-auto max-w-[1500px] space-y-6 pt-6">
+        <div className="ds2-visual-scope mx-auto max-w-[1500px] space-y-6 pt-6" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
             <header className="flex flex-col gap-4 rounded-[2rem] border border-white bg-white/85 p-6 shadow-xl sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">{t('inventory.stockEyebrow')}</p>

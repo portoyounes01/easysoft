@@ -7,9 +7,12 @@ import type {
     LocalPurchaseReceipt,
     LocalPurchaseReceiptLine,
 } from '../types/purchaseReceipt';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 const PurchaseReceipts: React.FC = () => {
     const { t } = useTranslation();
+    const { visualStyle, prefs } = useDesignSystem2Customization();
     const [receipts, setReceipts] = useState<LocalPurchaseReceipt[]>([]);
     const [selectedReceipt, setSelectedReceipt] = useState<LocalPurchaseReceipt>();
     const [selectedLines, setSelectedLines] = useState<LocalPurchaseReceiptLine[]>([]);
@@ -48,7 +51,7 @@ const PurchaseReceipts: React.FC = () => {
     );
 
     return (
-        <div className="mx-auto max-w-[1500px] space-y-6 pt-6">
+        <div className="ds2-visual-scope mx-auto max-w-[1500px] space-y-6 pt-6" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
             <header className="flex flex-col gap-4 rounded-[2rem] border border-white bg-white/85 p-6 shadow-xl sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">{t('purchaseReceipts.eyebrow')}</p>

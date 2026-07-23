@@ -5,6 +5,11 @@ import { useSettings } from '../contexts/SettingsContext';
 import { initializeLocalDatabase } from '../lib/localDatabase';
 import { queueTicketService } from '../services/queueTicketService';
 import type { LocalQueueTicket } from '../types/supabase';
+import {
+  DesignSystem2CustomizationProvider,
+  useDesignSystem2Customization,
+} from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 const TicketGrid: React.FC<{ tickets: LocalQueueTicket[]; tone: 'preparing' | 'ready' }> = ({
   tickets,
@@ -29,9 +34,10 @@ const TicketGrid: React.FC<{ tickets: LocalQueueTicket[]; tone: 'preparing' | 'r
   );
 };
 
-const OrderStatusDisplay: React.FC = () => {
+const OrderStatusDisplayInner: React.FC = () => {
   const { t } = useTranslation();
   const { settings } = useSettings();
+  const { visualStyle, prefs } = useDesignSystem2Customization();
   const [tickets, setTickets] = useState<LocalQueueTicket[]>([]);
   const [clock, setClock] = useState(new Date());
 
@@ -59,7 +65,7 @@ const OrderStatusDisplay: React.FC = () => {
   const ready = tickets.filter(ticket => ticket.status === 'ready');
 
   return (
-    <main className="min-h-screen bg-slate-100 p-6 text-slate-950 md:p-10">
+    <main className="ds2-visual-scope min-h-screen bg-slate-100 p-6 text-slate-950 md:p-10" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
       <header className="mb-8 flex items-center justify-between rounded-3xl bg-white px-7 py-5 shadow-sm">
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-green-600">{settings.company.name}</p>
@@ -92,5 +98,13 @@ const OrderStatusDisplay: React.FC = () => {
     </main>
   );
 };
+
+// /order-status renders outside Layout (no DesignSystem2CustomizationProvider in the tree),
+// so mount the provider here — same pattern as LoginForm2.
+const OrderStatusDisplay: React.FC = () => (
+  <DesignSystem2CustomizationProvider>
+    <OrderStatusDisplayInner />
+  </DesignSystem2CustomizationProvider>
+);
 
 export default OrderStatusDisplay;

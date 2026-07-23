@@ -6,6 +6,8 @@ import remarkGfm from 'remark-gfm';
 import { AssistantProvider, useAssistant } from '../contexts/AssistantContext';
 import { assistantService, WhatsAppPairCode } from '../services/assistantService';
 import { generateQRCodeImage } from '../utils/qrCode';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 // "Link WhatsApp" panel: shows linked status, and generates a pairing code the
 // owner texts from their phone to the business WhatsApp number.
@@ -183,6 +185,7 @@ const md = {
 const AssistantInner: React.FC = () => {
   const { t } = useTranslation();
   const { messages, loading, error, ask, reset } = useAssistant();
+  const { visualStyle, prefs } = useDesignSystem2Customization();
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -260,7 +263,7 @@ const AssistantInner: React.FC = () => {
   const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex flex-col h-full max-w-3xl mx-auto w-full">
+    <div className="ds2-visual-scope flex flex-col h-full max-w-3xl mx-auto w-full" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
       {/* Header */}
       <div className="flex items-center justify-between px-2 py-4">
         <div className="flex items-center gap-3">

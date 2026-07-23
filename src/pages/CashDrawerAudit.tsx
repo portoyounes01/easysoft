@@ -13,12 +13,15 @@ import { useTranslation } from 'react-i18next';
 
 import { cashDrawerAuditService } from '../services/cashDrawerAuditService';
 import type { LocalCashDrawerEvent } from '../types/cashDrawer';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 const escapeCsv = (value: string | number | null): string =>
     `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 const CashDrawerAudit: React.FC = () => {
     const { t } = useTranslation();
+    const { visualStyle, prefs } = useDesignSystem2Customization();
     const [events, setEvents] = useState<LocalCashDrawerEvent[]>([]);
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
@@ -101,7 +104,7 @@ const CashDrawerAudit: React.FC = () => {
     };
 
     return (
-        <div className="mx-auto max-w-[1500px] space-y-6 pt-6">
+        <div className="ds2-visual-scope mx-auto max-w-[1500px] space-y-6 pt-6" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
             <header className="flex flex-col gap-4 rounded-[2rem] border border-white bg-white/85 p-6 shadow-xl lg:flex-row lg:items-end lg:justify-between">
                 <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">{t('cashDrawerAudit.eyebrow')}</p>

@@ -27,7 +27,7 @@ import { DialogSectionTitle, DialogSwitch, DialogToggleRow } from './ui/dialogPa
  *   3 Variants & Modifiers
  *   4 Ingredients   → recipe lines against raw materials + availability
  * Creation is confirmed ("Add Product?"); "Save as Draft" stores the product
- * inactive at any step. Editing existing products still uses ProductForm.
+ * inactive at any step. Editing existing products also uses this wizard.
  */
 
 interface ProductWizardProps {

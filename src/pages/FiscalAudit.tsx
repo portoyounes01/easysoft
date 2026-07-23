@@ -3,9 +3,12 @@ import { ClipboardList } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import type { LocalFiscalAuditEvent } from '../types/supabase';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 const FiscalAudit: React.FC = () => {
     const { t } = useTranslation();
+    const { visualStyle, prefs } = useDesignSystem2Customization();
     const [rows, setRows] = useState<LocalFiscalAuditEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -32,7 +35,7 @@ const FiscalAudit: React.FC = () => {
     }, []);
 
     return (
-        <div className="space-y-6">
+        <div className="ds2-visual-scope space-y-6" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
             <div className="flex items-center gap-3">
                 <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-3 rounded-2xl">
                     <ClipboardList className="w-8 h-8 text-white" />

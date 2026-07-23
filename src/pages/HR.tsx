@@ -21,6 +21,8 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 import { employeeLocalService, initializeLocalDatabase } from '../lib/localDatabase';
 import { computeHolidayEntitlement, hrService } from '../services/hrService';
 import type {
@@ -94,6 +96,7 @@ const roleToneClasses: Record<string, string> = {
 const HR: React.FC = () => {
     const { t } = useTranslation();
     const appliedDialogStyle = useAppliedDialogStyle();
+    const { visualStyle, prefs } = useDesignSystem2Customization();
     const { employee: signedInEmployee } = useSupabaseAuth();
     const { settings } = useSettings();
     const [employees, setEmployees] = useState<LocalEmployee[]>([]);
@@ -421,11 +424,11 @@ const HR: React.FC = () => {
     }, [selectedHolidayDates]);
 
     if (loading) {
-        return <div className="flex min-h-96 items-center justify-center text-slate-500">{t('hr.loadingWorkspace')}</div>;
+        return <div className="ds2-visual-scope flex min-h-96 items-center justify-center text-slate-500" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>{t('hr.loadingWorkspace')}</div>;
     }
 
     return (
-        <div className="mx-auto max-w-[1500px]">
+        <div className="ds2-visual-scope mx-auto max-w-[1500px]" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
             <div className="space-y-5 px-4 pb-7 pt-2 md:hidden">
                 {!selectedEmployee && (
                     <>

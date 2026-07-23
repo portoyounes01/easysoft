@@ -6,7 +6,9 @@ interface PaymentMethodButtonProps extends React.ButtonHTMLAttributes<HTMLButton
     selected: boolean;
     icon: LucideIcon;
     label: string;
-    method: 'cash' | 'card';
+    /** Optional semantic hint; unused visually — PMB is the blessed generic
+     *  selectable option card (staff pickers, icon pickers, option chips). */
+    method?: 'cash' | 'card';
 }
 
 export const PaymentMethodButton: React.FC<PaymentMethodButtonProps> = ({

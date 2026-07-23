@@ -8,6 +8,8 @@ import {
     type ProductLedgerRow,
     type RawMaterialLedgerRow,
 } from '../services/productLedgerService';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 const firstOfMonth = (): string => {
     const now = new Date();
@@ -18,6 +20,7 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 const StockProfitReport: React.FC = () => {
     const { t } = useTranslation();
     const { settings } = useSettings();
+    const { visualStyle, prefs } = useDesignSystem2Customization();
     const currency = settings.pos.currencySymbol;
     const money = (value: number) => `${currency}${value.toFixed(2)}`;
 
@@ -70,7 +73,7 @@ const StockProfitReport: React.FC = () => {
     );
 
     return (
-        <div className="mx-auto max-w-[1500px] space-y-6 pt-6">
+        <div className="ds2-visual-scope mx-auto max-w-[1500px] space-y-6 pt-6" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
             <header className="flex flex-col gap-4 rounded-[2rem] border border-white bg-white/85 p-6 shadow-xl sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">{t('stockProfit.reportingEyebrow')}</p>

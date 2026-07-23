@@ -36,10 +36,6 @@ export interface FileEnvEntry {
 }
 
 export const FILE_ENV: Record<string, FileEnvEntry> = {
-    "src/components/Auth/LoginForm.tsx": {
-        env: "unscoped",
-        note: "Dead code \u2014 not imported/mounted anywhere (only a comment mention in SupabaseAuthContext.tsx). No ds2 markers; would be unscoped if mounted.",
-    },
     "src/components/Auth/LoginForm2.tsx": {
         env: "scoped",
         note: "Self-scoped: imports design-system-2-scope.css and wraps ALL Inner return paths (lines 341, 351, 377) via scopeRoot() which applies ds2-visual-scope + style={visualStyle} + data-ds2-neutral, inside its own DesignSystem2CustomizationProvider. The DesignSystem2Customizer sibling (~line 672) sits outsi",
@@ -116,13 +112,8 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         mounts: ["src/pages/POS.tsx"],
     },
     "src/components/HR/MyProfileDialog.tsx": {
-        env: "unscoped",
-        note: "Only mount is Layout chrome (sibling of <main>, outside every page scope). Two-branch dialog per rule 2: applied -> ConfiguredDialogShell (dialog-vars via shell's ds2 vars), else legacy markup (unscoped). WithDialogTokens (dialogParts.tsx:56) applies NO ds2 vars \u2014 it only reads DialogShellStyleConte",
-        mounts: ["src/components/Layout/Layout.tsx:193 (unscoped)"],
-        exceptions: [
-            { from: 160, to: 206, env: "dialog-vars", why: "applied-style branch: ConfiguredDialogShell (profile panel z-[80] + PIN prompt z-[90]) applies ds2 vars on its panels; var(--ds2-*)-based styles react, plain Tailwind stays frozen." },
-            { from: 208, to: 276, env: "unscoped", why: "legacy branch (no applied dialog style): plain Tailwind overlay + panel, no ds2 vars, fully frozen." },
-        ],
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/components/ImageUploader.tsx": {
         env: "scoped",
@@ -134,13 +125,9 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         note: "Both live mounts are inside self-applied ds2-visual-scope wrappers: Sidebar's root div (222-226, 'sidebar' variant) and LoginForm2's scopeRoot (306-314, applies ds2-visual-scope + visualStyle; the return at 377 wraps line 429 \u2014 'default' variant). Third mount Header.tsx:90 is dead code (Header unmou",
         mounts: ["src/components/Layout/Sidebar.tsx:327 (scoped)", "src/components/Auth/LoginForm2.tsx:429 (scoped)"],
     },
-    "src/components/Layout/Header.tsx": {
-        env: "unscoped",
-        note: "DEAD component \u2014 no importer anywhere in src (Layout renders its own inline header bar; the only '<Header>' grep hit is a SAF-T XML string). File itself has no scope class or ds2 vars; its logout modal (153-181) is plain Tailwind. If ever remounted it would be unscoped.",
-    },
     "src/components/Layout/Layout.tsx": {
-        env: "unscoped",
-        note: "Hosts DesignSystem2CustomizationProvider (context only) but applies NO ds2-visual-scope class or visualStyle to its own chrome (root div line 120). Header bar (146-167), training/series banners (175-188), InstallBanner (189) and MyProfileDialog mount (193) are all outside any page scope; pages self-",
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/components/Layout/Sidebar.tsx": {
         env: "scoped",
@@ -149,14 +136,6 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         exceptions: [
             { from: 349, to: 384, env: "unscoped", why: "Logout confirm dialog is createPortal'd to document.body, escaping the self-applied scope wrapper; the portal content carries no ds2-visual-scope class and no ds2 vars \u2014 fully frozen." },
         ],
-    },
-    "src/components/OrderPrintButton.tsx": {
-        env: "unscoped",
-        note: "Dead code \u2014 no real imports; only reference is a name string in buttonLabInlineSpecimens.tsx:5704 (lab preview, excluded per rules). Never renders in the real app.",
-    },
-    "src/components/OrderPrintManager.tsx": {
-        env: "unscoped",
-        note: "Dead code \u2014 not imported or rendered anywhere in src (only its own definition). Contains its own sample-order test UI; appears to be an abandoned demo component. Never renders in the real app.",
     },
     "src/components/OrderSummaryPanel.tsx": {
         env: "scoped",
@@ -167,10 +146,6 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         env: "scoped",
         note: "Mounted at POS.tsx:1031, inside POS ds2-visual-scope wrapper (lines 682-1338). Inline render, no portal.",
         mounts: ["src/pages/POS.tsx"],
-    },
-    "src/components/PrinterManager-complex.tsx": {
-        env: "unscoped",
-        note: "Dead code: never imported or mounted anywhere in src \u2014 only textual line-number refs in buttonLabInlineSpecimens.tsx specimen metadata. Never renders in the app.",
     },
     "src/components/PrinterManager.tsx": {
         env: "scoped",
@@ -194,10 +169,6 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         env: "scoped",
         note: "Both mount chains scoped: PrinterSettingsPanel applies its own ds2-visual-scope + visualStyle wrapper (PrinterTestPage.tsx L81-85) covering the whole return, and its Settings embed also sits on a scoped page. No createPortal in ProductAssignmentManager or intermediate PrinterWorkflowManager.",
         mounts: ["src/components/PrinterWorkflowManager.tsx:400 -> PrinterSettingsPanel (self-wraps in ds2-visual-scope, src/pages/Printer", "src/components/PrinterWorkflowManager.tsx:400 -> PrinterSettingsPanel embedded in src/pages/Settings.tsx:1495 (scoped)"],
-    },
-    "src/components/ProductForm.tsx": {
-        env: "unscoped",
-        note: "UNMOUNTED / dead code \u2014 no component import anywhere in src (only the ProductFormData TYPE is imported elsewhere); env is a fallback label, not measured. The ProductWizard.tsx:30 comment 'editing still uses ProductForm' is stale \u2014 edit flow moved to ProductWizard (commit f8d3531). Never renders in t",
     },
     "src/components/ProductOptionsDialog.tsx": {
         env: "scoped",
@@ -233,10 +204,6 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         note: "UNREACHABLE / dead code \u2014 its only mount is inside ProductForm, which itself has no live mounts; env is a fallback label, not measured. Never renders in the app.",
         mounts: ["src/components/ProductForm.tsx:643 (dead path \u2014 ProductForm is unmounted)"],
     },
-    "src/components/RoutingDebugger.tsx": {
-        env: "unscoped",
-        note: "Dead code: not imported or mounted anywhere in src. Never renders.",
-    },
     "src/components/RoutingRuleManager.tsx": {
         env: "unscoped",
         note: "Dead code: not imported by any file (grep across src finds only its own definition plus a name mention in buttonLabInlineSpecimens.tsx). Never renders.",
@@ -256,24 +223,18 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         note: "Both live mounts land inside ds2-visual-scope wrappers (POS.tsx:682, Categories.tsx:106; CategoryForm renders inside the Categories wrapper div). Two further mounts are dead code: ProductForm.tsx:800 (ProductForm unimported) and Auth/LoginForm.tsx:341 (LoginForm unimported \u2014 App.tsx uses LoginForm2/",
         mounts: ["src/components/CustomerDialog.tsx:477 -> src/pages/POS.tsx:1005 (scoped)", "src/components/CategoryForm.tsx:455 -> src/pages/Categories.tsx:379 (scoped)"],
     },
-    "src/components/VirtualNumpad.tsx": {
-        env: "unscoped",
-        note: "Dead code \u2014 sole mount is ProductForm.tsx:813, and ProductForm itself is imported nowhere in src (edit flow moved to ProductWizard). Never renders in the real app; would-be location unknown. No ds2 vars of its own; fixed-position overlay but no createPortal, so if ever remounted it would inherit its",
-    },
     "src/components/WeighDialog.tsx": {
         env: "scoped",
         note: "Mounted at POS.tsx:970, inside POS wrapper. Has shell/legacy dual branches (applied at line 336) but both branches are scoped since the mount page is scoped.",
         mounts: ["src/pages/POS.tsx"],
     },
     "src/components/notifications/NotificationBell.tsx": {
-        env: "unscoped",
-        note: "Only live mount is Layout's header chrome, PWA-host-gated, outside any ds2-visual-scope wrapper. Empirically verified: bell does not react. buttonLabInlineSpecimens usage excluded as lab preview.",
-        mounts: ["src/components/Layout/Layout.tsx:163 (unscoped)"],
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/components/notifications/NotificationPanel.tsx": {
-        env: "unscoped",
-        note: "Rendered inside the bell's popover (absolute-positioned, no portal), so it inherits the bell's unscoped Layout-header env. Plain Tailwind throughout; no ds2 vars.",
-        mounts: ["src/components/notifications/NotificationBell.tsx:41 -> src/components/Layout/Layout.tsx:163 (unscoped)"],
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/components/notifications/NotificationSettings.tsx": {
         env: "scoped",
@@ -281,9 +242,8 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         mounts: ["src/pages/Settings.tsx:2295 (scoped)"],
     },
     "src/components/pwa/InstallBanner.tsx": {
-        env: "unscoped",
-        note: "Rendered in Layout's <main> above {children}, i.e. Layout chrome outside any page's ds2-visual-scope wrapper. PWA-host-gated. Plain Tailwind emerald styling; no ds2 vars.",
-        mounts: ["src/components/Layout/Layout.tsx:189 (unscoped)"],
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/components/ui/ActionButton.tsx": {
         env: "scoped",
@@ -359,12 +319,12 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         note: "Single return; root div (lines 517-521) has ds2-visual-scope + style={visualStyle} + data-ds2-neutral, closing at line 760. No early returns, no portals. DialogLab and ButtonLab sections render inside the wrapper.",
     },
     "src/pages/Assistant.tsx": {
-        env: "unscoped",
-        note: "No ds2-visual-scope wrapper, no shell/token dialog components, no components applying ds2 vars.",
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/pages/CashDrawerAudit.tsx": {
-        env: "unscoped",
-        note: "No ds2-visual-scope wrapper, no shell/token dialog components.",
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/pages/CashierTesting.tsx": {
         env: "scoped",
@@ -388,15 +348,12 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         note: "Content pane self-applies ds2-visual-scope + visualStyle (lines ~141-150) except when colorDocsOutsidePreviewScope opts the color-docs section out.",
     },
     "src/pages/DevicePairing.tsx": {
-        env: "unscoped",
-        note: "No ds2-visual-scope wrapper; only imports PairingButton, which does not use ds2 vars.",
+        env: "scoped",
+        note: "Scoped 2026-07-23 via useDesignSystem2VisualStyleSafe: pre-auth route without provider \u2014 scope class applied, vars fall back to defaults until a provider mounts.",
     },
     "src/pages/Devices.tsx": {
-        env: "unscoped",
-        note: "No wrapper; single ConfirmDialog which self-applies ds2 vars when a dialog style is applied.",
-        exceptions: [
-            { from: 450, to: 458, env: "dialog-vars", why: "ConfirmDialog (revoke till) applies its own ds2Vars in applied branch; unscoped when no style applied" },
-        ],
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/pages/ElectronCashierTesting.tsx": {
         env: "scoped",
@@ -408,25 +365,16 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         note: "scopeShell (100) wraps db-reset (664), loading (676) and loadError (684) early returns; main wrapper 708-1422 covers the employee form (BaseDialog/mobile-sheet/shell branches), discard-confirm, and delete-confirm \u2014 both shell and legacy dialog branches sit inside the wrapper and remap.",
     },
     "src/pages/HR.tsx": {
-        env: "unscoped",
-        note: "profileEditorBody (652-849) is hoisted above the branch split and injected into BOTH branches: it is dialog-vars when a style is applied (rendered inside shell), unscoped otherwise. Legacy dialog branch 878-911 unscoped.",
-        exceptions: [
-            { from: 852, to: 875, env: "dialog-vars", why: "ConfiguredDialogShell branch of employee profile dialog; conditional on appliedDialogStyle" },
-            { from: 652, to: 849, env: "dialog-vars", why: "Shared profileEditorBody via WithDialogTokens; dialog-vars ONLY when appliedDialogStyle (rendered inside shell at 875), unscoped when legacy branch renders it at 895" },
-        ],
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/pages/Inventory.tsx": {
-        env: "unscoped",
-        note: "Add/edit and stock-update modals branch on (applied && shellButtons); legacy branches (739-758, 790-822) unscoped \u2014 matches empirical fact that legacy add-item dialog is fully frozen. ConfirmDialog applies its own ds2Vars in its shell branch only.",
-        exceptions: [
-            { from: 721, to: 737, env: "dialog-vars", why: "ConfiguredDialogShell branch of add/edit modal; conditional on applied dialog style" },
-            { from: 760, to: 788, env: "dialog-vars", why: "ConfiguredDialogShell branch of stock-update modal; conditional on applied dialog style" },
-            { from: 825, to: 872, env: "dialog-vars", why: "Four ConfirmDialog mounts; ConfirmDialog applies style={ds2Vars} on its panel in its applied branch only \u2014 unscoped when no style applied" },
-        ],
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/pages/OrderQueue.tsx": {
-        env: "unscoped",
-        note: "No ds2-visual-scope wrapper, no shell/token dialog components.",
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/pages/POS.tsx": {
         env: "scoped",
@@ -446,8 +394,8 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         note: "All three returns carry the full wrapper: loading (380-395), error (399-423), main (426-836) each root with ds2-visual-scope + visualStyle + data-ds2-neutral. Mobile bottom-sheet editors (e.g. line 509) are fixed-position but DOM-inside the wrapper.",
     },
     "src/pages/PurchaseReceipts.tsx": {
-        env: "unscoped",
-        note: "No ds2-visual-scope wrapper, no shell/token dialog components.",
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/pages/Reports.tsx": {
         env: "scoped",
@@ -463,11 +411,8 @@ export const FILE_ENV: Record<string, FileEnvEntry> = {
         note: "Loading early return has its own wrapper (2301-2310); main wrapper 2315-2451 covers all tab content via renderContent() and the training-mode ConfirmDialog (2440). Module-level subcomponents (SegmentedControl, StatusPill, ReadinessList) render only inside the wrapper.",
     },
     "src/pages/Tables.tsx": {
-        env: "unscoped",
-        note: "Page has no ds2-visual-scope wrapper. Local Dialog component (lines 235-270) branches on useAppliedDialogStyle: shell branch dialog-vars, legacy branch unscoped.",
-        exceptions: [
-            { from: 239, to: 244, env: "dialog-vars", why: "ConfiguredDialogShell branch of local Dialog wrapper; renders only when a dialog style is applied, otherwise legacy branch (246-270) renders unscoped" },
-        ],
+        env: "scoped",
+        note: "Scoped in the 2026-07-23 scope sweep (page root / Layout ChromeScope carries ds2-visual-scope + visualStyle).",
     },
     "src/pages/Transactions.tsx": {
         env: "scoped",

@@ -26,6 +26,8 @@ import {
   type ManagedDevice,
   type PairingCodeResponse,
 } from '../services/deviceManagementService';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 type RequestState = 'idle' | 'loading' | 'error';
 
@@ -50,6 +52,7 @@ function latestPairingCode(device: ManagedDevice) {
 const Devices: React.FC = () => {
   // 1. Hooks
   const { employee } = useSupabaseAuth();
+  const { visualStyle, prefs } = useDesignSystem2Customization();
   const [pin, setPin] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [requestState, setRequestState] = useState<RequestState>('idle');
@@ -177,7 +180,7 @@ const Devices: React.FC = () => {
   // 5. Render
   if (employee?.role !== 'admin') {
     return (
-      <div className="min-h-full bg-[#f7f7f7] p-8">
+      <div className="ds2-visual-scope min-h-full bg-[#f7f7f7] p-8" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
         <div className="mx-auto max-w-2xl rounded-3xl border-2 border-red-200 bg-red-50 p-8 text-center">
           <ShieldCheck className="mx-auto mb-4 h-14 w-14 text-red-600" />
           <h1 className="text-3xl font-bold text-gray-900">Administrator access required</h1>
@@ -189,7 +192,7 @@ const Devices: React.FC = () => {
 
   if (!isUnlocked) {
     return (
-      <div className="min-h-full bg-[#f7f7f7] p-8">
+      <div className="ds2-visual-scope min-h-full bg-[#f7f7f7] p-8" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
         <div className="mx-auto max-w-xl pt-10">
           <div className="mb-8 text-center">
             <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-red-500 to-pink-600 shadow-lg">
@@ -233,7 +236,7 @@ const Devices: React.FC = () => {
   }
 
   return (
-    <div className="min-h-full bg-[#f7f7f7] p-6 lg:p-8">
+    <div className="ds2-visual-scope min-h-full bg-[#f7f7f7] p-6 lg:p-8" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
