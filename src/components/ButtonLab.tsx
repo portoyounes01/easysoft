@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, Copy, Crown, List } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { List } from 'lucide-react';
 import {
     CANONICAL_SPECIMENS,
     GROUP_LABELS,
@@ -8,79 +8,42 @@ import {
     type SpecimenGroup,
     type SpecimenInstance,
     type SpecimenReacts,
+    type SpecimenStatus,
 } from './buttonLabSpecimens';
 import { INLINE_SPECIMENS } from './buttonLabInlineSpecimens';
 import { CANONICAL_INSTANCES } from './buttonLabCanonicalInstances';
 import { FILE_ENV, type SiteEnv } from './buttonLabSiteEnv';
 import { CLUSTERS, FAMILY_LABELS, FAMILY_ORDER, SPECIMEN_CLUSTER, type StyleCluster } from './buttonLabClusters';
-import { PROPOSED_PLAN } from './buttonLabProposedPlan';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 
 /**
- * Internal design tool: previews every distinct button style found in the app
- * (button audit, 2026-07-22) — shared components rendered via their REAL
- * imports, inline/hardcoded styles as verbatim class-string replicas.
+ * Internal design tool: the living register of the button design language
+ * (consolidation executed 2026-07-23; data re-extracted from the migrated
+ * codebase).
+ *
+ * Every distinct button style in the app appears here with a STATUS:
+ * design-language (the blessed ui/ components + SSOT dialog styles),
+ * legacy-frozen (untouched legacy dialog branches), widget-internal (blessed
+ * bespoke widgets), recipe (sanctioned token recipes on native elements) —
+ * and DRIFT, which should stay at zero: any drift card is a hand-written
+ * button style that escaped the design language and needs migrating
+ * (`npm run check:buttons` gates the same thing in CI).
  *
  * Each preview reproduces the button's REAL environment in the app (site-env
- * map, 2026-07-22): buttons on `.ds2-visual-scope` screens render inside the
- * live scope and follow the Appearances tokens; buttons inside dialog shells
- * on unscoped screens only get the colour vars; buttons on unscoped screens
- * render bare and stay frozen — exactly like the app. Preview only — nothing
- * here changes any screen in the app.
+ * map): scoped screens follow the Appearances tokens live, dialog shells get
+ * vars only, unscoped surfaces stay frozen. Preview only — nothing here
+ * changes any screen in the app.
  */
 
 type SourceFilter = 'all' | 'component' | 'inline';
 type ReactsFilter = 'all' | SpecimenReacts;
 type EnvFilter = 'all' | SiteEnv | 'mixed';
-type PlanFilter = 'all' | 'targets' | 'assigned' | 'retiring' | 'undecided';
-
-/** Sentinel migration target meaning "remove this style entirely". */
-export const RETIRE_TARGET = '__retire__';
-
-/**
- * The consolidation plan: which specimens are the blessed target styles for
- * the rebuild, and where every other style should migrate.
- */
-interface WinnerPlan {
-    /** Specimen keys chosen as target styles. */
-    blessed: string[];
-    /** Non-blessed specimen key → blessed key, or RETIRE_TARGET. */
-    targets: Record<string, string>;
-}
-
-const PLAN_STORAGE_KEY = 'button-lab-winner-plan';
-const ALL_SPECIMENS: ButtonSpecimen[] = [...CANONICAL_SPECIMENS, ...INLINE_SPECIMENS];
-const VALID_KEYS = new Set(ALL_SPECIMENS.map((s) => s.key));
-const SPECIMEN_BY_KEY = new Map(ALL_SPECIMENS.map((s) => [s.key, s]));
+type StatusFilter = 'all' | SpecimenStatus;
 type ViewMode = 'clusters' | 'roles';
 
-/** Validate a raw plan: prune keys that no longer exist after regeneration. */
-function sanitizePlan(parsed: Partial<WinnerPlan>): WinnerPlan {
-    const blessed = (parsed.blessed ?? []).filter((k) => VALID_KEYS.has(k));
-    const blessedSet = new Set(blessed);
-    const targets: Record<string, string> = {};
-    for (const [key, value] of Object.entries(parsed.targets ?? {})) {
-        if (!VALID_KEYS.has(key) || blessedSet.has(key)) continue;
-        if (value === RETIRE_TARGET || blessedSet.has(value)) targets[key] = value;
-    }
-    return { blessed, targets };
-}
-
-/** Load the stored plan; when none exists (or it is empty — merely opening the
- *  lab persists an empty plan), start from the curated proposal. */
-function loadPlan(): WinnerPlan {
-    try {
-        const raw = localStorage.getItem(PLAN_STORAGE_KEY);
-        const stored = raw ? sanitizePlan(JSON.parse(raw) as Partial<WinnerPlan>) : null;
-        if (!stored || (stored.blessed.length === 0 && Object.keys(stored.targets).length === 0)) {
-            return sanitizePlan(PROPOSED_PLAN);
-        }
-        return stored;
-    } catch {
-        return sanitizePlan(PROPOSED_PLAN);
-    }
-}
+const ALL_SPECIMENS: ButtonSpecimen[] = [...CANONICAL_SPECIMENS, ...INLINE_SPECIMENS];
+const SPECIMEN_BY_KEY = new Map(ALL_SPECIMENS.map((s) => [s.key, s]));
 
 /** Environment of one file:line ref, per the generated site-env map. */
 function resolveRefEnv(ref: string): SiteEnv | 'mixed' | null {
@@ -138,6 +101,11 @@ function computeCardEnv(specimen: ButtonSpecimen, instances: SpecimenInstance[])
     return { env: present.length === 1 ? present[0] : present.length === 0 ? 'unscoped' : 'mixed', renderEnv, counts, known };
 }
 
+function specimenStatus(specimen: ButtonSpecimen): SpecimenStatus {
+    if (specimen.status) return specimen.status;
+    return specimen.source === 'component' ? 'design-language' : 'drift';
+}
+
 const SOURCE_OPTIONS: { value: SourceFilter; label: string }[] = [
     { value: 'all', label: 'All sources' },
     { value: 'component', label: 'Shared component' },
@@ -150,6 +118,51 @@ const REACTS_OPTIONS: { value: ReactsFilter; label: string }[] = [
     { value: 'partial', label: '◐ Partly follows' },
     { value: 'none', label: '○ Static' },
 ];
+
+const ENV_OPTIONS: { value: EnvFilter; label: string }[] = [
+    { value: 'all', label: 'All screens' },
+    { value: 'scoped', label: 'In scope' },
+    { value: 'dialog-vars', label: 'Dialog vars' },
+    { value: 'unscoped', label: 'Out of scope' },
+    { value: 'mixed', label: 'Mixed' },
+];
+
+const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
+    { value: 'all', label: 'Whole register' },
+    { value: 'design-language', label: '♛ Design language' },
+    { value: 'recipe', label: 'Recipes' },
+    { value: 'legacy-frozen', label: 'Legacy-frozen' },
+    { value: 'widget-internal', label: 'Widget internals' },
+    { value: 'drift', label: '⚠ Drift' },
+];
+
+const STATUS_CHIP: Record<SpecimenStatus, { label: string; className: string; title: string }> = {
+    'design-language': {
+        label: 'design language',
+        className: 'bg-amber-100 text-amber-800',
+        title: 'A blessed ui/ component or SSOT dialog style — the unified language',
+    },
+    recipe: {
+        label: 'recipe',
+        className: 'bg-teal-50 text-teal-700',
+        title: 'Sanctioned token recipe on a native element (gradient primary, danger vars, ghost hover…)',
+    },
+    'legacy-frozen': {
+        label: 'legacy-frozen',
+        className: 'bg-neutral-200 text-neutral-600',
+        title: 'Legacy dialog fallback branch — byte-identical by policy; disappears when legacy dialog paths are decommissioned',
+    },
+    'widget-internal': {
+        label: 'widget internal',
+        className: 'bg-indigo-50 text-indigo-700',
+        title: 'Blessed bespoke widget internals (keyboard grid, tree rows, input adornments…) — outside the button language on purpose',
+    },
+    drift: {
+        label: '⚠ DRIFT',
+        className: 'bg-red-100 text-red-700',
+        title: 'Hand-written button style outside the design language — migrate it onto a winner (check:buttons gates this in CI)',
+    },
+};
 
 const SYSTEM_LABELS: Record<ButtonSpecimen['system'], string> = {
     canonical: 'ui/ component',
@@ -228,21 +241,7 @@ const FilterChip: React.FC<FilterChipProps> = ({ label, selected, onClick }) => 
     </button>
 );
 
-interface SpecimenCardProps {
-    specimen: ButtonSpecimen;
-    /** Chosen as a target style for the rebuild. */
-    blessed: boolean;
-    /** Migration target key (blessed key or RETIRE_TARGET), if assigned. */
-    target?: string;
-    /** How many other styles are assigned to migrate to this one. */
-    assignedToThis: number;
-    /** All blessed specimens, for the target picker. */
-    blessedOptions: ButtonSpecimen[];
-    onToggleBless: (key: string) => void;
-    onSetTarget: (key: string, value: string) => void;
-}
-
-const SpecimenCard = React.memo<SpecimenCardProps>(({ specimen, blessed, target, assignedToThis, blessedOptions, onToggleBless, onSetTarget }) => {
+const SpecimenCard = React.memo<{ specimen: ButtonSpecimen }>(({ specimen }) => {
     const dot = REACTS_DOT[specimen.reacts];
     const dark = specimen.surface === 'dark';
     const [listOpen, setListOpen] = useState(false);
@@ -262,10 +261,10 @@ const SpecimenCard = React.memo<SpecimenCardProps>(({ specimen, blessed, target,
                 : cardEnv.renderEnv
             : selectedEnv;
     const envChip = ENV_CHIP[cardEnv.known === 0 ? 'unscoped' : cardEnv.env];
-    const sameGroupTargets = blessedOptions.filter((b) => b.group === specimen.group && b.key !== specimen.key);
-    const otherGroupTargets = blessedOptions.filter((b) => b.group !== specimen.group);
+    const status = specimenStatus(specimen);
+    const statusChip = STATUS_CHIP[status];
     return (
-        <div className={`flex flex-col overflow-hidden rounded-xl border bg-white ${blessed ? 'border-amber-400 ring-1 ring-amber-300' : 'border-neutral-200'}`}>
+        <div className={`flex flex-col overflow-hidden rounded-xl border bg-white ${status === 'drift' ? 'border-red-300 ring-1 ring-red-200' : status === 'design-language' ? 'border-amber-300' : 'border-neutral-200'}`}>
             <div
                 className={`${renderEnv === 'scoped' ? 'ds2-visual-scope ' : ''}flex min-h-[7rem] items-center justify-center overflow-x-auto p-4 ${dark ? 'bg-slate-900' : 'bg-neutral-50'}`}
                 style={renderEnv === 'unscoped' ? undefined : visualStyle}
@@ -281,22 +280,9 @@ const SpecimenCard = React.memo<SpecimenCardProps>(({ specimen, blessed, target,
                     </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
-                    <button
-                        type="button"
-                        aria-pressed={blessed}
-                        onClick={() => onToggleBless(specimen.key)}
-                        title={blessed ? 'Target style for the rebuild — click to unmark' : 'Mark as a target style for the rebuild'}
-                        className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors ${blessed
-                            ? 'bg-amber-400 text-amber-950'
-                            : 'bg-neutral-100 text-neutral-400 hover:bg-amber-100 hover:text-amber-700'
-                            }`}
-                    >
-                        <Crown className="h-3 w-3" />
-                        {blessed && 'target'}
-                        {blessed && assignedToThis > 0 && (
-                            <span className="rounded bg-amber-200/80 px-1 font-bold text-amber-900">← {assignedToThis}</span>
-                        )}
-                    </button>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${statusChip.className}`} title={statusChip.title}>
+                        {statusChip.label}
+                    </span>
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${SYSTEM_CHIP_CLASSES[specimen.system]}`}>
                         {SYSTEM_LABELS[specimen.system]}
                     </span>
@@ -330,39 +316,6 @@ const SpecimenCard = React.memo<SpecimenCardProps>(({ specimen, blessed, target,
                         )
                     )}
                 </div>
-                {/* Keep the picker mounted while a target is set even if no
-                    winners remain, so a retire choice never becomes invisible
-                    or uneditable. */}
-                {!blessed && (blessedOptions.length > 0 || target !== undefined) && (
-                    <select
-                        value={target ?? ''}
-                        onChange={(event) => onSetTarget(specimen.key, event.target.value)}
-                        title="Where this style migrates in the rebuild"
-                        className={`w-full rounded border px-1.5 py-1 text-[10px] font-semibold ${target === RETIRE_TARGET
-                            ? 'border-red-200 bg-red-50 text-red-700'
-                            : target
-                                ? 'border-amber-300 bg-amber-50 text-amber-800'
-                                : 'border-neutral-200 bg-white text-neutral-500'
-                            }`}
-                    >
-                        <option value="">Migrate to… (undecided)</option>
-                        <option value={RETIRE_TARGET}>Retire — remove this style</option>
-                        {sameGroupTargets.length > 0 && (
-                            <optgroup label={`${GROUP_LABELS[specimen.group]} targets`}>
-                                {sameGroupTargets.map((b) => (
-                                    <option key={b.key} value={b.key}>{b.name}</option>
-                                ))}
-                            </optgroup>
-                        )}
-                        {otherGroupTargets.length > 0 && (
-                            <optgroup label="Targets from other roles">
-                                {otherGroupTargets.map((b) => (
-                                    <option key={b.key} value={b.key}>{GROUP_LABELS[b.group]} · {b.name}</option>
-                                ))}
-                            </optgroup>
-                        )}
-                    </select>
-                )}
                 {listOpen && instances.length > 0 && (
                     <div className="max-h-44 overflow-y-auto rounded-lg border border-neutral-200">
                         {instances.map((instance, index) => {
@@ -416,28 +369,16 @@ interface ClusterCardProps {
     cluster: StyleCluster;
     /** Members passing the active filters, heaviest use first. */
     members: ButtonSpecimen[];
-    blessedSet: Set<string>;
-    targets: Record<string, string>;
-    assignedCounts: Record<string, number>;
-    blessedSpecimens: ButtonSpecimen[];
-    onToggleBless: (key: string) => void;
-    onSetTarget: (key: string, value: string) => void;
-    onSetTargetBulk: (keys: string[], value: string) => void;
 }
 
 /**
  * One visual cluster: same fill / colour / radius / layout — members differ
- * only in padding, weight, hover shades etc. Preview one member at a time;
- * crown the variant that should be the target; bulk-assign the rest.
+ * only in padding, weight, hover shades etc. Preview one member at a time.
  */
-const ClusterCard: React.FC<ClusterCardProps> = ({ cluster, members, blessedSet, targets, assignedCounts, blessedSpecimens, onToggleBless, onSetTarget, onSetTargetBulk }) => {
+const ClusterCard: React.FC<ClusterCardProps> = ({ cluster, members }) => {
     const [activeKey, setActiveKey] = useState(members[0]?.key);
     const active = members.find((m) => m.key === activeKey) ?? members[0];
     if (!active) return null;
-    const nonBlessed = members.filter((m) => !blessedSet.has(m.key));
-    // Common bulk value: shared target across all non-blessed members, else ''.
-    const firstTarget = nonBlessed.length > 0 ? targets[nonBlessed[0].key] ?? '' : '';
-    const bulkValue = nonBlessed.every((m) => (targets[m.key] ?? '') === firstTarget) ? firstTarget : '';
     return (
         <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-1 px-0.5">
@@ -454,9 +395,7 @@ const ClusterCard: React.FC<ClusterCardProps> = ({ cluster, members, blessedSet,
                                 title={m.name}
                                 className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-bold transition-colors ${m.key === active.key
                                     ? 'bg-neutral-800 text-white'
-                                    : blessedSet.has(m.key)
-                                        ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                                        : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
+                                    : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200'
                                     }`}
                             >
                                 {index + 1}
@@ -465,203 +404,19 @@ const ClusterCard: React.FC<ClusterCardProps> = ({ cluster, members, blessedSet,
                     </span>
                 )}
             </div>
-            <SpecimenCard
-                specimen={active}
-                blessed={blessedSet.has(active.key)}
-                target={targets[active.key]}
-                assignedToThis={assignedCounts[active.key] ?? 0}
-                blessedOptions={blessedSpecimens}
-                onToggleBless={onToggleBless}
-                onSetTarget={onSetTarget}
-            />
-            {nonBlessed.length > 1 && blessedSpecimens.length > 0 && (
-                <select
-                    value={bulkValue}
-                    onChange={(event) => onSetTargetBulk(nonBlessed.map((m) => m.key), event.target.value)}
-                    title="Assign every variant in this cluster at once"
-                    className={`w-full rounded border px-1.5 py-1 text-[10px] font-semibold ${bulkValue === RETIRE_TARGET
-                        ? 'border-red-200 bg-red-50 text-red-700'
-                        : bulkValue
-                            ? 'border-amber-300 bg-amber-50 text-amber-800'
-                            : 'border-dashed border-neutral-300 bg-neutral-50 text-neutral-500'
-                        }`}
-                >
-                    <option value="">Migrate ALL {nonBlessed.length} variants to…</option>
-                    <option value={RETIRE_TARGET}>Retire — remove all of them</option>
-                    {blessedSpecimens.map((b) => (
-                        <option key={b.key} value={b.key}>{GROUP_LABELS[b.group]} · {b.name}</option>
-                    ))}
-                </select>
-            )}
+            <SpecimenCard specimen={active} />
         </div>
     );
 };
 
-const ENV_OPTIONS: { value: EnvFilter; label: string }[] = [
-    { value: 'all', label: 'All screens' },
-    { value: 'scoped', label: 'In scope' },
-    { value: 'dialog-vars', label: 'Dialog vars' },
-    { value: 'unscoped', label: 'Out of scope' },
-    { value: 'mixed', label: 'Mixed' },
-];
-
-const PLAN_OPTIONS: { value: PlanFilter; label: string }[] = [
-    { value: 'all', label: 'Whole plan' },
-    { value: 'targets', label: '♛ Targets' },
-    { value: 'assigned', label: 'Assigned' },
-    { value: 'retiring', label: 'Retiring' },
-    { value: 'undecided', label: 'Undecided' },
-];
-
 const ButtonLab: React.FC = () => {
-    const [viewMode, setViewMode] = useState<ViewMode>('clusters');
+    const [viewMode, setViewMode] = useState<ViewMode>('roles');
     const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
     const [reactsFilter, setReactsFilter] = useState<ReactsFilter>('all');
     const [envFilter, setEnvFilter] = useState<EnvFilter>('all');
-    const [planFilter, setPlanFilter] = useState<PlanFilter>('all');
-    const [plan, setPlan] = useState<WinnerPlan>(loadPlan);
-    const [copied, setCopied] = useState(false);
-
-    useEffect(() => {
-        try {
-            localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify(plan));
-        } catch {
-            /* ignore quota / private mode */
-        }
-    }, [plan]);
-
-    // Adopt plan edits made in other tabs, so a stale in-memory snapshot never
-    // clobbers them on the next write (last-writer-wins race).
-    useEffect(() => {
-        const onStorage = (event: StorageEvent) => {
-            if (event.key !== PLAN_STORAGE_KEY) return;
-            setPlan(loadPlan());
-        };
-        window.addEventListener('storage', onStorage);
-        return () => window.removeEventListener('storage', onStorage);
-    }, []);
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
     const allSpecimens = ALL_SPECIMENS;
-
-    const blessedSet = useMemo(() => new Set(plan.blessed), [plan.blessed]);
-    const blessedSpecimens = useMemo(
-        () => allSpecimens.filter((s) => blessedSet.has(s.key)),
-        [allSpecimens, blessedSet]
-    );
-
-    const toggleBless = useCallback((key: string) => {
-        setPlan((prev) => {
-            const wasBlessed = prev.blessed.includes(key);
-            const blessed = wasBlessed ? prev.blessed.filter((k) => k !== key) : [...prev.blessed, key];
-            const targets: Record<string, string> = {};
-            for (const [k, v] of Object.entries(prev.targets)) {
-                if (k === key) continue; // a newly blessed style has no migration target
-                if (v === key && wasBlessed) continue; // unblessed winner: drop styles assigned to it
-                targets[k] = v;
-            }
-            return { blessed, targets };
-        });
-    }, []);
-
-    const setTarget = useCallback((key: string, value: string) => {
-        setPlan((prev) => {
-            const targets = { ...prev.targets };
-            if (!value) delete targets[key];
-            else targets[key] = value;
-            return { ...prev, targets };
-        });
-    }, []);
-
-    const setTargetBulk = useCallback((keys: string[], value: string) => {
-        setPlan((prev) => {
-            const blessed = new Set(prev.blessed);
-            const targets = { ...prev.targets };
-            for (const key of keys) {
-                if (blessed.has(key)) continue;
-                if (!value) delete targets[key];
-                else targets[key] = value;
-            }
-            return { ...prev, targets };
-        });
-    }, []);
-
-    /** blessed key → number of styles assigned to migrate to it */
-    const assignedCounts = useMemo(() => {
-        const map: Record<string, number> = {};
-        for (const v of Object.values(plan.targets)) {
-            if (v !== RETIRE_TARGET) map[v] = (map[v] ?? 0) + 1;
-        }
-        return map;
-    }, [plan.targets]);
-
-    const planCounts = useMemo(() => {
-        let assigned = 0;
-        let retiring = 0;
-        for (const v of Object.values(plan.targets)) {
-            if (v === RETIRE_TARGET) retiring += 1;
-            else assigned += 1;
-        }
-        return {
-            targets: plan.blessed.length,
-            assigned,
-            retiring,
-            undecided: allSpecimens.length - plan.blessed.length - assigned - retiring,
-        };
-    }, [plan, allSpecimens]);
-
-    const copyPlan = useCallback(async () => {
-        const byKey = new Map(allSpecimens.map((s) => [s.key, s]));
-        const uses = (s: ButtonSpecimen) =>
-            (s.instances ?? CANONICAL_INSTANCES[s.key] ?? []).map((i) => ({ label: i.label, ref: i.ref }));
-        const entries = Object.entries(plan.targets).filter(([k]) => byKey.has(k));
-        const doc = {
-            tool: 'button-lab-winner-plan',
-            exportedAt: new Date().toISOString(),
-            targets: blessedSpecimens.map((s) => ({
-                key: s.key,
-                name: s.name,
-                group: s.group,
-                refs: s.refs,
-                assignedStyles: assignedCounts[s.key] ?? 0,
-            })),
-            migrations: entries
-                .filter(([, v]) => v !== RETIRE_TARGET && byKey.has(v))
-                .map(([k, v]) => {
-                    const s = byKey.get(k)!;
-                    const t = byKey.get(v)!;
-                    return { key: k, name: s.name, group: s.group, migrateTo: { key: v, name: t.name, group: t.group }, uses: uses(s) };
-                }),
-            retire: entries
-                .filter(([, v]) => v === RETIRE_TARGET)
-                .map(([k]) => {
-                    const s = byKey.get(k)!;
-                    return { key: k, name: s.name, group: s.group, uses: uses(s) };
-                }),
-            undecided: allSpecimens
-                .filter((s) => !blessedSet.has(s.key) && !plan.targets[s.key])
-                .map((s) => ({ key: s.key, name: s.name, group: s.group })),
-        };
-        const text = JSON.stringify(doc, null, 2);
-        let ok = false;
-        try {
-            await navigator.clipboard.writeText(text);
-            ok = true;
-        } catch {
-            // Headless / permission-less fallback
-            const area = document.createElement('textarea');
-            area.value = text;
-            document.body.appendChild(area);
-            area.select();
-            ok = document.execCommand('copy');
-            area.remove();
-        }
-        if (!ok) {
-            console.error('ButtonLab: clipboard write failed — plan JSON follows:\n', text);
-            return;
-        }
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1600);
-    }, [allSpecimens, plan.targets, blessedSpecimens, blessedSet, assignedCounts]);
 
     const cardEnvs = useMemo(() => {
         const map = new Map<string, CardEnv>();
@@ -678,16 +433,9 @@ const ButtonLab: React.FC = () => {
                     (sourceFilter === 'all' || s.source === sourceFilter) &&
                     (reactsFilter === 'all' || s.reacts === reactsFilter) &&
                     (envFilter === 'all' || cardEnvs.get(s.key)?.env === envFilter) &&
-                    (planFilter === 'all' ||
-                        (planFilter === 'targets' && blessedSet.has(s.key)) ||
-                        (planFilter === 'assigned' &&
-                            !blessedSet.has(s.key) &&
-                            plan.targets[s.key] !== undefined &&
-                            plan.targets[s.key] !== RETIRE_TARGET) ||
-                        (planFilter === 'retiring' && plan.targets[s.key] === RETIRE_TARGET) ||
-                        (planFilter === 'undecided' && !blessedSet.has(s.key) && plan.targets[s.key] === undefined))
+                    (statusFilter === 'all' || specimenStatus(s) === statusFilter)
             ),
-        [allSpecimens, sourceFilter, reactsFilter, envFilter, cardEnvs, planFilter, blessedSet, plan.targets]
+        [allSpecimens, sourceFilter, reactsFilter, envFilter, statusFilter, cardEnvs]
     );
 
     /** Cluster view: families → clusters, keeping only filter-passing members. */
@@ -719,24 +467,6 @@ const ButtonLab: React.FC = () => {
         return out;
     }, [filtered]);
 
-    const visibleClusters = useMemo(
-        () => clusterGrouped.reduce((n, [, items]) => n + items.length, 0),
-        [clusterGrouped]
-    );
-
-    /** Per-role plan progress over ALL specimens (not the filtered view). */
-    const groupStats = useMemo(() => {
-        const map = new Map<SpecimenGroup, { blessed: number; decided: number; total: number }>();
-        for (const s of allSpecimens) {
-            const entry = map.get(s.group) ?? { blessed: 0, decided: 0, total: 0 };
-            entry.total += 1;
-            if (blessedSet.has(s.key)) entry.blessed += 1;
-            else if (plan.targets[s.key] !== undefined) entry.decided += 1;
-            map.set(s.group, entry);
-        }
-        return map;
-    }, [allSpecimens, blessedSet, plan.targets]);
-
     const grouped = useMemo(() => {
         const map = new Map<SpecimenGroup, ButtonSpecimen[]>();
         for (const group of GROUP_ORDER) map.set(group, []);
@@ -744,39 +474,42 @@ const ButtonLab: React.FC = () => {
         return [...map.entries()].filter(([, list]) => list.length > 0);
     }, [filtered]);
 
-    const reactCounts = useMemo(() => {
-        const counts = { full: 0, partial: 0, none: 0 };
-        for (const s of allSpecimens) counts[s.reacts] += 1;
+    const statusCounts = useMemo(() => {
+        const counts: Record<SpecimenStatus, number> = {
+            'design-language': 0,
+            recipe: 0,
+            'legacy-frozen': 0,
+            'widget-internal': 0,
+            drift: 0,
+        };
+        for (const s of allSpecimens) counts[specimenStatus(s)] += 1;
         return counts;
     }, [allSpecimens]);
-
-    const envCounts = useMemo(() => {
-        const counts = { scoped: 0, 'dialog-vars': 0, unscoped: 0, mixed: 0, live: 0 };
-        for (const s of allSpecimens) {
-            const e = cardEnvs.get(s.key);
-            if (!e) continue;
-            counts[e.env] += 1;
-            // "live" = actually follows Appearances in the app today: reactive
-            // style AND every one of its sites is in scope.
-            if (e.env === 'scoped' && s.reacts !== 'none') counts.live += 1;
-        }
-        return counts;
-    }, [allSpecimens, cardEnvs]);
 
     return (
         <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                 <div className="flex flex-wrap gap-1.5">
                     <FilterChip
-                        label={`Deduped clusters (${CLUSTERS.length})`}
-                        selected={viewMode === 'clusters'}
-                        onClick={() => setViewMode('clusters')}
-                    />
-                    <FilterChip
-                        label={`All styles by role (${ALL_SPECIMENS.length})`}
+                        label={`By role (${ALL_SPECIMENS.length})`}
                         selected={viewMode === 'roles'}
                         onClick={() => setViewMode('roles')}
                     />
+                    <FilterChip
+                        label={`Visual clusters (${CLUSTERS.length})`}
+                        selected={viewMode === 'clusters'}
+                        onClick={() => setViewMode('clusters')}
+                    />
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                    {STATUS_OPTIONS.map((option) => (
+                        <FilterChip
+                            key={option.value}
+                            label={option.label}
+                            selected={statusFilter === option.value}
+                            onClick={() => setStatusFilter(option.value)}
+                        />
+                    ))}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                     {SOURCE_OPTIONS.map((option) => (
@@ -808,76 +541,26 @@ const ButtonLab: React.FC = () => {
                         />
                     ))}
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                    {PLAN_OPTIONS.map((option) => (
-                        <FilterChip
-                            key={option.value}
-                            label={option.label}
-                            selected={planFilter === option.value}
-                            onClick={() => setPlanFilter(option.value)}
-                        />
-                    ))}
-                    <button
-                        type="button"
-                        onClick={() => void copyPlan()}
-                        disabled={planCounts.targets === 0 && planCounts.assigned === 0 && planCounts.retiring === 0}
-                        title="Copy the consolidation plan (targets, migrations, retirements, undecided) as JSON"
-                        className="flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                        {copied ? 'Copied' : 'Copy plan'}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (window.confirm('Replace the current plan with the curated proposal? Your edits will be lost.')) {
-                                setPlan(sanitizePlan(PROPOSED_PLAN));
-                            }
-                        }}
-                        title="Load the curated consolidation proposal (winners + assignments)"
-                        className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-600 transition-colors hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800"
-                    >
-                        Reset to proposal
-                    </button>
-                </div>
                 <p className="text-xs font-semibold text-neutral-500">
-                    {viewMode === 'clusters' && `${visibleClusters} visual designs (${filtered.length} styles) · `}
-                    {viewMode === 'roles' && `${filtered.length} of ${allSpecimens.length} styles · `}
-                    only {envCounts.live} actually follow
-                    Appearances in the app today · {envCounts.scoped} in scope · {envCounts['dialog-vars']} dialog
-                    vars · {envCounts.unscoped} out of scope · {envCounts.mixed} mixed · style: ● {reactCounts.full} ◐ {reactCounts.partial} ○ {reactCounts.none}
-                </p>
-                <p className="text-xs font-semibold text-amber-700">
-                    Plan: ♛ {planCounts.targets} target styles · {planCounts.assigned} assigned ·{' '}
-                    {planCounts.retiring} retiring · {planCounts.undecided} undecided
+                    {filtered.length} of {allSpecimens.length} styles · ♛ {statusCounts['design-language']} design
+                    language · {statusCounts.recipe} recipes · {statusCounts['legacy-frozen']} legacy-frozen ·{' '}
+                    {statusCounts['widget-internal']} widget internals ·{' '}
+                    <span className={statusCounts.drift > 0 ? 'font-bold text-red-600' : 'text-green-700'}>
+                        {statusCounts.drift} drift{statusCounts.drift === 0 ? ' ✓' : ' ⚠'}
+                    </span>
                 </p>
             </div>
 
             <p className="text-xs leading-5 text-neutral-500">
-                Every preview reproduces the button's REAL environment in the app. Buttons on screens
-                wrapped in the appearance scope (green “in scope” chip) follow the controls above, exactly
-                as they do in the app. Buttons in dialog shells on unscoped screens (amber “dialog vars”)
-                only follow the colour vars. Buttons on unscoped screens (red “out of scope”) are frozen —
-                changing Appearances never reaches them, so they stay frozen here too. For “mixed” styles,
-                pick a use from its list to preview each real site exactly. Style dots: ● reactive style ·
-                ◐ partly reactive · ○ static CSS. Preview only — nothing here changes the app.
-            </p>
-
-            <p className="text-xs leading-5 text-neutral-500">
-                <strong className="text-neutral-700">Deduped clusters</strong> collapses buttons that share
-                the same visual design — fill, colour family, radius, content layout, border, size tier —
-                into one card; padding / font-weight / hover-shade drift becomes numbered variants you can
-                flip through (all grays count as one family since the appearance scope remaps them to a
-                single neutral; green / emerald / primary are all the brand green).
-            </p>
-
-            <p className="text-xs leading-5 text-neutral-500">
-                <Crown className="mr-1 inline h-3.5 w-3.5 text-amber-500" aria-hidden />
-                <strong className="text-neutral-700">Choosing the winners:</strong> crown the styles that
-                should survive the rebuild (a role can have several — e.g. primary / secondary / danger),
-                then use the “Migrate to…” pickers — per style, or the dashed cluster-wide picker to assign
-                every variant at once — or retire styles outright. Choices are saved locally; “Copy plan”
-                exports the full work-list (with every file:line use) as JSON for the migration phase.
+                The living register of the button design language. ♛ design-language cards are the blessed
+                components and SSOT dialog styles; recipes are their sanctioned token expressions on native
+                elements; legacy-frozen styles live in the untouched legacy dialog branches; widget internals
+                are blessed bespoke widgets. <strong className="text-red-600">Drift must stay at zero</strong>{' '}
+                — a drift card is a hand-written button that escaped the language (same gate as{' '}
+                <code className="rounded bg-neutral-100 px-1">npm run check:buttons</code>). Every preview
+                reproduces the button's real screen environment: “in scope” follows the Appearances controls
+                above live, “dialog vars” follows colours only, “out of scope” stays frozen. Pick a use from a
+                card's list to preview that exact site.
             </p>
 
             {viewMode === 'clusters' && (
@@ -893,18 +576,7 @@ const ButtonLab: React.FC = () => {
                             </h3>
                             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                                 {items.map(({ cluster, members }) => (
-                                    <ClusterCard
-                                        key={cluster.id}
-                                        cluster={cluster}
-                                        members={members}
-                                        blessedSet={blessedSet}
-                                        targets={plan.targets}
-                                        assignedCounts={assignedCounts}
-                                        blessedSpecimens={blessedSpecimens}
-                                        onToggleBless={toggleBless}
-                                        onSetTarget={setTarget}
-                                        onSetTargetBulk={setTargetBulk}
-                                    />
+                                    <ClusterCard key={cluster.id} cluster={cluster} members={members} />
                                 ))}
                             </div>
                         </section>
@@ -913,38 +585,21 @@ const ButtonLab: React.FC = () => {
             )}
 
             {viewMode === 'roles' && (
-            <div className="space-y-6">
-                {grouped.map(([group, list]) => {
-                    const stats = groupStats.get(group);
-                    return (
+                <div className="space-y-6">
+                    {grouped.map(([group, list]) => (
                         <section key={group}>
                             <h3 className="mb-2 text-sm font-bold text-neutral-700">
                                 {GROUP_LABELS[group]}
                                 <span className="ml-2 font-mono text-xs font-semibold text-neutral-400">{list.length}</span>
-                                {stats && (stats.blessed > 0 || stats.decided > 0) && (
-                                    <span className="ml-2 text-xs font-semibold text-amber-600">
-                                        ♛ {stats.blessed} · {stats.decided}/{stats.total - stats.blessed} decided
-                                    </span>
-                                )}
                             </h3>
                             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                                 {list.map((s) => (
-                                    <SpecimenCard
-                                        key={s.key}
-                                        specimen={s}
-                                        blessed={blessedSet.has(s.key)}
-                                        target={plan.targets[s.key]}
-                                        assignedToThis={assignedCounts[s.key] ?? 0}
-                                        blessedOptions={blessedSpecimens}
-                                        onToggleBless={toggleBless}
-                                        onSetTarget={setTarget}
-                                    />
+                                    <SpecimenCard key={s.key} specimen={s} />
                                 ))}
                             </div>
                         </section>
-                    );
-                })}
-            </div>
+                    ))}
+                </div>
             )}
         </div>
     );

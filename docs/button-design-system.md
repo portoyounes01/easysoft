@@ -78,8 +78,13 @@ mapped to unselected winners, list rows mapped to icon chips — all applied.
 
 ## Remaining follow-ups
 
-- **Re-extract the lab data** so the lab shows the post-migration truth (style count should
-  collapse from 381 to roughly the winner set + registered tail).
+- ~~Re-extract the lab data~~ **DONE 2026-07-23**: the lab re-extracted post-migration and rebuilt
+  as the living register — 284 styles: ♛ 37 design language · 138 recipes · 70 legacy-frozen ·
+  26 widget internals · **13 drift** (the honest tail: Devices' 3 blue-purple pairing CTAs +
+  issue-code outline, MyProfileDialog clock-out red, 2 lightbox/panel close-X's, RoutingRuleManager
+  edit icon, 2 dialog-configured composites, and the 3 deliberately-undecided cards). Drift-gate
+  scanner regex fixed (was blind to buttons whose onClick preceded className): baseline 63 → 137
+  signatures, gate green.
 - ~~Structural-misfit tail~~ **RESOLVED 2026-07-23**: 14 migrated (via component-API extensions:
   TableActionButton `dark`+disabled, TabToggle `description`+wrap, ListRow `divider`), 6 blessed
   as widget internals — see the register.

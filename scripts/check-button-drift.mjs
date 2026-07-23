@@ -45,7 +45,9 @@ function extract(file, source) {
     const out = [];
     const rel = relative(ROOT, file);
     if (ALLOWED.some((re) => re.test(rel))) return out;
-    const re = /<button\b[^>]*?className=(?:"([^"]*)"|\{`([^`]*)`\})/gs;
+    // Attribute scan must tolerate `>` inside brace expressions (onClick={() => …});
+    // plain [^>]*? would stop at the arrow and miss the className.
+    const re = /<button\b(?:[^>{"]|"[^"]*"|\{(?:[^{}]|\{[^{}]*\})*\})*?className=(?:"([^"]*)"|\{`([^`]*)`\})/gs;
     let m;
     while ((m = re.exec(source))) {
         const cls = (m[1] ?? m[2] ?? '').replace(/\$\{[^}]*\}/g, ' ');

@@ -30,6 +30,8 @@ import { OutlineButton } from './ui/OutlineButton';
 import { DashedCardButton } from './ui/DashedCardButton';
 import { ProductCard } from './ui/ProductCard';
 import { DialogSwitch, DialogToggleRow } from './ui/dialogParts';
+import { MenuRow } from './ui/MenuRow';
+import { ListRow } from './ui/ListRow';
 
 /**
  * Button lab specimen registry — canonical (shared-component) population.
@@ -72,11 +74,23 @@ export interface SpecimenInstance {
     note?: string;
 }
 
+/**
+ * Register status (post-consolidation, 2026-07-23):
+ * - design-language: blessed ui/ component or SSOT dialog style
+ * - recipe: sanctioned token recipe on a native element
+ * - legacy-frozen: untouched legacy dialog fallback branch
+ * - widget-internal: blessed bespoke widget internals
+ * - drift: hand-written style outside the language — must be migrated
+ */
+export type SpecimenStatus = 'design-language' | 'recipe' | 'legacy-frozen' | 'widget-internal' | 'drift';
+
 export interface ButtonSpecimen {
     /** Stable id — the future select/edit layer references specimens by this key. */
     key: string;
     name: string;
     group: SpecimenGroup;
+    /** Register status; canonical specimens default to 'design-language'. */
+    status?: SpecimenStatus;
     /** Orthogonal badge 1: shared component import vs inline hardcoded replica. */
     source: 'component' | 'inline';
     /** Which styling system the classes come from. */
@@ -573,5 +587,34 @@ export const CANONICAL_SPECIMENS: ButtonSpecimen[] = [
         reacts: 'partial',
         refs: ['src/components/ui/TableActionButton.tsx:19'],
         render: () => <TableActionButton variant="icon" icon={Pencil} aria-label="Edit" onClick={noop} />,
+    },
+    {
+        key: 'menu-row',
+        name: 'MenuRow · dropdown menu item',
+        group: 'misc',
+        source: 'component',
+        system: 'canonical',
+        reacts: 'partial',
+        reactsDetail: 'neutral text/hover remap via scope; danger variant static red',
+        refs: ['src/components/ui/MenuRow.tsx:1'],
+        stateNote: 'default shown; selected (blue tint + check) and danger (red) variants',
+        render: (label) => <MenuRow label={label ?? 'Sort by name'} onClick={noop} />,
+    },
+    {
+        key: 'list-row',
+        name: 'ListRow · tappable list row',
+        group: 'card-clickable',
+        source: 'component',
+        system: 'canonical',
+        reacts: 'partial',
+        reactsDetail: 'neutral hover/divider remap via scope; selected tint bg-green-50 remaps to primary tint',
+        refs: ['src/components/ui/ListRow.tsx:1'],
+        stateNote: 'chevron variant shown; selected rows tint green',
+        render: (label) => (
+            <ListRow showChevron onClick={noop} className="max-w-xs">
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{label ?? 'Ana Costa'}</span>
+                <span className="text-xs text-gray-500">CSH001</span>
+            </ListRow>
+        ),
     },
 ];
