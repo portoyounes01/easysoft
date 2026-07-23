@@ -19,7 +19,7 @@
 per the dialog-rebuild policy — they migrate when the legacy paths are decommissioned), 20 structural
 misfits (e.g. VirtualKeyboard's framed key grid, tri-state assignment checkboxes, kiosk-scale
 PairingButton contexts — each needs a component-API decision), 7 already-SSOT no-ops, 2 Appearances
-preview mocks. Full list: ask the lab's uses-lists or the wave misfit reports.
+preview mocks. Full per-site list with reasons: **docs/button-migration-register.md**.
 
 **⚠️ Known stale:** the Button lab's specimen data (class strings + file:line refs) predates the
 migration — re-run the extraction workflow to see the collapsed style count and fresh refs.
