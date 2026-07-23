@@ -3,6 +3,7 @@ import { Database, RefreshCw, CheckCircle, AlertCircle, Loader2 } from 'lucide-r
 import { populateTransactionData, clearTransactionData, checkTransactionDataExists } from '../utils/populateTransactionData';
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useProducts } from '../contexts/ProductsContext';
+import { AdminActionButton } from './ui/AdminActionButton';
 
 interface SetupResult {
     success: boolean;
@@ -145,23 +146,19 @@ const DataSetup: React.FC = () => {
 
                 <div className="p-6">
                     <div className="flex space-x-4 mb-6">
-                        <button
+                        <AdminActionButton
+                            variant="primary"
+                            icon={Database}
+                            label="Populate All Data"
                             onClick={populateAllData}
                             disabled={isLoading}
-                            className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-                        >
-                            {isLoading ? (
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                            ) : (
-                                <Database className="w-5 h-5" />
-                            )}
-                            <span>Populate All Data</span>
-                        </button>
+                            isLoading={isLoading}
+                        />
 
                         <button
                             onClick={clearAllData}
                             disabled={isLoading}
-                            className="flex items-center space-x-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                            className="flex items-center space-x-2 bg-[var(--ds2-danger-solid,#dc2626)] hover:bg-[var(--ds2-danger-hover,#b91c1c)] disabled:bg-gray-400 text-white px-6 py-3 rounded-xl font-semibold transition-colors"
                         >
                             {isLoading ? (
                                 <Loader2 className="w-5 h-5 animate-spin" />

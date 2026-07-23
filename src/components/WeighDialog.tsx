@@ -8,7 +8,7 @@ import manualWeightAuditService from '../services/manualWeightAuditService';
 import type { LocalProduct } from '../types/supabase';
 import type { ScaleReading } from '../types/electron';
 import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
-import { useAppliedDialogStyle } from '../theme/dialogStyle';
+import { DIALOG_SECONDARY_RADIUS, dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 
 interface WeighDialogProps {
   product: LocalProduct | null;
@@ -167,7 +167,9 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
 
   // Interior shared between the original panel and the applied-style shell.
   const interior = (
-    <WithDialogTokens>{tk => (<>
+    <WithDialogTokens>{tk => {
+    const shellButtons = tk.cfg ? dialogButtonClasses(tk.cfg) : null;
+    return (<>
     <>
         {connected || statusPending ? (
           <>
@@ -203,11 +205,11 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
               </p>
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className={`mt-6 ${shellButtons ? shellButtons.container : 'flex gap-3'}`}>
               <button
                 type="button"
                 onClick={onClose}
-                className={`min-h-touch flex-1 rounded-2xl border ${tk.p.border} bg-white px-4 py-3 font-semibold ${tk.p.subText} transition-colors hover:${tk.p.tintBg}`}
+                className={shellButtons ? shellButtons.secondary : `min-h-touch flex-1 rounded-2xl border ${tk.p.border} bg-white px-4 py-3 font-semibold ${tk.p.subText} transition-colors hover:${tk.p.tintBg}`}
               >
                 {t('common.cancel')}
               </button>
@@ -215,7 +217,7 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
                 type="button"
                 disabled={!canAdd}
                 onClick={() => weightKg !== null && onConfirm(Number(weightKg.toFixed(3)))}
-                className="min-h-touch flex-1 rounded-2xl bg-emerald-600 px-4 py-3 font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className={`${shellButtons ? shellButtons.primary : 'min-h-touch flex-1 rounded-2xl bg-emerald-600 px-4 py-3 font-bold text-white transition-colors hover:bg-emerald-700'} disabled:cursor-not-allowed disabled:opacity-40`}
               >
                 {t('weighDialog.addWeight', { weight: weightKg !== null ? weightKg.toFixed(3) : '—' })}
               </button>
@@ -245,7 +247,7 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
                     type="button"
                     onClick={() => void handleRetry()}
                     disabled={retrying}
-                    className="min-h-touch-sm inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-amber-800 shadow-sm transition-colors hover:bg-amber-100 disabled:opacity-50"
+                    className={`min-h-touch-sm inline-flex shrink-0 items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${tk.cfg ? `${tk.p.secondaryBtn} ${DIALOG_SECONDARY_RADIUS[tk.cfg.primaryCta]}` : 'rounded-[12px] bg-gray-200 text-gray-900 hover:bg-gray-300'}`}
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${retrying ? 'animate-spin' : ''}`} />
                     {t('weighDialog.tryAgain')}
@@ -310,11 +312,11 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
               </div>
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className={`mt-6 ${shellButtons ? shellButtons.container : 'flex gap-3'}`}>
               <button
                 type="button"
                 onClick={onClose}
-                className={`min-h-touch flex-1 rounded-2xl border ${tk.p.border} bg-white px-4 py-3 font-semibold ${tk.p.subText} transition-colors hover:${tk.p.tintBg}`}
+                className={shellButtons ? shellButtons.secondary : `min-h-touch flex-1 rounded-2xl border ${tk.p.border} bg-white px-4 py-3 font-semibold ${tk.p.subText} transition-colors hover:${tk.p.tintBg}`}
               >
                 {t('common.cancel')}
               </button>
@@ -322,7 +324,7 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
                 type="button"
                 disabled={!canAuthorize}
                 onClick={() => void handleManualAuthorize()}
-                className="min-h-touch flex-1 rounded-2xl bg-slate-800 px-4 py-3 font-bold text-white transition-colors hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+                className={`${shellButtons ? shellButtons.primary : 'min-h-touch flex-1 rounded-2xl bg-slate-800 px-4 py-3 font-bold text-white transition-colors hover:bg-slate-900'} disabled:cursor-not-allowed disabled:opacity-40`}
               >
                 {authBusy ? t('weighDialog.manualAuthorizing') : t('weighDialog.manualAuthorize')}
               </button>
@@ -330,7 +332,8 @@ export const WeighDialog: React.FC<WeighDialogProps> = ({
           </>
         )}
     </>
-    </>)}</WithDialogTokens>
+    </>);
+    }}</WithDialogTokens>
   );
 
   if (applied) {

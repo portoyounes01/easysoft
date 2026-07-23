@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertCircle, Contact } from 'lucide-react';
 import { BaseDialog } from './ui/BaseDialog';
 import { ActionButton } from './ui/ActionButton';
+import { DialogToggleRow } from './ui/dialogParts';
 import { LocalCustomer } from '../types/supabase';
 import { customerLocalService } from '../lib/localDatabase';
 import { useSettings } from '../contexts/SettingsContext';
@@ -374,15 +375,14 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
                 />
               </div>
             </div>
-            <label className="flex min-h-touch-sm cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
-              <input
-                type="checkbox"
-                checked={fields.is_active}
-                onChange={handleField('is_active')}
-                className="h-5 w-5 rounded border-gray-300 text-green-600 focus:ring-green-500"
-              />
-              <span className="text-sm font-medium text-gray-800">{t('customers.form.activeLabel')}</span>
-            </label>
+            <DialogToggleRow
+              title={t('customers.form.activeLabel')}
+              checked={fields.is_active}
+              onChange={() => {
+                setFormError(null);
+                setFields((prev) => ({ ...prev, is_active: !prev.is_active }));
+              }}
+            />
           </div>
         </div>
       </div>

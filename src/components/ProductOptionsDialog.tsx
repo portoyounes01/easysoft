@@ -8,6 +8,7 @@ import type { CartLineOptions } from '../contexts/POSContext';
 import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
 import {
     DIALOG_CONTROL_CLASSES,
+    DIALOG_PALETTES,
     dialogButtonClasses,
     useAppliedDialogStyle,
 } from '../theme/dialogStyle';
@@ -34,6 +35,7 @@ const OptionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const ProductOptionsDialog: React.FC<ProductOptionsDialogProps> = ({ product, onClose, onAdd }) => {
     const { t } = useTranslation();
     const applied = useAppliedDialogStyle();
+    const p = DIALOG_PALETTES[applied ? applied.palette : 'slate'];
     const { settings } = useSettings();
     const currency = settings.pos.currencySymbol;
 
@@ -118,7 +120,7 @@ const ProductOptionsDialog: React.FC<ProductOptionsDialogProps> = ({ product, on
                         type="button"
                         aria-label={t('pos.options.decrease')}
                         onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                        className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm hover:text-slate-950"
+                        className={`flex h-10 w-10 items-center justify-center rounded-xl border ${p.border} bg-white font-semibold ${p.titleText} hover:bg-gray-50`}
                     >
                         <Minus className="h-4 w-4" />
                     </button>
@@ -127,7 +129,7 @@ const ProductOptionsDialog: React.FC<ProductOptionsDialogProps> = ({ product, on
                         type="button"
                         aria-label={t('pos.options.increase')}
                         onClick={() => setQuantity(q => q + 1)}
-                        className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm hover:text-slate-950"
+                        className={`flex h-10 w-10 items-center justify-center rounded-xl border ${p.border} bg-white font-semibold ${p.titleText} hover:bg-gray-50`}
                     >
                         <Plus className="h-4 w-4" />
                     </button>

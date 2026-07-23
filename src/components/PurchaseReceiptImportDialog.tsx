@@ -29,7 +29,9 @@ import type {
 } from '../types/purchaseReceipt';
 import { RAW_MATERIAL_UNITS, type LocalRawMaterial, type RawMaterialUnit } from '../types/rawMaterial';
 import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
-import { useAppliedDialogStyle } from '../theme/dialogStyle';
+import { POSActionButton } from './ui/POSActionButton';
+import { TableActionButton } from './ui/TableActionButton';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 
 interface PurchaseReceiptImportDialogProps {
     open: boolean;
@@ -194,7 +196,9 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
 
     // Interior shared between the original panel and the applied-style shell.
     const interior = (
-        <WithDialogTokens>{tk => (<>
+        <WithDialogTokens>{tk => {
+            const shellButtons = tk.cfg ? dialogButtonClasses(tk.cfg) : null;
+            return (<>
                 <div className="grid min-h-0 flex-1 lg:grid-cols-[22rem_minmax(0,1fr)]">
                     <aside className={`overflow-y-auto border-b ${tk.p.border} ${tk.p.tintBg} p-5 lg:border-b-0 lg:border-r`}>
                         <input
@@ -213,17 +217,17 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                             onChange={event => handleFile(event.target.files?.[0])}
                         />
                         <div className="grid grid-cols-2 gap-3">
-                            <button
+                            <POSActionButton
                                 type="button"
                                 onClick={() => cameraInputRef.current?.click()}
-                                className="flex min-h-touch flex-col items-center justify-center gap-2 rounded-2xl bg-slate-950 px-3 text-sm font-semibold text-white"
-                            >
-                                <Camera className="h-5 w-5" /> {t('purchaseReceiptImport.scan')}
-                            </button>
+                                icon={Camera}
+                                label={t('purchaseReceiptImport.scan')}
+                                className="w-full"
+                            />
                             <button
                                 type="button"
                                 onClick={() => uploadInputRef.current?.click()}
-                                className={`flex min-h-touch flex-col items-center justify-center gap-2 rounded-2xl border ${tk.p.border} bg-white px-3 text-sm font-semibold ${tk.p.subText}`}
+                                className={`flex min-h-touch flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-300 bg-white px-3 text-sm font-semibold ${tk.p.subText} transition-all hover:border-purple-400 hover:bg-purple-50`}
                             >
                                 <Upload className="h-5 w-5" /> {t('purchaseReceiptImport.upload')}
                             </button>
@@ -267,7 +271,9 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                             type="button"
                             disabled={!file || processing}
                             onClick={() => void handleExtract()}
-                            className="mt-5 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300"
+                            className={shellButtons
+                                ? `mt-5 flex min-h-touch w-full items-center justify-center gap-2 ${shellButtons.primary} disabled:opacity-50 disabled:cursor-not-allowed`
+                                : 'mt-5 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300'}
                         >
                             {processing ? <Loader2 className="h-5 w-5 animate-spin" /> : <ScanLine className="h-5 w-5" />}
                             {processing ? t('purchaseReceiptImport.readingDocument') : t('purchaseReceiptImport.extractWithAzure')}
@@ -294,7 +300,9 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                                 type="button"
                                 onClick={addManualLine}
                                 disabled={!extraction}
-                                className={`min-h-touch-xs rounded-xl ${tk.p.tintBg} px-4 text-sm font-semibold ${tk.p.subText} disabled:opacity-40`}
+                                className={shellButtons
+                                    ? `${shellButtons.secondary} flex-none text-sm disabled:opacity-40`
+                                    : `min-h-touch-xs rounded-xl ${tk.p.tintBg} px-4 text-sm font-semibold ${tk.p.subText} disabled:opacity-40`}
                             >
                                 {t('purchaseReceiptImport.addManualLine')}
                             </button>
@@ -344,7 +352,9 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                                 type="button"
                                 disabled={!extraction || includedLines.length === 0 || applying || Boolean(success)}
                                 onClick={() => void handleApply()}
-                                className="flex min-h-touch items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 font-semibold text-white disabled:bg-slate-300"
+                                className={shellButtons
+                                    ? `flex min-h-touch items-center justify-center gap-2 ${shellButtons.primary} flex-none px-6 disabled:opacity-50 disabled:cursor-not-allowed`
+                                    : 'flex min-h-touch items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 font-semibold text-white disabled:bg-slate-300'}
                             >
                                 {applying ? <Loader2 className="h-5 w-5 animate-spin" /> : <PackagePlus className="h-5 w-5" />}
                                 {applying ? t('purchaseReceiptImport.updatingStock') : t('purchaseReceiptImport.confirmAddToStock')}
@@ -352,7 +362,8 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                         </footer>
                     </main>
                 </div>
-        </>)}</WithDialogTokens>
+        </>);
+        }}</WithDialogTokens>
     );
 
     if (applied) {
@@ -431,9 +442,7 @@ const PurchaseLineEditor: React.FC<PurchaseLineEditorProps> = ({
                         </p>
                     </div>
                 </div>
-                <button type="button" onClick={onDelete} className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600">
-                    <Trash2 className="h-4 w-4" />
-                </button>
+                <TableActionButton variant="delete" icon={Trash2} type="button" onClick={onDelete} />
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-4">

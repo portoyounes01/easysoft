@@ -2,6 +2,7 @@ import React from 'react';
 import { Languages } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
+import { AdminActionButton } from './ui/AdminActionButton';
 
 interface LanguageSwitcherProps {
     className?: string;
@@ -62,14 +63,14 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
     }
 
     return (
-        <button
+        <AdminActionButton
             type="button"
+            variant="outline"
             onClick={toggleLanguage}
-            className={`bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded-lg text-xs font-semibold transition-colors min-h-touch-xs min-w-touch-xs ${className || ''}`}
+            label={languageLabel}
+            className={`min-w-touch-xs ${className || ''}`}
             aria-label={`${t('common.language')}: ${languageName}`}
-        >
-            {languageLabel}
-        </button>
+        />
     );
 };
 

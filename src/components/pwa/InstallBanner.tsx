@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, X, Share, Plus } from 'lucide-react';
 import { useInstall } from '../../hooks/useInstall';
+import { AdminActionButton } from '../ui/AdminActionButton';
 
 const DISMISS_KEY = 'pwa-install-dismissed';
 
@@ -39,30 +40,30 @@ const InstallBanner: React.FC = () => {
           </p>
         </div>
         {installable ? (
-          <button
+          <AdminActionButton
             type="button"
+            variant="primary"
+            label="Install"
             onClick={onInstall}
-            className="flex-shrink-0 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3.5 py-2 transition-colors"
-          >
-            Install
-          </button>
+            className="flex-shrink-0 text-sm"
+          />
         ) : (
-          <button
+          <AdminActionButton
             type="button"
+            variant="outline"
+            label="How"
             onClick={() => setShowIosHelp((v) => !v)}
-            className="flex-shrink-0 rounded-lg bg-white border border-emerald-300 text-emerald-800 text-sm font-semibold px-3.5 py-2 hover:bg-emerald-100 transition-colors"
-          >
-            How
-          </button>
+            className="flex-shrink-0 text-sm"
+          />
         )}
-        <button
+        <AdminActionButton
           type="button"
+          variant="icon"
+          icon={X}
           onClick={dismiss}
           aria-label="Dismiss"
-          className="flex-shrink-0 p-1.5 rounded-lg text-emerald-700/70 hover:text-emerald-900 hover:bg-emerald-100 transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
+          className="flex-shrink-0"
+        />
       </div>
 
       {/* iOS: no programmatic install — show the manual steps. */}

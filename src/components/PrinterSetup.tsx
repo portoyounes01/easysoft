@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Wifi, Printer, Search, CheckCircle, AlertCircle, Loader, Usb, RefreshCw } from 'lucide-react';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import { TabToggle } from './ui/TabToggle';
 import '../styles/design-system-2-scope.css';
 
 export interface PrinterConnectedDetails {
@@ -23,9 +24,9 @@ export interface PrinterConnectedPayload {
 }
 
 const DS2_PRIMARY_BTN =
-    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+    'rounded-2xl min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-medium text-neutral-50 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
 const DS2_SECONDARY_BTN =
-    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+    'rounded-xl min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-gray-900 bg-gray-100 hover:bg-gray-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
 
 interface NetworkPrinter {
   ip: string;
@@ -293,7 +294,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
             <button
               type="button"
               onClick={onClose}
-              className="ds2-control-radius-lg flex min-h-touch-sm min-w-touch-sm items-center justify-center text-2xl font-bold text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+              className="rounded-2xl flex min-h-touch-sm min-w-touch-sm items-center justify-center text-2xl font-bold text-gray-700 transition-colors hover:bg-gray-100"
               aria-label="Close"
             >
               ×
@@ -301,63 +302,17 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
           </div>
 
           {/* Tabs */}
-          <div className="ds2-control-radius-lg mb-6 flex space-x-1 bg-gray-100 p-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('auto')}
-              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
-                activeTab === 'auto'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <Search className="h-4 w-4" />
-                <span>Network</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('usb')}
-              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
-                activeTab === 'usb'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <Usb className="h-4 w-4" />
-                <span>USB</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('manual')}
-              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
-                activeTab === 'manual'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <Wifi className="h-4 w-4" />
-                <span>Manual</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('system')}
-              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
-                activeTab === 'system'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <Printer className="h-4 w-4" />
-                <span>System</span>
-              </div>
-            </button>
+          <div className="mb-6">
+            <TabToggle
+              options={[
+                { value: 'auto', label: 'Network', icon: Search },
+                { value: 'usb', label: 'USB', icon: Usb },
+                { value: 'manual', label: 'Manual', icon: Wifi },
+                { value: 'system', label: 'System', icon: Printer },
+              ]}
+              value={activeTab}
+              onChange={setActiveTab}
+            />
           </div>
 
           {activeTab === 'auto' && (

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Database, Trash2, RefreshCw, AlertTriangle, CheckCircle, Bug, Info } from 'lucide-react';
 import { clearAndReinitializeDatabase } from '../utils/clearLocalDatabase';
+import { AdminActionButton } from './ui/AdminActionButton';
 import { runDatabaseDiagnostics, fixDatabaseIssues, DatabaseDiagnostics } from '../utils/debugDatabase';
 
 interface DatabaseResetProps {
@@ -145,30 +146,22 @@ indexedDB.deleteDatabase('POSDatabase').onsuccess = () => location.reload();
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-3">
                     {shouldShowAutoFix && (
-                        <button
+                        <AdminActionButton
+                            variant="primary"
+                            icon={RefreshCw}
+                            label={autoFixing ? 'Auto-fixing...' : 'Auto-Fix Issues'}
+                            isLoading={autoFixing}
                             onClick={handleAutoFix}
                             disabled={autoFixing || isDebugging}
-                            className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            {autoFixing ? (
-                                <>
-                                    <RefreshCw className="w-4 h-4 animate-spin" />
-                                    <span>Auto-fixing...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <RefreshCw className="w-4 h-4" />
-                                    <span>Auto-Fix Issues</span>
-                                </>
-                            )}
-                        </button>
+                            className="disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
                     )}
 
                     {shouldShowReset && (
                         <button
                             onClick={handleReset}
                             disabled={isResetting}
-                            className="flex items-center justify-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="flex items-center justify-center space-x-2 px-4 py-2 bg-[var(--ds2-danger-solid,#dc2626)] text-white hover:bg-[var(--ds2-danger-hover,#b91c1c)] rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             {isResetting ? (
                                 <>
@@ -184,21 +177,19 @@ indexedDB.deleteDatabase('POSDatabase').onsuccess = () => location.reload();
                         </button>
                     )}
 
-                    <button
+                    <AdminActionButton
+                        variant="outline"
+                        icon={Trash2}
+                        label="Manual Instructions"
                         onClick={handleManualReset}
-                        className="flex items-center justify-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                        <span>Manual Instructions</span>
-                    </button>
+                    />
 
-                    <button
+                    <AdminActionButton
+                        variant="outline"
+                        icon={Bug}
+                        label="Debug Info"
                         onClick={() => setShowDiagnostics(!showDiagnostics)}
-                        className="flex items-center justify-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                    >
-                        <Bug className="w-4 h-4" />
-                        <span>Debug Info</span>
-                    </button>
+                    />
                 </div>
             </div>
 
@@ -213,7 +204,7 @@ indexedDB.deleteDatabase('POSDatabase').onsuccess = () => location.reload();
                         <button
                             onClick={runDiagnostics}
                             disabled={isDebugging}
-                            className="text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded transition-colors disabled:opacity-50"
+                            className="text-sm bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 px-3 py-1 rounded-2xl transition-colors disabled:opacity-50"
                         >
                             {isDebugging ? 'Running...' : 'Refresh'}
                         </button>

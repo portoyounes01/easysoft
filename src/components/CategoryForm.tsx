@@ -1,11 +1,9 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { WithDialogTokens } from './ui/dialogParts';
+import { WithDialogTokens, DialogToggleRow } from './ui/dialogParts';
 import {
     AlertCircle,
     Tag,
     Hash,
-    ToggleLeft,
-    ToggleRight,
     Coffee,
     Milk,
     Cake,
@@ -332,9 +330,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                             key={colorOption.value}
                                             type="button"
                                             onClick={() => handleFieldChange('color', colorOption.value)}
-                                            className={`p-3 rounded-lg border-2 transition-all ${formData.color === colorOption.value
-                                                    ? 'border-blue-500 ring-2 ring-blue-200'
-                                                    : 'border-gray-300 hover:border-gray-400'
+                                            className={`p-3 rounded-[10px] border transition-all ${formData.color === colorOption.value
+                                                    ? 'bg-green-50 border-green-500'
+                                                    : 'bg-white border-gray-200 hover:bg-gray-50'
                                                 }`}
                                         >
                                             <div className={`w-full h-6 rounded ${colorOption.preview} mb-2`}></div>
@@ -363,9 +361,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                                 key={iconOption.name}
                                                 type="button"
                                                 onClick={() => handleFieldChange('icon', iconOption.name)}
-                                                className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center space-y-1 ${formData.icon === iconOption.name
-                                                        ? 'border-blue-500 bg-blue-50 text-blue-600'
-                                                        : 'border-gray-300 hover:border-gray-400 text-gray-600'
+                                                className={`p-3 rounded-[10px] border transition-all flex flex-col items-center space-y-1 ${formData.icon === iconOption.name
+                                                        ? 'bg-green-50 border-green-500 text-green-600'
+                                                        : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-600'
                                                     }`}
                                                 title={t(iconOption.labelKey)}
                                             >
@@ -428,21 +426,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                 <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.statusLabel')}
                                 </label>
-                                <button
-                                    type="button"
-                                    onClick={() => handleFieldChange('is_active', !formData.is_active)}
-                                    className={`flex items-center space-x-2 px-4 py-3 rounded-lg border transition-colors w-full ${formData.is_active
-                                        ? 'bg-green-50 border-green-200 text-green-700'
-                                        : 'bg-red-50 border-red-200 text-red-700'
-                                        }`}
-                                >
-                                    {formData.is_active ? (
-                                        <ToggleRight className="w-6 h-6 text-green-600" />
-                                    ) : (
-                                        <ToggleLeft className="w-6 h-6 text-red-600" />
-                                    )}
-                                    <span>{formData.is_active ? t('common.active') : t('common.inactive')}</span>
-                                </button>
+                                <DialogToggleRow
+                                    title={formData.is_active ? t('common.active') : t('common.inactive')}
+                                    checked={formData.is_active}
+                                    onChange={() => handleFieldChange('is_active', !formData.is_active)}
+                                />
                             </div>
                         </div>
                     </>)}</WithDialogTokens>

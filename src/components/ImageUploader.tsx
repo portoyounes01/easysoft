@@ -10,6 +10,7 @@ import {
     X
 } from 'lucide-react';
 import { supabase, connectionStatus } from '../lib/supabase';
+import { TabToggle } from './ui/TabToggle';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useTranslation } from 'react-i18next';
 
@@ -566,30 +567,14 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     return (
         <div className={`space-y-4 ${className}`}>
             {/* Mode Toggle */}
-            <div className="flex space-x-2 border-b border-gray-200">
-                <button
-                    type="button"
-                    onClick={() => setInputMode('upload')}
-                    className={`px-4 py-2 text-sm font-medium transition-colors ${inputMode === 'upload'
-                        ? 'text-blue-600 border-b-2 border-blue-600'
-                        : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                >
-                    <Upload className="w-4 h-4 inline mr-2" />
-                    Upload Image
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setInputMode('url')}
-                    className={`px-4 py-2 text-sm font-medium transition-colors ${inputMode === 'url'
-                        ? 'text-blue-600 border-b-2 border-blue-600'
-                        : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                >
-                    <Link className="w-4 h-4 inline mr-2" />
-                    Image URL
-                </button>
-            </div>
+            <TabToggle
+                options={[
+                    { value: 'upload', label: 'Upload Image', icon: Upload },
+                    { value: 'url', label: 'Image URL', icon: Link },
+                ]}
+                value={inputMode}
+                onChange={setInputMode}
+            />
 
             {/* Upload Mode */}
             {inputMode === 'upload' && (
@@ -602,10 +587,10 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                         onDragLeave={handleDragOut}
                         onPaste={handlePaste}
                         className={`
-                            relative border-2 border-dashed rounded-lg p-8 text-center transition-colors
+                            relative border-2 border-dashed rounded-lg p-8 text-center transition-all
                             ${state.dragActive
-                                ? 'border-blue-500 bg-blue-50'
-                                : 'border-gray-300 hover:border-gray-400'
+                                ? 'border-purple-400 bg-purple-50'
+                                : 'border-gray-300 hover:border-purple-400 hover:bg-purple-50'
                             }
                             ${state.isUploading ? 'pointer-events-none' : 'cursor-pointer'}
                         `}
@@ -678,7 +663,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                         <button
                             type="button"
                             onClick={handleUrlSubmit}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            className="px-4 py-2 bg-gradient-primary text-white rounded-xl hover:opacity-90 font-semibold transition-opacity"
                         >
                             Apply
                         </button>
@@ -719,7 +704,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                                     <button
                                         type="button"
                                         onClick={() => setShowPreview(true)}
-                                        className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+                                        className="p-2 bg-white rounded-2xl hover:bg-gray-100 text-gray-700 transition-colors"
                                         title="View full size"
                                     >
                                         <Eye className="w-4 h-4" />
@@ -727,7 +712,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                                     <button
                                         type="button"
                                         onClick={() => navigator.clipboard.writeText(state.previewUrl!)}
-                                        className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+                                        className="p-2 bg-white rounded-2xl hover:bg-gray-100 text-gray-700 transition-colors"
                                         title="Copy URL"
                                     >
                                         <Copy className="w-4 h-4" />
@@ -735,7 +720,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                                     <button
                                         type="button"
                                         onClick={clearImage}
-                                        className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+                                        className="p-2 bg-white rounded-2xl hover:bg-gray-100 text-gray-700 transition-colors"
                                         title="Remove image"
                                     >
                                         <Trash2 className="w-4 h-4" />

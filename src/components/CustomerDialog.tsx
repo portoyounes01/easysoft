@@ -338,12 +338,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         <div className="flex-1 flex flex-col overflow-hidden">
                             {searchTerm.trim().length > 0 && filteredCustomers.length > 0 ? (
                                 <div className="flex-1 overflow-y-auto">
-                                    <ul className="divide-y divide-gray-200">
+                                    <ul className="space-y-2">
                                         {filteredCustomers.map((customer, index) => (
                                             <li
                                                 key={customer.id}
                                                 onClick={() => setSelectedCustomer(customer)}
-                                                className={`cursor-pointer transition-colors ${selectedCustomer?.id === customer.id ? 'bg-green-50' : 'hover:bg-blue-50'
+                                                className={`cursor-pointer rounded-[10px] border transition-all ${selectedCustomer?.id === customer.id ? 'bg-green-50 border-green-500' : 'bg-white border-gray-200 hover:bg-gray-50'
                                                     }`}
                                                 style={{ paddingTop: index === 0 ? '2vh' : '1.5vh', paddingBottom: '1vh' }}
                                             >

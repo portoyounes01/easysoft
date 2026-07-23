@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AdminActionButton } from '../ui/AdminActionButton';
+import { TableActionButton } from '../ui/TableActionButton';
 
 type SortOption = 'name_asc' | 'name_desc';
 
@@ -197,7 +198,7 @@ const ProductsPageReference2: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={handleToggleSortMenu}
-                                className="min-h-touch flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 rounded-2xl hover:bg-neutral-50 hover:border-gray-300 transition-all font-medium text-gray-700 shadow-sm"
+                                className="min-h-touch flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 transition-all font-medium text-gray-900 shadow-sm"
                             >
                                 <ArrowUpDown className="w-5 h-5" />
                                 <span className="hidden sm:inline">{t('products.header.sort')}</span>
@@ -210,7 +211,7 @@ const ProductsPageReference2: React.FC = () => {
                                             setSortOption('name_asc');
                                             setShowSortMenu(false);
                                         }}
-                                        className={`w-full text-left px-4 py-3 text-sm min-h-touch-sm hover:bg-neutral-50 transition-colors ${sortOption === 'name_asc' ? 'font-semibold bg-blue-50 text-blue-700' : ''}`}
+                                        className={`min-h-10 w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors ${sortOption === 'name_asc' ? 'font-semibold bg-blue-50 text-blue-700' : 'text-gray-700'}`}
                                     >
                                         {t('products.header.nameAsc')}
                                     </button>
@@ -220,7 +221,7 @@ const ProductsPageReference2: React.FC = () => {
                                             setSortOption('name_desc');
                                             setShowSortMenu(false);
                                         }}
-                                        className={`w-full text-left px-4 py-3 text-sm min-h-touch-sm hover:bg-neutral-50 transition-colors ${sortOption === 'name_desc' ? 'font-semibold bg-blue-50 text-blue-700' : ''}`}
+                                        className={`min-h-10 w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 transition-colors ${sortOption === 'name_desc' ? 'font-semibold bg-blue-50 text-blue-700' : 'text-gray-700'}`}
                                     >
                                         {t('products.header.nameDesc')}
                                     </button>
@@ -232,7 +233,7 @@ const ProductsPageReference2: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={handleToggleFilterMenu}
-                                className="min-h-touch flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 rounded-2xl hover:bg-neutral-50 hover:border-gray-300 transition-all font-medium text-gray-700 shadow-sm"
+                                className="min-h-touch flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 transition-all font-medium text-gray-900 shadow-sm"
                             >
                                 <Filter className="w-5 h-5" />
                                 <span className="hidden sm:inline">{t('products.header.filter')}</span>
@@ -387,18 +388,17 @@ const ProductsPageReference2: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-4">{renderStatusBadge(product.badge)}</td>
                                         <td className="px-6 py-4 text-right relative">
-                                            <button
+                                            <TableActionButton
+                                                variant="icon"
+                                                icon={MoreVertical}
                                                 type="button"
                                                 onClick={() =>
                                                     setOpenMenuRowId(openMenuRowId === product.id ? null : product.id)
                                                 }
-                                                className="min-h-touch-sm min-w-touch-sm p-2 hover:bg-neutral-100 rounded-xl transition-colors inline-flex items-center justify-center"
                                                 title={t('products.table.actionsTitle')}
                                                 aria-expanded={openMenuRowId === product.id}
                                                 aria-haspopup="menu"
-                                            >
-                                                <MoreVertical className="w-5 h-5 text-gray-500" />
-                                            </button>
+                                            />
                                             {openMenuRowId === product.id && (
                                                 <div
                                                     className="absolute right-4 mt-2 w-44 bg-white border border-gray-200 rounded-xl shadow-xl z-20 overflow-hidden"
@@ -407,7 +407,7 @@ const ProductsPageReference2: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         role="menuitem"
-                                                        className="w-full text-left px-4 py-3 text-sm min-h-touch-sm hover:bg-neutral-50 transition-colors font-medium"
+                                                        className="min-h-10 w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                                         onClick={() => setOpenMenuRowId(null)}
                                                     >
                                                         {t('products.table.view')}
@@ -415,7 +415,7 @@ const ProductsPageReference2: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         role="menuitem"
-                                                        className="w-full text-left px-4 py-3 text-sm min-h-touch-sm hover:bg-neutral-50 transition-colors font-medium"
+                                                        className="min-h-10 w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                                         onClick={() => setOpenMenuRowId(null)}
                                                     >
                                                         {t('products.table.edit')}
@@ -423,7 +423,7 @@ const ProductsPageReference2: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         role="menuitem"
-                                                        className="w-full text-left px-4 py-3 text-sm min-h-touch-sm text-red-600 hover:bg-red-50 transition-colors font-medium"
+                                                        className="min-h-10 w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
                                                         onClick={() => setOpenMenuRowId(null)}
                                                     >
                                                         {t('products.table.delete')}
@@ -555,7 +555,7 @@ const ProductsPageReference2: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => setShowViewModal(false)}
-                                    className="min-h-touch px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all font-semibold"
+                                    className="min-h-touch px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-xl transition-all font-semibold"
                                 >
                                     {t('products.viewModal.close')}
                                 </button>

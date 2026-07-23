@@ -11,6 +11,8 @@ import { rawMaterialService } from '../services/rawMaterialService';
 import { recipeService } from '../services/recipeService';
 import { generateUUID } from '../utils/uuid';
 import ImageUploader from './ImageUploader';
+import { AdminActionButton } from './ui/AdminActionButton';
+import { TableActionButton } from './ui/TableActionButton';
 import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import {
@@ -416,17 +418,14 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                                         className={fieldClass}
                                         placeholder={t('products.wizard.attributeName')}
                                     />
-                                    <button type="button" aria-label={t('common.delete')} onClick={() => setVariants(prev => prev.filter(a => a.id !== attr.id))} className="flex min-h-touch-xs min-w-[2.5rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600">
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
-                                    <button
+                                    <TableActionButton variant="delete" icon={Trash2} type="button" aria-label={t('common.delete')} onClick={() => setVariants(prev => prev.filter(a => a.id !== attr.id))} />
+                                    <AdminActionButton
+                                        variant="icon"
+                                        icon={expanded ? ChevronUp : ChevronDown}
                                         type="button"
                                         aria-label={expanded ? t('products.wizard.collapse') : t('products.wizard.expand')}
                                         onClick={() => setExpandedAttrs(prev => { const next = new Set(prev); if (expanded) next.delete(attr.id); else next.add(attr.id); return next; })}
-                                        className="flex min-h-touch-xs min-w-[2.5rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100"
-                                    >
-                                        {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                    </button>
+                                    />
                                 </div>
                                 {expanded && (
                                     <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
@@ -448,15 +447,13 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                                                         className={`${fieldClass} pl-8`}
                                                     />
                                                 </div>
-                                                <button type="button" aria-label={t('common.delete')} onClick={() => setAttr(attr.id, { options: attr.options.filter(o => o.id !== option.id) })} className="flex min-h-touch-xs min-w-[2.5rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600">
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
+                                                <TableActionButton variant="delete" icon={Trash2} type="button" aria-label={t('common.delete')} onClick={() => setAttr(attr.id, { options: attr.options.filter(o => o.id !== option.id) })} />
                                             </div>
                                         ))}
                                         <button
                                             type="button"
                                             onClick={() => setAttr(attr.id, { options: [...attr.options, { id: generateUUID(), name: '', price_delta: 0, enabled: true }] })}
-                                            className="flex min-h-touch-xs items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+                                            className="flex min-h-touch-xs items-center gap-2 rounded-xl bg-gradient-primary px-4 text-sm font-semibold text-white hover:opacity-90"
                                         >
                                             <Plus className="h-4 w-4" /> {t('products.wizard.addVariant')}
                                         </button>
@@ -472,7 +469,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                             setVariants(prev => [...prev, { id, name: '', enabled: true, options: [{ id: generateUUID(), name: '', price_delta: 0, enabled: true }] }]);
                             setExpandedAttrs(prev => new Set(prev).add(id));
                         }}
-                        className="flex min-h-touch-sm w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50"
+                        className="flex min-h-touch-sm w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 bg-white font-semibold text-slate-700 transition-all hover:border-purple-400 hover:bg-purple-50"
                     >
                         <Plus className="h-4 w-4" /> {t('products.wizard.addAttribute')}
                     </button>
@@ -499,15 +496,13 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                                     className={`${fieldClass} pl-8`}
                                 />
                             </div>
-                            <button type="button" aria-label={t('common.delete')} onClick={() => setModifiers(prev => prev.filter(m => m.id !== modifier.id))} className="flex min-h-touch-xs min-w-[2.5rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600">
-                                <Trash2 className="h-4 w-4" />
-                            </button>
+                            <TableActionButton variant="delete" icon={Trash2} type="button" aria-label={t('common.delete')} onClick={() => setModifiers(prev => prev.filter(m => m.id !== modifier.id))} />
                         </div>
                     ))}
                     <button
                         type="button"
                         onClick={() => setModifiers(prev => [...prev, { id: generateUUID(), name: '', price_delta: 0, enabled: true }])}
-                        className="flex min-h-touch-sm w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white font-semibold text-slate-700 hover:bg-slate-50"
+                        className="flex min-h-touch-sm w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 bg-white font-semibold text-slate-700 transition-all hover:border-purple-400 hover:bg-purple-50"
                     >
                         <Plus className="h-4 w-4" /> {t('products.wizard.addModifier')}
                     </button>
@@ -541,7 +536,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                                     key={material.id}
                                     type="button"
                                     onClick={() => { setIngredients(prev => [...prev, { material, qty: 1 }]); setIngredientSearch(''); }}
-                                    className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-slate-50"
+                                    className="flex min-h-10 w-full items-center justify-between px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                     <span className="font-semibold text-slate-950">{material.name}</span>
                                     <span className="text-xs text-slate-400">{material.stock} {material.unit}</span>
@@ -563,9 +558,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                                     className={`${fieldClass} pl-12`}
                                 />
                             </div>
-                            <button type="button" aria-label={t('common.delete')} onClick={() => setIngredients(prev => prev.filter(r => r.material.id !== row.material.id))} className="flex min-h-touch-xs min-w-[2.5rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600">
-                                <Trash2 className="h-4 w-4" />
-                            </button>
+                            <TableActionButton variant="delete" icon={Trash2} type="button" aria-label={t('common.delete')} onClick={() => setIngredients(prev => prev.filter(r => r.material.id !== row.material.id))} />
                         </div>
                     ))}
                     {ingredients.length === 0 && (

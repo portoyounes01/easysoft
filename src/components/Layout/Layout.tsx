@@ -174,7 +174,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <button
                     type="button"
                     onClick={toggleNavSidebar}
-                    className="md:hidden -ml-1 p-2 rounded-lg text-gray-700 hover:bg-black/5 transition-colors"
+                    className="md:hidden -ml-1 p-2 rounded-2xl text-gray-700 hover:bg-gray-100 transition-colors"
                     aria-label={t("sidebar.openMenu", { defaultValue: "Open menu" })}
                   >
                     <Menu className="w-6 h-6" />

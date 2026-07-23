@@ -121,7 +121,9 @@ const MyProfileDialog: React.FC = () => {
                     className={`mt-4 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-semibold text-white ${
                         openShift
                             ? 'bg-red-500 hover:bg-red-600'
-                            : 'bg-green-500 hover:bg-green-600'
+                            : tk.cfg
+                                ? 'bg-[var(--ds2-confirm-bg,#22c55e)] hover:bg-[var(--ds2-confirm-hover,#16a34a)]'
+                                : 'bg-green-500 hover:bg-green-600'
                     }`}
                 >
                     {openShift ? <LogOut className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}

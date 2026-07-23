@@ -7,6 +7,7 @@ import { ActionButton } from './ui/ActionButton';
 import { BaseDialog } from './ui/BaseDialog';
 import { InputField } from './ui/InputField';
 import { WithDialogTokens } from './ui/dialogParts';
+import { DIALOG_SECONDARY_RADIUS } from '../theme/dialogStyle';
 
 export type PaymentMethod = 'cash' | 'card';
 
@@ -162,7 +163,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({ open, total, cashReceived
                                 <button
                                     type="button"
                                     onClick={onDiscount}
-                                    className={`flex items-center justify-center gap-2 rounded-lg border ${tk.cfg ? tk.p.border : 'border-gray-300'} bg-white font-semibold ${tk.p.subText} hover:${tk.p.tintBg}`}
+                                    className={`flex items-center justify-center gap-2 bg-white border shadow-sm font-semibold transition-all duration-200 ${tk.cfg ? `${tk.p.border} ${tk.p.titleText} ${DIALOG_SECONDARY_RADIUS[tk.cfg.primaryCta]}` : 'border-gray-200 text-gray-900 hover:bg-gray-50 rounded-2xl'}`}
                                     style={{ height: '5.5vh', fontSize: '1.5vh' }}
                                 >
                                     <Percent style={{ width: '2vh', height: '2vh' }} />
@@ -173,7 +174,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({ open, total, cashReceived
                                 <button
                                     type="button"
                                     onClick={onNif}
-                                    className={`flex items-center justify-center gap-2 rounded-lg border ${tk.cfg ? tk.p.border : 'border-gray-300'} bg-white font-semibold ${tk.p.subText} hover:${tk.p.tintBg}`}
+                                    className={`flex items-center justify-center gap-2 bg-white border shadow-sm font-semibold transition-all duration-200 ${tk.cfg ? `${tk.p.border} ${tk.p.titleText} ${DIALOG_SECONDARY_RADIUS[tk.cfg.primaryCta]}` : 'border-gray-200 text-gray-900 hover:bg-gray-50 rounded-2xl'}`}
                                     style={{ height: '5.5vh', fontSize: '1.5vh' }}
                                 >
                                     <UserSquare style={{ width: '2vh', height: '2vh' }} />

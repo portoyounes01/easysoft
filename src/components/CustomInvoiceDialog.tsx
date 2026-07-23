@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { WithDialogTokens } from './ui/dialogParts';
 import { useTranslation } from 'react-i18next';
-import { FileText, Plus, Trash2, X } from 'lucide-react';
+import { Banknote, CreditCard, FileText, Plus, Trash2, X } from 'lucide-react';
 
 import { ivaRatesForCountry, calculateTaxAmount } from '../types/supabase';
 import { useSettings } from '../contexts/SettingsContext';
 import { getCountryProfile } from '../lib/countryProfile';
 import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
+import { PaymentMethodButton } from './ui/PaymentMethodButton';
+import { TableActionButton } from './ui/TableActionButton';
 import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 
 export interface CustomInvoiceLine {
@@ -172,22 +174,22 @@ const CustomInvoiceDialog: React.FC<CustomInvoiceDialogProps> = ({ open, onClose
                                     </option>
                                 ))}
                             </select>
-                            <button
+                            <TableActionButton
+                                variant="delete"
+                                icon={Trash2}
                                 type="button"
                                 onClick={() => removeLine(index)}
                                 disabled={lines.length === 1}
-                                className="flex min-h-touch-sm items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                                className="disabled:cursor-not-allowed disabled:opacity-30"
                                 aria-label={t('transactions.customInvoice.removeLine')}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </button>
+                            />
                         </div>
                     ))}
                 </div>
                 <button
                     type="button"
                     onClick={addLine}
-                    className={`mt-3 flex items-center gap-2 rounded-lg border border-dashed ${tk.p.border} px-4 py-2 text-sm font-semibold ${tk.p.subText} hover:border-blue-400 hover:text-blue-600`}
+                    className={`mt-3 flex items-center gap-2 rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-sm font-semibold ${tk.p.subText} hover:border-purple-400 hover:bg-purple-50 transition-all`}
                 >
                     <Plus className="h-4 w-4" />
                     {t('transactions.customInvoice.addLine')}
@@ -217,18 +219,17 @@ const CustomInvoiceDialog: React.FC<CustomInvoiceDialogProps> = ({ open, onClose
                 </label>
                 <div className={`text-sm font-semibold ${tk.p.titleText} sm:col-span-2`}>
                     {t('transactions.customInvoice.paymentMethod')}
-                    <div className={`mt-1 inline-flex rounded-lg ${tk.p.tintBg} p-1`}>
+                    <div className="mt-1 flex gap-3">
                         {(['cash', 'card'] as const).map(method => (
-                            <button
+                            <PaymentMethodButton
                                 key={method}
                                 type="button"
+                                method={method}
+                                selected={paymentMethod === method}
+                                icon={method === 'cash' ? Banknote : CreditCard}
+                                label={method === 'cash' ? t('pos.cash') : t('pos.card')}
                                 onClick={() => setPaymentMethod(method)}
-                                className={`min-h-touch-sm rounded-md px-5 text-sm font-semibold ${
-                                    paymentMethod === method ? `bg-white ${tk.p.titleText} shadow-sm` : tk.p.subText
-                                }`}
-                            >
-                                {method === 'cash' ? t('pos.cash') : t('pos.card')}
-                            </button>
+                            />
                         ))}
                     </div>
                 </div>

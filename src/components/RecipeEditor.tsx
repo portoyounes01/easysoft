@@ -6,6 +6,7 @@ import { rawMaterialService } from '../services/rawMaterialService';
 import { recipeService } from '../services/recipeService';
 import type { LocalRawMaterial, RecipeLineWithMaterial } from '../types/rawMaterial';
 import { useSettings } from '../contexts/SettingsContext';
+import { TableActionButton } from './ui/TableActionButton';
 
 interface RecipeEditorProps {
     /** The product whose recipe is edited. Null when creating (recipe added after first save). */
@@ -107,15 +108,14 @@ const RecipeEditor: React.FC<RecipeEditorProps> = ({ productId }) => {
                                             {t('recipeEditor.perUnit', { quantity: line.quantity_per_unit, unit: line.material?.unit ?? '' })}
                                         </span>
                                     </div>
-                                    <button
+                                    <TableActionButton
+                                        variant="delete"
+                                        icon={Trash2}
                                         type="button"
                                         onClick={() => void removeLine(line.id)}
                                         disabled={busy}
-                                        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
                                         aria-label={t('products.recipe.remove')}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
+                                    />
                                 </div>
                             ))}
                             <div className="flex justify-end px-1 text-sm text-gray-500">
@@ -154,7 +154,7 @@ const RecipeEditor: React.FC<RecipeEditorProps> = ({ productId }) => {
                             type="button"
                             onClick={() => void addLine()}
                             disabled={busy || !selectedMaterial}
-                            className="flex items-center gap-1 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:bg-gray-300"
+                            className="flex items-center gap-1 rounded-xl bg-gradient-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <Plus className="h-4 w-4" />
                             {t('products.recipe.add')}

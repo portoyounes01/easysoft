@@ -3,6 +3,9 @@ import { Bell, BellRing, Loader2, Check, AlertTriangle, Percent, WifiOff } from 
 import { supabase } from '../../lib/supabase';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { enableAlerts, disableAlerts, currentSubscriptionState, type AlertsState } from '../../lib/push';
+import { DialogSwitch } from '../ui/dialogParts';
+import { AdminActionButton } from '../ui/AdminActionButton';
+import { DIALOG_TOGGLE_ON_CLASS } from '../../theme/dialogStyle';
 
 // Mirrors the server-side alerts config the notification triggers read via app.tenant_setting
 // (tenant_settings.data.alerts). Kept in sync with the seed in 20260721000000_notif_producer_helpers.sql.
@@ -25,7 +28,7 @@ function numOrNull(v: string): number | null {
 
 const cardClass = 'rounded-3xl bg-white/75 p-6 ring-1 ring-slate-200';
 const toggleClass = (on: boolean) =>
-  `relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${on ? 'bg-emerald-500' : 'bg-slate-300'}`;
+  `relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${on ? DIALOG_TOGGLE_ON_CLASS : 'bg-slate-300'}`;
 
 // PWA-only settings panel for server-side alert thresholds. Reads/writes tenant_settings.data.alerts
 // directly (RLS scopes it to the signed-in tenant). The triggers already deployed read these values,
@@ -195,15 +198,12 @@ const NotificationSettings: React.FC = () => {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={ld.enabled}
-            onClick={() => setCfg((c) => ({ ...c, large_discount: { ...c.large_discount, enabled: !c.large_discount.enabled } }))}
-            className={toggleClass(ld.enabled)}
-          >
-            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${ld.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-          </button>
+          <DialogSwitch
+            small
+            checked={ld.enabled}
+            onChange={() => setCfg((c) => ({ ...c, large_discount: { ...c.large_discount, enabled: !c.large_discount.enabled } }))}
+            label="Large discount alert"
+          />
         </div>
 
         <div className={`mt-5 grid gap-4 sm:grid-cols-2 ${ld.enabled ? '' : 'pointer-events-none opacity-50'}`}>
@@ -249,15 +249,12 @@ const NotificationSettings: React.FC = () => {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={off.enabled}
-            onClick={() => setCfg((c) => ({ ...c, offline: { ...c.offline, enabled: !c.offline.enabled } }))}
-            className={toggleClass(off.enabled)}
-          >
-            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${off.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-          </button>
+          <DialogSwitch
+            small
+            checked={off.enabled}
+            onChange={() => setCfg((c) => ({ ...c, offline: { ...c.offline, enabled: !c.offline.enabled } }))}
+            label="Till offline alert"
+          />
         </div>
 
         <div className={`mt-5 ${off.enabled ? '' : 'pointer-events-none opacity-50'}`}>
@@ -294,15 +291,16 @@ const NotificationSettings: React.FC = () => {
             <AlertTriangle className="h-4 w-4" /> Save failed
           </span>
         )}
-        <button
+        <AdminActionButton
           type="button"
+          variant="primary"
+          icon={Bell}
+          isLoading={saving}
           onClick={save}
           disabled={saving || !tenantId}
-          className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-          {saving ? 'Saving…' : 'Save alert settings'}
-        </button>
+          className="disabled:opacity-50"
+          label={saving ? 'Saving…' : 'Save alert settings'}
+        />
       </div>
     </div>
   );

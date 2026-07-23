@@ -37,7 +37,7 @@ const SimpleNumpad: React.FC<SimpleNumpadProps> = ({
     const shellStyle = useContext(DialogShellStyleContext);
     if (shellStyle && shellStyle.numpad === 'keys') {
         const p = DIALOG_PALETTES[shellStyle.palette];
-        const key = `flex min-h-touch-sm items-center justify-center rounded-xl border ${p.border} bg-white font-semibold ${p.titleText} hover:${p.tintBg}`;
+        const key = `flex min-h-touch-sm items-center justify-center rounded-xl border ${p.border} bg-white font-semibold ${p.titleText} hover:bg-gray-50`;
         return (
             <div className={`grid grid-cols-3 gap-2 ${className}`}>
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(digit => (

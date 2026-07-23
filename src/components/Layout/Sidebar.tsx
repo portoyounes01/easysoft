@@ -31,6 +31,7 @@ import {
   Armchair,
 } from "lucide-react";
 import { useSupabaseAuth } from "../../contexts/SupabaseAuthContext";
+import { dialogButtonClasses, useAppliedDialogStyle } from "../../theme/dialogStyle";
 import { isPwaHost } from "../../lib/host";
 import { useDesignSystem2Customization } from "../../contexts/DesignSystem2CustomizationContext";
 import LanguageSwitcher from "../LanguageSwitcher";
@@ -48,7 +49,7 @@ const sidebarNavClass = (isActive: boolean, isCollapsed: boolean): string => {
   const base =
     "group relative flex min-h-[44px] items-center gap-4 rounded-[18px] border px-4 text-sm transition-all duration-200";
   const active =
-    "border-[#d6d6d6] bg-white text-[#171717] shadow-[0_1px_2px_rgba(0,0,0,0.06)] before:absolute before:left-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-emerald-500";
+    "border-transparent bg-gradient-to-r from-blue-600 to-blue-500 text-neutral-100 shadow-lg transform scale-105";
   const idle =
     "border-transparent text-[#171717] hover:border-[#d8d8d8] hover:bg-white";
   const collapsed = isCollapsed ? "justify-center" : "";
@@ -67,6 +68,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
   const { t } = useTranslation();
   const { visualStyle, prefs } = useDesignSystem2Customization();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const applied = useAppliedDialogStyle();
+  const shellButtons = applied ? dialogButtonClasses(applied) : null;
 
   const menuItems = useMemo(
     () => [
@@ -229,7 +232,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="flex min-h-touch-xs min-w-[2.75rem] items-center justify-center rounded-xl text-[#727272] transition-colors duration-200 hover:bg-white hover:text-[#171717]"
+              className="flex min-h-touch-xs min-w-[2.75rem] items-center justify-center rounded-2xl text-gray-700 transition-colors duration-200 hover:bg-gray-100"
               aria-label={isCollapsed ? t("sidebar.expand", { defaultValue: "Expand sidebar" }) : t("sidebar.collapse", { defaultValue: "Collapse sidebar" })}
               aria-expanded={!isCollapsed}
             >
@@ -306,7 +309,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
           <button
             type="button"
             onClick={() => window.dispatchEvent(new Event(OPEN_MY_PROFILE_EVENT))}
-            className={`mb-2 flex min-h-touch-xs w-full items-center rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white ${isCollapsed ? "justify-center space-x-0" : "space-x-2.5"}`}
+            className={`mb-2 flex min-h-touch w-full items-center px-2.5 py-2 text-left transition-colors hover:bg-gray-50 ${isCollapsed ? "justify-center space-x-0" : "space-x-2.5"}`}
             title={isCollapsed ? "My Profile" : undefined}
           >
             <div className="flex-shrink-0 rounded-full bg-gray-100 p-1.5">
@@ -329,7 +332,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
           <button
             type="button"
             onClick={handleLogout}
-            className={`group relative flex min-h-touch-xs w-full items-center rounded-md border border-gray-200 bg-white px-2.5 py-2 text-gray-900 transition-all duration-200 hover:border-red-100 hover:bg-red-50 hover:text-red-600 ${isCollapsed ? "justify-center space-x-0" : "space-x-2.5"}`}
+            className={`group relative flex min-h-touch-xs w-full items-center rounded-2xl border border-gray-200 bg-white px-2.5 py-2 text-gray-900 transition-all duration-200 hover:bg-gray-50 ${isCollapsed ? "justify-center space-x-0" : "space-x-2.5"}`}
             title={isCollapsed ? t("common.logout") : undefined}
           >
             <LogOut className="h-4 w-4 flex-shrink-0" />
@@ -361,18 +364,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
               </p>
             </div>
 
-            <div className="flex space-x-3">
+            <div className={shellButtons ? shellButtons.container : "flex space-x-3"}>
               <button
                 type="button"
                 onClick={cancelLogout}
-                className="min-h-touch-sm flex-1 rounded-lg bg-gray-200 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-300"
+                className={shellButtons ? shellButtons.secondary : "min-h-touch-sm flex-1 rounded-lg bg-gray-200 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-300"}
               >
                 {t("common.cancel")}
               </button>
               <button
                 type="button"
                 onClick={confirmLogout}
-                className="flex min-h-touch-sm flex-1 items-center justify-center space-x-2 rounded-lg bg-red-600 py-3 font-semibold text-white transition-colors hover:bg-red-700"
+                className={shellButtons ? `flex items-center justify-center space-x-2 ${shellButtons.danger}` : "flex min-h-touch-sm flex-1 items-center justify-center space-x-2 rounded-lg bg-red-600 py-3 font-semibold text-white transition-colors hover:bg-red-700"}
               >
                 <LogOut className="h-4 w-4" />
                 <span>{t("common.logout")}</span>

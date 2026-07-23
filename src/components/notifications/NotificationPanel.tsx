@@ -1,5 +1,6 @@
 import React from 'react';
 import { Wifi, WifiOff, BellOff } from 'lucide-react';
+import { AdminActionButton } from '../ui/AdminActionButton';
 import { useNotificationFeed } from '../../contexts/NotificationFeedContext';
 import {
   notificationMeta, notificationDescription, relativeTime, SEVERITY_STYLES,
@@ -29,12 +30,12 @@ const NotificationPanel: React.FC<Props> = ({ onClose }) => {
             </span>
           )}
         </div>
-        <button
+        <AdminActionButton
+          variant="ghost"
+          label="Close"
           onClick={onClose}
-          className="text-xs text-gray-500 hover:text-gray-800 transition-colors"
-        >
-          Close
-        </button>
+          className="text-xs"
+        />
       </div>
 
       <div className="overflow-y-auto">

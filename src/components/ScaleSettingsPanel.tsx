@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle, Loader2, RefreshCw, Search, Weight } from 'lucide-react';
+import { CheckCircle, RefreshCw, Search, Weight } from 'lucide-react';
 import scaleService from '../services/scaleService';
+import { AdminActionButton } from './ui/AdminActionButton';
 import type {
   ScaleConfig,
   ScalePortInfo,
@@ -13,10 +14,6 @@ import type {
 const BAUD_OPTIONS = [9600, 4800, 2400, 19200, 1200];
 
 const cardClass = 'rounded-2xl border border-slate-200 bg-white/85 p-5';
-const buttonClass =
-  'min-h-touch-sm inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-const primaryButton = `${buttonClass} bg-blue-600 text-white hover:bg-blue-700`;
-const secondaryButton = `${buttonClass} bg-slate-100 text-slate-700 hover:bg-slate-200`;
 const fieldClass =
   'min-h-touch-sm w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 outline-none focus:border-slate-400';
 
@@ -225,13 +222,21 @@ export const ScaleSettingsPanel: React.FC<ScaleSettingsPanelProps> = ({ embedded
             )}
           </div>
           <div className="flex gap-2">
-            <button type="button" className={secondaryButton} onClick={handleReadOnce} disabled={detecting}>
-              <RefreshCw className="h-4 w-4" />
-              {t('scaleSettings.readOnce')}
-            </button>
-            <button type="button" className={primaryButton} onClick={handleStartStop} disabled={detecting}>
-              {live ? t('scaleSettings.stop') : t('scaleSettings.start')}
-            </button>
+            <AdminActionButton
+              type="button"
+              variant="outline"
+              icon={RefreshCw}
+              label={t('scaleSettings.readOnce')}
+              onClick={handleReadOnce}
+              disabled={detecting}
+            />
+            <AdminActionButton
+              type="button"
+              variant="primary"
+              label={live ? t('scaleSettings.stop') : t('scaleSettings.start')}
+              onClick={handleStartStop}
+              disabled={detecting}
+            />
           </div>
         </div>
         {reading && (
@@ -245,10 +250,15 @@ export const ScaleSettingsPanel: React.FC<ScaleSettingsPanelProps> = ({ embedded
       <div className={cardClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h4 className="text-sm font-semibold text-slate-900">{t('scaleSettings.detectTitle')}</h4>
-          <button type="button" className={primaryButton} onClick={handleDetect} disabled={detecting || live}>
-            {detecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            {detecting ? t('scaleSettings.detecting') : t('scaleSettings.detect')}
-          </button>
+          <AdminActionButton
+            type="button"
+            variant="primary"
+            icon={Search}
+            isLoading={detecting}
+            label={detecting ? t('scaleSettings.detecting') : t('scaleSettings.detect')}
+            onClick={handleDetect}
+            disabled={detecting || live}
+          />
         </div>
         {live && <p className="mt-2 text-xs text-slate-400">{t('scaleSettings.detectWhileLive')}</p>}
         {detectSummary && (

@@ -296,13 +296,12 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
                                                 }
                                                 placeholder={String(maxRedeemablePoints)}
                                             />
-                                            <button
+                                            <ActionButton
                                                 type="button"
+                                                variant="outline"
                                                 onClick={() => setPointsInput(String(maxRedeemablePoints))}
-                                                className="min-h-touch-sm w-full rounded-xl border border-emerald-200 bg-white px-4 font-semibold text-emerald-800 hover:bg-emerald-50"
-                                            >
-                                                {t('pos.discountDialog.redeem.useMaximum')} ({maxRedeemablePoints})
-                                            </button>
+                                                label={`${t('pos.discountDialog.redeem.useMaximum')} (${maxRedeemablePoints})`}
+                                            />
                                             {requestedPoints > 0 && (
                                                 <div className={`rounded-2xl bg-white p-4 text-sm ${tk.p.subText}`}>
                                                     {requestedPoints.toLocaleString()} points = €{pointsDiscount.toFixed(2)}
@@ -328,13 +327,13 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
                                     {t('pos.discountDialog.noPresets')}
                                 </div>
                             ) : (
-                                <ul className="divide-y divide-gray-200">
+                                <ul className="space-y-2">
                                     {presets.map(preset => (
                                         <li key={preset.id}>
                                             <button
                                                 type="button"
                                                 onClick={() => setSelectedPresetId(preset.id)}
-                                                className={`w-full px-5 py-4 text-left transition-all ${selectedPresetId === preset.id ? 'bg-green-100' : `hover:${tk.p.tintBg}`}`}
+                                                className={`w-full rounded-[10px] border px-5 py-4 text-left transition-all ${selectedPresetId === preset.id ? 'border-green-500 bg-green-50' : `bg-white ${tk.p.border} hover:bg-gray-50`}`}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <span className={`font-semibold ${tk.p.titleText}`}>{preset.name}</span>
