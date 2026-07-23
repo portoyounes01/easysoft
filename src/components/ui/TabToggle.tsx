@@ -25,6 +25,8 @@ export function TabToggle<T extends string = string>({
                 {options.map((option) => (
                     <button
                         key={option.value}
+                        type="button"
+                        aria-pressed={value === option.value}
                         onClick={() => onChange(option.value)}
                         className={`flex-1 rounded-[10px] font-semibold transition-all relative ${value === option.value ? 'bg-white text-gray-900 border-2 border-gray-200 shadow-sm' : 'text-gray-600 border-2 border-gray-200'
                             }`}

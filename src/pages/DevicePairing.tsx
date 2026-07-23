@@ -159,7 +159,7 @@ const DevicePairing: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate('/login')}
-              className="mx-auto flex min-h-touch items-center gap-2 rounded-2xl px-4 text-lg font-semibold text-blue-600 hover:bg-blue-50"
+              className="mx-auto flex min-h-touch items-center gap-2 rounded-2xl px-4 text-lg font-semibold text-gray-900 hover:bg-gray-100"
             >
               <ArrowLeft className="w-5 h-5" /> Back to sign in
             </button>

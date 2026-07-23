@@ -51,6 +51,7 @@ import { useDesignSystem2Customization } from '../contexts/DesignSystem2Customiz
 import { useLayoutNav } from '../contexts/LayoutNavContext';
 import { OPEN_MY_PROFILE_EVENT } from '../components/HR/MyProfileDialog';
 import { cashDrawerAuditService } from '../services/cashDrawerAuditService';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { recipeService } from '../services/recipeService';
 import { tableOrderService } from '../services/tableOrderService';
 import '../styles/design-system-2-scope.css';
@@ -68,6 +69,8 @@ const iconMap = {
 const POSInner: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const appliedDialogStyle = useAppliedDialogStyle();
+  const shellButtons = appliedDialogStyle ? dialogButtonClasses(appliedDialogStyle) : null;
   const { toggleNavSidebar } = useLayoutNav();
   const { visualStyle, prefs } = useDesignSystem2Customization();
   const {
@@ -691,7 +694,7 @@ const POSInner: React.FC = () => {
             <button
               type="button"
               onClick={toggleNavSidebar}
-              className="flex min-h-touch-xs min-w-[2.75rem] shrink-0 items-center justify-center rounded-xl text-[#727272] transition-colors duration-200 hover:bg-neutral-100 hover:text-[#171717]"
+              className="flex min-h-touch-xs min-w-[2.75rem] shrink-0 items-center justify-center rounded-2xl text-gray-700 transition-colors duration-200 hover:bg-gray-100"
               aria-label={t('pos.openMenu')}
             >
               <Menu className="h-[20px] w-[20px]" aria-hidden />
@@ -771,14 +774,14 @@ const POSInner: React.FC = () => {
                   <div className="flex space-x-3 justify-center">
                     <button
                       onClick={handleRetryData}
-                      className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-neutral-50 px-6 py-3 rounded-2xl font-medium flex items-center space-x-2 transition-all"
                     >
                       <RefreshCw className="w-5 h-5" />
                       <span>{t('pos.retry')}</span>
                     </button>
                     <button
                       onClick={handleSyncData}
-                      className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-neutral-50 px-6 py-3 rounded-2xl font-medium flex items-center space-x-2 transition-all"
                     >
                       <RefreshCw className="w-5 h-5" />
                       <span>{t('pos.syncData')}</span>
@@ -805,14 +808,14 @@ const POSInner: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => void handleSyncData()}
-                        className="min-h-touch px-6 rounded-2xl bg-green-500 hover:bg-green-600 text-white font-semibold text-lg transition-colors duration-200"
+                        className="min-h-touch px-6 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-neutral-50 font-medium text-lg transition-all duration-200"
                       >
                         {t('pos.syncDegradedRetry')}
                       </button>
                       <button
                         type="button"
                         onClick={() => clearSyncError()}
-                        className="min-h-touch px-6 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-lg transition-colors duration-200"
+                        className="min-h-touch px-6 rounded-2xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 text-lg transition-colors duration-200"
                       >
                         {t('pos.syncDegradedDismiss')}
                       </button>
@@ -883,7 +886,7 @@ const POSInner: React.FC = () => {
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new Event(OPEN_MY_PROFILE_EVENT))}
-                className="min-h-touch-xs rounded-xl px-2 text-left text-xs font-medium text-gray-800 transition-colors hover:bg-gray-100"
+                className="min-h-touch-xs rounded-2xl px-2 text-left text-xs font-medium text-gray-900 transition-colors hover:bg-gray-100"
               >
                 {employee?.name} • <span className="capitalize text-gray-600">{employee?.role}</span>
                 <span className="ml-2 text-emerald-700">{t('pos.myProfile')}</span>
@@ -1319,13 +1322,21 @@ const POSInner: React.FC = () => {
               <div className="flex space-x-4">
                 <button
                   onClick={handleAutoLogout}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-touch transition-colors"
+                  className={
+                    shellButtons
+                      ? `${shellButtons.danger} flex-1`
+                      : 'flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-touch transition-colors'
+                  }
                 >
                   {t('pos.logoutNow')}
                 </button>
                 <button
                   onClick={handleExtendSession}
-                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-touch transition-colors flex items-center justify-center space-x-2"
+                  className={
+                    shellButtons
+                      ? `${shellButtons.primary} flex-1 flex items-center justify-center space-x-2`
+                      : 'flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-touch transition-colors flex items-center justify-center space-x-2'
+                  }
                 >
                   <UserCircle className="w-5 h-5" />
                   <span>{t('pos.stayLoggedIn')}</span>

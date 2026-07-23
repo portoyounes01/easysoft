@@ -8,11 +8,13 @@ import type {
     LocalPurchaseReceiptLine,
 } from '../types/purchaseReceipt';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import { DIALOG_PALETTES, DIALOG_SECONDARY_RADIUS, useAppliedDialogStyle } from '../theme/dialogStyle';
 import '../styles/design-system-2-scope.css';
 
 const PurchaseReceipts: React.FC = () => {
     const { t } = useTranslation();
     const { visualStyle, prefs } = useDesignSystem2Customization();
+    const applied = useAppliedDialogStyle();
     const [receipts, setReceipts] = useState<LocalPurchaseReceipt[]>([]);
     const [selectedReceipt, setSelectedReceipt] = useState<LocalPurchaseReceipt>();
     const [selectedLines, setSelectedLines] = useState<LocalPurchaseReceiptLine[]>([]);
@@ -135,7 +137,9 @@ const PurchaseReceipts: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => setSelectedReceipt(undefined)}
-                                className="min-h-touch-xs rounded-xl bg-slate-100 px-4 font-semibold text-slate-700"
+                                className={applied
+                                    ? `min-h-touch-xs px-4 font-semibold ${DIALOG_PALETTES[applied.palette].secondaryBtn} ${DIALOG_SECONDARY_RADIUS[applied.primaryCta]}`
+                                    : 'min-h-touch-xs rounded-xl bg-slate-100 px-4 font-semibold text-slate-700'}
                             >
                                 {t('common.close')}
                             </button>

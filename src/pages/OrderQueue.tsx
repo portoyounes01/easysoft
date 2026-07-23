@@ -6,6 +6,7 @@ import { initializeLocalDatabase } from '../lib/localDatabase';
 import { queueTicketService } from '../services/queueTicketService';
 import type { LocalQueueTicket } from '../types/supabase';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
 import '../styles/design-system-2-scope.css';
 
 const OrderQueue: React.FC = () => {
@@ -60,14 +61,13 @@ const OrderQueue: React.FC = () => {
           <h1 className="mt-1 text-3xl font-bold text-gray-950">{t('orderQueue.title')}</h1>
           <p className="mt-2 text-gray-500">{t('orderQueue.subtitle')}</p>
         </div>
-        <button
+        <AdminActionButton
           type="button"
+          variant="primary"
+          icon={ExternalLink}
+          label={t('orderQueue.openCustomerDisplay')}
           onClick={handleOpenDisplay}
-          className="inline-flex min-h-touch items-center justify-center gap-2 rounded-2xl bg-gray-950 px-6 py-3 font-semibold text-white hover:bg-gray-800"
-        >
-          <ExternalLink className="h-5 w-5" />
-          {t('orderQueue.openCustomerDisplay')}
-        </button>
+        />
       </div>
 
       {isLoading ? (
@@ -89,14 +89,14 @@ const OrderQueue: React.FC = () => {
                   <p className="mt-2 text-sm text-gray-500">
                     {ticket.created_at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
-                  <button
+                  <AdminActionButton
                     type="button"
+                    variant="success"
+                    icon={PackageCheck}
+                    label={t('orderQueue.markReady')}
                     onClick={() => void handleStatus(ticket, 'ready')}
-                    className="mt-5 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-xl bg-green-500 px-4 font-bold text-white hover:bg-green-600"
-                  >
-                    <PackageCheck className="h-5 w-5" />
-                    {t('orderQueue.markReady')}
-                  </button>
+                    className="mt-5 w-full"
+                  />
                 </article>
               ))}
               {preparing.length === 0 && <p className="col-span-full py-12 text-center text-gray-400">{t('orderQueue.noOrdersPreparing')}</p>}

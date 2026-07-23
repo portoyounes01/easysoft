@@ -7,6 +7,7 @@ import CategoryForm from '../components/CategoryForm';
 import { useTranslation } from 'react-i18next';
 import { DashedCardButton } from '../components/ui/DashedCardButton';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -192,6 +193,7 @@ const CategoriesInner: React.FC = () => {
                     <div className={`py-4 ${layoutClasses.contentInsetX}`}>
                         {/* Mobile: compact tap-to-edit list (the big touch-grid tiles below are for md+ / the till). */}
                         <div className="space-y-2.5 md:hidden">
+                            <div className="overflow-hidden rounded-xl border border-gray-100 empty:hidden">
                             {categories
                                 .filter((category) => !category.deleted_at)
                                 .sort((a, b) => a.display_order - b.display_order)
@@ -211,9 +213,9 @@ const CategoriesInner: React.FC = () => {
                                                 }
                                             }}
                                             onClick={() => handleEditCategory(category)}
-                                            className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 shadow-sm transition-colors ${category.is_active
-                                                ? 'border-gray-200 bg-white hover:border-blue-300'
-                                                : 'border-gray-300 bg-gray-100 opacity-60'
+                                            className={`flex min-h-touch cursor-pointer items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 ${category.is_active
+                                                ? 'hover:bg-gray-50'
+                                                : 'bg-gray-100 opacity-60'
                                                 }`}
                                         >
                                             <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-r ${category.color} ${!category.is_active ? 'opacity-70' : ''}`}>
@@ -236,20 +238,22 @@ const CategoriesInner: React.FC = () => {
                                                     {t('categories.grid.productsCount', { count: productCount })}
                                                 </p>
                                             </div>
-                                            <button
+                                            <TableActionButton
+                                                variant="delete"
+                                                icon={Trash2}
                                                 type="button"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleDeleteCategory(category.id, category.name);
                                                 }}
-                                                className="ds2-control-radius-lg min-h-touch-xs min-w-touch-xs shrink-0 p-2 text-red-600 transition-colors hover:bg-red-50"
+                                                className="shrink-0"
                                                 title={t('categories.grid.deleteCategoryTitle')}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
+                                                aria-label={t('categories.grid.deleteCategoryTitle')}
+                                            />
                                         </div>
                                     );
                                 })}
+                            </div>
                             <DashedCardButton
                                 icon={Plus}
                                 label={t('categories.addCategoryCard')}
@@ -337,17 +341,17 @@ const CategoriesInner: React.FC = () => {
                                                     <span>
                                                         {t('categories.grid.productsCount', { count: productCount })}
                                                     </span>
-                                                    <button
+                                                    <TableActionButton
+                                                        variant="delete"
+                                                        icon={Trash2}
                                                         type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleDeleteCategory(category.id, category.name);
                                                         }}
-                                                        className="ds2-control-radius-lg min-h-touch-xs min-w-touch-xs p-2 text-red-600 transition-colors hover:bg-red-50"
                                                         title={t('categories.grid.deleteCategoryTitle')}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </button>
+                                                        aria-label={t('categories.grid.deleteCategoryTitle')}
+                                                    />
                                                 </div>
                                             </div>
                                         </div>

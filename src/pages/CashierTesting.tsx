@@ -18,6 +18,7 @@ import {
 import {
   useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
 import '../styles/design-system-2-scope.css';
 
 interface TestResult {
@@ -40,17 +41,11 @@ interface TestSuite {
 }
 
 const DS2_PRIMARY_FULL =
-  'ds2-control-radius-lg min-h-touch-sm flex w-full transform items-center justify-center gap-2 p-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-200 hover:scale-105 hover:from-blue-600 hover:to-blue-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 disabled:transform-none';
-const DS2_PRIMARY_ROW =
-  'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200';
+  'rounded-2xl min-h-touch-sm flex w-full items-center justify-center gap-2 p-4 font-medium text-neutral-50 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50';
 const DS2_GRAY_ROW =
-  'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-gray-600 hover:bg-gray-700 shadow-sm transition-all duration-200';
+  'rounded-2xl min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 transition-all duration-200';
 const DS2_DANGER_ROW =
-  'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-red-500 hover:bg-red-600 shadow-sm transition-all duration-200';
-const DS2_COMPACT_GRAY =
-  'ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-1 px-3 text-sm font-semibold text-white bg-gray-600 hover:bg-gray-700 shadow-sm transition-all duration-200';
-const DS2_COMPACT_PRIMARY =
-  'ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-1 px-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200';
+  'rounded-xl min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-[var(--ds2-danger-solid,#dc2626)] hover:bg-[var(--ds2-danger-hover,#b91c1c)] transition-all duration-200';
 
 export interface CashierTestingPanelProps {
   embedded?: boolean;
@@ -300,21 +295,20 @@ export const CashierTestingPanel: React.FC<CashierTestingPanelProps> = ({ embedd
                   <div className="flex space-x-2">
                     {!isConnected ? (
                       <>
-                        <button
+                        <AdminActionButton
                           type="button"
+                          variant="primary"
+                          icon={Usb}
+                          label="Connect Printer"
                           onClick={() => connectPrinter()}
-                          className={DS2_PRIMARY_ROW}
-                        >
-                          <Usb className="h-4 w-4" />
-                          <span>Connect Printer</span>
-                        </button>
-                        <button
+                        />
+                        <AdminActionButton
                           type="button"
+                          variant="outline"
+                          label="Show All Devices"
                           onClick={() => connectToAnyDevice()}
-                          className={`${DS2_GRAY_ROW} px-3 text-sm`}
-                        >
-                          <span>Show All Devices</span>
-                        </button>
+                          className="text-sm"
+                        />
                       </>
                     ) : (
                       <button
@@ -444,23 +438,23 @@ export const CashierTestingPanel: React.FC<CashierTestingPanelProps> = ({ embedd
                         <div className="flex items-center space-x-2">
                           {test.commands && (
                             <>
-                              <button
+                              <AdminActionButton
                                 type="button"
+                                variant="outline"
+                                icon={Download}
+                                label="Download"
                                 onClick={() => downloadCommands(test.commands!, test.testName)}
-                                className={DS2_COMPACT_GRAY}
-                              >
-                                <Download className="h-4 w-4" />
-                                <span>Download</span>
-                              </button>
+                                className="text-sm"
+                              />
                               {isConnected && (
-                                <button
+                                <AdminActionButton
                                   type="button"
+                                  variant="primary"
+                                  icon={Send}
+                                  label="Send to Hardware"
                                   onClick={() => sendToPrinter(test.commands!)}
-                                  className={DS2_COMPACT_PRIMARY}
-                                >
-                                  <Send className="w-4 h-4" />
-                                  <span>Send to Hardware</span>
-                                </button>
+                                  className="text-sm"
+                                />
                               )}
                             </>
                           )}
@@ -526,12 +520,12 @@ export const CashierTestingPanel: React.FC<CashierTestingPanelProps> = ({ embedd
               ) : fetchError ? (
                 <div className="text-center py-8">
                   <p className="text-red-500 text-sm mb-2">{fetchError}</p>
-                  <button
+                  <AdminActionButton
+                    variant="ghost"
+                    label="Try again"
                     onClick={fetchTestLogs}
-                    className="text-blue-500 text-sm hover:underline"
-                  >
-                    Try again
-                  </button>
+                    className="mx-auto w-fit text-sm"
+                  />
                 </div>
               ) : testLogs.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">

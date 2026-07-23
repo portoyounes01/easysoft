@@ -127,7 +127,7 @@ const CashDrawerAudit: React.FC = () => {
                         type="button"
                         onClick={exportCsv}
                         disabled={filteredEvents.length === 0}
-                        className="flex min-h-touch-sm items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 font-semibold text-white disabled:bg-slate-300"
+                        className="flex min-h-touch-sm items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 font-medium text-neutral-50 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50"
                     >
                         <Download className="h-5 w-5" /> {t('cashDrawerAudit.exportCsvButton')}
                     </button>

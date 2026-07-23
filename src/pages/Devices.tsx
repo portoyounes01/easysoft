@@ -224,7 +224,7 @@ const Devices: React.FC = () => {
             <button
               type="submit"
               disabled={!pin || requestState === 'loading'}
-              className="mt-6 flex min-h-20 w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-red-500 to-pink-600 px-6 text-2xl font-semibold text-white transition-all duration-200 hover:from-red-600 hover:to-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-6 flex min-h-20 w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 px-6 text-2xl font-medium text-neutral-50 transition-all duration-200 hover:from-blue-600 hover:to-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {requestState === 'loading' ? <Loader2 className="h-7 w-7 animate-spin" /> : <ShieldCheck className="h-7 w-7" />}
               Unlock device management
@@ -251,21 +251,21 @@ const Devices: React.FC = () => {
               type="button"
               onClick={() => loadDevices()}
               disabled={requestState === 'loading'}
-              className="flex min-h-touch-sm items-center gap-2 rounded-2xl border-2 border-gray-200 bg-white px-5 font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="flex min-h-touch-sm items-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 text-gray-900 hover:bg-gray-50 disabled:opacity-50"
             >
               <RefreshCw className={`h-5 w-5 ${requestState === 'loading' ? 'animate-spin' : ''}`} /> Refresh
             </button>
             <button
               type="button"
               onClick={handleLock}
-              className="flex min-h-touch-sm items-center gap-2 rounded-2xl border-2 border-gray-200 bg-white px-5 font-semibold text-gray-700 hover:bg-gray-50"
+              className="flex min-h-touch-sm items-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 text-gray-900 hover:bg-gray-50"
             >
               <LockKeyhole className="h-5 w-5" /> Lock
             </button>
             <button
               type="button"
               onClick={() => setShowCreate(true)}
-              className="flex min-h-touch-sm items-center gap-2 rounded-2xl bg-emerald-600 px-6 font-semibold text-white hover:bg-emerald-700"
+              className="flex min-h-touch-sm items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 font-medium text-neutral-50 hover:from-blue-600 hover:to-purple-700"
             >
               <Plus className="h-5 w-5" /> Pair a new till
             </button>
@@ -289,7 +289,7 @@ const Devices: React.FC = () => {
                   <p className="mt-1 text-gray-600">This code is shown once and expires at {new Date(pairing.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.</p>
                 </div>
               </div>
-              <button type="button" onClick={() => setPairing(null)} className="min-h-touch-xs min-w-[44px] rounded-xl text-gray-500 hover:bg-white" aria-label="Close pairing code">
+              <button type="button" onClick={() => setPairing(null)} className="min-h-touch-xs min-w-[44px] rounded-2xl p-2 text-gray-700 hover:bg-gray-100" aria-label="Close pairing code">
                 <X className="mx-auto h-6 w-6" />
               </button>
             </div>
@@ -302,7 +302,7 @@ const Devices: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="mt-4 flex min-h-touch-sm items-center gap-2 rounded-2xl bg-gray-900 px-6 font-semibold text-white hover:bg-black"
+                  className="mt-4 flex min-h-touch-sm items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 px-6 font-medium text-neutral-50 hover:from-blue-600 hover:to-purple-700"
                 >
                   {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
                   {copied ? 'Copied' : 'Copy code'}
@@ -325,7 +325,7 @@ const Devices: React.FC = () => {
                 <h2 className="text-2xl font-bold text-gray-900">Pair a new till</h2>
                 <p className="mt-1 text-gray-600">Create the till first, then enter the generated code on that machine.</p>
               </div>
-              <button type="button" onClick={() => setShowCreate(false)} className="min-h-touch-xs min-w-[44px] rounded-xl text-gray-500 hover:bg-gray-100" aria-label="Cancel">
+              <button type="button" onClick={() => setShowCreate(false)} className="min-h-touch-xs min-w-[44px] rounded-2xl p-2 text-gray-700 hover:bg-gray-100" aria-label="Cancel">
                 <X className="mx-auto h-6 w-6" />
               </button>
             </div>
@@ -359,7 +359,7 @@ const Devices: React.FC = () => {
             <button
               type="submit"
               disabled={!label.trim() || !storeId || requestState === 'loading'}
-              className="mt-6 flex min-h-touch items-center gap-2 rounded-2xl bg-emerald-600 px-7 text-lg font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-6 flex min-h-touch items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 px-7 text-lg font-medium text-neutral-50 hover:from-blue-600 hover:to-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {requestState === 'loading' ? <Loader2 className="h-5 w-5 animate-spin" /> : <KeyRound className="h-5 w-5" />}
               Create till and code
@@ -419,7 +419,7 @@ const Devices: React.FC = () => {
                       type="button"
                       onClick={() => handleReissue(device.id)}
                       disabled={busy}
-                      className="flex min-h-touch-sm items-center gap-2 rounded-2xl bg-amber-500 px-5 font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
+                      className="flex min-h-touch-sm items-center gap-2 rounded-2xl border border-gray-300 bg-white px-5 font-medium text-gray-900 hover:bg-gray-50 disabled:opacity-50"
                     >
                       {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
                       Issue new code
@@ -430,7 +430,7 @@ const Devices: React.FC = () => {
                       type="button"
                       onClick={() => handleRevoke(device)}
                       disabled={busy}
-                      className="flex min-h-touch-sm items-center gap-2 rounded-2xl border-2 border-red-200 bg-white px-5 font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      className="flex min-h-touch-sm items-center gap-2 rounded-xl border border-[var(--ds2-danger-border,#fca5a5)] bg-white px-5 font-semibold text-[var(--ds2-danger-solid,#dc2626)] hover:bg-[var(--ds2-danger-tint-bg,#fef2f2)] disabled:opacity-50"
                     >
                       <Ban className="h-5 w-5" /> Revoke
                     </button>

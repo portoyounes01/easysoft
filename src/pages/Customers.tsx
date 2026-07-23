@@ -15,6 +15,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import CustomerForm from '../components/CustomerForm';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { MenuRow } from '../components/ui/MenuRow';
+import { TableActionButton } from '../components/ui/TableActionButton';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { DialogInfoCard } from '../components/ui/dialogParts';
@@ -338,25 +340,19 @@ const CustomersInner: React.FC = () => {
                     {formatLastPurchase(latestPurchases[customer.id])}
                   </td>
                   <td className="relative px-4 py-4 text-right">
-                    <button
+                    <TableActionButton
+                      variant="icon"
+                      icon={MoreVertical}
                       type="button"
                       onClick={() => setOpenMenuCustomerId(openMenuCustomerId === customer.id ? null : customer.id)}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
+                      title={t('customers.table.actionsTitle')}
                       aria-haspopup="menu"
-                    >
-                      <MoreVertical className="h-5 w-5" />
-                    </button>
+                    />
                     {openMenuCustomerId === customer.id && (
                       <div className="absolute right-4 z-20 mt-1 w-40 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg" role="menu">
-                        <button type="button" className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50" onClick={() => { setViewingCustomer(customer); setOpenMenuCustomerId(null); }}>
-                          {t('customers.table.view')}
-                        </button>
-                        <button type="button" className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50" onClick={() => { handleEditCustomer(customer); setOpenMenuCustomerId(null); }}>
-                          {t('customers.table.edit')}
-                        </button>
-                        <button type="button" className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50" onClick={() => { setOpenMenuCustomerId(null); void handleDeleteCustomer(customer.id); }}>
-                          {t('customers.table.delete')}
-                        </button>
+                        <MenuRow label={t('customers.table.view')} onClick={() => { setViewingCustomer(customer); setOpenMenuCustomerId(null); }} />
+                        <MenuRow label={t('customers.table.edit')} onClick={() => { handleEditCustomer(customer); setOpenMenuCustomerId(null); }} />
+                        <MenuRow variant="danger" label={t('customers.table.delete')} onClick={() => { setOpenMenuCustomerId(null); void handleDeleteCustomer(customer.id); }} />
                       </div>
                     )}
                   </td>
@@ -391,26 +387,20 @@ const CustomersInner: React.FC = () => {
                   </div>
                 </button>
                 <div className="relative shrink-0">
-                  <button
+                  <TableActionButton
+                    variant="icon"
+                    icon={MoreVertical}
                     type="button"
                     onClick={() => setOpenMenuCustomerId(openMenuCustomerId === customer.id ? null : customer.id)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
+                    title={t('customers.table.actionsTitle')}
                     aria-haspopup="menu"
                     aria-expanded={openMenuCustomerId === customer.id}
-                  >
-                    <MoreVertical className="h-5 w-5" />
-                  </button>
+                  />
                   {openMenuCustomerId === customer.id && (
                     <div className="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg" role="menu">
-                      <button type="button" className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50" onClick={() => { setViewingCustomer(customer); setOpenMenuCustomerId(null); }}>
-                        {t('customers.table.view')}
-                      </button>
-                      <button type="button" className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50" onClick={() => { handleEditCustomer(customer); setOpenMenuCustomerId(null); }}>
-                        {t('customers.table.edit')}
-                      </button>
-                      <button type="button" className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50" onClick={() => { setOpenMenuCustomerId(null); void handleDeleteCustomer(customer.id); }}>
-                        {t('customers.table.delete')}
-                      </button>
+                      <MenuRow label={t('customers.table.view')} onClick={() => { setViewingCustomer(customer); setOpenMenuCustomerId(null); }} />
+                      <MenuRow label={t('customers.table.edit')} onClick={() => { handleEditCustomer(customer); setOpenMenuCustomerId(null); }} />
+                      <MenuRow variant="danger" label={t('customers.table.delete')} onClick={() => { setOpenMenuCustomerId(null); void handleDeleteCustomer(customer.id); }} />
                     </div>
                   )}
                 </div>
@@ -427,15 +417,15 @@ const CustomersInner: React.FC = () => {
             </select>
           </div>
           <div className="flex items-center justify-center gap-1">
-            <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage(page => Math.max(1, page - 1))} className="flex h-9 w-9 items-center justify-center rounded-lg disabled:opacity-40">
+            <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage(page => Math.max(1, page - 1))} className="flex h-9 w-9 items-center justify-center rounded-2xl text-gray-700 hover:bg-gray-100 disabled:opacity-40">
               <ChevronLeft className="h-5 w-5" />
             </button>
             {pageNumbers.map(page => (
-              <button key={page} type="button" onClick={() => setCurrentPage(page)} className={`flex min-h-9 min-w-9 items-center justify-center rounded-md px-2 text-sm font-medium ${page === currentPage ? 'bg-green-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+              <button key={page} type="button" onClick={() => setCurrentPage(page)} className={`flex min-h-9 min-w-9 items-center justify-center px-2 text-sm ${page === currentPage ? 'rounded-lg border border-green-500 bg-green-50 font-semibold text-green-700' : 'rounded-md font-medium text-gray-500 hover:bg-gray-100'}`}>
                 {page}
               </button>
             ))}
-            <button type="button" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))} className="flex h-9 w-9 items-center justify-center rounded-lg disabled:opacity-40">
+            <button type="button" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))} className="flex h-9 w-9 items-center justify-center rounded-2xl text-gray-700 hover:bg-gray-100 disabled:opacity-40">
               <ChevronRight className="h-5 w-5" />
             </button>
           </div>

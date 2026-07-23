@@ -15,7 +15,9 @@ import {
 import { usePOS } from '../contexts/POSContext';
 import { tableOrderService } from '../services/tableOrderService';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
-import { useAppliedDialogStyle } from '../theme/dialogStyle';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { ListRow } from '../components/ui/ListRow';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 import type {
@@ -303,6 +305,8 @@ const Tables: React.FC = () => {
         clearActiveTableOrder,
     } = usePOS();
     const { visualStyle, prefs } = useDesignSystem2Customization();
+    const applied = useAppliedDialogStyle();
+    const shellButtons = applied ? dialogButtonClasses(applied) : null;
     const [layout, setLayout] = useState<TableLayoutState>(loadLayout);
     const [draft, setDraft] = useState<TableLayoutState>(cloneLayout(layout));
     const [isEditing, setIsEditing] = useState(false);
@@ -700,15 +704,14 @@ const Tables: React.FC = () => {
                                 <option value="4">Medium · 4 seats</option>
                                 <option value="6">Large · 6 seats</option>
                             </select>
-                            <button
+                            <AdminActionButton
                                 type="button"
+                                variant="primary"
+                                icon={Edit3}
+                                label="Edit layout"
                                 onClick={handleStartEditing}
-                                className="inline-flex min-h-touch-xs items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200"
                                 data-testid="tables-edit-layout"
-                            >
-                                <Edit3 className="h-5 w-5" />
-                                Edit layout
-                            </button>
+                            />
                         </div>
                     </div>
 
@@ -722,22 +725,22 @@ const Tables: React.FC = () => {
                                 <p className="mt-0.5 text-sm text-emerald-700">Choose another available table to move it, or return to keep taking items.</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                <button
+                                <AdminActionButton
                                     type="button"
+                                    variant="outline"
+                                    label="Park order"
                                     onClick={() => void handleParkCurrentOrder()}
                                     disabled={isProcessingOrder}
-                                    className="min-h-touch-xs rounded-xl border border-emerald-300 bg-white px-4 font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 disabled:opacity-40"
-                                >
-                                    Park order
-                                </button>
-                                <button
+                                    className="disabled:opacity-40"
+                                />
+                                <AdminActionButton
                                     type="button"
+                                    variant="primary"
+                                    label="Return to order"
                                     onClick={() => navigate('/pos')}
                                     disabled={isProcessingOrder}
-                                    className="min-h-touch-xs rounded-xl bg-emerald-600 px-4 font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-40"
-                                >
-                                    Return to order
-                                </button>
+                                    className="disabled:opacity-50"
+                                />
                             </div>
                         </div>
                     )}
@@ -750,13 +753,12 @@ const Tables: React.FC = () => {
                                     <p className="font-medium">{activeLayout.tables.length === 0 ? 'Your table list will be shown here' : 'No tables match these filters'}</p>
                                 </div>
                             ) : (
-                                <ul className="divide-y divide-neutral-200">
+                                <ul>
                                     {visibleTables.map(table => (
                                         <li key={table.id}>
-                                            <button
-                                                type="button"
+                                            <ListRow
                                                 onClick={() => handleSelectTable(table.id)}
-                                                className={`flex min-h-touch-sm w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-neutral-50 ${selectedTableId === table.id ? 'bg-emerald-50' : ''}`}
+                                                selected={selectedTableId === table.id}
                                             >
                                                 <span className={`h-2.5 w-2.5 rounded-full ${table.status === 'available' ? 'bg-emerald-500' : table.status === 'settling' ? 'bg-amber-500' : 'bg-orange-500'}`} aria-hidden="true" />
                                                 <span className="min-w-0 flex-1">
@@ -777,7 +779,7 @@ const Tables: React.FC = () => {
                                                 >
                                                     {table.status === 'settling' ? 'paying' : table.status}
                                                 </span>
-                                            </button>
+                                            </ListRow>
                                         </li>
                                     ))}
                                 </ul>
@@ -827,7 +829,7 @@ const Tables: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => setDialog('reset')}
-                                className="min-h-touch-xs rounded-2xl px-4 font-semibold text-red-600 transition-colors hover:bg-red-50"
+                                className="min-h-touch-xs rounded-xl border border-[var(--ds2-danger-border,#fca5a5)] px-4 font-semibold text-[var(--ds2-danger-solid,#dc2626)] transition-colors hover:bg-[var(--ds2-danger-tint-bg,#fef2f2)]"
                             >
                                 Reset layout
                             </button>
@@ -840,32 +842,29 @@ const Tables: React.FC = () => {
                                     className="h-6 w-11 cursor-pointer accent-emerald-600"
                                 />
                             </label>
-                            <button
+                            <AdminActionButton
                                 type="button"
+                                variant="outline"
+                                icon={Plus}
+                                label="Add table"
                                 onClick={handleOpenAdd}
-                                className="inline-flex min-h-touch-xs items-center gap-2 rounded-2xl border border-neutral-200 px-4 font-semibold text-neutral-800 transition-colors hover:bg-neutral-50"
                                 data-testid="tables-add-table"
-                            >
-                                <Plus className="h-5 w-5" />
-                                Add table
-                            </button>
+                            />
                             <span className="hidden h-8 w-px bg-neutral-200 sm:block" aria-hidden="true" />
-                            <button
+                            <AdminActionButton
                                 type="button"
+                                variant="outline"
+                                label="Cancel"
                                 onClick={handleCancelEditing}
-                                className="min-h-touch-xs rounded-2xl border border-neutral-200 px-5 font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
+                            />
+                            <AdminActionButton
                                 type="button"
+                                variant="primary"
+                                icon={Save}
+                                label="Save"
                                 onClick={() => setDialog('save')}
-                                className="inline-flex min-h-touch-xs items-center gap-2 rounded-2xl bg-emerald-600 px-5 font-semibold text-white transition-colors hover:bg-emerald-700"
                                 data-testid="tables-save-layout"
-                            >
-                                <Save className="h-5 w-5" />
-                                Save
-                            </button>
+                            />
                         </div>
                     </div>
 
@@ -943,8 +942,8 @@ const Tables: React.FC = () => {
                         </label>
                         <p className="rounded-xl bg-neutral-50 px-4 py-3 text-sm text-neutral-600">Small tables seat 2, medium tables seat 4, and large tables seat 6.</p>
                         <div className="grid grid-cols-2 gap-3 pt-1">
-                            <button type="button" onClick={() => setDialog(null)} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50">Cancel</button>
-                            <button type="button" onClick={handlePrepareAdd} disabled={!addForm.name.trim() || addForm.capacity === ''} className="min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">Add</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
+                            <button type="button" onClick={handlePrepareAdd} disabled={!addForm.name.trim() || addForm.capacity === ''} className={shellButtons ? `${shellButtons.primary} disabled:cursor-not-allowed disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40'}>Add</button>
                         </div>
                     </div>
                 </Dialog>
@@ -956,8 +955,8 @@ const Tables: React.FC = () => {
                         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-amber-500" />
                         <p className="text-neutral-600">Add <strong className="text-neutral-900">{addForm.name.trim()}</strong> as a {capacityLabels[addForm.capacity].toLocaleLowerCase()}?</p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog('add')} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50">Back</button>
-                            <button type="button" onClick={handleConfirmAdd} className="min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700">Yes, add</button>
+                            <button type="button" onClick={() => setDialog('add')} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Back</button>
+                            <button type="button" onClick={handleConfirmAdd} className={shellButtons ? shellButtons.primary : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700'}>Yes, add</button>
                         </div>
                     </div>
                 </Dialog>
@@ -979,8 +978,8 @@ const Tables: React.FC = () => {
                             </select>
                         </label>
                         <div className="grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50">Cancel</button>
-                            <button type="button" onClick={handleSaveEdit} disabled={!editForm.name.trim() || editForm.capacity === ''} className="min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">Save</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
+                            <button type="button" onClick={handleSaveEdit} disabled={!editForm.name.trim() || editForm.capacity === ''} className={shellButtons ? `${shellButtons.primary} disabled:cursor-not-allowed disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40'}>Save</button>
                         </div>
                     </div>
                 </Dialog>
@@ -992,8 +991,8 @@ const Tables: React.FC = () => {
                         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-amber-500" />
                         <p className="text-neutral-600">Your updated table layout will be available on this till.</p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50">Cancel</button>
-                            <button type="button" onClick={handleConfirmSave} className="min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700">Yes, save</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
+                            <button type="button" onClick={handleConfirmSave} className={shellButtons ? shellButtons.primary : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700'}>Yes, save</button>
                         </div>
                     </div>
                 </Dialog>
@@ -1005,8 +1004,8 @@ const Tables: React.FC = () => {
                         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
                         <p className="text-neutral-600">This removes every table from this till’s saved layout. You can add them again afterwards.</p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50">Cancel</button>
-                            <button type="button" onClick={handleConfirmReset} className="min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700">Yes, reset</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
+                            <button type="button" onClick={handleConfirmReset} className={shellButtons ? shellButtons.danger : 'min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700'}>Yes, reset</button>
                         </div>
                     </div>
                 </Dialog>
@@ -1018,8 +1017,8 @@ const Tables: React.FC = () => {
                         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
                         <p className="text-neutral-600">This table will be removed from the draft layout when you save.</p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50">Cancel</button>
-                            <button type="button" onClick={handleConfirmDelete} className="min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700">Yes, delete</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
+                            <button type="button" onClick={handleConfirmDelete} className={shellButtons ? shellButtons.danger : 'min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700'}>Yes, delete</button>
                         </div>
                     </div>
                 </Dialog>
@@ -1040,8 +1039,8 @@ const Tables: React.FC = () => {
                             </p>
                         )}
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40">Cancel</button>
-                            <button type="button" onClick={() => void handleConfirmAssignOrder()} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">
+                            <button type="button" onClick={() => setDialog(null)} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.secondary} disabled:opacity-40` : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40'}>Cancel</button>
+                            <button type="button" onClick={() => void handleConfirmAssignOrder()} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.primary} disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-40'}>
                                 {isProcessingOrder ? 'Saving…' : 'Assign order'}
                             </button>
                         </div>
@@ -1062,13 +1061,13 @@ const Tables: React.FC = () => {
                             <p className="mt-2 text-sm text-neutral-500">Customer: {selectedTable.order.customer.name}</p>
                         )}
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50">Cancel</button>
-                            <button type="button" onClick={handleConfirmOpenOrder} className="min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700">Open order</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
+                            <button type="button" onClick={handleConfirmOpenOrder} className={shellButtons ? shellButtons.primary : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700'}>Open order</button>
                         </div>
                         <button
                             type="button"
                             onClick={() => setDialog('discard-order')}
-                            className="mt-4 min-h-touch-xs px-4 text-sm font-semibold text-red-600 transition-colors hover:text-red-700"
+                            className={shellButtons ? `mt-4 ${shellButtons.dangerOutline}` : 'mt-4 min-h-touch-xs px-4 text-sm font-semibold text-red-600 transition-colors hover:text-red-700'}
                         >
                             Discard unbilled order
                         </button>
@@ -1085,8 +1084,8 @@ const Tables: React.FC = () => {
                             The order remains unbilled until payment.
                         </p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40">Cancel</button>
-                            <button type="button" onClick={() => void handleConfirmMoveOrder()} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">
+                            <button type="button" onClick={() => setDialog(null)} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.secondary} disabled:opacity-40` : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40'}>Cancel</button>
+                            <button type="button" onClick={() => void handleConfirmMoveOrder()} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.primary} disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-40'}>
                                 {isProcessingOrder ? 'Moving…' : 'Move order'}
                             </button>
                         </div>
@@ -1102,8 +1101,8 @@ const Tables: React.FC = () => {
                             This permanently removes the unbilled table order. It does not cancel or change any fiscal document.
                         </p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog('open-order')} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40">Keep order</button>
-                            <button type="button" onClick={() => void handleConfirmDiscardOrder()} disabled={isProcessingOrder} className="min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700 disabled:opacity-40">
+                            <button type="button" onClick={() => setDialog('open-order')} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.secondary} disabled:opacity-40` : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40'}>Keep order</button>
+                            <button type="button" onClick={() => void handleConfirmDiscardOrder()} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.danger} disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700 disabled:opacity-40'}>
                                 {isProcessingOrder ? 'Discarding…' : 'Yes, discard'}
                             </button>
                         </div>

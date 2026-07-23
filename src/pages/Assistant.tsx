@@ -7,6 +7,8 @@ import { AssistantProvider, useAssistant } from '../contexts/AssistantContext';
 import { assistantService, WhatsAppPairCode } from '../services/assistantService';
 import { generateQRCodeImage } from '../utils/qrCode';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
 import '../styles/design-system-2-scope.css';
 
 // "Link WhatsApp" panel: shows linked status, and generates a pairing code the
@@ -73,9 +75,7 @@ const WhatsAppLink: React.FC = () => {
 
   return (
     <div className="relative">
-      <button onClick={toggle} className="flex items-center gap-2 text-sm text-green-700 hover:text-green-800 min-h-touch-xs px-3 rounded-xl hover:bg-green-50 transition-colors">
-        <MessageCircle className="w-4 h-4" /> WhatsApp
-      </button>
+      <AdminActionButton variant="ghost" icon={MessageCircle} label="WhatsApp" onClick={toggle} className="text-sm" />
       {open && (
         <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-2xl shadow-xl p-4 z-20 text-sm">
           <p className="font-semibold text-gray-900 mb-1">Use the assistant on WhatsApp</p>
@@ -100,26 +100,27 @@ const WhatsAppLink: React.FC = () => {
                       <div className="shrink-0 flex items-center gap-1">
                         <button
                           onClick={() => unlink(c.phone_e164)}
-                          className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-2 py-1 rounded-lg transition-colors"
+                          className="text-xs font-semibold text-white bg-[var(--ds2-danger-solid,#dc2626)] hover:bg-[var(--ds2-danger-hover,#b91c1c)] px-2 py-1 rounded-xl transition-colors"
                         >
                           Remove
                         </button>
                         <button
                           onClick={() => setConfirmUnlink(null)}
-                          className="text-xs font-medium text-gray-500 hover:text-gray-800 px-1.5 py-1 rounded-lg transition-colors"
+                          className="text-xs font-medium text-gray-900 hover:bg-gray-100 px-1.5 py-1 rounded-2xl transition-colors"
                         >
                           Cancel
                         </button>
                       </div>
                     ) : (
-                      <button
+                      <TableActionButton
+                        variant="delete"
+                        icon={X}
+                        label="Disconnect"
                         onClick={() => setConfirmUnlink(c.phone_e164)}
                         title="Disconnect this number"
                         aria-label="Disconnect"
-                        className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:bg-red-100 px-2 py-1 rounded-lg transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" /> Disconnect
-                      </button>
+                        className="shrink-0 gap-1 text-xs font-medium"
+                      />
                     )}
                   </li>
                 ))}
@@ -136,7 +137,7 @@ const WhatsAppLink: React.FC = () => {
             <div>
               <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 mb-2">
                 <span className="font-mono text-lg font-bold tracking-widest">{code.code}</span>
-                <button onClick={() => { navigator.clipboard?.writeText(code.code); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="text-gray-500 hover:text-gray-800">
+                <button onClick={() => { navigator.clipboard?.writeText(code.code); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="p-2 hover:bg-gray-100 text-gray-700 rounded-2xl">
                   {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
                 </button>
               </div>
@@ -278,13 +279,13 @@ const AssistantInner: React.FC = () => {
         <div className="flex items-center gap-1">
           <WhatsAppLink />
           {!isEmpty && (
-            <button
+            <AdminActionButton
+              variant="ghost"
+              icon={RefreshCw}
+              label={t('assistant.newChat')}
               onClick={reset}
-              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 min-h-touch-xs px-3 rounded-xl hover:bg-gray-100 transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-              {t('assistant.newChat')}
-            </button>
+              className="text-sm"
+            />
           )}
         </div>
       </div>
@@ -392,7 +393,7 @@ const AssistantInner: React.FC = () => {
             onClick={() => submit()}
             disabled={loading || !input.trim()}
             aria-label={t('assistant.send')}
-            className="bg-gradient-primary text-white rounded-xl p-3 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity min-h-touch-xs"
+            className="bg-gradient-primary text-white rounded-xl p-3 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity min-h-touch-xs"
           >
             <Send className="w-5 h-5" />
           </button>

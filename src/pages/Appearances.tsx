@@ -18,6 +18,7 @@ import {
     Type,
 } from 'lucide-react';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TabToggle } from '../components/ui/TabToggle';
 import DialogLab from '../components/DialogLab';
 import ButtonLab from '../components/ButtonLab';
 import {
@@ -53,7 +54,6 @@ interface SegmentedControlProps<T extends string> {
     options: SegmentOption<T>[];
     value: T;
     onChange: (value: T) => void;
-    columnsClassName?: string;
 }
 
 interface SectionCardProps {
@@ -171,33 +171,8 @@ function SegmentedControl<T extends string>({
     options,
     value,
     onChange,
-    columnsClassName = 'grid-cols-1 sm:grid-cols-3',
 }: SegmentedControlProps<T>) {
-    return (
-        <div className={`grid gap-3 ${columnsClassName}`}>
-            {options.map((option) => {
-                const Icon = option.icon;
-                const selected = option.value === value;
-
-                return (
-                    <button
-                        key={option.value}
-                        type="button"
-                        aria-pressed={selected}
-                        onClick={() => onChange(option.value)}
-                        className={`relative flex min-h-touch-sm items-center justify-center gap-2 border px-3 py-2 text-sm font-semibold transition-all duration-200 ds2-control-radius-lg ${selected
-                            ? 'border-green-500 bg-green-50 text-green-600 shadow-sm'
-                            : 'border-neutral-200 bg-white text-neutral-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700'
-                            }`}
-                    >
-                        {Icon && <Icon className="h-4 w-4" />}
-                        <span>{option.label}</span>
-                        {selected && <Check className="absolute right-3 h-4 w-4" />}
-                    </button>
-                );
-            })}
-        </div>
-    );
+    return <TabToggle options={options} value={value} onChange={onChange} />;
 }
 
 const SectionCard: React.FC<SectionCardProps> = ({ icon: Icon, title, description, children }) => (
@@ -244,9 +219,9 @@ const BaseCanvasButton: React.FC<BaseCanvasButtonProps> = ({ option, selected, o
         type="button"
         aria-pressed={selected}
         onClick={onClick}
-        className={`rounded-2xl border bg-white p-3 text-left transition-all duration-200 ${selected
-            ? 'border-green-500 shadow-sm ring-2 ring-green-500/20'
-            : 'border-neutral-200 hover:border-blue-200 hover:bg-blue-50'
+        className={`rounded-[10px] border p-3 text-left transition-all duration-200 ${selected
+            ? 'bg-green-50 border-green-500'
+            : 'bg-white border-gray-200 hover:bg-gray-50'
             }`}
     >
         <div className={`mb-3 h-20 rounded-xl border border-neutral-200 ${BASE_CANVAS_CLASSES[option.id]} p-3`}>
@@ -425,7 +400,6 @@ const AppearancePreview: React.FC<AppearancePreviewProps> = ({ previewTab, onPre
                 options={previewTabOptions}
                 value={previewTab}
                 onChange={onPreviewTabChange}
-                columnsClassName="grid-cols-2"
             />
 
             <div className="mt-5">{previewTab === 'order' ? <OrderPreview /> : <MenuPreview />}</div>
@@ -649,7 +623,6 @@ const Appearances: React.FC = () => {
                                             setRadiusDraft(null);
                                             setPrefs({ radiusPreset });
                                         }}
-                                        columnsClassName="grid-cols-2 lg:grid-cols-4"
                                     />
                                     <div className="mt-3 flex items-center gap-3">
                                         <input
@@ -712,7 +685,6 @@ const Appearances: React.FC = () => {
                                         options={maxWidthOptions}
                                         value={prefs.maxWidth}
                                         onChange={(maxWidth) => setPrefs({ maxWidth })}
-                                        columnsClassName="grid-cols-2 lg:grid-cols-4"
                                     />
                                 </div>
                                 <div>
@@ -729,7 +701,6 @@ const Appearances: React.FC = () => {
                                         options={neutralOptions}
                                         value={prefs.neutralFamilyId}
                                         onChange={(neutralFamilyId) => setPrefs({ neutralFamilyId })}
-                                        columnsClassName="grid-cols-2 lg:grid-cols-4"
                                     />
                                 </div>
                             </div>

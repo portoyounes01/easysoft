@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { DialogSwitch } from '../components/ui/dialogParts';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
 import { useSearchParams } from 'react-router-dom';
 import {
     AlertTriangle,
@@ -148,22 +151,7 @@ interface ToggleSwitchProps {
 }
 
 const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ checked, onChange, label }) => (
-    <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors duration-200 ${
-            checked ? 'bg-slate-950' : 'bg-slate-300'
-        }`}
-    >
-        <span
-            className={`inline-block h-6 w-6 rounded-full bg-white shadow-lg transition-transform duration-200 ${
-                checked ? 'translate-x-7' : 'translate-x-1'
-            }`}
-        />
-    </button>
+    <DialogSwitch checked={checked} onChange={() => onChange(!checked)} label={label} />
 );
 
 interface SegmentOption<T extends string> {
@@ -1279,18 +1267,17 @@ const Settings: React.FC = () => {
                                 onChange={enabled => handleVoucherChange(voucher.id, { enabled })}
                                 label={t('settings.voucherEnableAria', { name: voucher.code || voucher.id })}
                             />
-                            <button
+                            <TableActionButton
+                                variant="delete"
+                                icon={Trash2}
                                 type="button"
                                 onClick={() =>
                                     updateVouchers(
                                         settings.loyalty.vouchers.filter(item => item.id !== voucher.id)
                                     )
                                 }
-                                className="flex min-h-touch-sm min-w-touch-sm items-center justify-center rounded-2xl bg-rose-50 text-rose-700 hover:bg-rose-100"
                                 aria-label={t('settings.voucherDeleteAria')}
-                            >
-                                <Trash2 className="h-5 w-5" />
-                            </button>
+                            />
                         </div>
                     ))}
                     {settings.loyalty.vouchers.length === 0 && (
@@ -1298,14 +1285,13 @@ const Settings: React.FC = () => {
                             {t('settings.noVouchers')}
                         </p>
                     )}
-                    <button
+                    <AdminActionButton
+                        variant="primary"
                         type="button"
                         onClick={handleAddVoucher}
-                        className="inline-flex min-h-touch-sm items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 font-semibold text-white hover:bg-slate-800"
-                    >
-                        <Plus className="h-4 w-4" />
-                        {t('settings.addVoucher')}
-                    </button>
+                        icon={Plus}
+                        label={t('settings.addVoucher')}
+                    />
                 </div>
             </SettingCard>
         </div>
@@ -1476,10 +1462,10 @@ const Settings: React.FC = () => {
                                     key={tool.id}
                                     type="button"
                                     onClick={() => setHardwareTool(tool.id)}
-                                    className={`min-h-touch rounded-3xl border p-4 text-left transition-all duration-200 ${
+                                    className={`min-h-touch rounded-[10px] border p-4 text-left transition-all duration-200 ${
                                         active
-                                            ? 'border-blue-400 bg-gradient-primary text-white shadow-xl'
-                                            : 'border-slate-200 bg-white/80 text-slate-600 hover:bg-white hover:text-slate-950'
+                                            ? 'border-green-500 bg-green-50 text-green-900'
+                                            : 'border-gray-200 bg-white text-slate-600 hover:bg-gray-50 hover:text-slate-950'
                                     }`}
                                 >
                                     <Icon className="h-5 w-5" />
@@ -1940,14 +1926,14 @@ const Settings: React.FC = () => {
                     )}
 
                     <div className="flex flex-wrap items-center gap-3">
-                        <button
+                        <AdminActionButton
+                            variant="primary"
                             type="button"
                             onClick={handleExternalHealthCheck}
                             disabled={externalCheck.status === 'checking'}
-                            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                        >
-                            {externalCheck.status === 'checking' ? t('settings.checking') : t('settings.checkConnection')}
-                        </button>
+                            label={externalCheck.status === 'checking' ? t('settings.checking') : t('settings.checkConnection')}
+                            className="text-sm disabled:opacity-50"
+                        />
                         {externalCheck.message && (
                             <StatusPill
                                 label={externalCheck.message}
@@ -2144,7 +2130,7 @@ const Settings: React.FC = () => {
                             type="button"
                             onClick={handleVendusHealthCheck}
                             disabled={vendusCheck.status === 'checking'}
-                            className="mt-4 min-h-touch-sm w-full rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition-all hover:bg-slate-100 disabled:opacity-60"
+                            className="mt-4 min-h-touch-sm w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-60"
                         >
                             {vendusCheck.status === 'checking' ? t('settings.checking') : t('settings.checkVendus')}
                         </button>
@@ -2195,7 +2181,7 @@ const Settings: React.FC = () => {
                     type="button"
                     onClick={handleExportSaft}
                     disabled={saftBusy}
-                    className="min-h-touch rounded-2xl bg-slate-950 px-6 py-3 font-semibold text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:translate-y-0 disabled:opacity-60"
+                    className="min-h-touch rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-3 font-medium text-neutral-50 transition-all hover:from-blue-600 hover:to-blue-700 disabled:opacity-50"
                 >
                     {saftBusy
                         ? t('settings.saftExportingBtn')
@@ -2415,7 +2401,7 @@ const Settings: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={handleReset}
-                                className="min-h-touch-sm rounded-2xl bg-slate-100 px-4 py-3 font-semibold text-slate-700 transition-all hover:bg-slate-200"
+                                className="min-h-touch-sm rounded-xl border border-[var(--ds2-danger-border,#fca5a5)] px-4 py-3 font-semibold text-[var(--ds2-danger-solid,#dc2626)] transition-all hover:bg-[var(--ds2-danger-tint-bg,#fef2f2)]"
                             >
                                 <span className="inline-flex items-center gap-2">
                                     <RotateCcw className="h-4 w-4" />
@@ -2426,7 +2412,7 @@ const Settings: React.FC = () => {
                                 type="button"
                                 onClick={handleSave}
                                 disabled={!pendingChanges || saveStatus === 'saving'}
-                                className="min-h-touch-sm rounded-2xl bg-slate-950 px-5 py-3 font-semibold text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:translate-y-0 disabled:bg-slate-300 disabled:shadow-none"
+                                className="min-h-touch-sm rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-3 font-medium text-neutral-50 transition-all hover:from-blue-600 hover:to-blue-700 disabled:opacity-50"
                             >
                                 <span className="inline-flex items-center gap-2">
                                     {saveStatus === 'saved' ? <CheckCircle className="h-4 w-4" /> : <Save className="h-4 w-4" />}

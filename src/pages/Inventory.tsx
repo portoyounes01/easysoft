@@ -12,6 +12,9 @@ import { RAW_MATERIAL_UNITS, type LocalRawMaterial, type RawMaterialUnit } from 
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DialogField, DialogToggleRow } from '../components/ui/dialogParts';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
+import { TabToggle } from '../components/ui/TabToggle';
 import {
     DIALOG_CONTROL_CLASSES,
     dialogButtonClasses,
@@ -312,21 +315,34 @@ const Inventory: React.FC = () => {
     const formFields = (
         <div className="grid gap-4 sm:grid-cols-2">
             <Field label={t('inventory.imageLabel')} className="sm:col-span-2">
-                <div className="mb-2 inline-flex rounded-xl bg-slate-100 p-1">
-                    {(['upload', 'url'] as const).map(mode => (
-                        <button
-                            key={mode}
-                            type="button"
-                            aria-pressed={imageMode === mode}
-                            onClick={() => setImageMode(mode)}
-                            className={`min-h-touch-xs rounded-lg px-4 text-xs font-semibold transition-colors ${
-                                imageMode === mode ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'
-                            }`}
-                        >
-                            {mode === 'upload' ? t('inventory.imageModeUpload') : t('inventory.imageModeUrl')}
-                        </button>
-                    ))}
-                </div>
+                {applied ? (
+                    <div className="mb-2">
+                        <TabToggle
+                            options={[
+                                { value: 'upload', label: t('inventory.imageModeUpload') },
+                                { value: 'url', label: t('inventory.imageModeUrl') },
+                            ]}
+                            value={imageMode}
+                            onChange={setImageMode}
+                        />
+                    </div>
+                ) : (
+                    <div className="mb-2 inline-flex rounded-xl bg-slate-100 p-1">
+                        {(['upload', 'url'] as const).map(mode => (
+                            <button
+                                key={mode}
+                                type="button"
+                                aria-pressed={imageMode === mode}
+                                onClick={() => setImageMode(mode)}
+                                className={`min-h-touch-xs rounded-lg px-4 text-xs font-semibold transition-colors ${
+                                    imageMode === mode ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'
+                                }`}
+                            >
+                                {mode === 'upload' ? t('inventory.imageModeUpload') : t('inventory.imageModeUrl')}
+                            </button>
+                        ))}
+                    </div>
+                )}
                 <input
                     ref={fileInputRef}
                     type="file"
@@ -361,7 +377,9 @@ const Inventory: React.FC = () => {
                             type="button"
                             onClick={removeImage}
                             aria-label={t('inventory.imageRemove')}
-                            className="flex min-h-touch-xs min-w-[2.75rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600"
+                            className={applied
+                                ? 'inline-flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50'
+                                : 'flex min-h-touch-xs min-w-[2.75rem] items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-red-600'}
                         >
                             <Trash2 className="h-5 w-5" />
                         </button>
@@ -370,7 +388,9 @@ const Inventory: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className={`flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed px-4 py-7 text-center hover:bg-slate-50 ${formErrors.image ? 'border-red-400' : 'border-slate-300'}`}
+                        className={applied
+                            ? `flex w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-7 text-center transition-all hover:border-purple-400 hover:bg-purple-50 ${formErrors.image ? 'border-red-400' : 'border-gray-300'}`
+                            : `flex w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed px-4 py-7 text-center hover:bg-slate-50 ${formErrors.image ? 'border-red-400' : 'border-slate-300'}`}
                     >
                         <Upload className="h-6 w-6 text-slate-400" />
                         <span className="text-sm font-semibold text-slate-950">{t('inventory.imageUploadCta')}</span>
@@ -491,21 +511,32 @@ const Inventory: React.FC = () => {
                     {t('inventory.currentStock')}: <b className="text-slate-950">{adjusting.stock}</b> {adjusting.unit}
                 </span>
             </div>
-            <div className="grid grid-cols-2 rounded-2xl bg-slate-100 p-1">
-                {(['in', 'out'] as const).map(tab => (
-                    <button
-                        key={tab}
-                        type="button"
-                        aria-pressed={stockTab === tab}
-                        onClick={() => setStockTab(tab)}
-                        className={`min-h-touch-xs rounded-xl text-sm font-semibold transition-colors ${
-                            stockTab === tab ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'
-                        }`}
-                    >
-                        {tab === 'in' ? t('inventory.stockIn') : t('inventory.stockOut')}
-                    </button>
-                ))}
-            </div>
+            {applied ? (
+                <TabToggle
+                    options={[
+                        { value: 'in', label: t('inventory.stockIn') },
+                        { value: 'out', label: t('inventory.stockOut') },
+                    ]}
+                    value={stockTab}
+                    onChange={setStockTab}
+                />
+            ) : (
+                <div className="grid grid-cols-2 rounded-2xl bg-slate-100 p-1">
+                    {(['in', 'out'] as const).map(tab => (
+                        <button
+                            key={tab}
+                            type="button"
+                            aria-pressed={stockTab === tab}
+                            onClick={() => setStockTab(tab)}
+                            className={`min-h-touch-xs rounded-xl text-sm font-semibold transition-colors ${
+                                stockTab === tab ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'
+                            }`}
+                        >
+                            {tab === 'in' ? t('inventory.stockIn') : t('inventory.stockOut')}
+                        </button>
+                    ))}
+                </div>
+            )}
             <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                     <p className="font-semibold text-slate-950">{t('inventory.numberOfItems')}</p>
@@ -518,7 +549,9 @@ const Inventory: React.FC = () => {
                         type="button"
                         aria-label={t('inventory.decrease')}
                         onClick={() => setStockQty(q => Math.max(0, q - 1))}
-                        className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm hover:text-slate-950"
+                        className={applied
+                            ? 'flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white font-semibold text-gray-900 hover:bg-gray-50'
+                            : 'flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm hover:text-slate-950'}
                     >
                         <Minus className="h-4 w-4" />
                     </button>
@@ -534,7 +567,9 @@ const Inventory: React.FC = () => {
                         type="button"
                         aria-label={t('inventory.increase')}
                         onClick={() => setStockQty(q => q + 1)}
-                        className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm hover:text-slate-950"
+                        className={applied
+                            ? 'flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white font-semibold text-gray-900 hover:bg-gray-50'
+                            : 'flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-600 shadow-sm hover:text-slate-950'}
                     >
                         <Plus className="h-4 w-4" />
                     </button>
@@ -563,14 +598,13 @@ const Inventory: React.FC = () => {
                             className="min-h-touch-sm w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 outline-none focus:ring-4 focus:ring-slate-200"
                         />
                     </div>
-                    <button
+                    <AdminActionButton
                         type="button"
+                        variant="primary"
+                        icon={Plus}
+                        label={t('inventory.addItem')}
                         onClick={openCreate}
-                        className="flex min-h-touch-sm items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 font-semibold text-white hover:bg-slate-800"
-                    >
-                        <Plus className="h-5 w-5" />
-                        {t('inventory.addItem')}
-                    </button>
+                    />
                 </div>
             </header>
 
@@ -618,28 +652,27 @@ const Inventory: React.FC = () => {
                                             {t('inventory.columnStockValue')}: {currency}{(material.cost * material.stock).toFixed(2)}
                                         </div>
                                         <div className="flex shrink-0 gap-2">
-                                            <button
+                                            <TableActionButton
                                                 type="button"
+                                                variant="edit"
+                                                icon={SlidersHorizontal}
+                                                label={t('inventory.adjust')}
                                                 onClick={() => openAdjust(material)}
-                                                className="flex min-h-touch-xs items-center gap-1 rounded-xl bg-slate-100 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-200"
-                                            >
-                                                <SlidersHorizontal className="h-4 w-4" /> {t('inventory.adjust')}
-                                            </button>
-                                            <button
+                                            />
+                                            <TableActionButton
                                                 type="button"
+                                                variant="edit"
+                                                icon={Pencil}
+                                                label={t('inventory.edit')}
                                                 onClick={() => openEdit(material)}
-                                                className="flex min-h-touch-xs items-center gap-1 rounded-xl bg-slate-100 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-200"
-                                            >
-                                                <Pencil className="h-4 w-4" /> {t('inventory.edit')}
-                                            </button>
-                                            <button
+                                            />
+                                            <TableActionButton
                                                 type="button"
+                                                variant="delete"
+                                                icon={Trash2}
                                                 aria-label={t('inventory.delete')}
                                                 onClick={() => setDeleting(material)}
-                                                className="flex min-h-touch-xs items-center gap-1 rounded-xl bg-red-50 px-3 text-xs font-semibold text-red-600 hover:bg-red-100"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -686,28 +719,27 @@ const Inventory: React.FC = () => {
                                         <td className="px-5 py-3 text-right text-slate-600">{currency}{(material.cost * material.stock).toFixed(2)}</td>
                                         <td className="px-5 py-3">
                                             <div className="flex justify-end gap-2">
-                                                <button
+                                                <TableActionButton
                                                     type="button"
+                                                    variant="edit"
+                                                    icon={SlidersHorizontal}
+                                                    label={t('inventory.adjust')}
                                                     onClick={() => openAdjust(material)}
-                                                    className="flex min-h-touch-xs items-center gap-1 rounded-xl bg-slate-100 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-200"
-                                                >
-                                                    <SlidersHorizontal className="h-4 w-4" /> {t('inventory.adjust')}
-                                                </button>
-                                                <button
+                                                />
+                                                <TableActionButton
                                                     type="button"
+                                                    variant="edit"
+                                                    icon={Pencil}
+                                                    label={t('inventory.edit')}
                                                     onClick={() => openEdit(material)}
-                                                    className="flex min-h-touch-xs items-center gap-1 rounded-xl bg-slate-100 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-200"
-                                                >
-                                                    <Pencil className="h-4 w-4" /> {t('inventory.edit')}
-                                                </button>
-                                                <button
+                                                />
+                                                <TableActionButton
                                                     type="button"
+                                                    variant="delete"
+                                                    icon={Trash2}
                                                     aria-label={t('inventory.delete')}
                                                     onClick={() => setDeleting(material)}
-                                                    className="flex min-h-touch-xs items-center gap-1 rounded-xl bg-red-50 px-3 text-xs font-semibold text-red-600 hover:bg-red-100"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
+                                                />
                                             </div>
                                         </td>
                                     </tr>

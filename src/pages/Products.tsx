@@ -21,6 +21,8 @@ import ProductWizard from '../components/ProductWizard';
 import PurchaseReceiptImportDialog from '../components/PurchaseReceiptImportDialog';
 import { useTranslation } from 'react-i18next';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
+import { MenuRow } from '../components/ui/MenuRow';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { DialogInfoCard, DialogSectionTitle } from '../components/ui/dialogParts';
@@ -313,26 +315,24 @@ const ProductsInner: React.FC = () => {
               />
               {showSortMenu && (
                 <div className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
-                  <button
-                    type="button"
+                  <MenuRow
+                    label={t('products.header.nameAsc')}
+                    selected={sortOption === 'name_asc'}
+                    showCheck
                     onClick={() => {
                       setSortOption('name_asc');
                       setShowSortMenu(false);
                     }}
-                    className={`w-full min-h-10 px-4 py-2.5 text-left text-sm hover:bg-gray-50 ${sortOption === 'name_asc' ? 'bg-sky-50 font-semibold text-sky-800' : 'text-gray-700'}`}
-                  >
-                    {t('products.header.nameAsc')}
-                  </button>
-                  <button
-                    type="button"
+                  />
+                  <MenuRow
+                    label={t('products.header.nameDesc')}
+                    selected={sortOption === 'name_desc'}
+                    showCheck
                     onClick={() => {
                       setSortOption('name_desc');
                       setShowSortMenu(false);
                     }}
-                    className={`w-full min-h-10 px-4 py-2.5 text-left text-sm hover:bg-gray-50 ${sortOption === 'name_desc' ? 'bg-sky-50 font-semibold text-sky-800' : 'text-gray-700'}`}
-                  >
-                    {t('products.header.nameDesc')}
-                  </button>
+                  />
                 </div>
               )}
             </div>
@@ -482,56 +482,44 @@ const ProductsInner: React.FC = () => {
                   </td>
                   <td className="border-r border-gray-100 px-4 py-4">{getExtendedStatusBadge(product)}</td>
                   <td className="relative px-4 py-4 text-right">
-                    <button
+                    <TableActionButton
+                      variant="icon"
+                      icon={MoreVertical}
                       type="button"
                       onClick={() =>
                         setOpenMenuProductId(openMenuProductId === product.id ? null : product.id)
                       }
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
                       title={t('products.table.actionsTitle')}
                       aria-expanded={openMenuProductId === product.id}
                       aria-haspopup="menu"
-                    >
-                      <MoreVertical className="h-5 w-5" />
-                    </button>
+                    />
                     {openMenuProductId === product.id && (
                       <div
                         className="absolute right-4 z-20 mt-1 w-40 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
                         role="menu"
                       >
-                        <button
-                          type="button"
-                          role="menuitem"
+                        <MenuRow
+                          label={t('products.table.view')}
                           onClick={() => {
                             setViewingProduct(product);
                             setOpenMenuProductId(null);
                           }}
-                          className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          {t('products.table.view')}
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
+                        />
+                        <MenuRow
+                          label={t('products.table.edit')}
                           onClick={() => {
                             handleEditProduct(product);
                             setOpenMenuProductId(null);
                           }}
-                          className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          {t('products.table.edit')}
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
+                        />
+                        <MenuRow
+                          variant="danger"
+                          label={t('products.table.delete')}
                           onClick={() => {
                             setOpenMenuProductId(null);
                             handleDeleteProduct(product.id);
                           }}
-                          className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
-                        >
-                          {t('products.table.delete')}
-                        </button>
+                        />
                       </div>
                     )}
                   </td>
@@ -578,51 +566,39 @@ const ProductsInner: React.FC = () => {
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
                   <span className="font-semibold tabular-nums text-gray-900">€{product.price.toFixed(2)}</span>
                   <div className="relative">
-                    <button
+                    <TableActionButton
+                      variant="icon"
+                      icon={MoreVertical}
                       type="button"
                       onClick={() => setOpenMenuProductId(openMenuProductId === product.id ? null : product.id)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
                       aria-haspopup="menu"
                       aria-expanded={openMenuProductId === product.id}
                       title={t('products.table.actionsTitle')}
-                    >
-                      <MoreVertical className="h-5 w-5" />
-                    </button>
+                    />
                     {openMenuProductId === product.id && (
                       <div className="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg" role="menu">
-                        <button
-                          type="button"
-                          role="menuitem"
+                        <MenuRow
+                          label={t('products.table.view')}
                           onClick={() => {
                             setViewingProduct(product);
                             setOpenMenuProductId(null);
                           }}
-                          className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          {t('products.table.view')}
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
+                        />
+                        <MenuRow
+                          label={t('products.table.edit')}
                           onClick={() => {
                             handleEditProduct(product);
                             setOpenMenuProductId(null);
                           }}
-                          className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          {t('products.table.edit')}
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
+                        />
+                        <MenuRow
+                          variant="danger"
+                          label={t('products.table.delete')}
                           onClick={() => {
                             setOpenMenuProductId(null);
                             handleDeleteProduct(product.id);
                           }}
-                          className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
-                        >
-                          {t('products.table.delete')}
-                        </button>
+                        />
                       </div>
                     )}
                   </div>
@@ -660,7 +636,7 @@ const ProductsInner: React.FC = () => {
               type="button"
               disabled={currentPage <= 1}
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              className="ds2-control-radius-lg flex h-9 w-9 items-center justify-center text-gray-500 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-9 w-9 items-center justify-center rounded-2xl text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label={t('products.table.prevPage')}
             >
               <ChevronLeft className="h-5 w-5" />
@@ -670,10 +646,10 @@ const ProductsInner: React.FC = () => {
                 key={num}
                 type="button"
                 onClick={() => setCurrentPage(num)}
-                className={`ds2-control-radius-md flex min-h-9 min-w-9 items-center justify-center px-2 text-sm font-medium transition-colors ${
+                className={`flex min-h-9 min-w-9 items-center justify-center px-2 text-sm transition-colors ${
                   num === currentPage
-                    ? 'bg-green-600 text-white shadow-sm'
-                    : 'text-gray-500 hover:bg-gray-100'
+                    ? 'rounded-lg border border-green-500 bg-green-50 font-semibold text-green-700'
+                    : 'rounded-md font-medium text-gray-500 hover:bg-gray-100'
                 }`}
               >
                 {num}
@@ -683,7 +659,7 @@ const ProductsInner: React.FC = () => {
               type="button"
               disabled={currentPage >= totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              className="ds2-control-radius-lg flex h-9 w-9 items-center justify-center text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-9 w-9 items-center justify-center rounded-2xl text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label={t('products.table.nextPage')}
             >
               <ChevronRight className="h-5 w-5" />

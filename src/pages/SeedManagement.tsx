@@ -20,6 +20,8 @@ import {
     Trash2,
 } from 'lucide-react';
 import { seedDataService, SeedResult } from '../utils/seedData';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useProducts } from '../contexts/ProductsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
@@ -45,6 +47,8 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
     const { refreshEmployees } = useEmployees();
     const { refreshData: refreshProducts } = useProducts();
     const { employee, hasPermission } = useSupabaseAuth();
+    const applied = useAppliedDialogStyle();
+    const shellButtons = applied ? dialogButtonClasses(applied) : null;
     const canClearLocalData = hasPermission('clear_data');
     const [seedStatus, setSeedStatus] = useState<SeedStatus>({
         isRunning: false,
@@ -286,28 +290,15 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                                     </p>
                                 </div>
 
-                                <button
+                                <AdminActionButton
                                     type="button"
+                                    variant="primary"
                                     onClick={handleRunSeed}
-                                    disabled={seedStatus.isRunning}
-                                    className={`ds2-control-radius-lg flex w-full items-center justify-center gap-2 px-6 py-3 font-semibold transition-all duration-200 ${
-                                        seedStatus.isRunning
-                                            ? 'cursor-not-allowed bg-gray-300 text-gray-500'
-                                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                                    }`}
-                                >
-                                    {seedStatus.isRunning ? (
-                                        <>
-                                            <RefreshCw className="w-5 h-5 animate-spin" />
-                                            <span>{t('seedManagement.running')}</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Play className="w-5 h-5" />
-                                            <span>{t('seedManagement.runButton')}</span>
-                                        </>
-                                    )}
-                                </button>
+                                    isLoading={seedStatus.isRunning}
+                                    icon={Play}
+                                    label={seedStatus.isRunning ? t('seedManagement.running') : t('seedManagement.runButton')}
+                                    className="w-full"
+                                />
                             </div>
                         </div>
 
@@ -330,7 +321,7 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                                     type="button"
                                     onClick={() => setShowClearDialog(true)}
                                     disabled={seedStatus.isRunning}
-                                    className="mt-5 flex min-h-touch w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-6 py-3 font-semibold text-white transition-colors duration-200 hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="mt-5 flex min-h-touch w-full items-center justify-center gap-2 rounded-xl bg-[var(--ds2-danger-solid,#dc2626)] px-6 py-3 font-semibold text-white transition-colors duration-200 hover:bg-[var(--ds2-danger-hover,#b91c1c)] disabled:cursor-not-allowed disabled:opacity-50"
                                     data-testid="clear-local-database-button"
                                 >
                                     <Trash2 className="h-5 w-5" />
@@ -544,7 +535,9 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                                     setClearConfirmation('');
                                 }}
                                 disabled={seedStatus.isRunning}
-                                className="min-h-touch rounded-lg border border-gray-300 bg-white px-5 font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                                className={shellButtons
+                                    ? `${shellButtons.secondary} disabled:opacity-50`
+                                    : 'min-h-touch rounded-lg border border-gray-300 bg-white px-5 font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50'}
                             >
                                 {t('seedManagement.clear.cancel')}
                             </button>
@@ -552,7 +545,9 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                                 type="button"
                                 onClick={handleClearLocalData}
                                 disabled={seedStatus.isRunning || clearConfirmation !== 'CLEAR LOCAL DATA'}
-                                className="flex min-h-touch items-center justify-center gap-2 rounded-lg bg-red-600 px-5 font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                className={shellButtons
+                                    ? `flex items-center justify-center gap-2 ${shellButtons.danger} disabled:cursor-not-allowed disabled:opacity-40`
+                                    : 'flex min-h-touch items-center justify-center gap-2 rounded-lg bg-red-600 px-5 font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40'}
                             >
                                 {seedStatus.isRunning ? (
                                     <RefreshCw className="h-5 w-5 animate-spin" />

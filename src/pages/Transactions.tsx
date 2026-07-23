@@ -35,6 +35,8 @@ import type { LocalCustomer, LocalProduct } from '../types/supabase';
 import { activeProfile } from '../lib/countryProfile';
 import { generateUUID } from '../utils/uuid';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -152,6 +154,8 @@ const TransactionsInner: React.FC = () => {
     const { employee } = useSupabaseAuth();
     const { processTransaction } = usePOS();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+    const applied = useAppliedDialogStyle();
+    const shellButtons = applied ? dialogButtonClasses(applied) : null;
 
     const toolbarBtn =
         'ds2-control-radius-lg ds2-toolbar-control-h !px-3 text-sm font-medium gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
@@ -866,19 +870,14 @@ const TransactionsInner: React.FC = () => {
                                                     <p className="text-lg font-bold text-gray-900">{formatCurrency(transaction.total)}</p>
                                                     <p className="text-sm text-gray-500">{transaction.items.length} {transaction.items.length !== 1 ? t('transactions.list.itemPlural') : t('transactions.list.itemSingular')}</p>
                                                 </div>
-                                                <button
+                                                <TableActionButton
+                                                    variant="icon"
+                                                    icon={expandedTransaction === transaction.id ? ChevronUp : ChevronDown}
                                                     onClick={() => setExpandedTransaction(
                                                         expandedTransaction === transaction.id ? null : transaction.id
                                                     )}
-                                                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
                                                     aria-label={expandedTransaction === transaction.id ? 'Collapse transaction details' : 'Expand transaction details'}
-                                                >
-                                                    {expandedTransaction === transaction.id ? (
-                                                        <ChevronUp className="w-5 h-5" />
-                                                    ) : (
-                                                        <ChevronDown className="w-5 h-5" />
-                                                    )}
-                                                </button>
+                                                />
                                             </div>
                                         </div>
 
@@ -1037,12 +1036,14 @@ const TransactionsInner: React.FC = () => {
                             {creditNoteResult && !creditNoteResult.ok && (
                                 <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{creditNoteResult.msg}</p>
                             )}
-                            <div className="mt-5 flex gap-3">
+                            <div className={shellButtons ? `mt-5 ${shellButtons.container}` : 'mt-5 flex gap-3'}>
                                 <button
                                     type="button"
                                     onClick={() => setCreditNoteTx(null)}
                                     disabled={creditNoteBusyId !== null}
-                                    className="flex-1 rounded-xl bg-gray-100 px-4 py-2.5 font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                                    className={shellButtons
+                                        ? `${shellButtons.secondary} disabled:opacity-50`
+                                        : 'flex-1 rounded-xl bg-gray-100 px-4 py-2.5 font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50'}
                                 >
                                     {t('common.cancel', { defaultValue: 'Cancel' })}
                                 </button>
@@ -1050,7 +1051,9 @@ const TransactionsInner: React.FC = () => {
                                     type="button"
                                     onClick={() => void confirmCreditNote()}
                                     disabled={creditNoteBusyId !== null}
-                                    className="flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 px-4 py-2.5 font-semibold text-white hover:from-orange-600 disabled:opacity-50"
+                                    className={shellButtons
+                                        ? `${shellButtons.danger} disabled:opacity-50`
+                                        : 'flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 px-4 py-2.5 font-semibold text-white hover:from-orange-600 disabled:opacity-50'}
                                 >
                                     {creditNoteBusyId ? t('transactions.creditNote.issuing') : t('transactions.list.issueCreditNote')}
                                 </button>
