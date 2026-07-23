@@ -17,6 +17,7 @@ import { tableOrderService } from '../services/tableOrderService';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { ListRow } from '../components/ui/ListRow';
+import { TableActionButton } from '../components/ui/TableActionButton';
 import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
@@ -893,9 +894,9 @@ const Tables: React.FC = () => {
                                 style={{ left: `${selectedTable.x}%`, top: `calc(${selectedTable.y}% - 4.8rem)` }}
                                 onClick={event => event.stopPropagation()}
                             >
-                                <button type="button" onClick={handleRotate} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-lg hover:bg-white/15" aria-label={`Rotate ${selectedTable.name}`}><RotateCw className="h-4 w-4" /></button>
-                                <button type="button" onClick={handleOpenEdit} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-lg hover:bg-white/15" aria-label={`Edit ${selectedTable.name}`}><Edit3 className="h-4 w-4" /></button>
-                                <button type="button" onClick={() => setDialog('delete')} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-lg hover:bg-white/15" aria-label={`Delete ${selectedTable.name}`}><Trash2 className="h-4 w-4" /></button>
+                                <TableActionButton variant="icon" dark icon={RotateCw} onClick={handleRotate} aria-label={`Rotate ${selectedTable.name}`} />
+                                <TableActionButton variant="icon" dark icon={Edit3} onClick={handleOpenEdit} aria-label={`Edit ${selectedTable.name}`} />
+                                <TableActionButton variant="delete" dark icon={Trash2} onClick={() => setDialog('delete')} aria-label={`Delete ${selectedTable.name}`} />
                             </div>
                         )}
                         {draft.tables.length === 0 && (

@@ -3,6 +3,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DialogSwitch } from '../components/ui/dialogParts';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { TableActionButton } from '../components/ui/TableActionButton';
+import { TabToggle } from '../components/ui/TabToggle';
 import { useSearchParams } from 'react-router-dom';
 import {
     AlertTriangle,
@@ -169,28 +170,7 @@ function SegmentedControl<T extends string>({
     options: SegmentOption<T>[];
     onChange: (value: T) => void;
 }) {
-    return (
-        <div className="grid gap-2 rounded-[1.5rem] bg-slate-100 p-2 sm:grid-cols-2">
-            {options.map(option => {
-                const active = option.value === value;
-                return (
-                    <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => onChange(option.value)}
-                        className={`min-h-touch rounded-2xl px-4 py-3 text-left transition-all duration-200 ${
-                            active
-                                ? 'bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
-                                : 'text-slate-500 hover:bg-white/60 hover:text-slate-900'
-                        }`}
-                    >
-                        <span className="block text-base font-semibold">{option.label}</span>
-                        {option.description && <span className="mt-1 block text-xs leading-5 opacity-80">{option.description}</span>}
-                    </button>
-                );
-            })}
-        </div>
-    );
+    return <TabToggle options={options} value={value} onChange={onChange} />;
 }
 
 interface StatusPillProps {

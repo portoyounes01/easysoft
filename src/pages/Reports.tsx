@@ -339,7 +339,7 @@ const ReportsInner: React.FC = () => {
                             onChange={value => handleMobileDatePreset(Number(value))}
                         />
                     </div>
-                    <button type="button" onClick={() => setShowMobileFilters(true)} className="flex min-h-touch-xs w-full items-center gap-2 rounded-xl bg-transparent px-1 text-left text-sm font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <button type="button" onClick={() => setShowMobileFilters(true)} className="flex min-h-touch-xs w-full items-center gap-2 rounded-xl bg-transparent px-1 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-500">
                         <Calendar className="h-4 w-4 text-green-700" />
                         <span>{dateRangeLabel}</span><span className="text-gray-300">·</span><span>{filters.employeeId ? employees.find(employee => employee.id === filters.employeeId)?.name : t('reports.filters.allEmployees')}</span>
                     </button>

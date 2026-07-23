@@ -82,48 +82,34 @@ How to act on each category:
 - `src/pages/Tables.tsx:264 (legacy Dialog close X)`
   legacy dialog branch — the X lives only in the non-applied fallback render of the dual-render Dialog (shell branch uses ConfiguredDialogShell's own close affordance); legacy path stays byte-identical per prime directive 4
 
-## Structural misfits (need a design/API decision) — 20
+## Structural misfits — RESOLVED 2026-07-23 (14 migrated, 6 blessed as widget internals)
 
-- `src/components/Auth/LoginForm2.tsx:611`
-  PairingButton is a component-only hero CTA (min-h-20 text-2xl px-8, blue-purple gradient, hover:scale) with no sanctioned class recipe in the cookbook; the site is a small inline error-recovery action (px-4 py-1.5 text-sm) inside a max-w-sm red error panel. The component would break the panel layout, Tailwind v4 class-order makes sizing overrides unreliable, and inventing a gradient recipe would be forcing per directive 3. Left byte-identical.
-- `src/components/CategoryForm.tsx:235`
-  TabToggle requires a segmented group of 2+ mutually exclusive options; this site is a single show/hide pill for the virtual keyboard. TabToggle cannot express toggle-off on re-click of the selected option (onChange fires the same value, so setShowKeyboard(!showKeyboard) semantics are lost), only one i18n label exists (t('forms.keyboard')) so a second option would require inventing i18n keys, and TabToggle is w-full while the site is a compact right-aligned footer pill. The pattern's namesake Keyboard/Numpad pair lived in ProductForm.tsx, which no longer exists (replaced by ProductWizard). Left byte-identical.
-- `src/components/LanguageSwitcher.tsx:38`
-  TabButton takes only icon+label props and cannot host this button's extra children (trailing language-code pill with group-hover styles, collapsed-mode tooltip flyout) or its group/relative/w-full/collapsed-justify-center layout; no sanctioned tab-button recipe exists, and the component's sidebar-inactive expression (text-neutral-300 hover:bg-slate-800 hover:text-yellow-400) is a dark-slate style that would be illegible on this app's light sidebar. Likely audit misfire: the sibling logout button in Sidebar.tsx with the identical current style family was assigned admin-action-outline. Site left 100% unchanged.
-- `src/components/ProductAssignmentManager.tsx:218`
-  DialogToggleRow cannot express this site: the category row is a tri-state checkbox (none/partial/all with a Minus indicator) which a boolean switch cannot represent; the row carries a name plus (assigned/total) count that a title/help-strings-only card cannot hold; converting a leading checkbox tree row into a trailing-iOS-switch card is a structural redesign, not a visual swap; and the cookbook defines no recipe form for dialog-toggle-row, so there is no non-forcing fallback. Left byte-identical.
-- `src/components/ProductAssignmentManager.tsx:248`
-  Same winner mismatch as the category row: the product row's children (checkbox, Package icon, name, SKU line, price) exceed DialogToggleRow's title/help string props; leading checkbox to trailing switch is a redesign not a visual swap; no recipe form exists for dialog-toggle-row. Left byte-identical.
-- `src/components/VirtualKeyboard.tsx:97`
-  Same structural misfit as the character keys: contiguous framed grid with divider borders, flex weights, and 2vh-sized lucide icons (Delete/Undo2/X) that NumpadButton would force to fixed w-6 h-6; no listed recipe exists for the numpad-action winner to apply on the existing buttons. Left unchanged per rule 3.
-- `src/components/VirtualKeyboard.tsx:98`
-  Semantic mismatch on top of the structural one: numpad-confirm (green submit-action fill) has no inactive form, but Caps/#+=/ABC are persistent two-state toggles (capsButtonClass(active)/specialToggleClass(active)); mapping them onto confirm would either lose the wired active/inactive state (directive 5) or invent an unsanctioned off-state expression. Left unchanged.
-- `src/pages/Assistant.tsx:130`
-  pairing-primary (PairingButton) is a kiosk-scale device CTA (min-h-20/text-2xl/px-8) that cannot fit the w-80 popover, className cannot override its font-size/min-height reliably, and the cookbook lists no pairing recipe — same call wave 1 made on inline-loginform2-repair-till (left byte-identical); site unchanged
-- `src/pages/Assistant.tsx:306-310`
-  pos-action-default (POSActionButton) is a fixed w-24 h-20 stacked icon+label tile with a required icon prop; example prompt cards are full-width, text-left, icon-less, dynamic-length grid cells, and no pos-action recipe is listed in the cookbook — site unchanged
-- `src/pages/Customers.tsx:374`
-  Structural misfit: partial-width (flex-1) tap target inside a composed mobile card with a sibling kebab overlay; the list-row winner (ListRow / ProfitCosts inline recipe) is a full-width horizontal flex row (items-center) with its own px-4/py-3 padding and bottom divider built for grouped list containers. Applying it would horizontal-ize the vertically stacked customer details and collide with the card's p-3 padding and the kebab sibling — cannot express the winner without restructuring the whole card. Left byte-identical (advisor-confirmed).
-- `src/pages/Employees.tsx:1127`
-  absolutely positioned adornment inside a py-2 (~40px) input with pr-10 well; admin-action-icon geometry (p-2 chip, min-h-touch-xs = 44px) overflows the input and shifts the icon out of the reserved well
-- `src/pages/Employees.tsx:861`
-  partial-row tap target: avatar and kebab menu are siblings inside the card row; ListRow/full-row winner would either nest the kebab button inside a button (invalid HTML) or double-pad and re-tint inside the existing p-3 card
-- `src/pages/Employees.tsx:975`
-  disabled cursor-not-allowed ghost icon placeholder; table-action-edit is a solid bg-blue-600 labeled CTA with no disabled/icon-only expression — forcing it would break the card footer
-- `src/pages/Employees.tsx:995`
-  same as :975 — no TableActionButton variant expresses a disabled gray icon chip; left byte-identical
-- `src/pages/OrderQueue.tsx:114-121`
-  pos-action-default (POSActionButton) is a fixed w-24 h-20 white stacked icon+label tile; the site is a full-width dark CTA inside a ticket card mirroring the sibling mark-ready button. The cookbook lists no recipe for pos-action, and className cannot cleanly override the base w-24/h-20/flex-col — layout misfit, left byte-identical.
-- `src/pages/Products.tsx:562`
-  Structural misfit for the ListRow winner: the button is only the middle text region of a mobile card row that also contains the kebab <button>; wrapping in ListRow would nest a button inside a button (invalid) and force the stacked name/sku/category divs into ListRow's horizontal items-center span, breaking the card layout. Left byte-identical (wave 1 left the identical Employees site untouched too).
-- `src/pages/Reports.tsx:344`
-  Standalone transparent summary row in the space-y-5 stack, not inside a list container. The ListRow winner carries a built-in border-b/last:border-b-0 divider that assumes sibling rows in an overflow-hidden card (as entries 6/8 have); here it would render a stray hanging rule mid-page, and overriding it via className border-b-0 is unreliable against Tailwind source order. Left byte-identical.
-- `src/pages/Settings.tsx:177 (component def; usages at 1625, 1733, 1749, 1831, 1874, 1884, 1972)`
-  All 7 SegmentedControl usages pass description sublabels (fiscal issuer/doc-family/environment guidance text); TabToggle's option type has no description field, so migrating would silently drop visible content, and the cookbook lists no sanctioned tab-toggle class recipe. Left byte-identical.
-- `src/pages/Tables.tsx:896-898 (rotate/edit/delete keys, all 3 refs)`
-  dark floating toolbar (bg-neutral-800 text-white); table-action-icon winner is a light-surface chip (text-gray-700, hover:bg-gray-100) that would be illegible on the dark surface, no dark variant or recipe exists, and className color overrides resolve by stylesheet order (unreliable) — honest misfit beats a broken screen
-- `src/pages/Transactions.tsx:1064`
-  The ✕ sits on a solid bg-green-600 success toast with white text; the admin-action-icon winner is a gray-on-white expression (text-gray-700, hover:bg-gray-100) that would be illegible on the green surface, and overriding to white/translucent colors would be non-sanctioned drift. Left byte-identical.
+**Migrated** (component-API extensions made this possible: TableActionButton gained `dark` +
+disabled styling, TabToggle gained `description` sublabels, ListRow gained `divider={false}`):
+
+- `src/components/CategoryForm.tsx` keyboard pill → selectable-pill recipe + aria-pressed
+- `src/components/Auth/LoginForm2.tsx` re-pair CTA → danger solid var(--ds2-danger-*) recipe
+- `src/pages/Assistant.tsx` get-pairing-code → primary gradient recipe; example prompt cards →
+  outline expression (off-language extras dropped)
+- `src/pages/OrderQueue.tsx` Collected → AdminActionButton · success
+- `src/pages/Employees.tsx` 2 disabled icon placeholders → TableActionButton disabled
+- `src/pages/Tables.tsx` floating toolbar (rotate/edit/delete) → TableActionButton dark
+- `src/pages/Transactions.tsx` toast dismiss → TableActionButton icon dark
+- `src/pages/Settings.tsx` SegmentedControl (7 usages) → TabToggle with descriptions
+- `src/pages/{Customers,Employees,Products}.tsx` partial-row tap targets +
+  `src/pages/Reports.tsx` date-range summary → sanctioned ghost hover recipe
+
+**Blessed widget internals** (deliberate exemptions — these are self-contained widgets whose
+internals leave the button language; recorded in the drift baseline):
+
+- `src/components/LanguageSwitcher.tsx:38` — bespoke sidebar language control (flyout, collapsed
+  tooltip, trailing code pill); one-of-a-kind chrome
+- `src/components/ProductAssignmentManager.tsx:218,248` — tri-state assignment tree rows
+  (none/partial/all checkboxes); a tree control, not buttons
+- `src/components/VirtualKeyboard.tsx:96-98` — framed keyboard grid keys (flex-weighted,
+  divider-bordered, two-state caps/symbols toggles); the keyboard IS the widget
+- `src/pages/Employees.tsx:1127` — password-reveal eye inside an input well; an input adornment
+  (InputField internals family), not a standalone button
 
 ## Already the SSOT winner (no-ops) — 7
 

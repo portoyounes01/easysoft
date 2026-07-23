@@ -233,7 +233,8 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                         <button
                             type="button"
                             onClick={() => setShowKeyboard(!showKeyboard)}
-                            className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${showKeyboard ? 'bg-gray-300 text-gray-900' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                            aria-pressed={showKeyboard}
+                            className={`rounded-[10px] border px-3 py-2 text-sm font-medium transition-all ${showKeyboard ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
                             title={t('forms.toggleKeyboard')}
                         >
                             {t('forms.keyboard')}

@@ -180,7 +180,7 @@ const CustomInvoiceDialog: React.FC<CustomInvoiceDialogProps> = ({ open, onClose
                                 type="button"
                                 onClick={() => removeLine(index)}
                                 disabled={lines.length === 1}
-                                className="disabled:cursor-not-allowed disabled:opacity-30"
+                                className="disabled:cursor-not-allowed"
                                 aria-label={t('transactions.customInvoice.removeLine')}
                             />
                         </div>

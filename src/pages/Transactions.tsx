@@ -19,6 +19,7 @@ import {
     FileMinus,
     FilePlus,
     Printer,
+    X,
 } from 'lucide-react';
 import { transactionService } from '../services/transactionService';
 import { useTranslation } from 'react-i18next';
@@ -1064,7 +1065,7 @@ const TransactionsInner: React.FC = () => {
                 {creditNoteResult && creditNoteResult.ok && (
                     <div className="fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-3 rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white shadow-2xl">
                         <span>{creditNoteResult.msg}</span>
-                        <button type="button" className="opacity-80 hover:opacity-100" onClick={() => setCreditNoteResult(null)}>✕</button>
+                        <TableActionButton variant="icon" dark icon={X} className="-my-1" onClick={() => setCreditNoteResult(null)} aria-label={t('common.close')} />
                     </div>
                 )}
             </div>

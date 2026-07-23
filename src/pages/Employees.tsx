@@ -845,7 +845,7 @@ const EmployeesInner: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => canEditEmployee && handleEditEmployee(employee)}
-                                    className="min-w-0 flex-1 text-left"
+                                    className="min-w-0 flex-1 rounded-lg text-left transition-colors hover:bg-gray-50"
                                 >
                                     <div className="flex items-center gap-2">
                                         <span className={`min-w-0 truncate text-[15px] font-semibold ${employee.is_active ? 'text-gray-900' : 'text-gray-600'}`}>{employee.name}</span>
@@ -955,14 +955,13 @@ const EmployeesInner: React.FC = () => {
                                             aria-label={`${t('employees.actions.edit')} ${employee.name}`}
                                         />
                                     ) : (
-                                        <button
+                                        <TableActionButton
+                                            variant="icon"
+                                            icon={Edit}
                                             disabled
-                                            className="p-2 text-gray-400 cursor-not-allowed rounded-lg"
                                             title={t('employees.actions.onlyAdminsEditAdmins')}
                                             aria-label={`${t('employees.actions.onlyAdminsEditAdmins')} ${employee.name}`}
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                        </button>
+                                        />
                                     )}
 
                                     {/* Only admins can delete other admins */}
@@ -974,13 +973,12 @@ const EmployeesInner: React.FC = () => {
                                             title={t('employees.actions.delete')}
                                         />
                                     ) : (
-                                        <button
+                                        <TableActionButton
+                                            variant="icon"
+                                            icon={Trash2}
                                             disabled
-                                            className="p-2 text-gray-400 cursor-not-allowed rounded-lg"
                                             title={t('employees.actions.onlyAdminsDeleteAdmins')}
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        />
                                     )}
                                 </div>
                             </div>

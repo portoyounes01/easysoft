@@ -130,7 +130,7 @@ const WhatsAppLink: React.FC = () => {
             <p className="text-gray-500 mb-3">No numbers connected yet. Link your WhatsApp to ask about your business from your phone.</p>
           )}
           {!code ? (
-            <button onClick={getCode} disabled={busy} className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-2.5 font-medium disabled:opacity-50">
+            <button onClick={getCode} disabled={busy} className="w-full bg-gradient-primary hover:opacity-90 text-white rounded-xl py-2.5 font-semibold transition-opacity disabled:opacity-50">
               {busy ? 'Getting code…' : connected.length ? 'Link another number' : 'Get my pairing code'}
             </button>
           ) : (
@@ -310,7 +310,7 @@ const AssistantInner: React.FC = () => {
                 <button
                   key={i}
                   onClick={() => submit(ex)}
-                  className="text-left text-sm bg-white border border-gray-200 rounded-2xl px-4 py-3 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm min-h-touch-sm"
+                  className="text-left text-sm bg-white border border-gray-200 rounded-2xl px-4 py-3 hover:bg-gray-50 transition-all min-h-touch-sm"
                 >
                   {ex}
                 </button>

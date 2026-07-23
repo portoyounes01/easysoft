@@ -114,14 +114,15 @@ const OrderQueue: React.FC = () => {
                 <article key={ticket.id} className="rounded-2xl border border-green-200 bg-green-50 p-5">
                   <p className="text-4xl font-black tracking-tight text-green-950">{ticket.display_number}</p>
                   <p className="mt-2 text-sm text-green-700">{t('orderQueue.waitingForCollection')}</p>
-                  <button
+                  <AdminActionButton
                     type="button"
+                    variant="success"
+                    icon={Check}
+                    label={t('orderQueue.collected')}
                     onClick={() => void handleStatus(ticket, 'collected')}
-                    className="mt-5 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 font-bold text-white hover:bg-gray-800"
-                  >
-                    <Check className="h-5 w-5" />
-                    {t('orderQueue.collected')}
-                  </button>
+                    className="mt-5 w-full"
+                    style={{ minHeight: '3.75rem' }}
+                  />
                 </article>
               ))}
               {ready.length === 0 && <p className="col-span-full py-12 text-center text-gray-400">{t('orderQueue.noOrdersReady')}</p>}

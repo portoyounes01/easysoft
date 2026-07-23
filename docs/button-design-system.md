@@ -80,8 +80,9 @@ mapped to unselected winners, list rows mapped to icon chips — all applied.
 
 - **Re-extract the lab data** so the lab shows the post-migration truth (style count should
   collapse from 381 to roughly the winner set + registered tail).
-- **Structural-misfit tail (20 sites)** — each needs a small component-API decision
-  (extend a winner or bless a new shape) rather than a mechanical swap.
+- ~~Structural-misfit tail~~ **RESOLVED 2026-07-23**: 14 migrated (via component-API extensions:
+  TableActionButton `dark`+disabled, TabToggle `description`+wrap, ListRow `divider`), 6 blessed
+  as widget internals — see the register.
 - **Legacy dialog branches (31 sites)** migrate automatically when the legacy dialog paths are
   formally decommissioned (dialog-rebuild policy decision).
 - The 4 still-undecided styles from the plan (Assistant mic 3-state toggle, DeliveryOrders status

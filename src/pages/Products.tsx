@@ -550,7 +550,7 @@ const ProductsInner: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setViewingProduct(product)}
-                  className="min-w-0 flex-1 text-left"
+                  className="min-w-0 flex-1 rounded-lg text-left transition-colors hover:bg-gray-50"
                 >
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="font-semibold text-gray-900">{product.name}</span>

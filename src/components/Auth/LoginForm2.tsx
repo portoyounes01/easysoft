@@ -614,7 +614,7 @@ const LoginForm2Inner: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => navigate('/pair-device')}
-                            className="mx-auto mt-2 block rounded-lg bg-red-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-700"
+                            className="mx-auto mt-2 block rounded-xl bg-[var(--ds2-danger-solid,#dc2626)] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[var(--ds2-danger-hover,#b91c1c)]"
                           >
                             Re-pair this till
                           </button>

@@ -8,6 +8,8 @@ interface ListRowProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     showChevron?: boolean;
     /** Highlight as the currently selected row (pickers, tills, tables). */
     selected?: boolean;
+    /** Bottom divider — disable for standalone rows outside a list card. */
+    divider?: boolean;
 }
 
 /**
@@ -20,12 +22,13 @@ export const ListRow: React.FC<ListRowProps> = ({
     children,
     showChevron = false,
     selected = false,
+    divider = true,
     className = '',
     ...props
 }) => (
     <button
         type="button"
-        className={`flex min-h-touch w-full items-center gap-4 border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 ${selected ? 'bg-green-50' : 'hover:bg-gray-50'} ${className}`}
+        className={`flex min-h-touch w-full items-center gap-4 ${divider ? 'border-b border-gray-100 last:border-b-0 ' : ''}px-4 py-3 text-left transition-colors ${selected ? 'bg-green-50' : 'hover:bg-gray-50'} ${className}`}
         {...props}
     >
         <span className="flex min-w-0 flex-1 items-center gap-4">{children}</span>
