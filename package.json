@@ -10,6 +10,7 @@
     "dev:network": "vite --host",
     "build": "vite build",
     "lint": "eslint .",
+    "check:buttons": "node scripts/check-button-drift.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "validate:saft": "npm test -- --run tests/fiscal/saftExport.test.ts",

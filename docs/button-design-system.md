@@ -1,7 +1,28 @@
 # Button design language — consolidation brief
 
-**Status (2026-07-23):** plan curated and loaded into the Button lab (Appearances → Button lab).
-Migration NOT started — every assignment is reviewable/editable in the lab before any code changes.
+**Status (2026-07-23): MIGRATION EXECUTED.** All four phases landed (commits `df25388` MenuRow/ListRow,
+`51bddef` scope sweep, `efc4314` wave 1, `4154461` wave 2):
+
+- **278 button sites migrated** onto the blessed winners (102 component files + 176 pages),
+  each wave gated by a per-file adversarial diff review (48/55 clean; every finding fixed).
+- **All screens now render inside the appearance scope** — the 13 unscoped pages plus Layout
+  chrome follow the Appearances tokens (verified live: 2px-radius/orange test tokens reached
+  every page).
+- **14 dead files deleted** (LoginForm v1, Layout/Header, PrinterManager-complex, RoutingDebugger,
+  ProductForm + VirtualNumpad, OrderPrintButton/Manager, and the earlier POS2/DS v1 removal).
+- **Drift gate live:** `npm run check:buttons` (scripts/check-button-drift.mjs) fails on any new
+  hand-written styled button vs the checked-in baseline (106 signatures pre-migration → **64**,
+  all accounted for: frozen legacy branches, sanctioned token recipes, registered misfits).
+- Typecheck: 137 pre-existing errors → **124** (deleted files carried 13); zero new errors.
+
+**⚠️ Deliberately-untouched register (60 sites):** 31 legacy-frozen dialog branches (byte-identical
+per the dialog-rebuild policy — they migrate when the legacy paths are decommissioned), 20 structural
+misfits (e.g. VirtualKeyboard's framed key grid, tri-state assignment checkboxes, kiosk-scale
+PairingButton contexts — each needs a component-API decision), 7 already-SSOT no-ops, 2 Appearances
+preview mocks. Full list: ask the lab's uses-lists or the wave misfit reports.
+
+**⚠️ Known stale:** the Button lab's specimen data (class strings + file:line refs) predates the
+migration — re-run the extraction workflow to see the collapsed style count and fresh refs.
 
 ## The problem being solved
 
@@ -55,12 +76,13 @@ mapped to unselected winners, list rows mapped to icon chips — all applied.
 3. The lab is the register: any new distinct style that shows up in a future extraction run is a
    regression.
 
-## ⚠️ Deliberately NOT done yet (needs sign-off)
+## Remaining follow-ups
 
-- **The actual code migration** of 317 styles across ~75 files — big, breaking-risk change;
-  execute in waves (suggested: dialogs → tables/icons → misc pages) after plan sign-off in the lab.
-- **Bringing the 13 unscoped screens into the appearance scope** (Tables, HR, Inventory, Devices,
-  OrderQueue, layout chrome, …) — prerequisite for "everything follows Appearances".
-- **`MenuRow` / `ListRow` components** — two real gaps; 16 styles wait on them.
-- **Lint enforcement** (e.g. flag inline `className` buttons outside `ui/`) — worth doing after
-  migration so it doesn't fire on legacy code.
+- **Re-extract the lab data** so the lab shows the post-migration truth (style count should
+  collapse from 381 to roughly the winner set + registered tail).
+- **Structural-misfit tail (20 sites)** — each needs a small component-API decision
+  (extend a winner or bless a new shape) rather than a mechanical swap.
+- **Legacy dialog branches (31 sites)** migrate automatically when the legacy dialog paths are
+  formally decommissioned (dialog-rebuild policy decision).
+- The 4 still-undecided styles from the plan (Assistant mic 3-state toggle, DeliveryOrders status
+  filter card, Categories desktop card, PWA login mode toggle).
