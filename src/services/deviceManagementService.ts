@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 
 export type ManagedDeviceStatus = 'provisioned' | 'enrolled' | 'revoked';
 export type DevicePresence = 'online' | 'offline' | 'unknown';
@@ -70,8 +70,8 @@ async function request<T>(
   const accessToken = sessionData.session?.access_token;
   if (!accessToken) throw new Error('This till has no active device session.');
 
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-devices`;
-  const anon = import.meta.env.VITE_SUPABASE_ANON ?? '';
+  const url = `${supabaseUrl}/functions/v1/manage-devices`;
+  const anon = supabaseAnonKey;
   const response = await fetch(url, {
     method: 'POST',
     headers: {

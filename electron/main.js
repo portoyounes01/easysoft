@@ -2,8 +2,18 @@ const { app, BrowserWindow, Menu, ipcMain, dialog, net, protocol, shell } = requ
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
+const { loadRuntimeConfig } = require('./runtimeConfig');
 const { resolveRendererConfig } = require('./rendererConfig');
-const rendererConfig = resolveRendererConfig({ dirname: __dirname });
+const { runPreflight } = require('./gatePreflight');
+const { HARDWARE_API_VERSION } = require('./shellContract');
+
+// Stage-0 runtime config (userData/config.json) — invalid values surface as a
+// blocking red on the boot gate rather than being silently ignored.
+const runtimeConfig = loadRuntimeConfig({ userDataPath: app.getPath('userData') });
+if (runtimeConfig.issues.length > 0) {
+  console.warn('runtime config issues (gate will block):', runtimeConfig.issues);
+}
+const rendererConfig = resolveRendererConfig({ dirname: __dirname, runtime: runtimeConfig });
 const isDev = rendererConfig.mode === 'development';
 
 // Import our hardware controllers
@@ -80,7 +90,10 @@ function resolveAppProtocolPath(requestUrl) {
     pathname = '/index.html';
   }
 
-  const root = rendererConfig.root;
+  // Host routing: app://gate/* serves the installer-local readiness gate
+  // (electron/gate — must render with no network and no dist/); every other
+  // host (app://pos/*) serves the bundled web build.
+  const root = url.host === 'gate' ? rendererConfig.gateRoot : rendererConfig.root;
   const filePath = path.normalize(path.join(root, pathname));
   const rootWithSeparator = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
 
@@ -119,7 +132,7 @@ function registerProductionProtocol() {
 
 async function loadRenderer() {
   try {
-    console.log('Renderer mode:', rendererConfig.mode, 'NODE_ENV:', process.env.NODE_ENV, 'isPackaged:', app.isPackaged);
+    console.log('Renderer mode:', rendererConfig.mode, 'source:', rendererConfig.source, 'NODE_ENV:', process.env.NODE_ENV, 'isPackaged:', app.isPackaged);
 
     if (rendererConfig.mode === 'development') {
       console.log('Loading development URL:', rendererConfig.url);
@@ -128,22 +141,74 @@ async function loadRenderer() {
       return;
     }
 
-    if (!fs.existsSync(rendererConfig.file)) {
-      const message = `Missing renderer build at ${rendererConfig.file}. Run "npm run build" before launching Electron.`;
-      console.error(message);
-      dialog.showErrorBox('Renderer build not found', message);
-      app.quit();
-      return;
-    }
-
-    console.log('Loading production URL:', rendererConfig.url, 'from:', rendererConfig.file);
-    await mainWindow.loadURL(rendererConfig.url);
+    // Production always boots to the readiness gate (§10 Stage 1: gate before
+    // repoint). The gate blocks handoff on red preconditions — including a
+    // missing dist/ build, which used to be a dialog-then-quit dead end.
+    console.log('Loading readiness gate:', rendererConfig.gateUrl, '→ UI:', rendererConfig.url);
+    await mainWindow.loadURL(rendererConfig.gateUrl);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('Failed to load renderer:', error);
     dialog.showErrorBox('Unable to load renderer', message);
     app.quit();
   }
+}
+
+// Auto-handoff damping (§7.4): after 3 handoff failures inside 5 minutes the
+// gate stops auto-proceeding (manual Continue only) so a flapping UI origin
+// cannot bounce the till in a loop.
+let handoffFailures = [];
+function recordHandoffFailure() {
+  const now = Date.now();
+  // A rejected loadURL and its did-fail-load event report the SAME failure —
+  // collapse anything inside 1s so damping trips at 3 real failures, not 2.
+  if (handoffFailures.length > 0 && now - handoffFailures[handoffFailures.length - 1] < 1000) {
+    return;
+  }
+  handoffFailures.push(now);
+}
+function autoProceedAllowed() {
+  const cutoff = Date.now() - 5 * 60 * 1000;
+  handoffFailures = handoffFailures.filter((at) => at > cutoff);
+  return handoffFailures.length < 3;
+}
+
+// Deploy-skew watchdog (network mode only): index.html can load fine while its
+// hashed chunks are gone (CDN skew / rollback purge — the SPA rewrite even
+// serves HTML for missing chunks), leaving a "successfully loaded" blank page
+// did-fail-load never sees. 20s after handoff, probe whether the app painted
+// (#root has children) and bounce back to the diagnostic gate if not (§7.1).
+let blankUiWatchdog = null;
+function scheduleBlankUiWatchdog() {
+  if (rendererConfig.source !== 'network') return;
+  clearTimeout(blankUiWatchdog);
+  blankUiWatchdog = setTimeout(async () => {
+    try {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (!mainWindow.webContents.getURL().startsWith(runtimeConfig.uiOrigin)) return;
+      const painted = await mainWindow.webContents.executeJavaScript(
+        "Boolean(document.getElementById('root') && document.getElementById('root').children.length)",
+      );
+      if (!painted) {
+        console.error('Network UI loaded but never rendered — returning to gate');
+        recordHandoffFailure();
+        const query = `?reason=load-failed&detail=${encodeURIComponent('UI loaded but never rendered (deploy skew?)')}`;
+        await mainWindow.loadURL(rendererConfig.gateUrl + query);
+      }
+    } catch (error) {
+      console.error('Blank-UI watchdog error:', error);
+    }
+  }, 20000);
+}
+
+async function getGateState() {
+  const state = await runPreflight({
+    rendererConfig,
+    hardwareController,
+    shellVersion: app.getVersion(),
+  });
+  state.autoProceed = autoProceedAllowed();
+  return state;
 }
 
 async function createWindow() {
@@ -159,6 +224,17 @@ async function createWindow() {
   // permanently disables the macOS green-button fullscreen (it only zooms).
   const kiosk = !isDev;
 
+  // Stage-0 subset the renderer is allowed to see (anon key is public by design;
+  // the service key never exists on a till). Delivered synchronously via argv so
+  // src/lib/supabase.ts can prefer it over Vite-baked env at module load.
+  // Dev deliberately gets NONE of it: a leftover config.json must not silently
+  // repoint a dev machine away from its .env.
+  const rendererRuntimeConfig = isDev ? {} : {
+    supabaseUrl: runtimeConfig.supabaseUrl || undefined,
+    supabaseAnonKey: runtimeConfig.supabaseAnonKey || undefined,
+    environment: runtimeConfig.environment || undefined,
+  };
+
   // Create the browser window
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -169,10 +245,62 @@ async function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      additionalArguments: [
+        `--pos-shell-version=${app.getVersion()}`,
+        `--pos-hardware-api-version=${HARDWARE_API_VERSION}`,
+        `--pos-runtime-config=${Buffer.from(JSON.stringify(rendererRuntimeConfig)).toString('base64')}`,
+      ],
     },
     icon: path.join(__dirname, '../public/favicon.ico'), // Add your app icon
     show: false // Don't show until ready
+  });
+
+  // Stage-2 origin allowlist: the window may only navigate between the gate,
+  // the bundled UI, and (in network mode) the locked ui_origin. Fetch/XHR are
+  // governed by CSP; this guards top-level navigation AND server redirects.
+  // app:// must be matched by protocol+host: it is a non-special scheme in
+  // Node's URL, so its .origin serializes to the literal string 'null'.
+  const allowedWebOrigins = new Set();
+  if (isDev) {
+    allowedWebOrigins.add(new URL(rendererConfig.url).origin);
+  }
+  if (rendererConfig.source === 'network') {
+    allowedWebOrigins.add(runtimeConfig.uiOrigin);
+  }
+  const isNavigationAllowed = (targetUrl) => {
+    let url;
+    try {
+      url = new URL(targetUrl);
+    } catch {
+      return false;
+    }
+    if (url.protocol === 'app:') {
+      return url.host === 'pos' || url.host === 'gate';
+    }
+    return allowedWebOrigins.has(url.origin);
+  };
+  const blockDisallowed = (label) => (event, targetUrl) => {
+    if (!isNavigationAllowed(targetUrl)) {
+      console.error(`Blocked ${label} outside allowed origins:`, targetUrl);
+      event.preventDefault();
+    }
+  };
+  mainWindow.webContents.on('will-navigate', blockDisallowed('navigation'));
+  mainWindow.webContents.on('will-redirect', blockDisallowed('redirect'));
+
+  // Fail-loud fallback (§7.1): if the real UI ever fails to load (network drop,
+  // bad deploy), return to the diagnostic gate instead of Electron's blank
+  // error page. ERR_ABORTED (-3) is a superseded navigation, not a failure.
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame || isDev || errorCode === -3) return;
+    if (validatedURL.startsWith('app://gate')) return;
+    console.error('Renderer failed to load, returning to gate:', errorCode, errorDescription, validatedURL);
+    recordHandoffFailure();
+    const query = `?reason=load-failed&detail=${encodeURIComponent(`${errorCode} ${errorDescription}`)}`;
+    mainWindow.loadURL(rendererConfig.gateUrl + query).catch((gateError) => {
+      console.error('Failed to load gate after renderer failure:', gateError);
+    });
   });
 
   // The menu's accelerators died with the menu, so devtools gets a manual binding.
@@ -522,6 +650,62 @@ ipcMain.handle('hardware:check-all-connections', async () => {
 
 ipcMain.handle('app:get-version', async () => {
   return app.getVersion();
+});
+
+ipcMain.handle('shell:get-info', async () => ({
+  shellVersion: app.getVersion(),
+  hardwareApiVersion: HARDWARE_API_VERSION,
+  platform: process.platform,
+}));
+
+ipcMain.handle('gate:get-state', async () => getGateState());
+
+// Handoff out of the gate. Fail-closed enforcement lives HERE: only the gate
+// page may ask, and the blocking set is re-validated in main immediately before
+// navigation — gate-page JS cannot skip a red precondition.
+let proceedInFlight = false;
+ipcMain.handle('gate:proceed', async (event) => {
+  if (isDev) return { ok: false, error: 'gate-disabled-in-dev' };
+  if (!event.sender.getURL().startsWith('app://gate')) {
+    return { ok: false, error: 'not-at-gate' };
+  }
+  // Manual Continue and the 5s auto-proceed can race; a second loadURL would
+  // abort a good handoff and log a phantom failure. First caller wins.
+  if (proceedInFlight) return { ok: false, error: 'busy' };
+  proceedInFlight = true;
+
+  try {
+    const state = await getGateState();
+    if (!state.allBlockingGreen) {
+      return { ok: false, error: 'blocking-preconditions-red', state };
+    }
+
+    try {
+      await mainWindow.loadURL(rendererConfig.url);
+      scheduleBlankUiWatchdog();
+      return { ok: true };
+    } catch (error) {
+      recordHandoffFailure();
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Gate handoff failed:', message);
+      const query = `?reason=load-failed&detail=${encodeURIComponent(message)}`;
+      await mainWindow.loadURL(rendererConfig.gateUrl + query).catch(() => {});
+      return { ok: false, error: message };
+    }
+  } finally {
+    proceedInFlight = false;
+  }
+});
+
+// Operator restart from the gate — config.json is read once at process start,
+// so "fix the config" recovery needs a real relaunch, not a recheck.
+ipcMain.handle('gate:restart', async (event) => {
+  if (!event.sender.getURL().startsWith('app://gate')) {
+    return { ok: false, error: 'not-at-gate' };
+  }
+  app.relaunch();
+  app.exit(0);
+  return { ok: true };
 });
 
 registerFiscalSigningIpc(ipcMain, app);

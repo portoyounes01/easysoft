@@ -45,7 +45,9 @@ Deno.serve(async (req) => {
   const username = body.username ? String(body.username).trim() : null;
   const password = String(body.password ?? '');
   const role = String(body.role ?? 'manager');
-  const storeIds = Array.isArray(body.store_ids) ? body.store_ids.map(String) : null;
+  // Lowercased at the boundary: uuids are case-insensitive but Postgres returns
+  // them lowercase, so mixed-case input would false-fail the existence check.
+  const storeIds = Array.isArray(body.store_ids) ? body.store_ids.map((s) => String(s).toLowerCase()) : null;
   const displayName = body.display_name ? String(body.display_name) : (username || email);
 
   if (!email || !password) return json({ error: 'email_password_required' }, 400);
@@ -56,6 +58,19 @@ Deno.serve(async (req) => {
   const callerStores = Array.isArray(cmeta.store_ids) ? cmeta.store_ids : null;
   if (callerStores && storeIds && !storeIds.every((s) => callerStores.includes(s))) {
     return json({ error: 'store_scope_exceeds_caller' }, 403);
+  }
+  // store_ids must name REAL stores of THIS tenant — a membership scoped to
+  // nonexistent/foreign stores is a silent authz misconfiguration (the DB
+  // trigger app.validate_tenant_member_store_ids is the schema-level backstop).
+  if (storeIds && storeIds.length > 0) {
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!storeIds.every((s) => UUID_RE.test(s))) return json({ error: 'store_ids_not_uuids' }, 400);
+    const { data: storeRows, error: sErr } = await admin
+      .from('stores').select('id').eq('tenant_id', callerTenant).in('id', storeIds);
+    if (sErr) return json({ error: 'store_lookup_failed', detail: sErr.message }, 500);
+    const known = new Set((storeRows ?? []).map((r) => String(r.id)));
+    const missing = storeIds.filter((s) => !known.has(s));
+    if (missing.length > 0) return json({ error: 'unknown_store_ids', detail: missing.join(',') }, 400);
   }
 
   // tenant is FORCED to the caller's verified tenant — body tenant_id is never honored

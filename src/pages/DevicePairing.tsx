@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { QrCode, MonitorSmartphone, HelpCircle, Loader2, CheckCircle2, AlertCircle, KeyRound, ArrowLeft } from 'lucide-react';
 import { PairingButton } from '../components/ui/PairingButton';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { saveDevicePairingScope, hasDevicePairingScope } from '../utils/devicePairingStorage';
 import { useDesignSystem2VisualStyleSafe } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
@@ -41,8 +41,8 @@ const DevicePairing: React.FC = () => {
     try {
       // pair-device is verify_jwt=false; the pairing code is the credential. Raw fetch so we
       // get the JSON body (and its error code) regardless of HTTP status.
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pair-device`;
-      const anon = import.meta.env.VITE_SUPABASE_ANON ?? '';
+      const url = `${supabaseUrl}/functions/v1/pair-device`;
+      const anon = supabaseAnonKey;
       const resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: anon, Authorization: `Bearer ${anon}` },

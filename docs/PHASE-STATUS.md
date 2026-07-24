@@ -49,7 +49,7 @@ that, plus the supporting `allocate_fiscal_number` RPC (atomic, gap-free counter
 - **JWT expiry → 15 min** — Dashboard → Auth (currently 3600s). Lowers ban/claim-change convergence time.
 - **S13 drop `VITE_FISCAL_RSA_PRIVATE_KEY_PEM` from Vercel** — hygiene; key never used in prod.
 - **S21 edge-function CORS allowlist** — needs the exact prod origin set (Electron `app://pos` + the real Vercel domain) to avoid opaque breakage; currently `*`.
-- **S22 Electron runtime-config layer** — enables key rotation without reinstalling tills; only needed before rotation (itself deferred). Ties into `docs/update-policy.md` Stage 0.
+- **S22 Electron runtime-config layer** — ✅ BUILT 2026-07-24 (branch `update-stages`, with update-policy Stages 0–3: readiness gate, network repoint, min-shell handshake — see `docs/update-policy.md` §15). Remaining config side: actually writing a `config.json` onto each till at install time (supabase_url + anon key + environment), so the gate's backend check activates and key rotation works without reinstall.
 - **Code-signing** — DECIDED unsigned for v1 (Windows/Linux tills; no macOS tills).
 
 ## Phase 2 polish (🧊 — client, needs browser testing)

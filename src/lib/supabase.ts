@@ -1,9 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '../types/supabase';
 
-// Environment variables (you'll need to add these to your .env file)
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON || '';
+// Stage-0 runtime config (update-policy §10 / multi-tenant-plan §9.2): on a
+// till, the Electron shell reads userData/config.json and exposes the renderer
+// subset as window.__RUNTIME_CONFIG__ (via preload). It wins over Vite-baked
+// env so a till can be repointed (staging↔prod, key rotation) by editing one
+// file — no rebuild. Browser hosts (PWA) have no shell and use the baked env.
+const runtimeConfig: { supabaseUrl?: string; supabaseAnonKey?: string; environment?: string } =
+    (typeof window !== 'undefined' && window.__RUNTIME_CONFIG__) || {};
+
+// Environment variables (you'll need to add these to your .env file).
+// Exported so raw edge-function fetches use the SAME resolution — anything
+// reading import.meta.env directly would split-brain a repointed till.
+export const supabaseUrl = runtimeConfig.supabaseUrl || import.meta.env.VITE_SUPABASE_URL || '';
+export const supabaseAnonKey = runtimeConfig.supabaseAnonKey || import.meta.env.VITE_SUPABASE_ANON || '';
 
 // Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {

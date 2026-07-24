@@ -9,7 +9,7 @@ import {
     Loader2,
     X
 } from 'lucide-react';
-import { supabase, connectionStatus } from '../lib/supabase';
+import { supabase, connectionStatus, supabaseUrl } from '../lib/supabase';
 import { TabToggle } from './ui/TabToggle';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useTranslation } from 'react-i18next';
@@ -236,7 +236,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         }
 
         // Request signed upload URL
-        const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-image`;
+        const fnUrl = `${supabaseUrl}/functions/v1/upload-image`;
         const reqBody = {
             employee_number: employee.employee_number,
             employee_id: employee.id,
@@ -309,7 +309,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         if (!pathToDelete) return;
 
         const { data: { session } } = await supabase.auth.getSession();
-        const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-image`;
+        const fnUrl = `${supabaseUrl}/functions/v1/upload-image`;
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
 

@@ -173,12 +173,30 @@ interface ElectronAPI {
       plaintext: string
     ) => Promise<{ success: boolean; hashBase64?: string; error?: string }>;
   };
+  /** Versioned UI↔shell contract (update-policy §8); absent on legacy shells */
+  shell?: {
+    version: string;
+    hardwareApiVersion: number;
+    getInfo: () => Promise<{ shellVersion: string; hardwareApiVersion: number; platform: string }>;
+  };
+  /** Boot readiness gate bridge (shell-local gate page only) */
+  gate?: {
+    getState: () => Promise<unknown>;
+    proceed: () => Promise<{ ok: boolean; error?: string }>;
+    restart: () => Promise<{ ok: boolean; error?: string }>;
+  };
   isDev: boolean;
 }
 
 declare global {
   interface Window {
     electronAPI: ElectronAPI;
+    /** Stage-0 runtime config from the till shell's preload; absent in browsers */
+    __RUNTIME_CONFIG__?: {
+      supabaseUrl?: string;
+      supabaseAnonKey?: string;
+      environment?: string;
+    };
   }
 }
 

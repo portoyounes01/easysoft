@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { initializeLocalDatabase, localDb } from '../lib/localDatabase';
 import type {
     LocalProduct,
@@ -96,7 +96,7 @@ class PurchaseReceiptService {
             throw new Error('The document is larger than 10 MB. Compress or split it before uploading.');
         }
 
-        const functionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-purchase-document`;
+        const functionUrl = `${supabaseUrl}/functions/v1/extract-purchase-document`;
         const { data: sessionData } = await supabase.auth.getSession();
         if (!sessionData.session?.access_token) {
             throw new Error('Your device session has expired. Pair or sign in again.');
@@ -105,7 +105,7 @@ class PurchaseReceiptService {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                apikey: import.meta.env.VITE_SUPABASE_ANON ?? '',
+                apikey: supabaseAnonKey,
                 Authorization: `Bearer ${sessionData.session.access_token}`,
             },
             body: JSON.stringify({

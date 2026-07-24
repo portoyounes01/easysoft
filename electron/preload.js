@@ -1,8 +1,51 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Shell identity + Stage-0 runtime config arrive synchronously via argv
+// (webPreferences.additionalArguments in main.js) so they are readable at
+// renderer module-load time — no async IPC race at boot.
+function readProcessArg(name) {
+  const prefix = `${name}=`;
+  const match = process.argv.find((arg) => arg.startsWith(prefix));
+  return match ? match.slice(prefix.length) : undefined;
+}
+
+const shellVersion = readProcessArg('--pos-shell-version') || '0.0.0';
+const hardwareApiVersion = parseInt(readProcessArg('--pos-hardware-api-version') || '0', 10);
+
+let runtimeConfig = {};
+try {
+  const encoded = readProcessArg('--pos-runtime-config');
+  if (encoded) {
+    runtimeConfig = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')) || {};
+  }
+} catch (error) {
+  console.error('preload: failed to parse runtime config argv:', error);
+}
+
+// Stage-0 runtime config for the web app (src/lib/supabase.ts prefers this over
+// Vite-baked env). Contains only renderer-safe values: supabaseUrl,
+// supabaseAnonKey (public by design), environment.
+contextBridge.exposeInMainWorld('__RUNTIME_CONFIG__', runtimeConfig);
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Versioned UI↔shell contract (update-policy §8). `version` is the installed
+  // shell (installer) version; `hardwareApiVersion` numbers the electronAPI
+  // surface and only bumps on breaking changes.
+  shell: {
+    version: shellVersion,
+    hardwareApiVersion,
+    getInfo: () => ipcRenderer.invoke('shell:get-info'),
+  },
+
+  // Boot readiness gate bridge (gate page only; harmless elsewhere).
+  gate: {
+    getState: () => ipcRenderer.invoke('gate:get-state'),
+    proceed: () => ipcRenderer.invoke('gate:proceed'),
+    restart: () => ipcRenderer.invoke('gate:restart'),
+  },
+
   // Hardware control methods
   hardware: {
     init: () => ipcRenderer.invoke('hardware:init'),

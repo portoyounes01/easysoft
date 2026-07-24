@@ -1,6 +1,6 @@
 // Calls the read-only AI assistant edge function + the WhatsApp pairing helper.
 // Mirrors the fetch + session pattern in purchaseReceiptService.ts.
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 
 export interface AssistantResponse {
   answer: string;
@@ -18,11 +18,11 @@ async function authedFetch(fnName: string, body: unknown) {
   if (!sessionData.session?.access_token) {
     throw new Error('Your session has expired. Please sign in again.');
   }
-  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fnName}`, {
+  const res = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      apikey: import.meta.env.VITE_SUPABASE_ANON ?? '',
+      apikey: supabaseAnonKey,
       Authorization: `Bearer ${sessionData.session.access_token}`,
     },
     body: JSON.stringify(body),
@@ -45,11 +45,11 @@ class AssistantService {
     if (!sessionData.session?.access_token) {
       throw new Error('Your session has expired. Please sign in again.');
     }
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe`, {
+    const res = await fetch(`${supabaseUrl}/functions/v1/transcribe`, {
       method: 'POST',
       headers: {
         'Content-Type': audio.type || 'audio/webm',
-        apikey: import.meta.env.VITE_SUPABASE_ANON ?? '',
+        apikey: supabaseAnonKey,
         Authorization: `Bearer ${sessionData.session.access_token}`,
       },
       body: audio,

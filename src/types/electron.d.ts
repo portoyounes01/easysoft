@@ -316,12 +316,58 @@ interface ElectronAPI {
     onStatusChange(callback: (status: ScaleStatusInfo) => void): () => void;
   };
 
+  // Versioned UI↔shell contract (update-policy §8). Optional: shells older
+  // than the Stage-1/3 work predate it — treated as version 0.0.0 by
+  // src/lib/shellContract.ts (fail closed).
+  shell?: {
+    version: string;
+    hardwareApiVersion: number;
+    getInfo(): Promise<{ shellVersion: string; hardwareApiVersion: number; platform: string }>;
+  };
+
+  // Boot readiness gate bridge — consumed by the shell-local gate page
+  // (electron/gate/), not by the React app.
+  gate?: {
+    getState(): Promise<GatePreflightState>;
+    proceed(): Promise<{ ok: boolean; error?: string; state?: GatePreflightState }>;
+    restart(): Promise<{ ok: boolean; error?: string }>;
+  };
+
   isDev: boolean;
+}
+
+interface GatePreflightCheck {
+  id: string;
+  class: 'blocking' | 'degraded' | 'info';
+  status: 'green' | 'yellow' | 'red';
+  label: string;
+  detail: string;
+  fix: string;
+}
+
+interface GatePreflightState {
+  checks: GatePreflightCheck[];
+  allBlockingGreen: boolean;
+  autoProceed: boolean;
+  shellVersion: string;
+  hardwareApiVersion: number;
+  source: 'bundled' | 'network' | 'dev-server';
+  uiUrl: string;
+  environment: string | null;
+  configPath: string;
+  ranAt: string;
 }
 
 declare global {
   interface Window {
     electronAPI: ElectronAPI;
+    // Stage-0 runtime config subset exposed by the till shell's preload;
+    // absent on browser hosts (PWA) and on legacy shells.
+    __RUNTIME_CONFIG__?: {
+      supabaseUrl?: string;
+      supabaseAnonKey?: string;
+      environment?: string;
+    };
   }
 }
 

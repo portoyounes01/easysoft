@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>POS — Verificação de arranque</title>
+  <link rel="stylesheet" href="gate.css" />
+</head>
+<body>
+  <main class="gate">
+    <header class="gate-header">
+      <div id="gate-badge" class="badge badge-checking">A VERIFICAR…</div>
+      <h1>Verificação de arranque do terminal</h1>
+      <p class="subtitle">Startup readiness check — this till will not sell until every blocking item is green.</p>
+    </header>
+
+    <p id="gate-reason" class="handoff-reason" hidden></p>
+
+    <ul id="gate-checks" class="checks" aria-live="polite"></ul>
+
+    <div class="actions">
+      <button id="gate-retry" type="button">Tentar novamente / Retry now</button>
+      <button id="gate-continue" type="button" disabled>Continuar / Continue</button>
+      <button id="gate-restart" type="button" title="Reinicia a aplicação do terminal (relê o config.json)">Reiniciar / Restart</button>
+      <span id="gate-auto-note" class="auto-note">Verificação automática a cada 5 s.</span>
+    </div>
+
+    <footer id="gate-footer" class="gate-footer"></footer>
+  </main>
+  <script src="gate.js"></script>
+</body>
+</html>

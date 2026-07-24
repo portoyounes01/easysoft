@@ -1,6 +1,6 @@
 # Update Policy — Till Fleet & Backend
 
-**Type:** Policy / handoff brief. **Status:** decisions captured 2026-07-05; ready to expand into an implementation plan.
+**Type:** Policy / handoff brief. **Status:** decisions captured 2026-07-05; **Stages 0–3 IMPLEMENTED 2026-07-24** (branch `update-stages`) — see §15 for exactly what shipped, the interim defaults awaiting sign-off, and what stays deferred.
 
 > **How to use this document (downstream planning agent, read first).**
 > This is the **policy and the decisions already made** — not the implementation plan. Your job is to turn it into a thorough, phased, file-level plan that **integrates with `docs/multi-tenant-plan.md`** (do not fork or contradict it; reference its §-numbers and Deferral Register D-numbers). Every grounded fact below has a `file:line` — verify it still holds before you build on it (the repo drifts). Honor the project rule: **no silent deferrals** — anything you push to "later" goes in a register with a landing point and a risk-if-forgotten (mirror the style of `multi-tenant-plan.md` §Deferral Register).
@@ -190,3 +190,23 @@ Open questions the plan must resolve: is a working **receipt printer legally blo
 - `docs/multi-tenant-plan.md` — the parent plan; especially §2 (rings), §3 (fiskaly/layout gate), §7.3 (connectivity/checkout gate), §9 (migration + rollback), §9.2 & §11 Phase 0 (runtime-config layer), §11 Phase 1∥ (deploy/CI substrate, unsigned builds), §11 Phase 4–6, Deferral Register (D1, D10).
 - `electron/main.js` (`loadURL`, `webPreferences`, `app://` handler + CSP, `hardware:*` handlers), `electron/rendererConfig.js`, `electron/preload.js`, `electron/fiscalSigning.js`.
 - `package.json` (native hardware deps; the unsigned-build / `electron:dist` scripts).
+
+---
+
+## 15. Implementation state (2026-07-24, branch `update-stages`)
+
+**Stages 0–3 are code-complete.** Stage 4 is the operational fleet-roll that *uses* this code — its runbook is `docs/till-update-runbook.md`. File map:
+
+| Stage | What shipped | Where |
+|---|---|---|
+| **0 — runtime config** | `userData/config.json` read at startup: `environment`, `supabase_url` + `supabase_anon_key` (must travel together), `ui_origin`, `renderer_source: bundled\|network` (default `bundled`). Missing file = defaults (zero behavior change); invalid file = **blocking red on the gate**, never silently ignored. Renderer subset exposed as `window.__RUNTIME_CONFIG__` (preload, via argv); `src/lib/supabase.ts` prefers it over Vite-baked env. | `electron/runtimeConfig.js`, `electron/main.js`, `electron/preload.js`, `src/lib/supabase.ts` |
+| **1 — readiness gate** | Installer-local gate bundle served at `app://gate/` (host-routed in the `app://` handler; renders with no network and no `dist/`). Production always boots to the gate; checks run **in main** (`gatePreflight.js`) and `gate:proceed` re-validates there, so gate-page JS cannot skip a red. Red items carry cause + fix text (§7.5). Auto-recheck every 5 s; auto-handoff when green; damping: 3 handoff failures in 5 min → manual Continue only (§7.4). `did-fail-load` of the real UI returns to the gate with the reason — no blank screens (§7.1). Preload now exposes `electronAPI.shell.{version, hardwareApiVersion}`. | `electron/gate/*`, `electron/gatePreflight.js`, `electron/main.js`, `electron/preload.js` |
+| **2 — network repoint** | `renderer_source:'network'` loads the UI from `ui_origin` (https enforced; http only for localhost/LAN pilots). Top-level navigation locked to {gate, `app://pos`, ui_origin}; window-open stays deny+external. The session CSP is still injected onto all responses (including the remote document — ours, not the server's, wins). Rollback = edit `renderer_source` back to `'bundled'` (P4). | `electron/rendererConfig.js`, `electron/main.js` |
+| **3 — min-shell handshake** | The web build publishes `shell-requirements.json` at its root (single source: `src/shell-requirements.json`, emitted by Vite). The gate fetches it (network) or reads it from `dist/` (bundled) and **blocks with "update the installer"** when the shell or hardware-API version is too old; unreadable-but-published requirements also block (fail closed). Second layer: `src/lib/shellContract.ts` + `main.tsx` render a framework-free "update required" screen on till hosts whose shell predates the contract (covers installers too old to have the gate). `HARDWARE_API_VERSION = 1` (`electron/shellContract.js`) — bump on breaking preload changes only. | `src/shell-requirements.json`, `vite.config.ts`, `src/lib/shellContract.ts`, `src/main.tsx`, `electron/shellContract.js`, `electron/gatePreflight.js` |
+
+**⚠️ Interim defaults awaiting sign-off (no silent deferrals):**
+- **O1 preconditions classification — DEFAULTS CHOSEN, NOT RATIFIED.** Blocking: config validity, internet, backend (when `supabase_url` configured), UI source reachable, shell handshake. **Degraded (warn-only): receipt printer and cash drawer** — the conservative choice (an unplugged printer must not brick boot) but §7.2 lists the printer as a *candidate* blocker for fiscal-delivery reasons. **User/compliance must confirm or flip.**
+- **Not yet shell-checkable (future preflight items):** device enrolled + valid session, fiskaly reachable, checkout-function health (§7.2). The shell has no session/fiskaly knowledge today; the renderer-side checks (fiscal issuers' `assertOnline`, planned `ConnectivityGate`) remain the mid-shift guard. Backend check is **skipped (informational) when no `supabase_url` is in config.json** — tills should get a config.json at install time.
+- **Dev mode bypasses the gate** (unchanged DX; `npm run electron` exercises it via the production path).
+
+**Still deferred (unchanged):** electron-updater (U2/O2 — decision + channel before Phase 5; enabling an *unsigned* auto-update channel is a security decision needing explicit sign-off), code-signing (U3 — DECIDED unsigned for v1), fiscal-layout change-control mechanism (O4), server-published min-version floor governance (O5 — today the floor ships inside the web build; a `tenant_fiscal_config`-published floor is future work).
