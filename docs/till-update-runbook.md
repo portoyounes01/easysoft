@@ -70,11 +70,18 @@ Unchanged by the stages — §9 rules stand: staging soak, PITR restore point be
 
 ⚠️ **Install per-user** (the build pins `perMachine: false`): install the app as the till user in the default location. A per-machine/Program Files install would make the silent update hit a UAC prompt on an unattended kiosk — declined or unanswered, the update is silently dropped.
 
-**Publishing a shell release:**
+**Publishing a shell release — AUTOMATED via Cloudflare R2 (decided 2026-07-24):**
 1. Bump `version` in `package.json` (this is the shellVersion the gate/handshake sees).
-2. CI (`build.yml`) produces `dist-electron/`: the `.exe` installers, `.blockmap`, and **`latest.yml`** — the feed manifest.
-3. Upload the NSIS `.exe` + `.blockmap` + `latest.yml` together to the static HTTPS host at the `update_feed_url` path. Any static host works (must serve exact filenames; ⚠️ Vercel's 100 MB static limit likely rules it out for the installer — a bucket/CDN is the expected host; **feed host choice still open**).
-4. Tills pick it up within 4h (or next boot) and install on their next restart.
+2. Push to `main`. CI (`build.yml`) builds AND publishes the feed set (`.exe` + `.blockmap` + `latest.yml`) to the R2 bucket under `/pos/` — installers first, `latest.yml` last (a till polling mid-publish never sees a manifest pointing at a missing installer), `latest.yml` served no-cache. PR builds are never published.
+3. Tills pick it up within 4h (or next boot) and install at the gate / on quit.
+
+**One-time R2 setup (repo secrets — CI warns loudly and skips publish until set):**
+1. Cloudflare dashboard → R2 → create a bucket (e.g. `pos-updates`).
+2. Enable public read for the bucket: either the managed `r2.dev` public URL or (better) a custom domain — the resulting HTTPS origin is the till-facing feed host. Only public READ; never public write.
+3. Create an R2 API token scoped to that bucket, **Object Read & Write**.
+4. GitHub repo → Settings → Secrets and variables → Actions, add: `R2_ACCOUNT_ID` (Cloudflare account id), `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY` (from the token), `R2_BUCKET` (bucket name).
+5. Till `config.json`: `"update_feed_url": "https://<public-r2-domain>/pos/"` (the `/pos/` prefix must match the CI upload path).
+6. Old versions accumulate in the bucket — deliberate (manual rollback = re-upload an older `latest.yml`); prune occasionally if size ever matters.
 
 **Renderer surface:** `electronAPI.shell.getUpdateStatus()` / `onUpdateStatus(cb)` — status `disabled|idle|checking|available|downloaded|up-to-date|error`. ⚠️ No UI nudge is wired yet (D-U5): "update downloaded — restart when convenient" surfacing in the POS UI is open work.
 

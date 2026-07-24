@@ -96,3 +96,35 @@ jobs:
             dist-electron/*.blockmap
             dist-electron/latest.yml
           if-no-files-found: error
+
+      - name: Publish update feed to Cloudflare R2
+        # Auto-publish the electron-updater feed set so shipping a shell release is just
+        # "bump version + push to main" (docs/till-update-runbook.md §G). Never publishes
+        # PR builds. Upload ORDER is load-bearing: installers + blockmaps first,
+        # latest.yml LAST — a till polling mid-publish must never see a manifest that
+        # points at a not-yet-uploaded installer. latest.yml is no-cache so tills see a
+        # new release within one poll, not a CDN TTL later.
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          AWS_DEFAULT_REGION: auto
+          # R2 rejects the newer AWS-CLI default integrity checksums — documented workaround:
+          AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+          AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+        run: |
+          if [ -z "$R2_BUCKET" ] || [ -z "$R2_ACCOUNT_ID" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "::warning::R2 secrets not configured (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET) — update feed NOT published; tills will not see this version."
+            exit 0
+          fi
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          shopt -s nullglob
+          for f in dist-electron/*.exe dist-electron/*.blockmap; do
+            echo "uploading: $(basename "$f")"
+            aws s3 cp "$f" "s3://${R2_BUCKET}/pos/$(basename "$f")" --endpoint-url "$ENDPOINT" --only-show-errors
+          done
+          aws s3 cp dist-electron/latest.yml "s3://${R2_BUCKET}/pos/latest.yml" --endpoint-url "$ENDPOINT" --cache-control "no-cache" --only-show-errors
+          echo "Feed published under /pos/ — tills poll it via config.json update_feed_url."

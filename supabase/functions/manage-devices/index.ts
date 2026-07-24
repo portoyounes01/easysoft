@@ -66,7 +66,12 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
   const url = Deno.env.get('SUPABASE_URL') ?? '';
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  // ADMIN_SERVICE_KEY (explicit secret) preferred over the injected env: functions
+  // created after Supabase's new-API-keys rollout get injected a credential GoTrue's
+  // ADMIN endpoints cannot verify ("unrecognized JWT kid <nil> for algorithm ES256"
+  // — PostgREST accepts it, auth.admin.* fails). Set via:
+  //   supabase secrets set ADMIN_SERVICE_KEY=<legacy service_role JWT>
+  const serviceKey = Deno.env.get('ADMIN_SERVICE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   if (!url || !serviceKey || !anonKey) return json({ error: 'server_misconfigured' }, 500);
 
