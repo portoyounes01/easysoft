@@ -121,6 +121,15 @@ Deno.serve(async (req) => {
     return json({ error: 'admin_required' }, 403);
   }
 
+  // Store-scoped humans (store_ids claim, minted from tenant_members.store_ids) may
+  // only see/touch tills of their stores. Device callers and tenant-wide humans
+  // (no store_ids) are unrestricted within the tenant.
+  const scopedStoreIds = appRole !== 'device' && Array.isArray(user.app_metadata?.store_ids)
+    ? (user.app_metadata.store_ids as unknown[]).filter((s): s is string => typeof s === 'string')
+    : null;
+  const inScope = (storeId: string | null | undefined) =>
+    !scopedStoreIds || (!!storeId && scopedStoreIds.includes(storeId));
+
   const action = body.action;
   if (!action) return json({ error: 'missing_action' }, 400);
 
@@ -138,7 +147,10 @@ Deno.serve(async (req) => {
         .order('created_at', { ascending: false }),
     ]);
     if (storesError || devicesError) return json({ error: 'device_list_failed' }, 500);
-    return json({ stores: stores ?? [], devices: devices ?? [] });
+    return json({
+      stores: (stores ?? []).filter((store) => inScope(store.id)),
+      devices: (devices ?? []).filter((device) => inScope(device.store_id)),
+    });
   }
 
   if (action === 'create') {
@@ -146,6 +158,7 @@ Deno.serve(async (req) => {
     const storeId = body.store_id?.trim() ?? '';
     if (!label || label.length > 80) return json({ error: 'invalid_device_label' }, 400);
     if (!storeId) return json({ error: 'store_required' }, 400);
+    if (!inScope(storeId)) return json({ error: 'store_scope_forbidden' }, 403);
 
     const { data: store, error: storeError } = await admin
       .from('stores')
@@ -191,6 +204,7 @@ Deno.serve(async (req) => {
     .eq('id', deviceId)
     .maybeSingle();
   if (deviceError || !device) return json({ error: 'device_not_found' }, 404);
+  if (!inScope(device.store_id)) return json({ error: 'store_scope_forbidden' }, 403);
 
   if (action === 'reissue') {
     if (device.status !== 'provisioned') return json({ error: 'device_already_enrolled' }, 409);

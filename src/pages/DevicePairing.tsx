@@ -4,8 +4,14 @@ import { QrCode, MonitorSmartphone, HelpCircle, Loader2, CheckCircle2, AlertCirc
 import { PairingButton } from '../components/ui/PairingButton';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { saveDevicePairingScope, hasDevicePairingScope } from '../utils/devicePairingStorage';
+import { isTillHost } from '../lib/host';
 import { useDesignSystem2VisualStyleSafe } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
+
+// Tills are Electron-only (multi-tenant-plan A5): a browser must not redeem a pairing
+// code and become a phantom "till" (no hardware, and it would burn the one-time code).
+// Dev builds stay exempt so the browser POS flows remain testable locally.
+const canPairHere = isTillHost || import.meta.env.DEV;
 
 type PairStatus = 'idle' | 'pairing' | 'success' | 'error';
 
@@ -75,6 +81,23 @@ const DevicePairing: React.FC = () => {
   };
 
   // 5. Render
+  if (!canPairHere) {
+    return (
+      <div className="ds2-visual-scope min-h-screen bg-gray-50 py-10" style={visualStyle}>
+        <div className="max-w-2xl mx-auto px-6 pt-16">
+          <div className="bg-white rounded-3xl shadow-2xl p-10 text-center">
+            <MonitorSmartphone className="w-14 h-14 mx-auto mb-5 text-gray-400" />
+            <h1 className="text-4xl font-bold text-gray-900 mb-3">Pairing happens on the till</h1>
+            <p className="text-gray-600 text-lg">
+              Pairing codes are entered on the till itself (the installed POS app), not in a
+              browser. Open the POS app on the new till and type the code there.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const pairing = status === 'pairing';
   return (
     <div className="ds2-visual-scope min-h-screen bg-gray-50 py-10" style={visualStyle}>

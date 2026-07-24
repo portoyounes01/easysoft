@@ -36,6 +36,7 @@ import Inventory from './pages/Inventory';
 import StockProfitReport from './pages/StockProfitReport';
 import Devices from './pages/Devices';
 import Assistant from './pages/Assistant';
+import PlatformConsole from './pages/PlatformConsole';
 
 const Router = ['app:', 'file:'].includes(window.location.protocol) ? HashRouter : BrowserRouter;
 
@@ -75,7 +76,9 @@ const PermissionRoute: React.FC<{
   const { hasPermission, employee, principal } = useSupabaseAuth();
   const { t } = useTranslation();
   // A denied browser/PWA human must not be bounced to /pos (till-only) — send to PWA_LANDING.
-  const denyRedirect = isPwaHost ? PWA_LANDING : fallbackPath;
+  // A platform (sysadmin) principal fails EVERY tenant permission, so its deny target must
+  // be /platform — PWA_LANDING is itself permission-gated and would redirect-loop.
+  const denyRedirect = principal?.source === 'platform' ? '/platform' : isPwaHost ? PWA_LANDING : fallbackPath;
   const displayName = employee?.name ?? principal?.displayName ?? '';
   const displayRole = employee?.role ?? principal?.role ?? '';
 
@@ -111,8 +114,19 @@ const PermissionRoute: React.FC<{
 
 // Post-login landing — HOST-aware. The till lands on /pos (the operator workspace); a
 // browser/PWA human lands on PWA_LANDING (/pos is till-only and would dead-end). Role is
-// no longer the discriminator: the host is.
-const getRoleBasedRedirect = (_role: string): string => (isPwaHost ? PWA_LANDING : '/pos');
+// no longer the discriminator: the host is — except the platform (sysadmin) principal,
+// whose only surface is the console.
+const getRoleBasedRedirect = (role: string): string =>
+  role === 'sysadmin' ? '/platform' : isPwaHost ? PWA_LANDING : '/pos';
+
+// Platform-console gate: the SOURCE is the credential (no tenant permission applies).
+const PlatformRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { principal } = useSupabaseAuth();
+  if (principal?.source !== 'platform') {
+    return <Navigate to={isPwaHost ? PWA_LANDING : '/pos'} replace />;
+  }
+  return <>{children}</>;
+};
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, principal } = useSupabaseAuth();
@@ -175,7 +189,17 @@ const AppContent: React.FC = () => {
                   {/* Dashboard removed (was mock/placeholder) — '/' routes to the host landing. */}
                   <Route
                     path="/"
-                    element={<Navigate to={isPwaHost ? PWA_LANDING : '/pos'} replace />}
+                    element={<Navigate to={getRoleBasedRedirect(principal?.role ?? '')} replace />}
+                  />
+                  {/* Platform (sysadmin) console — source-gated, PWA-host only in practice
+                      (a till session can never be a platform principal). */}
+                  <Route
+                    path="/platform"
+                    element={
+                      <PlatformRoute>
+                        <PlatformConsole />
+                      </PlatformRoute>
+                    }
                   />
                   <Route
                     path="/products"
@@ -385,7 +409,7 @@ const AppContent: React.FC = () => {
                   )}
                   {/* Catch-all: an unknown or till-only path (e.g. /pos on the PWA) lands the
                       user on the host's home instead of a blank screen. */}
-                  <Route path="*" element={<Navigate to={isPwaHost ? PWA_LANDING : '/pos'} replace />} />
+                  <Route path="*" element={<Navigate to={getRoleBasedRedirect(principal?.role ?? '')} replace />} />
                 </Routes>
               </Layout>
             </POSProvider>

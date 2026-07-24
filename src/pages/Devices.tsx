@@ -51,10 +51,15 @@ function latestPairingCode(device: ManagedDevice) {
 
 const Devices: React.FC = () => {
   // 1. Hooks
-  const { employee } = useSupabaseAuth();
+  const { employee, principal } = useSupabaseAuth();
   const { visualStyle, prefs } = useDesignSystem2Customization();
   const [pin, setPin] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
+  // PWA human path: an owner/admin MEMBERSHIP JWT is the authority server-side
+  // (manage-devices accepts it directly) — no employee row, no PIN re-auth step.
+  // The till path (device JWT + employee attribution) keeps the PIN unlock.
+  const isMembershipAdmin =
+    principal?.source === 'membership' && (principal.role === 'owner' || principal.role === 'admin');
   const [requestState, setRequestState] = useState<RequestState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DeviceListResponse>({ stores: [], devices: [] });
@@ -67,10 +72,11 @@ const Devices: React.FC = () => {
   const [busyDeviceId, setBusyDeviceId] = useState<string | null>(null);
   const [revokingDevice, setRevokingDevice] = useState<ManagedDevice | null>(null);
 
-  const credentials = useMemo<DeviceAdminCredentials>(() => ({
-    employeeNumber: employee?.employee_number ?? '',
-    secret: pin,
-  }), [employee?.employee_number, pin]);
+  const credentials = useMemo<DeviceAdminCredentials | undefined>(() => (
+    isMembershipAdmin
+      ? undefined
+      : { employeeNumber: employee?.employee_number ?? '', secret: pin }
+  ), [isMembershipAdmin, employee?.employee_number, pin]);
 
   useEffect(() => {
     let active = true;
@@ -83,6 +89,19 @@ const Devices: React.FC = () => {
       .catch(() => { if (active) setQrDataUrl(''); });
     return () => { active = false; };
   }, [pairing?.pairing_code]);
+
+  // PWA human: no PIN gate — load straight away (the membership JWT is the authority).
+  // Once-ref, not a state guard: StrictMode replays the effect before any setState
+  // lands, so a requestState check can't dedupe — and a ref stays safe even if
+  // someone later adds deps that would otherwise create a refetch-after-error loop.
+  const autoLoadStarted = React.useRef(false);
+  useEffect(() => {
+    if (isMembershipAdmin && !isUnlocked && !autoLoadStarted.current) {
+      autoLoadStarted.current = true;
+      void loadDevices(undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMembershipAdmin]);
 
   // 2. Event handlers
   const loadDevices = async (nextCredentials = credentials) => {
@@ -178,13 +197,41 @@ const Devices: React.FC = () => {
   );
 
   // 5. Render
-  if (employee?.role !== 'admin') {
+  if (!isMembershipAdmin && employee?.role !== 'admin') {
     return (
       <div className="ds2-visual-scope min-h-full bg-[#f7f7f7] p-8" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
         <div className="mx-auto max-w-2xl rounded-3xl border-2 border-red-200 bg-red-50 p-8 text-center">
           <ShieldCheck className="mx-auto mb-4 h-14 w-14 text-red-600" />
           <h1 className="text-3xl font-bold text-gray-900">Administrator access required</h1>
           <p className="mt-3 text-lg text-gray-600">Only an administrator can provision or revoke tills.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isUnlocked && isMembershipAdmin) {
+    // Auto-load in flight (or it failed) — show progress/error instead of a PIN form
+    // that a membership human cannot answer.
+    return (
+      <div className="ds2-visual-scope min-h-full bg-[#f7f7f7] p-8" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
+        <div className="mx-auto max-w-xl pt-16 text-center">
+          {requestState === 'error' ? (
+            <div className="rounded-3xl border-2 border-red-200 bg-red-50 p-8">
+              <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-600" />
+              <p className="text-lg font-medium text-red-700">{error ?? 'The till list could not be loaded.'}</p>
+              <button
+                type="button"
+                onClick={() => void loadDevices(undefined)}
+                className="mx-auto mt-6 flex min-h-touch-sm items-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 text-gray-900 hover:bg-gray-50"
+              >
+                <RefreshCw className="h-5 w-5" /> Try again
+              </button>
+            </div>
+          ) : (
+            <p className="flex items-center justify-center gap-3 text-xl text-gray-600">
+              <Loader2 className="h-6 w-6 animate-spin" /> Loading tills…
+            </p>
+          )}
         </div>
       </div>
     );
@@ -255,13 +302,15 @@ const Devices: React.FC = () => {
             >
               <RefreshCw className={`h-5 w-5 ${requestState === 'loading' ? 'animate-spin' : ''}`} /> Refresh
             </button>
-            <button
-              type="button"
-              onClick={handleLock}
-              className="flex min-h-touch-sm items-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 text-gray-900 hover:bg-gray-50"
-            >
-              <LockKeyhole className="h-5 w-5" /> Lock
-            </button>
+            {!isMembershipAdmin && (
+              <button
+                type="button"
+                onClick={handleLock}
+                className="flex min-h-touch-sm items-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 text-gray-900 hover:bg-gray-50"
+              >
+                <LockKeyhole className="h-5 w-5" /> Lock
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setShowCreate(true)}

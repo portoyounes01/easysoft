@@ -49,6 +49,7 @@ const errorMessages: Record<string, string> = {
   invalid_admin_credentials: 'The administrator PIN is incorrect.',
   admin_locked: 'This administrator account is locked for 15 minutes.',
   admin_required: 'Only administrators can manage tills.',
+  store_scope_forbidden: 'Your account is limited to specific stores — this till belongs to another store.',
   invalid_session: 'Your device session has expired. Pair this till again.',
   no_tenant_context: 'This session is not assigned to a business.',
   invalid_device_label: 'Enter a till name of up to 80 characters.',
@@ -62,13 +63,21 @@ const errorMessages: Record<string, string> = {
   device_list_failed: 'The till list could not be loaded.',
 };
 
+// credentials are the till path's admin-PIN re-auth. A PWA human (owner/admin
+// membership JWT) passes undefined — the JWT itself is the authority server-side.
 async function request<T>(
   body: Record<string, string>,
-  credentials: DeviceAdminCredentials,
+  credentials?: DeviceAdminCredentials,
 ): Promise<T> {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
-  if (!accessToken) throw new Error('This till has no active device session.');
+  // credentials doubles as the host discriminator: the till passes them, the PWA
+  // doesn't — and on a till the remedy is re-pairing, not "sign in again".
+  if (!accessToken) {
+    throw new Error(credentials
+      ? 'This till has no active device session.'
+      : 'No active session — sign in again.');
+  }
 
   const url = `${supabaseUrl}/functions/v1/manage-devices`;
   const anon = supabaseAnonKey;
@@ -81,8 +90,7 @@ async function request<T>(
     },
     body: JSON.stringify({
       ...body,
-      employee_number: credentials.employeeNumber,
-      secret: credentials.secret,
+      ...(credentials ? { employee_number: credentials.employeeNumber, secret: credentials.secret } : {}),
     }),
   });
   const result = await response.json().catch(() => ({})) as T & { error?: string };
@@ -93,11 +101,11 @@ async function request<T>(
 }
 
 export const deviceManagementService = {
-  list: (credentials: DeviceAdminCredentials) =>
+  list: (credentials?: DeviceAdminCredentials) =>
     request<DeviceListResponse>({ action: 'list' }, credentials),
 
   create: (
-    credentials: DeviceAdminCredentials,
+    credentials: DeviceAdminCredentials | undefined,
     input: { label: string; storeId: string },
   ) => request<PairingCodeResponse>({
     action: 'create',
@@ -105,9 +113,9 @@ export const deviceManagementService = {
     store_id: input.storeId,
   }, credentials),
 
-  reissue: (credentials: DeviceAdminCredentials, deviceId: string) =>
+  reissue: (credentials: DeviceAdminCredentials | undefined, deviceId: string) =>
     request<PairingCodeResponse>({ action: 'reissue', device_id: deviceId }, credentials),
 
-  revoke: (credentials: DeviceAdminCredentials, deviceId: string) =>
+  revoke: (credentials: DeviceAdminCredentials | undefined, deviceId: string) =>
     request<{ success: boolean }>({ action: 'revoke', device_id: deviceId }, credentials),
 };

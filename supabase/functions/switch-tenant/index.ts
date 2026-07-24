@@ -38,7 +38,15 @@ Deno.serve(async (req) => {
     .select('tenant_id, role, store_ids').eq('user_id', user.id).eq('tenant_id', tenantId).maybeSingle();
   if (!m) return json({ error: 'not_a_member' }, 403);
 
-  const app_metadata = { tenant_id: m.tenant_id, app_role: m.role, ...(m.store_ids ? { store_ids: m.store_ids } : {}) };
+  // GoTrue MERGES app_metadata: store_ids must be EXPLICITLY nulled when the target
+  // membership has none, or the previous tenant's store scope survives the switch
+  // (and empty arrays normalize to null — [] reads as scoped-to-zero-stores).
+  const app_metadata = {
+    tenant_id: m.tenant_id,
+    app_role: m.role,
+    store_ids: m.store_ids?.length ? m.store_ids : null,
+    store_id: null,
+  };
   const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata });
   if (error) return json({ error: 'claim_stamp_failed' }, 500);
 

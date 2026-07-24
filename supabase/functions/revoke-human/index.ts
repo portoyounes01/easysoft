@@ -79,15 +79,15 @@ Deno.serve(async (req) => {
     const { data: remaining } = await admin.from('tenant_members')
       .select('tenant_id, role, store_ids').eq('user_id', targetUser).limit(1);
     const next = remaining?.[0] as { tenant_id: string; role: string; store_ids: string[] | null } | undefined;
-    let newMeta: Record<string, unknown>;
-    if (next) {
-      newMeta = { ...targetMeta, tenant_id: next.tenant_id, app_role: next.role };
-      if (next.store_ids) newMeta.store_ids = next.store_ids; else delete newMeta.store_ids;
-    } else {
-      newMeta = { ...targetMeta };
-      delete newMeta.tenant_id; delete newMeta.app_role; delete newMeta.store_ids; delete newMeta.store_id;
-    }
-    const { error: upErr } = await admin.auth.admin.updateUserById(targetUser, { app_metadata: newMeta });
+    // GoTrue MERGES app_metadata key-by-key: absent keys SURVIVE, explicit nulls
+    // delete. The old spread-and-delete copy left tenant_id/app_role in the DB
+    // record — which every edge fn reads via getUser — so revocation never actually
+    // revoked edge-function authority. (Found by the 2026-07-24 platform-console
+    // adversarial review; this fn had the original pattern.)
+    const app_metadata = next
+      ? { tenant_id: next.tenant_id, app_role: next.role, store_ids: next.store_ids?.length ? next.store_ids : null, store_id: null }
+      : { tenant_id: null, app_role: null, store_ids: null, store_id: null };
+    const { error: upErr } = await admin.auth.admin.updateUserById(targetUser, { app_metadata });
     if (upErr) return json({ error: 'restamp_failed', detail: upErr.message }, 500);
   }
 

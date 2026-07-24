@@ -172,6 +172,34 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   };
 
+  // Platform (sysadmin) principal — PURE + SYNCHRONOUS like the membership deriver.
+  // Keyed on the platform_admin claim read from the ACCESS TOKEN (hook-controlled),
+  // NOT from session.user.app_metadata: when an admin is revoked, the access-token
+  // hook strips the claim from newly minted JWTs but GoTrue keeps the key in the user
+  // record — the token is the truthful source, so revocation demotes the client at
+  // the next refresh. The claim only renders the console shell; every platform ACTION
+  // is re-authorized server-side against the platform_admins table by the edge fn.
+  const derivePlatformPrincipal = (session: Session): Principal | null => {
+    let isPlatform = false;
+    try {
+      const payload = session.access_token.split('.')[1] ?? '';
+      const claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as { app_metadata?: Record<string, unknown> };
+      isPlatform = claims.app_metadata?.platform_admin === true;
+    } catch {
+      isPlatform = false;
+    }
+    if (!isPlatform) return null;
+    return {
+      source: 'platform',
+      userId: session.user.id,
+      displayName: session.user.email ?? 'platform admin',
+      role: 'sysadmin',
+      tenantId: null,
+      storeIds: [],
+      capabilities: new Set<string>(),
+    };
+  };
+
   const fetchEmployeeDataForId = async (session: Session, employeeId: string): Promise<Employee | null> => {
     try {
       const tenantId = session.user.app_metadata.tenant_id;
@@ -426,8 +454,27 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (!mounted) return;
 
       if (event === 'SIGNED_IN' && session) {
+        // Precedence is MEMBERSHIP FIRST at every derivation site (matches pwa-login's
+        // "a tenant member always gets the tenant path, never the console"; the hook
+        // additionally strips platform_admin from any member's JWT, so a dual-claim
+        // session should be unreachable — this ordering is the client-side backstop).
         const appRole = session.user.app_metadata?.app_role;
-        if (appRole === 'owner' || appRole === 'admin' || appRole === 'manager') {
+        const platformPrincipal = appRole === 'owner' || appRole === 'admin' || appRole === 'manager'
+          ? null
+          : derivePlatformPrincipal(session);
+        if (platformPrincipal) {
+          // Platform (sysadmin) operator: no tenant, no realtime feed, no push — just
+          // the console. Derived synchronously (no PostgREST, no deadlock).
+          setState({
+            user: session.user,
+            employee: null,
+            principal: platformPrincipal,
+            session,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+        } else if (appRole === 'owner' || appRole === 'admin' || appRole === 'manager') {
           // PWA human: derive the principal SYNCHRONOUSLY from app_metadata (no PostgREST,
           // so no deadlock, no employees read — a human has no employee row).
           const principal = deriveMembershipPrincipal(session);
@@ -490,12 +537,23 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         // keep ...prev — never null the till's principal / isAuthenticated mid-shift. For a
         // human switch-tenant refresh, the fresh app_metadata yields a new membership
         // principal (active tenant updates). Do NOT recompute isAuthenticated here.
-        setState(prev => ({
-          ...prev,
-          user: session.user,
-          session,
-          principal: deriveMembershipPrincipal(session) ?? prev.principal,
-        }));
+        setState(prev => {
+          const derived = deriveMembershipPrincipal(session) ?? derivePlatformPrincipal(session);
+          // The prev-principal fallback exists for the TILL (employee attribution under a
+          // device session — both derivers return null there). For browser humans, a
+          // refresh whose claims were hook-stripped (revoked member / revoked platform
+          // admin) must DEMOTE — keeping prev.principal would pin a dead identity with
+          // "session expired" errors on every action until a manual reload.
+          const keepTill = prev.principal?.source === 'employee';
+          const principal = derived ?? (keepTill ? prev.principal : null);
+          return {
+            ...prev,
+            user: session.user,
+            session,
+            principal,
+            isAuthenticated: keepTill ? prev.isAuthenticated : !!principal,
+          };
+        });
         syncRealtimeAuth(session);
         // Switch-tenant refreshes the token with new app_metadata — repoint push at the new tenant.
         const refreshedTenant = deriveMembershipPrincipal(session)?.tenantId;
@@ -527,7 +585,22 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (session) {
         const appRole = session.user.app_metadata?.app_role;
-        if (appRole === 'owner' || appRole === 'admin' || appRole === 'manager') {
+        // membership-first, same precedence as SIGNED_IN
+        const platformPrincipal = appRole === 'owner' || appRole === 'admin' || appRole === 'manager'
+          ? null
+          : derivePlatformPrincipal(session);
+        if (platformPrincipal) {
+          // Platform (sysadmin) reload — synchronous, no employees read, no tenant feed.
+          setState({
+            user: session.user,
+            employee: null,
+            principal: platformPrincipal,
+            session,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+        } else if (appRole === 'owner' || appRole === 'admin' || appRole === 'manager') {
           // Human reload: derive synchronously; skip the employees read (returns null anyway).
           const principal = deriveMembershipPrincipal(session);
           setState({

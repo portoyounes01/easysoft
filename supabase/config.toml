@@ -522,3 +522,13 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/import_map.json"
 entrypoint = "./functions/whatsapp-webhook/index.ts"
+
+[functions.platform-admin]
+enabled = true
+# Platform (sysadmin) console backend — cross-tenant tenants/stores/members/devices
+# control. Requires a valid session JWT at the gateway; the function then verifies
+# the caller against public.platform_admins (the SSOT) per request and acts with
+# the service role. No RLS carve-outs (multi-tenant-plan §6.5).
+verify_jwt = true
+import_map = "./functions/import_map.json"
+entrypoint = "./functions/platform-admin/index.ts"

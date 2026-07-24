@@ -47,7 +47,11 @@ Deno.serve(async (req) => {
   const role = String(body.role ?? 'manager');
   // Lowercased at the boundary: uuids are case-insensitive but Postgres returns
   // them lowercase, so mixed-case input would false-fail the existence check.
-  const storeIds = Array.isArray(body.store_ids) ? body.store_ids.map((s) => String(s).toLowerCase()) : null;
+  // Empty array normalized to null — a stamped [] reads as scoped-to-zero-stores
+  // in edge-fn scope gates (manage-devices), silently bricking the member.
+  const storeIds = Array.isArray(body.store_ids) && body.store_ids.length > 0
+    ? body.store_ids.map((s) => String(s).toLowerCase())
+    : null;
   const displayName = body.display_name ? String(body.display_name) : (username || email);
 
   if (!email || !password) return json({ error: 'email_password_required' }, 400);
@@ -94,6 +98,12 @@ Deno.serve(async (req) => {
   } else {
     userId = created!.user.id;
   }
+
+  // Platform admins can never be tenant members (v1 disjointness — see
+  // docs/platform-console-runbook.md). GENERIC error on purpose: a tenant owner
+  // must not learn which emails are platform operators.
+  const { data: paRow } = await admin.from('platform_admins').select('user_id').eq('user_id', userId).maybeSingle();
+  if (paRow) return json({ error: 'create_failed' }, 500);
 
   if (username) {
     const { error: pErr } = await admin.from('user_profiles').upsert(

@@ -29,6 +29,7 @@ import {
   MonitorSmartphone,
   Sparkles,
   Armchair,
+  ShieldCheck,
 } from "lucide-react";
 import { useSupabaseAuth } from "../../contexts/SupabaseAuthContext";
 import { dialogButtonClasses, useAppliedDialogStyle } from "../../theme/dialogStyle";
@@ -71,7 +72,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
   const applied = useAppliedDialogStyle();
   const shellButtons = applied ? dialogButtonClasses(applied) : null;
 
-  const menuItems = useMemo(
+  const menuItems = useMemo<Array<{
+    path: string;
+    icon: typeof ShoppingCart;
+    labelKey: string;
+    permission: string;
+    /** Source-gated console entry (principal.source === 'platform') — skips permission checks. */
+    platformOnly?: boolean;
+  }>>(
     () => [
       // { path: '/', icon: LayoutDashboard, labelKey: 'sidebar.menu.dashboard', permission: 'dashboard' },
       {
@@ -201,6 +209,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         labelKey: "sidebar.menu.appearances",
         permission: "settings",
       },
+      {
+        // Platform (sysadmin) console — source-gated, not permission-gated: a platform
+        // principal fails every tenant permission (by design), and tenant users must
+        // never see this entry. Filtered below on principal.source === 'platform'.
+        path: "/platform",
+        icon: ShieldCheck,
+        labelKey: "sidebar.menu.platform",
+        permission: "",
+        platformOnly: true,
+      },
     ],
     [],
   );
@@ -254,9 +272,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
         <nav className={`min-h-0 flex-1 overflow-y-auto py-5 ${isCollapsed ? "px-3" : "px-6"}`}>
           <ul className="space-y-4">
             {menuItems.map((item) => {
-              if (isPwaHost && TILL_ONLY_PATHS.has(item.path)) return null;
-              if (HUMAN_ONLY_PATHS.has(item.path) && principal?.source !== "membership") return null;
-              if (!hasPermission(item.permission)) return null;
+              if (item.platformOnly) {
+                if (principal?.source !== "platform") return null;
+              } else {
+                if (isPwaHost && TILL_ONLY_PATHS.has(item.path)) return null;
+                if (HUMAN_ONLY_PATHS.has(item.path) && principal?.source !== "membership") return null;
+                if (!hasPermission(item.permission)) return null;
+              }
 
               const Icon = item.icon;
               const label = t(item.labelKey, {
@@ -273,6 +295,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
                         ? "Stock & Profit"
                       : item.labelKey === "sidebar.menu.devices"
                         ? "Tills"
+                      : item.labelKey === "sidebar.menu.platform"
+                        ? "Platform Console"
                       : item.labelKey,
               });
               return (
