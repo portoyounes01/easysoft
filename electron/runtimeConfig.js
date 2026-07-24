@@ -108,10 +108,13 @@ function loadRuntimeConfig(options = {}) {
 
   if (raw.update_feed_url != null) {
     const feed = validateHttpUrl(raw.update_feed_url, 'update_feed_url', issues);
-    if (feed && feed.protocol !== 'https:') {
-      // The feed delivers EXECUTABLES to an unsigned install — https strictly,
-      // no LAN-http exception (that exception exists only for UI pilots).
-      issues.push(`update_feed_url must be https:// (executables travel over it): ${raw.update_feed_url}`);
+    const loopback = feed && ['localhost', '127.0.0.1', '[::1]'].includes(feed.hostname);
+    if (feed && feed.protocol !== 'https:' && !loopback) {
+      // The feed delivers EXECUTABLES to an unsigned install — https strictly.
+      // No LAN-http exception (that one exists only for UI pilots); loopback
+      // is allowed because it cannot be intercepted and is how the local
+      // two-version e2e test runs (runbook §G).
+      issues.push(`update_feed_url must be https:// (executables travel over it; http is allowed only on loopback): ${raw.update_feed_url}`);
       config.updateFeedUrl = null;
     } else {
       config.updateFeedUrl = feed ? feed.href : null;

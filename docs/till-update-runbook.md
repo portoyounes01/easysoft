@@ -76,4 +76,10 @@ Unchanged by the stages — §9 rules stand: staging soak, PITR restore point be
 3. Upload the NSIS `.exe` + `.blockmap` + `latest.yml` together to the static HTTPS host at the `update_feed_url` path. Any static host works (must serve exact filenames; ⚠️ Vercel's 100 MB static limit likely rules it out for the installer — a bucket/CDN is the expected host; **feed host choice still open**).
 4. Tills pick it up within 4h (or next boot) and install on their next restart.
 
-**Renderer surface:** `electronAPI.shell.getUpdateStatus()` / `onUpdateStatus(cb)` — status `disabled|checking|available|downloaded|up-to-date|error`. ⚠️ No UI nudge is wired yet (D-U5): "update downloaded — restart when convenient" surfacing in the POS UI is open work.
+**Renderer surface:** `electronAPI.shell.getUpdateStatus()` / `onUpdateStatus(cb)` — status `disabled|idle|checking|available|downloaded|up-to-date|error`. ⚠️ No UI nudge is wired yet (D-U5): "update downloaded — restart when convenient" surfacing in the POS UI is open work.
+
+**Local two-version e2e test (Windows box required — any Windows machine, not necessarily a till; macOS cannot run this: Squirrel.Mac refuses unsigned updates, and macOS uses a different updater/feed than the NSIS tills anyway):**
+1. Install the CI `Setup 0.1.0.exe` per-user on the Windows box.
+2. Bump `package.json` version to `0.1.1`, let CI build, download the new `Setup .exe` + `.blockmap` + `latest.yml`.
+3. Serve that folder over loopback: `npx http-server -p 8080` → `config.json`: `"update_feed_url": "http://127.0.0.1:8080/"` (loopback http is the one allowed http exception — it cannot be intercepted).
+4. Launch the 0.1.0 install: expect updater logs `checking → available 0.1.1 → downloaded`, and if still at the gate, an immediate silent install + relaunch as 0.1.1. Also verify the Alt+F4 path installs on quit.

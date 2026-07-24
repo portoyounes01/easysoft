@@ -96,6 +96,12 @@ describe('Electron runtime config (Stage 0)', () => {
     expect(lan.issues.join(' ')).toContain('update_feed_url must be https://');
     expect(lan.updateFeedUrl).toBeNull();
 
+    // Loopback http IS allowed — it cannot be intercepted; local e2e test path
+    write({ update_feed_url: 'http://127.0.0.1:8080/feed' });
+    const loop = loadRuntimeConfig({ userDataPath: tmp });
+    expect(loop.issues).toEqual([]);
+    expect(loop.updateFeedUrl).toBe('http://127.0.0.1:8080/feed');
+
     write({ update_feed_url: 'not a url' });
     const junk = loadRuntimeConfig({ userDataPath: tmp });
     expect(junk.issues.join(' ')).toContain('update_feed_url');
