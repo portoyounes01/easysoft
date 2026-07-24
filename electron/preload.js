@@ -27,6 +27,19 @@ try {
 // supabaseAnonKey (public by design), environment.
 contextBridge.exposeInMainWorld('__RUNTIME_CONFIG__', runtimeConfig);
 
+// Shell device store snapshot (§6.2 / D-U4): fetched synchronously so the
+// renderer can hydrate localStorage before any page script reads it. The
+// device — not the web origin — owns pairing + session identity.
+let deviceStoreSnapshot = null;
+let deviceStoreExists = false;
+try {
+  const result = ipcRenderer.sendSync('device-store:get-all-sync');
+  deviceStoreSnapshot = result?.data ?? null;
+  deviceStoreExists = Boolean(result?.exists);
+} catch (error) {
+  console.error('preload: device store snapshot unavailable:', error);
+}
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -37,6 +50,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     version: shellVersion,
     hardwareApiVersion,
     getInfo: () => ipcRenderer.invoke('shell:get-info'),
+    // Auto-update channel status (D-U5): 'disabled' | 'checking' | 'available'
+    // | 'downloaded' | 'up-to-date' | 'error'. Downloaded updates install on quit.
+    getUpdateStatus: () => ipcRenderer.invoke('shell:get-update-status'),
+    onUpdateStatus: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on('shell:update-status', handler);
+      return () => ipcRenderer.removeListener('shell:update-status', handler);
+    },
   },
 
   // Boot readiness gate bridge (gate page only; harmless elsewhere).
@@ -44,6 +65,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getState: () => ipcRenderer.invoke('gate:get-state'),
     proceed: () => ipcRenderer.invoke('gate:proceed'),
     restart: () => ipcRenderer.invoke('gate:restart'),
+  },
+
+  // Shell-owned device identity store — survives renderer_source origin flips.
+  // storeExists=false means the store was never written: the renderer's
+  // one-time adoption of legacy localStorage identity is gated on it.
+  deviceStore: {
+    snapshot: deviceStoreSnapshot,
+    storeExists: deviceStoreExists,
+    set: (key, value) => ipcRenderer.invoke('device-store:set', key, value),
+    remove: (key) => ipcRenderer.invoke('device-store:remove', key),
   },
 
   // Hardware control methods

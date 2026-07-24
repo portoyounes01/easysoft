@@ -323,6 +323,8 @@ interface ElectronAPI {
     version: string;
     hardwareApiVersion: number;
     getInfo(): Promise<{ shellVersion: string; hardwareApiVersion: number; platform: string }>;
+    getUpdateStatus(): Promise<ShellUpdateStatus>;
+    onUpdateStatus(callback: (status: ShellUpdateStatus) => void): () => void;
   };
 
   // Boot readiness gate bridge — consumed by the shell-local gate page
@@ -333,7 +335,22 @@ interface ElectronAPI {
     restart(): Promise<{ ok: boolean; error?: string }>;
   };
 
+  // Shell-owned device identity store (§6.2/D-U4) — carries pairing + session
+  // across renderer_source origin flips. Absent on shells older than this API.
+  deviceStore?: {
+    snapshot: Record<string, string> | null;
+    storeExists: boolean;
+    set(key: string, value: string): Promise<{ success: boolean; error?: string }>;
+    remove(key: string): Promise<{ success: boolean; error?: string }>;
+  };
+
   isDev: boolean;
+}
+
+interface ShellUpdateStatus {
+  status: 'disabled' | 'idle' | 'checking' | 'available' | 'downloaded' | 'up-to-date' | 'error';
+  detail: string;
+  at: string | null;
 }
 
 interface GatePreflightCheck {

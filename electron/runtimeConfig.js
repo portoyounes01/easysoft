@@ -24,6 +24,12 @@ function isPrivateHost(hostname) {
 
 // Returns the normalized origin string, or null (pushing a reason into issues).
 function validateOrigin(value, field, issues) {
+  const url = validateHttpUrl(value, field, issues);
+  return url ? url.origin : null;
+}
+
+// Full-URL variant (path allowed — update feeds live under a path).
+function validateHttpUrl(value, field, issues) {
   let url;
   try {
     url = new URL(String(value));
@@ -37,7 +43,7 @@ function validateOrigin(value, field, issues) {
     issues.push(`${field} must be https:// (http:// is allowed only for localhost/LAN hosts): ${value}`);
     return null;
   }
-  return url.origin;
+  return url;
 }
 
 function loadRuntimeConfig(options = {}) {
@@ -71,6 +77,7 @@ function loadRuntimeConfig(options = {}) {
     supabaseAnonKey: null,
     uiOrigin: null,
     rendererSource: 'bundled',
+    updateFeedUrl: null,
   };
 
   if (raw.environment != null) {
@@ -97,6 +104,18 @@ function loadRuntimeConfig(options = {}) {
 
   if (raw.ui_origin != null) {
     config.uiOrigin = validateOrigin(raw.ui_origin, 'ui_origin', issues);
+  }
+
+  if (raw.update_feed_url != null) {
+    const feed = validateHttpUrl(raw.update_feed_url, 'update_feed_url', issues);
+    if (feed && feed.protocol !== 'https:') {
+      // The feed delivers EXECUTABLES to an unsigned install — https strictly,
+      // no LAN-http exception (that exception exists only for UI pilots).
+      issues.push(`update_feed_url must be https:// (executables travel over it): ${raw.update_feed_url}`);
+      config.updateFeedUrl = null;
+    } else {
+      config.updateFeedUrl = feed ? feed.href : null;
+    }
   }
 
   if (raw.renderer_source != null) {

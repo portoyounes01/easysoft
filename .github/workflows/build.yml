@@ -59,9 +59,22 @@ jobs:
         # `npm run electron:dist:win` script was a no-op echo stub.
         run: npx electron-builder --win --x64 --publish=never
 
+      - name: Check update-feed manifest was produced
+        # latest.yml is the auto-update feed manifest (D-U5). The upload step's
+        # if-no-files-found only fires when ALL globs are empty, so assert it
+        # explicitly — a feed without latest.yml silently updates nobody.
+        shell: bash
+        run: test -f dist-electron/latest.yml || { echo "::error::dist-electron/latest.yml missing — electron-builder did not emit the update manifest"; exit 1; }
+
       - name: Upload artifacts (Windows)
+        # latest.yml + .blockmap are the electron-updater feed files: publish
+        # the whole set to the static HTTPS host configured as update_feed_url
+        # on the tills (docs/till-update-runbook.md §G).
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: dist-electron/*.exe
+          path: |
+            dist-electron/*.exe
+            dist-electron/*.blockmap
+            dist-electron/latest.yml
           if-no-files-found: error

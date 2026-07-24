@@ -1,3 +1,6 @@
+// FIRST import on purpose: hydrates localStorage from the shell's device store
+// before the Supabase client or any route guard reads identity (§6.2 / D-U4).
+import './lib/shellDeviceStore';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';

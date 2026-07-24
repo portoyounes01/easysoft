@@ -178,12 +178,21 @@ interface ElectronAPI {
     version: string;
     hardwareApiVersion: number;
     getInfo: () => Promise<{ shellVersion: string; hardwareApiVersion: number; platform: string }>;
+    getUpdateStatus: () => Promise<{ status: string; detail: string; at: string | null }>;
+    onUpdateStatus: (callback: (status: { status: string; detail: string; at: string | null }) => void) => () => void;
   };
   /** Boot readiness gate bridge (shell-local gate page only) */
   gate?: {
     getState: () => Promise<unknown>;
     proceed: () => Promise<{ ok: boolean; error?: string }>;
     restart: () => Promise<{ ok: boolean; error?: string }>;
+  };
+  /** Shell device store — carries pairing/session across origin flips; absent on old shells */
+  deviceStore?: {
+    snapshot: Record<string, string> | null;
+    storeExists: boolean;
+    set: (key: string, value: string) => Promise<{ success: boolean; error?: string }>;
+    remove: (key: string) => Promise<{ success: boolean; error?: string }>;
   };
   isDev: boolean;
 }

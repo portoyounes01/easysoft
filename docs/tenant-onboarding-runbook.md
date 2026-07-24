@@ -53,5 +53,5 @@ Note: `store_ids` lives in BOTH `tenant_members` and the user's JWT `app_metadat
 | T-1 | **Plan names provisional** (`trial|basic|standard|premium` invented 2026-07-24 — no product tier names exist in the repo) | Before first paying tenant | Billing tier taxonomy churn after tenants exist |
 | T-2 | **No `admin-provision-tenant` pipeline** — tenant+store+owner+fiscal-tree creation is still manual SQL + edge calls (the plan's §7.5 `admin-provision-tenant` remains unbuilt) | Before tenant #2 (Phase 5) | Hand-provisioning errors: exactly the unlinked-owner state this runbook exists to prevent |
 | T-3 | **JWT re-stamp on SQL scope changes** is manual (§C note) | With T-2 (pipeline should own claims) | Member keeps stale store scope ≤ JWT expiry, or until re-login |
-| T-4 | **Migration `20260801000000` not yet applied** to staging/prod (created on branch `update-stages`) | Next `db push` (user-gated) | Plan column + linkage trigger simply don't exist yet |
+| T-4 | **Migration `20260801000000`** | ✅ APPLIED to prod (EasySoft) 2026-07-24, user-ordered `db push`; verified in remote migration ledger. Staging still unpushed (B3 — password unknown) | Staging drift until B3 resolves |
 | T-5 | **`provision-human` employee_id link** still absent (role-taxonomy gap, pre-existing) | P2 identity work | Human members not joinable to `employees` rows for attribution |

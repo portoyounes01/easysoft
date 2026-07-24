@@ -83,6 +83,31 @@ describe('Electron runtime config (Stage 0)', () => {
     expect(cfg.issues.join(' ')).toContain('renderer_source');
     expect(cfg.rendererSource).toBe('bundled');
   });
+
+  it('update_feed_url keeps its path and requires https strictly', () => {
+    write({ update_feed_url: 'https://cdn.example.com/pos-updates/' });
+    const cfg = loadRuntimeConfig({ userDataPath: tmp });
+    expect(cfg.issues).toEqual([]);
+    expect(cfg.updateFeedUrl).toBe('https://cdn.example.com/pos-updates/');
+
+    // Executables travel over the feed: no LAN-http exception (unlike ui_origin)
+    write({ update_feed_url: 'http://192.168.1.10/updates' });
+    const lan = loadRuntimeConfig({ userDataPath: tmp });
+    expect(lan.issues.join(' ')).toContain('update_feed_url must be https://');
+    expect(lan.updateFeedUrl).toBeNull();
+
+    write({ update_feed_url: 'not a url' });
+    const junk = loadRuntimeConfig({ userDataPath: tmp });
+    expect(junk.issues.join(' ')).toContain('update_feed_url');
+    expect(junk.updateFeedUrl).toBeNull();
+  });
+
+  it('ui_origin still accepts LAN http and normalizes to origin (validateOrigin refactor)', () => {
+    write({ ui_origin: 'http://192.168.1.20:4173/deep/path' });
+    const cfg = loadRuntimeConfig({ userDataPath: tmp });
+    expect(cfg.issues).toEqual([]);
+    expect(cfg.uiOrigin).toBe('http://192.168.1.20:4173');
+  });
 });
 
 describe('Shell contract version compare (Stage 3)', () => {

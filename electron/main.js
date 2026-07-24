@@ -20,6 +20,8 @@ const isDev = rendererConfig.mode === 'development';
 const HardwareController = require('./hardware/hardwareController');
 const { registerFiscalSigningIpc } = require('./fiscalSigning');
 const { registerScaleIpc } = require('./scaleIpc');
+const { registerDeviceStoreIpc } = require('./deviceStore');
+const { initAutoUpdater, quitAndInstallIfPending } = require('./updater');
 
 let mainWindow;
 let hardwareController;
@@ -350,6 +352,15 @@ async function createWindow() {
 app.whenReady().then(async () => {
   registerProductionProtocol();
   await createWindow();
+
+  // Auto-update channel (D-U5): inert without update_feed_url in config.json;
+  // downloads in background, installs on quit — never interrupts selling.
+  initAutoUpdater({
+    feedUrl: runtimeConfig.updateFeedUrl,
+    isDev,
+    getWindow: () => mainWindow,
+    ipcMain,
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -703,12 +714,20 @@ ipcMain.handle('gate:restart', async (event) => {
   if (!event.sender.getURL().startsWith('app://gate')) {
     return { ok: false, error: 'not-at-gate' };
   }
+  // A pending downloaded update must go through the updater's own exit path:
+  // app.exit() would fire 'quit' → autoInstallOnAppQuit spawns the installer
+  // WHILE app.relaunch() starts the old version — two instances racing.
+  if (quitAndInstallIfPending()) {
+    return { ok: true };
+  }
   app.relaunch();
   app.exit(0);
   return { ok: true };
 });
 
 registerFiscalSigningIpc(ipcMain, app);
+
+registerDeviceStoreIpc(ipcMain, app);
 
 scaleController = registerScaleIpc(ipcMain, app);
 

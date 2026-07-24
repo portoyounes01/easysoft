@@ -37,6 +37,7 @@
     "@supabase/supabase-js": "^2.50.4",
     "dexie": "^4.0.11",
     "dotenv": "^17.2.2",
+    "electron-updater": "^6.8.9",
     "escpos": "^3.0.0-alpha.6",
     "escpos-usb": "^3.0.0-alpha.4",
     "html2canvas": "^1.4.1",
@@ -90,6 +91,12 @@
     "directories": {
       "output": "dist-electron"
     },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://updates.placeholder.invalid/pos"
+      }
+    ],
     "files": [
       "dist/**/*",
       "electron/**/*",
@@ -163,7 +170,8 @@
       "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "perMachine": false
     }
   }
 }

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '../types/supabase';
+import { mirrorToShell } from './shellDeviceStore';
 
 // Stage-0 runtime config (update-policy §10 / multi-tenant-plan §9.2): on a
 // till, the Electron shell reads userData/config.json and exposes the renderer
@@ -20,12 +21,29 @@ if (!supabaseUrl || !supabaseAnonKey) {
     console.warn('Supabase environment variables not configured. Running in offline-only mode.');
 }
 
+// Auth storage: localStorage as always, but session writes mirror into the
+// shell's device store on tills (no-op in browsers / old shells) so the
+// session follows the DEVICE across renderer_source origin flips (§6.2/D-U4).
+// shellDeviceStore hydrated localStorage from the shell before this module ran.
+const tillAuthStorage = {
+    getItem: (key: string) => localStorage.getItem(key),
+    setItem: (key: string, value: string) => {
+        localStorage.setItem(key, value);
+        mirrorToShell(key, value);
+    },
+    removeItem: (key: string) => {
+        localStorage.removeItem(key);
+        mirrorToShell(key, null);
+    },
+};
+
 // Create Supabase client with TypeScript support
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false, // We're not using OAuth flows in POS
+        ...(typeof window !== 'undefined' ? { storage: tillAuthStorage } : {}),
     },
     global: {
         headers: {
