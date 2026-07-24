@@ -34,6 +34,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache electron + electron-builder binaries
+        # The 2026-07-24 run died on a GitHub CDN 504 fetching nsis-resources —
+        # cache the downloaded tool binaries so later runs don't re-fetch them.
+        uses: actions/cache@v4
+        with:
+          path: |
+            electron-cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-builder-bins-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-builder-bins-${{ runner.os }}-
+
       - name: Check Supabase build config
         # Fail loudly instead of shipping an exe with no backend config: src/lib/supabase.ts
         # throws at startup (blank page) when these are absent from the Vite build.
@@ -55,9 +66,16 @@ jobs:
         run: npm run build
 
       - name: Build Electron app (Windows)
-        # x64 only — the ia32 leg forced a 32-bit native-module compile; the old
-        # `npm run electron:dist:win` script was a no-op echo stub.
-        run: npx electron-builder --win --x64 --publish=never
+        # x64 only — the ia32 leg forced a 32-bit native-module compile (the
+        # CLI --x64 does NOT override package.json's arch list, so that list is
+        # x64-only too). Retry once: the tool-binary downloads (nsis-resources
+        # etc.) come from a GitHub CDN that intermittently 504s.
+        shell: bash
+        run: |
+          npx electron-builder --win --x64 --publish=never || {
+            echo "electron-builder failed — retrying once (transient tool-download errors)"
+            npx electron-builder --win --x64 --publish=never
+          }
 
       - name: Check update-feed manifest was produced
         # latest.yml is the auto-update feed manifest (D-U5). The upload step's
