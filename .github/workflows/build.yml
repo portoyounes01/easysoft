@@ -111,16 +111,20 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          # Optional: full S3 endpoint override. REQUIRED for jurisdiction-pinned buckets
+          # (e.g. EU: https://<account-id>.eu.r2.cloudflarestorage.com) — those are NOT
+          # reachable on the default per-account endpoint.
+          R2_S3_ENDPOINT: ${{ secrets.R2_S3_ENDPOINT }}
           AWS_DEFAULT_REGION: auto
           # R2 rejects the newer AWS-CLI default integrity checksums — documented workaround:
           AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
           AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
         run: |
-          if [ -z "$R2_BUCKET" ] || [ -z "$R2_ACCOUNT_ID" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-            echo "::warning::R2 secrets not configured (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET) — update feed NOT published; tills will not see this version."
+          if [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || { [ -z "$R2_ACCOUNT_ID" ] && [ -z "$R2_S3_ENDPOINT" ]; }; then
+            echo "::warning::R2 secrets not configured (need R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET + R2_ACCOUNT_ID or R2_S3_ENDPOINT) — update feed NOT published; tills will not see this version."
             exit 0
           fi
-          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          ENDPOINT="${R2_S3_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
           shopt -s nullglob
           for f in dist-electron/*.exe dist-electron/*.blockmap; do
             echo "uploading: $(basename "$f")"

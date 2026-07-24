@@ -79,7 +79,7 @@ Unchanged by the stages — §9 rules stand: staging soak, PITR restore point be
 1. Cloudflare dashboard → R2 → create a bucket (e.g. `pos-updates`).
 2. Enable public read for the bucket: either the managed `r2.dev` public URL or (better) a custom domain — the resulting HTTPS origin is the till-facing feed host. Only public READ; never public write.
 3. Create an R2 API token scoped to that bucket, **Object Read & Write**.
-4. GitHub repo → Settings → Secrets and variables → Actions, add: `R2_ACCOUNT_ID` (Cloudflare account id), `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY` (from the token), `R2_BUCKET` (bucket name).
+4. GitHub repo → Settings → Secrets and variables → Actions, add: `R2_ACCOUNT_ID` (Cloudflare account id — the 32-hex value, WITHOUT any `.eu`), `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY` (from the token), `R2_BUCKET` (bucket name), and — for a jurisdiction-pinned bucket (endpoint contains `.eu.`) — `R2_S3_ENDPOINT` set to the full endpoint (e.g. `https://<account-id>.eu.r2.cloudflarestorage.com`); such buckets are NOT reachable on the default endpoint.
 5. Till `config.json`: `"update_feed_url": "https://<public-r2-domain>/pos/"` (the `/pos/` prefix must match the CI upload path).
 6. Old versions accumulate in the bucket — deliberate (manual rollback = re-upload an older `latest.yml`); prune occasionally if size ever matters.
 
