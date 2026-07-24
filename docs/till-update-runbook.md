@@ -81,6 +81,7 @@ Unchanged by the stages — §9 rules stand: staging soak, PITR restore point be
 3. Create an R2 API token scoped to that bucket, **Object Read & Write**.
 4. GitHub repo → Settings → Secrets and variables → Actions, add: `R2_ACCOUNT_ID` (Cloudflare account id — the 32-hex value, WITHOUT any `.eu`), `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY` (from the token), `R2_BUCKET` (bucket name), and — for a jurisdiction-pinned bucket (endpoint contains `.eu.`) — `R2_S3_ENDPOINT` set to the full endpoint (e.g. `https://<account-id>.eu.r2.cloudflarestorage.com`); such buckets are NOT reachable on the default endpoint.
 5. Till `config.json`: `"update_feed_url": "https://<public-r2-domain>/pos/"` (the `/pos/` prefix must match the CI upload path).
+   **Live values (2026-07-24):** bucket `pos-updates` (EU jurisdiction), public feed host `https://pub-a07e0f67d1dd4aa2b9ef49ce82014a2a.r2.dev` → tills use `"update_feed_url": "https://pub-a07e0f67d1dd4aa2b9ef49ce82014a2a.r2.dev/pos/"`. ⚠️ r2.dev is Cloudflare-rate-limited — fine at current fleet size; move the bucket behind a custom domain before fleet scale-out (config flip on the tills, no reinstall).
 6. Old versions accumulate in the bucket — deliberate (manual rollback = re-upload an older `latest.yml`); prune occasionally if size ever matters.
 
 **Renderer surface:** `electronAPI.shell.getUpdateStatus()` / `onUpdateStatus(cb)` — status `disabled|idle|checking|available|downloaded|up-to-date|error`. ⚠️ No UI nudge is wired yet (D-U5): "update downloaded — restart when convenient" surfacing in the POS UI is open work.
