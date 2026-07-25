@@ -24,20 +24,36 @@ const AutoPrinterSetup = require('../../auto-printer-setup.js');
 const execAsync = promisify(exec);
 
 class HardwareController {
-  constructor() {
+  constructor(options = {}) {
     this.printer = null;
     this.device = null;
     this.isInitialized = false;
     this.printerName = 'HPRT_TP80K';
     this.printerVendorId = 0x2aaf;
     this.printerProductId = 0x6004;
-    
+
     // Network printer info
     this.networkPrinter = null;
     this.discoveryMode = 'auto'; // 'auto', 'usb', 'network'
-    
+
     // Multiple printer management
     this.configuredPrinters = new Map(); // Map of printer name -> printer config
+
+    // App-wide printer-config SSOT: which transport carries receipts (and the
+    // drawer kick, which rides the receipt printer). Set when the operator
+    // picks a queue ("Use This" → setPrinterRole) or a direct-USB connect
+    // succeeds; persisted to userData so a rebooted till remembers its printer.
+    // Dispatch (printReceipt/openCashDrawer) and initialize() key on THIS —
+    // never on bare object truthiness of a possibly-unopened USB handle.
+    this.printerTransport = null; // 'windows-queue' | 'cups-queue' | 'direct-usb' | null (network rides discoveryMode)
+    this.getUserDataDir = options.getUserDataDir || null;
+    // In-flight guard: every caller of quickListPrinters shares one scan
+    // instead of stacking a powershell.exe per remount/refresh click.
+    this.quickListInFlight = null;
+    // TTL for the configured-queue existence check: cashDrawerAuditService runs
+    // initialize() before EVERY drawer command — one Get-Printer per 30s, not
+    // one per cash sale.
+    this.lastQueueCheckOkAt = null;
     
     // Cached printer list for instant display
     this.cachedPrinterList = [];
@@ -77,6 +93,12 @@ class HardwareController {
         normal: [0x1b, 0x21, 0x00]
       }
     };
+
+    // MUST be the constructor's last statement: it assigns activePrinter/
+    // printerName/printerTransport, and any field default below it would
+    // silently clobber the restored values (three review agents independently
+    // caught exactly that when this call sat mid-constructor).
+    this.restorePersistedPrinterConfig();
   }
 
   /**
@@ -208,11 +230,19 @@ class HardwareController {
     try {
       // First get the quick list
       const quickPrinters = await this.quickListPrinters();
-      
+
       if (!checkConnectivity) {
         return quickPrinters;
       }
-      
+
+      // Windows: the quick list ALREADY carries honest per-queue status
+      // (Get-Printer WorkOffline → connected/isStale). The universal probes
+      // below are CUPS/macOS-shaped (usb:// URIs, system_profiler) and would
+      // overwrite that honesty with connected:false for every queue.
+      if (process.platform === 'win32') {
+        return quickPrinters;
+      }
+
       // Then check connectivity for each printer
       const printersWithStatus = await Promise.all(
         quickPrinters.map(async (printer) => {
@@ -255,6 +285,73 @@ class HardwareController {
   updatePrinterCache(printers) {
     this.cachedPrinterList = printers.map(p => ({ ...p })); // Deep copy
     this.lastCacheUpdate = new Date();
+  }
+
+  // ---- Printer-config persistence (userData/printer-config.json, same pattern
+  // as the scale's scale-config.json). Only the receipt role is persisted: the
+  // drawer and status paths all hang off the receipt printer.
+  printerConfigPath() {
+    return this.getUserDataDir ? path.join(this.getUserDataDir(), 'printer-config.json') : null;
+  }
+
+  restorePersistedPrinterConfig() {
+    try {
+      const configPath = this.printerConfigPath();
+      if (!configPath || !fs.existsSync(configPath)) return;
+      const saved = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const receipt = saved?.roles?.receipt;
+      if (!receipt?.name) return;
+      this.configuredPrinters.set(receipt.name, {
+        ...(this.configuredPrinters.get(receipt.name) || {}),
+        role: 'receipt',
+        lastUpdated: saved.savedAt || null,
+      });
+      this.activePrinter = receipt.name;
+      this.printerName = receipt.name;
+      if (receipt.transport) this.printerTransport = receipt.transport;
+      // isInitialized stays false here on purpose: initialize() validates the
+      // queue still exists (fail-closed) before printing is declared ready.
+      console.log(`💾 Restored receipt printer from config: ${receipt.name} (${receipt.transport || 'unknown transport'})`);
+    } catch (error) {
+      console.error('Failed to restore printer config:', error.message);
+    }
+  }
+
+  persistPrinterConfig() {
+    try {
+      const configPath = this.printerConfigPath();
+      if (!configPath) return;
+      const roles = {};
+      if (this.activePrinter) {
+        roles.receipt = { name: this.activePrinter, transport: this.printerTransport };
+      }
+      // Atomic write: tills lose power routinely; a half-written JSON must not
+      // eat the configuration (restore treats parse failure as unconfigured).
+      const tempPath = `${configPath}.tmp`;
+      fs.writeFileSync(tempPath, JSON.stringify({ roles, savedAt: new Date().toISOString() }, null, 2));
+      fs.renameSync(tempPath, configPath);
+    } catch (error) {
+      console.error('Failed to persist printer config:', error.message);
+    }
+  }
+
+  // Snapshot served over hardware:get-printer-config and pushed on
+  // hardware:printer-config-changed — the renderer's app-wide printer SSOT.
+  getPrinterConfigSnapshot() {
+    let mode = null;
+    if (this.discoveryMode === 'network' && this.networkPrinter) mode = 'network';
+    else if (this.printerTransport) mode = this.printerTransport;
+    else if (this.isInitialized) mode = process.platform === 'win32' ? 'windows-queue' : 'cups-queue';
+    return {
+      // Network mode: the discovered device's name, not the ctor default that
+      // this.printerName may still carry.
+      receiptPrinter: (mode === 'network' ? this.networkPrinter?.name : null)
+        || this.activePrinter
+        || (this.isInitialized ? this.printerName : null),
+      mode,
+      initialized: this.isInitialized,
+      platform: process.platform,
+    };
   }
 
   // Windows print-queue list, shared by listPrinters and quickListPrinters.
@@ -300,6 +397,16 @@ class HardwareController {
 
   // Quick list without connectivity checks - for instant UI display
   async quickListPrinters() {
+    // Shared in-flight scan: page mounts, Refresh clicks, and main.js's
+    // cache-warm fire-and-forget all coalesce onto one child-process sweep
+    // instead of stacking a fresh powershell/lpstat per trigger.
+    if (this.quickListInFlight) return this.quickListInFlight;
+    this.quickListInFlight = this.quickListPrintersUncoalesced()
+      .finally(() => { this.quickListInFlight = null; });
+    return this.quickListInFlight;
+  }
+
+  async quickListPrintersUncoalesced() {
     try {
       let stdout = '';
       try {
@@ -474,7 +581,47 @@ class HardwareController {
   async initialize() {
     try {
       console.log('🔧 Initializing hardware controller...');
-      
+
+      // A configured receipt QUEUE is the source of truth: validate it exists
+      // and go. Re-running discovery here would (a) clobber the operator's
+      // explicit "Use This" selection, (b) kick off a full network scan on
+      // every drawer open (cashDrawerAuditService calls initialize() before
+      // each drawer command), and (c) leave a half-open direct-USB handle that
+      // crashed drawer kicks with "reading 'transfer'".
+      if (this.printerTransport === 'windows-queue' || this.printerTransport === 'cups-queue') {
+        const cacheFresh = this.lastQueueCheckOkAt && (Date.now() - this.lastQueueCheckOkAt < 30000);
+        const queueCheck = cacheFresh ? { success: true } : await this.checkSystemPrinter();
+        if (queueCheck.success) {
+          // Stamp only on a REAL check — a sliding window would let sustained
+          // sales keep an actually-deleted queue "fresh" forever.
+          if (!cacheFresh) this.lastQueueCheckOkAt = Date.now();
+          // Drop any stale auto-discovery network claim: dispatch checks the
+          // network branch FIRST, so leaving it set would silently reroute
+          // receipts away from the operator's configured queue.
+          if (this.networkPrinter && this.networkPrinter.name !== this.printerName) {
+            this.networkPrinter = null;
+            if (this.discoveryMode === 'network') this.discoveryMode = 'auto';
+          }
+          this.isInitialized = true;
+          return {
+            success: true,
+            mode: 'configured-queue',
+            message: `Using configured receipt printer: ${this.printerName}`,
+            printer: this.printerName,
+          };
+        }
+        // Fail CLOSED — never fall through to discovery here: auto-discovery
+        // could claim whatever LAN device answers port 9100 and fiscal receipts
+        // would silently reroute to it. If the queue is really gone the
+        // operator re-picks it in Settings; isInitialized is left untouched so
+        // a transient Get-Printer blip doesn't brick printing mid-shift.
+        console.log(`⚠️ Configured queue "${this.printerName}" not found — staying on it (fail-closed)`);
+        return {
+          success: false,
+          error: `Configured receipt printer "${this.printerName}" was not found (${queueCheck.error || 'queue check failed'}). Reselect it in Settings → Hardware → Printers if it was renamed or removed.`,
+        };
+      }
+
       // Try automatic discovery first
       if (this.discoveryMode === 'auto') {
         console.log('🚀 Starting automatic thermal printer discovery...');
@@ -689,24 +836,38 @@ class HardwareController {
         };
       }
 
-      this.device = new USB(targetDevice);
-      this.printer = new escpos.Printer(this.device);
+      // Assign to this.device/this.printer ONLY after open() succeeds:
+      // dispatch in printReceipt/openCashDrawer keys on their truthiness, and
+      // an unopened escpos-usb adapter has no endpoint — any write() crashes
+      // with "Cannot read properties of undefined (reading 'transfer')".
+      // (On Windows the driver-bound HPRT ALWAYS refuses open, so the old
+      // assign-first code poisoned the state on every initialize().)
+      const device = new USB(targetDevice);
+      const printer = new escpos.Printer(device);
 
-      // Test connection
-      await new Promise((resolve, reject) => {
-        this.device.open((error) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve();
-          }
+      try {
+        await new Promise((resolve, reject) => {
+          device.open((error) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve();
+            }
+          });
         });
-      });
+      } catch (openError) {
+        try { device.close(); } catch { /* releases the detach listener best-effort */ }
+        throw openError;
+      }
+
+      this.device = device;
+      this.printer = printer;
+      this.printerTransport = 'direct-usb';
 
       console.log('✅ USB printer connected successfully');
-      return { 
-        success: true, 
-        printer: 'HPRT_TP80K_USB' 
+      return {
+        success: true,
+        printer: 'HPRT_TP80K_USB'
       };
 
     } catch (error) {
@@ -773,11 +934,13 @@ class HardwareController {
       if (this.discoveryMode === 'network' && this.networkPrinter) {
         // Network printer - use raw socket
         return await this.printViaNetwork(receiptData);
-      } else if (this.printer && this.device) {
-        // Direct USB printing
+      } else if (this.printerTransport === 'direct-usb' && this.printer && this.device) {
+        // Direct USB printing — only when direct USB is the CONFIGURED
+        // transport, never on bare handle truthiness (a configured queue
+        // must win even if a USB handle exists).
         return await this.printViaUSB(receiptData);
       } else {
-        // System printer fallback
+        // System printer (queue) path
         return await this.printViaSystem(receiptData);
       }
 
@@ -1001,11 +1164,12 @@ class HardwareController {
       if (this.discoveryMode === 'network' && this.networkPrinter) {
         // Network printer - send raw commands
         return await this.openDrawerViaNetwork(commands);
-      } else if (this.printer && this.device) {
-        // Direct USB control
+      } else if (this.printerTransport === 'direct-usb' && this.printer && this.device) {
+        // Direct USB control — same transport-first rule as printReceipt.
         return await this.openDrawerViaUSB(commands);
       } else {
-        // System printer fallback
+        // System printer (queue) path — on win32 this is the same winspool
+        // transport the receipts use.
         return await this.openDrawerViaSystem(commands);
       }
 
@@ -1097,6 +1261,16 @@ class HardwareController {
 
       if (this.discoveryMode === 'network' && this.networkPrinter) {
         result = await this.getDrawerStatusViaNetwork();
+      } else if (this.printerTransport === 'windows-queue' || this.printerTransport === 'cups-queue') {
+        // Spooler transport is write-only: the DLE EOT status byte needs a
+        // readable USB endpoint the print queue does not expose. Be honest
+        // instead of re-running USB init (which used to poison the dispatch
+        // state for the NEXT drawer open on driver-bound printers).
+        return {
+          success: false,
+          status: 'unknown',
+          error: `Drawer status readback is not available through the "${this.printerName}" print queue (write-only). Opening the drawer still works.`,
+        };
       } else {
         if (!this.device || !this.device.device) {
           const initialization = await this.initializeUSBPrinter();
@@ -1491,6 +1665,7 @@ class HardwareController {
       this.device = device;
       this.printer = new escpos.Printer(device);
       this.discoveryMode = 'usb';
+      this.printerTransport = 'direct-usb';
       this.isInitialized = true;
 
       const name = printerName || `USB_${m[1]}_${m[2]}`;
@@ -1520,7 +1695,20 @@ class HardwareController {
   async getConfiguredPrinters() {
     try {
       console.log('📋 Getting configured printers...');
-      
+
+      // Windows: derive from the honest queue list (Get-Printer + WorkOffline)
+      // — the CUPS lpstat path below throws on win32 and used to make this
+      // handler useless on exactly the platform where roles are assigned.
+      if (process.platform === 'win32') {
+        const queues = await this.winListPrinterQueues();
+        return {
+          success: true,
+          printers: queues,
+          count: queues.length,
+          connectedCount: queues.filter(p => p.connected).length
+        };
+      }
+
       // Get all configured printers from CUPS
       const { stdout } = await execAsync('lpstat -p');
       const printerLines = stdout.split('\n').filter(line => line.trim() && line.startsWith('printer '));
@@ -1746,14 +1934,28 @@ class HardwareController {
           this.printer = null;
           this.device = null;
         }
+        // "Use This" targets a system print queue on every platform — record
+        // the transport so dispatch and initialize() honor the selection.
+        this.printerTransport = process.platform === 'win32' ? 'windows-queue' : 'cups-queue';
+        // Drop a prior auto-discovery network claim (dispatch checks it first)
+        // unless the operator selected the network printer itself.
+        if (this.networkPrinter && this.networkPrinter.name !== printerName) {
+          this.networkPrinter = null;
+          if (this.discoveryMode === 'network') this.discoveryMode = 'auto';
+        }
+        // New selection → next initialize() re-validates the queue for real.
+        this.lastQueueCheckOkAt = null;
         // Windows: the queue IS the transport — selecting it makes printing
         // ready immediately (initialize()'s checkSystemPrinter branch confirms
         // it on the next boot).
         if (process.platform === 'win32') {
           this.isInitialized = true;
         }
+        // Survive app restarts: the till remembers its printer without anyone
+        // reopening the setup dialog.
+        this.persistPrinterConfig();
       }
-      
+
       return {
         success: true,
         message: `Printer ${printerName} assigned role: ${role}`
@@ -1789,11 +1991,18 @@ class HardwareController {
           if (config.role === 'receipt') {
             this.activePrinter = name;
             this.printerName = name;
+            // The promoted printer's own transport, not the removed one's.
+            this.printerTransport = config.connectionMethod === 'usb_direct'
+              ? 'direct-usb'
+              : (process.platform === 'win32' ? 'windows-queue' : 'cups-queue');
             break;
           }
         }
+        if (!this.activePrinter) this.printerTransport = null;
+        this.lastQueueCheckOkAt = null;
+        this.persistPrinterConfig();
       }
-      
+
       return {
         success: true,
         message: `Printer ${printerName} removed successfully`

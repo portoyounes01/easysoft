@@ -336,8 +336,8 @@ async function createWindow() {
     }
   });
 
-  // Initialize hardware controller
-  hardwareController = new HardwareController();
+  // Initialize hardware controller (userData access → persisted printer roles)
+  hardwareController = new HardwareController({ getUserDataDir: () => app.getPath('userData') });
   console.log('🛠️ hardwareController methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(hardwareController)));
 
   registerContentSecurityPolicy();
@@ -413,12 +413,36 @@ app.on('web-contents-created', (event, contents) => {
   });
 });
 
+// Push the app-wide printer-config snapshot to the renderer whenever it may
+// have changed (role assigned, printer removed, init resolved a transport) —
+// every usePrinterConfig subscriber updates without re-scanning.
+function broadcastPrinterConfig() {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed() && hardwareController) {
+      mainWindow.webContents.send('hardware:printer-config-changed', hardwareController.getPrinterConfigSnapshot());
+    }
+  } catch (error) {
+    console.error('Printer-config broadcast failed:', error.message);
+  }
+}
+
 // IPC Handlers for hardware control
 ipcMain.handle('hardware:init', async () => {
   try {
-    return await hardwareController.initialize();
+    const result = await hardwareController.initialize();
+    broadcastPrinterConfig();
+    return result;
   } catch (error) {
     console.error('Hardware initialization failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('hardware:get-printer-config', async () => {
+  try {
+    return { success: true, config: hardwareController.getPrinterConfigSnapshot() };
+  } catch (error) {
+    console.error('Get printer config failed:', error);
     return { success: false, error: error.message };
   }
 });
@@ -479,7 +503,9 @@ ipcMain.handle('hardware:discover-thermal-printers', async () => {
 
 ipcMain.handle('hardware:connect-network-printer', async (event, ip, port, printerName) => {
   try {
-    return await hardwareController.connectToNetworkPrinter(ip, port, printerName);
+    const result = await hardwareController.connectToNetworkPrinter(ip, port, printerName);
+    broadcastPrinterConfig();
+    return result;
   } catch (error) {
     console.error('Connect to network printer failed:', error);
     return { success: false, error: error.message };
@@ -497,7 +523,9 @@ ipcMain.handle('hardware:discover-usb-printers', async () => {
 
 ipcMain.handle('hardware:connect-usb-printer', async (event, uri, printerName) => {
   try {
-    return await hardwareController.connectToUSBPrinter(uri, printerName);
+    const result = await hardwareController.connectToUSBPrinter(uri, printerName);
+    broadcastPrinterConfig();
+    return result;
   } catch (error) {
     console.error('Connect to USB printer failed:', error);
     return { success: false, error: error.message };
@@ -568,7 +596,9 @@ ipcMain.handle('hardware:quick-list-printers-with-status', async (event, checkCo
 
 ipcMain.handle('hardware:set-printer-role', async (event, printerName, role) => {
   try {
-    return await hardwareController.setPrinterRole(printerName, role);
+    const result = await hardwareController.setPrinterRole(printerName, role);
+    broadcastPrinterConfig();
+    return result;
   } catch (error) {
     console.error('Set printer role failed:', error);
     return { success: false, error: error.message };
@@ -577,7 +607,9 @@ ipcMain.handle('hardware:set-printer-role', async (event, printerName, role) => 
 
 ipcMain.handle('hardware:remove-printer', async (event, printerName) => {
   try {
-    return await hardwareController.removePrinter(printerName);
+    const result = await hardwareController.removePrinter(printerName);
+    broadcastPrinterConfig();
+    return result;
   } catch (error) {
     console.error('Remove printer failed:', error);
     return { success: false, error: error.message };

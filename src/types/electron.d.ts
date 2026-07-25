@@ -165,6 +165,14 @@ interface ElectronAPI {
       error?: string;
     }>;
 
+    getPrinterConfig(): Promise<{
+      success: boolean;
+      config?: PrinterConfigSnapshot;
+      error?: string;
+    }>;
+
+    onPrinterConfigChanged(callback: (config: PrinterConfigSnapshot) => void): () => void;
+
     setPrinterRole(printerName: string, role: string): Promise<{
       success: boolean;
       message?: string;
@@ -349,6 +357,15 @@ interface ElectronAPI {
   isDev: boolean;
 }
 
+// App-wide printer-config SSOT snapshot (owned by the main-process hardware
+// controller; renderer cards subscribe instead of keeping private connect state).
+interface PrinterConfigSnapshot {
+  receiptPrinter: string | null;
+  mode: 'windows-queue' | 'cups-queue' | 'direct-usb' | 'network' | null;
+  initialized: boolean;
+  platform: string;
+}
+
 interface ShellUpdateStatus {
   status: 'disabled' | 'idle' | 'checking' | 'available' | 'downloaded' | 'up-to-date' | 'error';
   detail: string;
@@ -403,4 +420,5 @@ export {
   ScalePortInfo,
   ScaleProbeResult,
   ShellUpdateStatus,
+  PrinterConfigSnapshot,
 };

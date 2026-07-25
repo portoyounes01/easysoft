@@ -89,6 +89,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     testPrinter: () => ipcRenderer.invoke('hardware:test-printer'),
     getHardwareStatus: () => ipcRenderer.invoke('hardware:get-hardware-status'),
     getConfiguredPrinters: () => ipcRenderer.invoke('hardware:get-configured-printers'),
+    // App-wide printer-config SSOT: one snapshot of "which printer holds the
+    // receipt role and over which transport", owned by the main-process
+    // controller. Cards subscribe instead of keeping private connect state.
+    getPrinterConfig: () => ipcRenderer.invoke('hardware:get-printer-config'),
+    onPrinterConfigChanged: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on('hardware:printer-config-changed', handler);
+      return () => ipcRenderer.removeListener('hardware:printer-config-changed', handler);
+    },
     setPrinterRole: (printerName, role) => ipcRenderer.invoke('hardware:set-printer-role', printerName, role),
     removePrinter: (printerName) => ipcRenderer.invoke('hardware:remove-printer', printerName),
   testPrinterByName: (printerName, testType) => ipcRenderer.invoke('hardware:test-printer-by-name', printerName, testType),

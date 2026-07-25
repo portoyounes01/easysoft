@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useWebSerialPrinter } from '../utils/webSerialPrinter';
 import electronHardwareService from '../services/electronHardwareService';
+import { usePrinterConfig } from '../hooks/usePrinterConfig';
 import { 
   Zap, 
   Printer, 
@@ -43,6 +44,9 @@ export interface ElectronTestingPanelProps {
 export const ElectronTestingPanel: React.FC<ElectronTestingPanelProps> = ({ embedded = false }) => {
   const { connectToAnyDevice, sendToPrinter, disconnectPrinter, isConnected, isSupported } = useWebSerialPrinter();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+  // App-wide printer config (SSOT in the main process): the printer selected in
+  // the setup dialog ("Use This") is automatically THE printer here too.
+  const printerConfig = usePrinterConfig();
   // State management
   const [isLoading, setIsLoading] = useState(false);
   const [hardwareMode, setHardwareMode] = useState<HardwareMode>({
@@ -264,6 +268,15 @@ Web Hardware Status:
         </h3>
       </div>
       <p className="text-blue-700 text-sm">{hardwareMode.status}</p>
+      {hardwareMode.type === 'electron' && printerConfig?.receiptPrinter && (
+        <p className="mt-1 text-sm font-medium text-blue-800">
+          Receipt printer: {printerConfig.receiptPrinter}
+          {printerConfig.mode === 'windows-queue' && ' (Windows print queue)'}
+          {printerConfig.mode === 'cups-queue' && ' (system queue)'}
+          {printerConfig.mode === 'direct-usb' && ' (direct USB)'}
+          {printerConfig.mode === 'network' && ' (network)'}
+        </p>
+      )}
       {hardwareMode.type === 'electron' && (
         <div className="mt-2 text-xs text-blue-600">
           • Direct hardware control via Node.js
