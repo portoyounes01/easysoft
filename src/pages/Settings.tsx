@@ -24,6 +24,7 @@ import {
     KeyRound,
     Languages,
     CalendarDays,
+    DownloadCloud,
     Monitor,
     PackageCheck,
     Plus,
@@ -58,6 +59,7 @@ import { generateUUID } from '../utils/uuid';
 import type { ReceiptLanguage } from '../utils/receiptLanguage';
 import { PrinterSettingsPanel, type HardwareSettingsTool } from './PrinterTestPage';
 import ScaleSettingsPanel from '../components/ScaleSettingsPanel';
+import UpdateSettingsPanel from '../components/UpdateSettingsPanel';
 import NotificationSettings from '../components/notifications/NotificationSettings';
 import { isPwaHost } from '../lib/host';
 import { SeedManagementPanel } from './SeedManagement';
@@ -404,8 +406,8 @@ const Settings: React.FC = () => {
     useEffect(() => {
         const hw = searchParams.get('hw');
         const allowed: HardwareSettingsTool[] = devToolsEnabled
-            ? ['printer', 'scale', 'seed', 'cashier', 'electron']
-            : ['printer', 'scale'];
+            ? ['printer', 'scale', 'updates', 'seed', 'cashier', 'electron']
+            : ['printer', 'scale', 'updates'];
         if (hw && (allowed as string[]).includes(hw)) {
             setActiveTab('hardware');
             setHardwareTool(hw as HardwareSettingsTool);
@@ -1421,10 +1423,11 @@ const Settings: React.FC = () => {
         const tools: Array<{ id: HardwareSettingsTool; label: string; description: string; icon: LucideIcon }> = [
             { id: 'printer', label: t('settings.hwPrintersLabel'), description: t('settings.hwPrintersDesc'), icon: Printer },
             { id: 'scale', label: t('settings.hwScaleLabel'), description: t('settings.hwScaleDesc'), icon: Weight },
+            { id: 'updates', label: t('settings.hwUpdatesLabel', { defaultValue: 'Updates' }), description: t('settings.hwUpdatesDesc', { defaultValue: 'Till software updates' }), icon: DownloadCloud },
             { id: 'seed', label: t('settings.hwSeedLabel'), description: t('settings.hwSeedDesc'), icon: Database },
             { id: 'cashier', label: t('settings.hwCashierLabel'), description: t('settings.hwCashierDesc'), icon: BadgeCheck },
             { id: 'electron', label: 'Electron', description: t('settings.hwElectronDesc'), icon: Monitor },
-        ].filter(tool => tool.id === 'printer' || tool.id === 'scale' || devToolsEnabled);
+        ].filter(tool => tool.id === 'printer' || tool.id === 'scale' || tool.id === 'updates' || devToolsEnabled);
         return (
             <div className="space-y-6">
                 <SettingCard
@@ -1460,6 +1463,7 @@ const Settings: React.FC = () => {
                 <div className={`${glassCard} p-3 sm:p-5`}>
                     {hardwareTool === 'printer' && <PrinterSettingsPanel embedded />}
                     {hardwareTool === 'scale' && <ScaleSettingsPanel embedded />}
+                    {hardwareTool === 'updates' && <UpdateSettingsPanel embedded />}
                     {devToolsEnabled && hardwareTool === 'seed' && <SeedManagementPanel embedded />}
                     {devToolsEnabled && hardwareTool === 'cashier' && <CashierTestingPanel embedded />}
                     {devToolsEnabled && hardwareTool === 'electron' && <ElectronTestingPanel embedded />}

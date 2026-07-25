@@ -58,6 +58,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('shell:update-status', handler);
       return () => ipcRenderer.removeListener('shell:update-status', handler);
     },
+    // Operator "restart to install" (Settings → Updates). Routes through the
+    // updater's own exit path so NSIS and the relaunch never race.
+    restartToInstall: () => ipcRenderer.invoke('shell:restart-to-install'),
   },
 
   // Boot readiness gate bridge (gate page only; harmless elsewhere).

@@ -20,7 +20,7 @@ interface HardwareStatusPayload {
     };
 }
 
-export type HardwareSettingsTool = 'printer' | 'scale' | 'seed' | 'cashier' | 'electron';
+export type HardwareSettingsTool = 'printer' | 'scale' | 'updates' | 'seed' | 'cashier' | 'electron';
 
 export interface PrinterSettingsPanelProps {
     /** When true, omit full-page chrome (used inside Settings). */

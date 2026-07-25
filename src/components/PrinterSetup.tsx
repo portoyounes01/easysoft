@@ -46,6 +46,8 @@ interface USBPrinter {
   uri: string;
   isThermal: boolean;
   recommended: boolean;
+  /** Windows only: 'winusb' = direct mode possible; 'windows-driver' = print via its Windows queue (System tab). */
+  driverState?: 'winusb' | 'windows-driver';
 }
 
 interface PrinterSetupProps {
@@ -459,6 +461,16 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                               {printer.isThermal ? 'Thermal Printer ✅' : 'Standard Printer'}
                             </p>
                             <p className="text-sm text-gray-600">Serial: {printer.serial}</p>
+                            {printer.driverState === 'windows-driver' && (
+                              <p className="text-xs font-medium text-amber-700">
+                                Managed by a Windows print driver — print through its queue: System tab → select it → Use This.
+                              </p>
+                            )}
+                            {printer.driverState === 'winusb' && (
+                              <p className="text-xs font-medium text-emerald-700">
+                                Direct USB mode available.
+                              </p>
+                            )}
                           </div>
                         </div>
                         <button
@@ -603,13 +615,29 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                         <div className="ml-4">
                           <button
                             type="button"
-                            onClick={() =>
+                            onClick={async () => {
+                              // Windows: actually wire the selection into the print
+                              // engine — the 'receipt' role makes this queue the
+                              // winspool raw-print target (previously the click only
+                              // updated local React state and nothing could print).
+                              // macOS keeps its long-standing behavior untouched: the
+                              // CUPS print target is managed by the USB-tab setup flow.
+                              const isWindows = window.electronAPI?.app?.platform === 'win32';
+                              if (isWindows) {
+                                const roleResult = await window.electronAPI?.hardware?.setPrinterRole?.(p.name, 'receipt');
+                                if (roleResult && roleResult.success === false) {
+                                  setCurrentStatus(`Could not select ${p.name}: ${roleResult.error ?? 'unknown error'}`);
+                                  return;
+                                }
+                              }
                               onPrinterConnected({
                                 success: true,
-                                message: `Selected system printer: ${p.name}`,
+                                message: isWindows
+                                  ? `Receipt printer set to: ${p.name}`
+                                  : `Selected system printer: ${p.name}`,
                                 printerName: p.name,
-                              })
-                            }
+                              });
+                            }}
                             className={DS2_PRIMARY_BTN}
                           >
                             Use This

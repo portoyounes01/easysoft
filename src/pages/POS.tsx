@@ -27,6 +27,7 @@ import DiscountDialog from '../components/DiscountDialog';
 import WeighDialog from '../components/WeighDialog';
 import ProductOptionsDialog from '../components/ProductOptionsDialog';
 import ScaleStatusIndicator from '../components/ScaleStatusIndicator';
+import UpdateStatusIndicator from '../components/UpdateStatusIndicator';
 import scaleService from '../services/scaleService';
 import { LocalProduct, LocalCustomer } from '../types/supabase';
 import { useTranslation } from 'react-i18next';
@@ -909,6 +910,7 @@ const POSInner: React.FC = () => {
                 </span>
               )}
               <ScaleStatusIndicator />
+              <UpdateStatusIndicator />
               <span>POS Terminal • {new Date().toLocaleDateString('pt-PT')}</span>
             </div>
           </div>

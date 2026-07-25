@@ -325,6 +325,8 @@ interface ElectronAPI {
     getInfo(): Promise<{ shellVersion: string; hardwareApiVersion: number; platform: string }>;
     getUpdateStatus(): Promise<ShellUpdateStatus>;
     onUpdateStatus(callback: (status: ShellUpdateStatus) => void): () => void;
+    /** Added 0.1.2 — feature-detect: older shells expose `shell` without it. */
+    restartToInstall?(): Promise<{ ok: boolean; installing?: boolean; error?: string }>;
   };
 
   // Boot readiness gate bridge — consumed by the shell-local gate page
@@ -400,4 +402,5 @@ export {
   ScaleConfig,
   ScalePortInfo,
   ScaleProbeResult,
+  ShellUpdateStatus,
 };

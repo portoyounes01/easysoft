@@ -731,12 +731,60 @@ ipcMain.handle('gate:restart', async (event) => {
   // A pending downloaded update must go through the updater's own exit path:
   // app.exit() would fire 'quit' → autoInstallOnAppQuit spawns the installer
   // WHILE app.relaunch() starts the old version — two instances racing.
-  if (quitAndInstallIfPending()) {
+  // ('install-failed' = pending but the installer refused to start — the gate
+  // restart still restarts plainly; the boot-time check re-downloads.)
+  if (quitAndInstallIfPending() === true) {
     return { ok: true };
   }
   app.relaunch();
   app.exit(0);
   return { ok: true };
+});
+
+// Trusted-UI check for module-level IPC: mirrors createWindow's navigation
+// allowlist. app:// is a non-special scheme (its URL .origin serializes to the
+// literal 'null'), so it must be matched by protocol+host.
+function isMainWindowUrlTrusted(targetUrl) {
+  let url;
+  try {
+    url = new URL(targetUrl);
+  } catch {
+    return false;
+  }
+  if (url.protocol === 'app:') {
+    return url.host === 'pos' || url.host === 'gate';
+  }
+  if (isDev && rendererConfig.url) {
+    try {
+      if (new URL(rendererConfig.url).origin === url.origin) return true;
+    } catch { /* ignore */ }
+  }
+  return runtimeConfig.uiOrigin != null && url.origin === runtimeConfig.uiOrigin;
+}
+
+// Operator-initiated "restart to install" from the POS UI (Settings → Updates).
+// Same updater-owned exit path as gate:restart (never app.exit() with a pending
+// download — NSIS and the relaunch would race). Trusted-origin gated: the POS UI
+// is the caller, whatever origin it legitimately runs on (app://pos, the network
+// ui_origin) — the gate origin keeps its own handler.
+ipcMain.handle('shell:restart-to-install', async (event) => {
+  const senderUrl = event.sender.getURL();
+  const fromGate = senderUrl.startsWith('app://gate');
+  if (!fromGate && !isMainWindowUrlTrusted(senderUrl)) {
+    return { ok: false, error: 'untrusted-origin' };
+  }
+  const pendingResult = quitAndInstallIfPending();
+  if (pendingResult === true) {
+    return { ok: true, installing: true };
+  }
+  if (pendingResult === 'install-failed') {
+    // The operator clicked "Restart and install now" — if the installer refused
+    // to start, surface it instead of pretending; the panel resets and shows it.
+    return { ok: false, error: 'install-failed' };
+  }
+  app.relaunch();
+  app.exit(0);
+  return { ok: true, installing: false };
 });
 
 registerFiscalSigningIpc(ipcMain, app);

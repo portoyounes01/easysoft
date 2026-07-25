@@ -85,19 +85,27 @@ function initAutoUpdater({ feedUrl, isDev, getWindow, ipcMain }) {
   return { enabled: true };
 }
 
-// True → a downloaded update is being installed (the app is exiting: NSIS runs
-// silently and relaunches the new version). False → nothing pending; caller
-// handles its own restart path.
+// Tri-state: true → a downloaded update is being installed (the app is exiting:
+// NSIS runs silently and relaunches the new version). false → nothing pending;
+// caller handles its own restart path. 'install-failed' → an update WAS pending
+// but the installer did not start (cached file gone, prior call latched, doInstall
+// error — electron-updater's quitAndInstall never throws on these; it leaves
+// quitAndInstallCalled false and returns). Callers must NOT plain-restart-install
+// on 'install-failed' as if the install had begun.
 function quitAndInstallIfPending() {
   if (!updaterRef || pendingVersion === null) return false;
   console.log('[updater] quitAndInstall for pending version', pendingVersion);
   try {
     updaterRef.quitAndInstall(true, true); // silent install, relaunch after
-    return true;
   } catch (error) {
     console.error('[updater] quitAndInstall failed:', error);
-    return false;
+    return 'install-failed';
   }
+  if (updaterRef.quitAndInstallCalled !== true) {
+    console.error('[updater] quitAndInstall did not start the installer (cached file missing or install refused)');
+    return 'install-failed';
+  }
+  return true;
 }
 
 let statusIpcRegistered = false;

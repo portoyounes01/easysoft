@@ -13,6 +13,7 @@ const { promisify } = require('util');
 const net = require('net');
 const dns = require('dns');
 const { parseCashDrawerStatus } = require('./cashDrawerStatus.js');
+const { sendRawToWindowsPrinter, encodePowerShell } = require('./windowsRawPrint.js');
 
 // Import our discovery classes
 const NetworkPrinterDiscovery = require('../../discover-network-printers.js');
@@ -256,6 +257,50 @@ class HardwareController {
     this.lastCacheUpdate = new Date();
   }
 
+  // Windows print-queue list, shared by listPrinters and quickListPrinters.
+  // WorkOffline is the honest presence signal: Windows flips it when a USB
+  // printer is unplugged, and ghost queues (printers installed years ago) sit
+  // permanently offline — the old branches hardcoded connected:true, painting
+  // every ghost green. StatusText via "$()" stringifies the enum so the value
+  // is version-stable text ("Normal", "Offline", ...). The [Console] line
+  // forces UTF-8 stdout: PowerShell 5.1 otherwise writes the OEM codepage and
+  // accented queue names (Impressora Térmica) arrive as U+FFFD mojibake that
+  // can never be targeted by OpenPrinter. -EncodedCommand sidesteps cmd.exe
+  // quoting entirely.
+  async winListPrinterQueues() {
+    const ps = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; '
+      + 'Get-Printer | Select-Object -Property Name, DriverName, PortName, WorkOffline, '
+      + '@{n=\'StatusText\';e={"$($_.PrinterStatus)"}} | ConvertTo-Json';
+    const { stdout: winOut } = await execAsync(
+      `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShell(ps)}`,
+      { timeout: 15000, windowsHide: true },
+    );
+    if (!winOut.trim()) return [];
+    const list = JSON.parse(winOut);
+    const arr = Array.isArray(list) ? list : [list];
+    return arr.map(p => {
+      const statusText = String(p.StatusText || 'unknown');
+      const offline = p.WorkOffline === true || /offline/i.test(statusText);
+      return {
+        name: p.Name,
+        status: offline ? 'not_accepting' : (/^normal$/i.test(statusText) ? 'ready' : 'unknown'),
+        device: p.PortName || p.DriverName || 'unknown',
+        type: (p.PortName || '').toLowerCase().includes('usb') ? 'usb' : ((p.PortName || '').match(/\d+\.\d+\.\d+\.\d+/) ? 'network' : 'system'),
+        role: this.configuredPrinters.get(p.Name)?.role || 'unassigned',
+        isActive: this.activePrinter === p.Name,
+        lastConnected: this.configuredPrinters.get(p.Name)?.lastConnected || null,
+        connected: !offline,
+        connectionStatus: offline ? 'offline' : statusText.toLowerCase(),
+        lastSeen: null,
+        hasQueuedJobs: false,
+        queueCount: 0,
+        // ghost/unplugged queues surface as stale instead of green "Connected"
+        isStale: offline,
+        source: 'system'
+      };
+    });
+  }
+
   // Quick list without connectivity checks - for instant UI display
   async quickListPrinters() {
     try {
@@ -265,26 +310,9 @@ class HardwareController {
       } catch (e) {
         // Non-CUPS environment (likely Windows). Fallback to PowerShell.
         if (process.platform === 'win32') {
-          const ps = 'Get-Printer | Select-Object -Property Name, DriverName, PortName | ConvertTo-Json';
-          const { stdout: winOut } = await execAsync(`powershell -NoProfile -Command "${ps}"`);
-          const list = JSON.parse(winOut);
-          const arr = Array.isArray(list) ? list : [list];
-          return arr.map(p => ({
-            name: p.Name,
-            status: 'unknown',
-            device: p.PortName || p.DriverName || 'unknown',
-            type: (p.PortName || '').toLowerCase().includes('usb') ? 'usb' : ((p.PortName || '').match(/\d+\.\d+\.\d+\.\d+/) ? 'network' : 'system'),
-            role: this.configuredPrinters.get(p.Name)?.role || 'unassigned',
-            isActive: this.activePrinter === p.Name,
-            lastConnected: this.configuredPrinters.get(p.Name)?.lastConnected || null,
-            connected: true, // Assume connected for quick list
-            connectionStatus: 'unknown',
-            lastSeen: null,
-            hasQueuedJobs: false,
-            queueCount: 0,
-            isStale: false,
-            source: 'system'
-          }));
+          const quickList = await this.winListPrinterQueues();
+          this.updatePrinterCache(quickList);
+          return quickList;
         }
         throw e;
       }
@@ -358,28 +386,10 @@ class HardwareController {
       try {
         ({ stdout } = await execAsync('lpstat -p'));
       } catch (e) {
-        // Non-CUPS environment (likely Windows). Fallback to PowerShell.
+        // Non-CUPS environment (likely Windows). Fallback to PowerShell —
+        // shared honest branch (WorkOffline-based; see winListPrinterQueues).
         if (process.platform === 'win32') {
-          const ps = 'Get-Printer | Select-Object -Property Name, DriverName, PortName | ConvertTo-Json';
-          const { stdout: winOut } = await execAsync(`powershell -NoProfile -Command "${ps}"`);
-          const list = JSON.parse(winOut);
-          const arr = Array.isArray(list) ? list : [list];
-          return arr.map(p => ({
-            name: p.Name,
-            status: 'unknown',
-            device: p.PortName || p.DriverName || 'unknown',
-            type: (p.PortName || '').toLowerCase().includes('usb') ? 'usb' : ((p.PortName || '').match(/\d+\.\d+\.\d+\.\d+/) ? 'network' : 'system'),
-            role: this.configuredPrinters.get(p.Name)?.role || 'unassigned',
-            isActive: this.activePrinter === p.Name,
-            lastConnected: this.configuredPrinters.get(p.Name)?.lastConnected || null,
-            connected: true,
-            connectionStatus: 'unknown',
-            lastSeen: null,
-            hasQueuedJobs: false,
-            queueCount: 0,
-            isStale: false,
-            source: 'system'
-          }));
+          return await this.winListPrinterQueues();
         }
         throw e;
       }
@@ -712,6 +722,24 @@ class HardwareController {
   }
 
   async checkSystemPrinter() {
+    // Windows: verify the configured queue exists via Get-Printer (lpstat is
+    // CUPS-only). This is load-bearing for printing on Windows: initialize()'s
+    // fallback chain reaches here, and its success is what sets isInitialized —
+    // without this branch printReceipt/openCashDrawer refused with 'Hardware
+    // not initialized' even though the winspool raw path was ready.
+    if (process.platform === 'win32') {
+      try {
+        const psName = String(this.printerName ?? '').replace(/'/g, "''");
+        await execAsync(
+          `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShell(`Get-Printer -Name '${psName}' | Out-Null`)}`,
+          { timeout: 15000, windowsHide: true },
+        );
+        console.log(`✅ Windows print queue found: ${this.printerName}`);
+        return { success: true, printer: this.printerName };
+      } catch {
+        return { success: false, error: `System printer "${this.printerName}" not found` };
+      }
+    }
     try {
       console.log(`🔍 Checking system printer: ${this.printerName}`);
       const { stdout } = await execAsync(`lpstat -p "${this.printerName}"`);
@@ -872,7 +900,16 @@ class HardwareController {
     try {
       // Generate ESC/POS commands for the receipt
       const commands = this.generateReceiptCommands(receiptData);
-      
+
+      // Windows: raw bytes go through winspool (the CUPS `lp -o raw` equivalent) —
+      // `lp` does not exist there, so before this branch the system fallback could
+      // never print on a Windows till.
+      if (process.platform === 'win32') {
+        await sendRawToWindowsPrinter(this.printerName, Buffer.from(commands));
+        console.log(`✅ Receipt printed via Windows spooler (${this.printerName})`);
+        return { success: true, method: 'system-windows' };
+      }
+
       // Write to temporary file
       const tempFile = path.join(__dirname, '..', 'temp_receipt.bin');
       fs.writeFileSync(tempFile, Buffer.from(commands));
@@ -885,8 +922,8 @@ class HardwareController {
       fs.unlinkSync(tempFile);
 
       console.log(`✅ Receipt printed via system printer. Job ID: ${stdout.trim()}`);
-      return { 
-        success: true, 
+      return {
+        success: true,
         method: 'system',
         jobId: stdout.trim()
       };
@@ -1023,6 +1060,14 @@ class HardwareController {
 
   async openDrawerViaSystem(commands) {
     try {
+      // Windows: same winspool raw path as receipts (drawer kick = ESC/POS pulse
+      // through the receipt printer).
+      if (process.platform === 'win32') {
+        await sendRawToWindowsPrinter(this.printerName, Buffer.from(commands));
+        console.log(`✅ Cash drawer opened via Windows spooler (${this.printerName})`);
+        return { success: true, method: 'system-windows' };
+      }
+
       // Write commands to temporary file
       const tempFile = path.join(__dirname, '..', 'temp_drawer.bin');
       fs.writeFileSync(tempFile, Buffer.from(commands));
@@ -1319,7 +1364,9 @@ class HardwareController {
         uri: printer.uri,
         isThermal: printer.isThermal,
         recommended: printer.recommended,
-        confidence: printer.isThermal ? 90 : 50
+        confidence: printer.isThermal ? 90 : 50,
+        // Windows only: 'winusb' (direct mode possible) | 'windows-driver' (use its queue)
+        ...(printer.driverState ? { driverState: printer.driverState } : {})
       }));
 
       console.log(`✅ Found ${formattedPrinters.length} USB printer(s)`);
@@ -1343,7 +1390,12 @@ class HardwareController {
   async connectToUSBPrinter(uri, printerName) {
     try {
       console.log(`🔌 Connecting to USB printer: ${printerName}`);
-      
+
+      // Windows scan results carry usbwin:// URIs — no CUPS on that platform.
+      if (typeof uri === 'string' && uri.startsWith('usbwin://')) {
+        return await this.connectToWindowsUSBPrinter(uri, printerName);
+      }
+
       // Use our existing USB detection script for setup
       const USBPrinterDetector = require('../../detect-usb-printers.js');
       const detector = new USBPrinterDetector();
@@ -1414,6 +1466,53 @@ class HardwareController {
       return {
         success: false,
         error: error.message
+      };
+    }
+  }
+
+  // Windows direct-USB connect: only possible when libusb can OPEN the device, i.e.
+  // it carries a WinUSB-class driver. A printer installed normally (usbprint.sys)
+  // refuses the open — that is not a dead end: its Windows print QUEUE is the
+  // supported transport (System tab + raw spooler), so the error says exactly that.
+  async connectToWindowsUSBPrinter(uri, printerName) {
+    try {
+      const m = uri.match(/vid=0x([0-9a-f]{1,4})&pid=0x([0-9a-f]{1,4})/i);
+      if (!m) return { success: false, error: 'Invalid Windows USB printer URI' };
+      const vid = parseInt(m[1], 16);
+      const pid = parseInt(m[2], 16);
+
+      const devices = USB.findPrinter() || [];
+      const target = devices.find(d =>
+        d.deviceDescriptor && d.deviceDescriptor.idVendor === vid && d.deviceDescriptor.idProduct === pid);
+      if (!target) return { success: false, error: 'That USB printer is no longer attached' };
+
+      const device = new USB(target);
+      await new Promise((resolve, reject) => device.open((err) => (err ? reject(err) : resolve())));
+
+      this.device = device;
+      this.printer = new escpos.Printer(device);
+      this.discoveryMode = 'usb';
+      this.isInitialized = true;
+
+      const name = printerName || `USB_${m[1]}_${m[2]}`;
+      this.configuredPrinters.set(name, {
+        type: 'usb',
+        uri,
+        role: 'unassigned',
+        lastConnected: new Date().toISOString(),
+        connectionMethod: 'usb_direct',
+      });
+      if (!this.activePrinter) this.activePrinter = name;
+
+      console.log(`✅ Direct USB (WinUSB) printer connected: ${name}`);
+      return { success: true, printerName: name, message: `Direct USB connection to ${name} established` };
+    } catch (error) {
+      console.error('Windows direct-USB connect failed:', error.message);
+      return {
+        success: false,
+        error: `Windows holds this printer through its print driver (${error.message}). `
+          + 'Use its Windows print queue instead: System tab → select the printer → Use This. '
+          + '(Direct mode would require replacing the driver with WinUSB via Zadig — not needed for normal printing.)',
       };
     }
   }
@@ -1641,6 +1740,19 @@ class HardwareController {
       if (role === 'receipt') {
         this.activePrinter = printerName;
         this.printerName = printerName;
+        // A held direct-USB device would otherwise keep winning in printReceipt/
+        // openCashDrawer and silently ignore this selection.
+        if (this.printer && this.device) {
+          try { this.device.close(); } catch { /* already released */ }
+          this.printer = null;
+          this.device = null;
+        }
+        // Windows: the queue IS the transport — selecting it makes printing
+        // ready immediately (initialize()'s checkSystemPrinter branch confirms
+        // it on the next boot).
+        if (process.platform === 'win32') {
+          this.isInitialized = true;
+        }
       }
       
       return {
@@ -1660,9 +1772,12 @@ class HardwareController {
   async removePrinter(printerName) {
     try {
       console.log(`🗑️ Removing printer: ${printerName}`);
-      
-      // Remove from CUPS
-      await execAsync(`lpadmin -x "${printerName}"`);
+
+      // Remove from CUPS (macOS/Linux). On Windows we only manage OUR config —
+      // deleting the OS print queue is the operator's call, not the POS's.
+      if (process.platform !== 'win32') {
+        await execAsync(`lpadmin -x "${printerName}"`);
+      }
       
       // Remove from internal configuration
       this.configuredPrinters.delete(printerName);
@@ -1712,9 +1827,20 @@ class HardwareController {
           break;
       }
       
+      // Windows: raw text + feed/cut through winspool (`lp` is CUPS-only).
+      if (process.platform === 'win32') {
+        const cut = Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]); // feeds + GS V full cut
+        await sendRawToWindowsPrinter(printerName, Buffer.concat([Buffer.from(testContent, 'utf8'), cut]));
+        return {
+          success: true,
+          message: `Test print sent to ${printerName}`,
+          jobInfo: 'windows-spooler'
+        };
+      }
+
       const command = `echo "${testContent}" | lp -d "${printerName}"`;
       const { stdout } = await execAsync(command);
-      
+
       return {
         success: true,
         message: `Test print sent to ${printerName}`,
