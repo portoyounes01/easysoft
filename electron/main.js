@@ -74,7 +74,21 @@ function buildContentSecurityPolicy() {
 function registerContentSecurityPolicy() {
   const csp = buildContentSecurityPolicy();
 
+  // Dev-server exception: a plain-http ui_origin (the config layer allows http only
+  // on private/LAN hosts) serves a VITE DEV build, whose HMR/react-refresh preamble
+  // is an inline script — stamping the strict CSP over it blanks the page
+  // ("Refused to execute inline script"). The dev server governs its own responses;
+  // the bundled app:// build and every https origin keep the strict policy.
+  const devHttpOrigin = rendererConfig.runtime && typeof rendererConfig.runtime.uiOrigin === 'string'
+    && rendererConfig.runtime.uiOrigin.startsWith('http://')
+    ? rendererConfig.runtime.uiOrigin
+    : null;
+
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    if (devHttpOrigin && (details.url === devHttpOrigin || details.url.startsWith(`${devHttpOrigin}/`))) {
+      callback({ responseHeaders: details.responseHeaders });
+      return;
+    }
     callback({
       responseHeaders: {
         ...details.responseHeaders,
