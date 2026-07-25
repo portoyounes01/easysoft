@@ -240,21 +240,15 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
   };
 
   useEffect(() => {
-    // Clear results when switching tabs
-    if (activeTab === 'auto') {
-      setDiscoveredPrinters([]);
-      setCurrentStatus('');
-    } else if (activeTab === 'usb') {
-      setUsbPrinters([]);
-      setCurrentStatus('');
-    } else if (activeTab === 'manual') {
-      setCurrentStatus('');
-    } else if (activeTab === 'system') {
-      setSystemPrinters([]);
-      setCurrentStatus('');
-      // Immediately list printers when opening the System tab
+    // Keep each tab's scan results across switches — scans are slow on a till
+    // and wiping them forced a rescan on every tab visit. Only the transient
+    // status line resets; the System tab refreshes IN PLACE (the previous list
+    // stays visible until the fresh one lands).
+    setCurrentStatus('');
+    if (activeTab === 'system') {
       listSystemPrinters();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   // Instant hardware monitoring updates inside the setup modal

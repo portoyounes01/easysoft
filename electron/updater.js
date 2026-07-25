@@ -17,12 +17,36 @@
 //   2. On a real app quit (Alt+F4, gate Restart) via autoInstallOnAppQuit —
 //      gate:restart routes through quitAndInstallIfPending() so relaunch and
 //      the NSIS installer never race each other.
+const { app, Notification } = require('electron');
+
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const GATE_INSTALL_DELAY_MS = 2000;
 
 let lastStatus = { status: 'disabled', detail: '', at: null };
 let updaterRef = null;
 let pendingVersion = null;
+let installNotified = false;
+
+// OS-level toast while the silent NSIS install runs: from the operator's view
+// the app "quits and won't reopen" for ~a minute — without this, that reads as
+// a hang and they mash the icon. Best-effort (toasts need an AppUserModelID on
+// Windows — main.js sets it; if the OS refuses, nothing breaks).
+function notifyInstalling(version, willRelaunch) {
+  if (installNotified) return;
+  installNotified = true;
+  try {
+    if (!Notification.isSupported()) return;
+    new Notification({
+      title: `Installing POS update ${version || ''}`.trim(),
+      body: willRelaunch
+        ? 'The app will restart by itself in about a minute — no action needed.'
+        : 'Installing in the background — you can reopen the app in about a minute.',
+      silent: true,
+    }).show();
+  } catch (error) {
+    console.error('[updater] install notification failed:', error.message);
+  }
+}
 
 function initAutoUpdater({ feedUrl, isDev, getWindow, ipcMain }) {
   registerStatusIpc(ipcMain);
@@ -48,6 +72,16 @@ function initAutoUpdater({ feedUrl, isDev, getWindow, ipcMain }) {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.setFeedURL({ provider: 'generic', url: feedUrl });
+
+  // Alt+F4 with a downloaded update: autoInstallOnAppQuit installs during the
+  // quit WITHOUT relaunching — the operator's next click on the icon does
+  // nothing until NSIS finishes, which reads as a hang. Toast before exiting.
+  // (gate:restart / restart-to-install go through quitAndInstallIfPending,
+  // which notifies with the "restarts by itself" wording; installNotified
+  // dedupes when both fire.)
+  app.on('before-quit', () => {
+    if (pendingVersion !== null) notifyInstalling(pendingVersion, false);
+  });
 
   const send = (status, detail) => {
     lastStatus = { status, detail: detail || '', at: new Date().toISOString() };
@@ -95,6 +129,7 @@ function initAutoUpdater({ feedUrl, isDev, getWindow, ipcMain }) {
 function quitAndInstallIfPending() {
   if (!updaterRef || pendingVersion === null) return false;
   console.log('[updater] quitAndInstall for pending version', pendingVersion);
+  notifyInstalling(pendingVersion, true); // this path relaunches after install
   try {
     updaterRef.quitAndInstall(true, true); // silent install, relaunch after
   } catch (error) {

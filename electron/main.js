@@ -27,6 +27,11 @@ let mainWindow;
 let hardwareController;
 let scaleController;
 
+// Windows toast notifications (the updater's "installing…" toast) only display
+// when the process carries the shortcut's AppUserModelID — electron-builder
+// stamps build.appId on the NSIS shortcuts.
+app.setAppUserModelId('com.pos.comprehensive-pos-system');
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
