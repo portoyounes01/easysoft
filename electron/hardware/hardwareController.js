@@ -1346,12 +1346,16 @@ class HardwareController {
       const detector = new USBPrinterDetector();
       
       const usbPrinters = await detector.detectUSBPrinters();
-      
+      const diagnostics = detector.lastScanDiagnostics || [];
+
       if (usbPrinters.length === 0) {
         return {
           success: true,
           printers: [],
-          message: 'No USB printers found'
+          diagnostics,
+          message: diagnostics.length
+            ? `No USB printers found — ${diagnostics.join(' · ')}`
+            : 'No USB printers found'
         };
       }
 
@@ -1374,6 +1378,7 @@ class HardwareController {
       return {
         success: true,
         printers: formattedPrinters,
+        diagnostics,
         message: `Found ${formattedPrinters.length} USB printer(s)`
       };
 

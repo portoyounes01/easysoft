@@ -100,10 +100,19 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
     try {
       // Call the Electron main process to discover USB printers
       const result = await window.electronAPI?.discoverUSBPrinters();
-      
+      // Full scan trail in the DevTools console (F12) — the main-process log is
+      // invisible on a till, and "found 0" must never be unexplained.
+      console.log('[usb-scan]', result);
+
       if (result?.success) {
         setUsbPrinters(result.printers || []);
-        setCurrentStatus(`Found ${result.printers?.length || 0} USB printer(s)`);
+        const diagnostics = (result as { diagnostics?: string[] }).diagnostics;
+        const count = result.printers?.length || 0;
+        setCurrentStatus(
+          count === 0 && diagnostics?.length
+            ? `Found 0 USB printer(s) — ${diagnostics.join(' · ')}`
+            : `Found ${count} USB printer(s)`,
+        );
       } else {
         setCurrentStatus(`Scan failed: ${result?.error || 'Unknown error'}`);
       }

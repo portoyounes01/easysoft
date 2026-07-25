@@ -18,6 +18,9 @@ const KNOWN_THERMAL_VENDORS = {
 class USBPrinterDetector {
   constructor() {
     this.foundPrinters = [];
+    // Windows scan decision trail — surfaced to the renderer so "found 0" is
+    // never unexplained on a till (main-process console is invisible there).
+    this.lastScanDiagnostics = [];
   }
 
   async detectUSBPrinters() {
@@ -51,32 +54,84 @@ class USBPrinterDetector {
   }
 
   // Windows: enumerate over libusb (the `usb`/`escpos-usb` modules already ship in the
-  // packaged build). Device + config descriptors come from Windows' cached copies, so
-  // devices appear WITHOUT being opened — including printers bound to usbprint.sys
-  // (the normal state for an installed printer). Opening is only attempted to read
-  // the model/serial strings; when the Windows driver holds the device that open
-  // fails, which is expected and MUST NOT hide the printer (that mistake would look
-  // exactly like the old "0 printers found").
+  // packaged build). Device descriptors come from Windows' cached copies, so devices
+  // appear WITHOUT being opened — including printers bound to usbprint.sys (the
+  // normal state for an installed printer). Opening is only attempted to read the
+  // model/serial strings; when the Windows driver holds the device that open fails,
+  // which is expected and MUST NOT hide the printer (that mistake would look exactly
+  // like the old "0 printers found").
+  //
+  // Two hard-learned rules (0.1.2 shipped without them and still found 0):
+  //  * do NOT filter through escpos-usb's findPrinter — its configDescriptor read
+  //    can throw for driver-bound devices on Windows and its catch silently DROPS
+  //    them; read the config descriptor tolerantly ourselves instead;
+  //  * a known thermal VENDOR (HPRT & co) is listed even when the config
+  //    descriptor is unreadable — the vendor id alone is enough evidence.
+  // Every decision lands in this.lastScanDiagnostics so the renderer can show WHY
+  // a scan found what it found (main-process console is invisible on a till).
   async detectUSBPrintersWindows() {
     console.log('🔍 Detecting USB printers (Windows/libusb)...');
-    let USB;
+    const diag = [];
+    this.lastScanDiagnostics = diag;
+
+    let usbModule;
     try {
-      USB = require('escpos-usb');
+      usbModule = require('usb');
     } catch (error) {
-      console.error('❌ escpos-usb unavailable on this shell:', error.message);
+      diag.push(`usb module unavailable: ${error.message}`);
+      console.error('❌ usb module unavailable on this shell:', error.message);
       return [];
     }
-    let devices = [];
-    try {
-      // findPrinter filters usb.getDeviceList() to interface class 0x07 (printer)
-      devices = USB.findPrinter() || [];
-    } catch (error) {
-      console.error('❌ USB enumeration failed:', error.message);
+    const getDeviceList = usbModule.getDeviceList
+      ? usbModule.getDeviceList.bind(usbModule)
+      : usbModule.usb && usbModule.usb.getDeviceList
+        ? usbModule.usb.getDeviceList.bind(usbModule.usb)
+        : null;
+    if (!getDeviceList) {
+      diag.push('usb module has no getDeviceList (unexpected API shape)');
       return [];
     }
 
+    let all = [];
+    try {
+      all = getDeviceList() || [];
+    } catch (error) {
+      diag.push(`USB enumeration failed: ${error.message}`);
+      console.error('❌ USB enumeration failed:', error.message);
+      return [];
+    }
+    diag.push(`${all.length} USB device(s) enumerated`);
+
+    const candidates = [];
+    for (const device of all) {
+      const dd = device.deviceDescriptor || {};
+      const vid = dd.idVendor || 0;
+      const pid = dd.idProduct || 0;
+      const vidHex = `0x${vid.toString(16).padStart(4, '0')}`;
+      const pidHex = `0x${pid.toString(16).padStart(4, '0')}`;
+      const knownBrand = KNOWN_THERMAL_VENDORS[vid] || null;
+
+      let hasPrinterInterface = false;
+      let configReadable = true;
+      try {
+        const cfg = device.configDescriptor;
+        hasPrinterInterface = Boolean(cfg && (cfg.interfaces || []).some(
+          (alts) => (alts || []).some((alt) => alt && alt.bInterfaceClass === 0x07),
+        ));
+      } catch {
+        configReadable = false;
+      }
+
+      if (!hasPrinterInterface && !knownBrand) {
+        diag.push(`skipped ${vidHex}:${pidHex} (${configReadable ? 'no printer-class interface' : 'config descriptor unreadable, vendor unknown'})`);
+        continue;
+      }
+      diag.push(`candidate ${vidHex}:${pidHex}${knownBrand ? ` [${knownBrand}]` : ''} printerIface=${hasPrinterInterface} cfgReadable=${configReadable}`);
+      candidates.push(device);
+    }
+
     const printers = [];
-    for (const device of devices) {
+    for (const device of candidates) {
       const dd = device.deviceDescriptor || {};
       const vid = dd.idVendor || 0;
       const pid = dd.idProduct || 0;
@@ -125,6 +180,7 @@ class USBPrinterDetector {
         // 'windows-driver' → print through its Windows queue (System tab).
         driverState: directAccess ? 'winusb' : 'windows-driver',
       };
+      diag.push(`listed ${printer.brand} ${printer.model} (${printer.driverState})`);
       console.log(`✅ Found USB printer: ${printer.brand} ${printer.model} (${printer.driverState})`);
       printers.push(printer);
     }
