@@ -70,19 +70,28 @@ class CashDrawerAuditService {
             };
         }
 
-        const initialization = await electronHardwareService.initialize();
-        if (!initialization.success) {
-            return {
-                success: false,
-                method: 'initialization_failed',
-                error: initialization.error ?? 'Cash drawer hardware initialization failed.',
-            };
+        // Send the command FIRST. Initializing before every open used to gate the
+        // drawer behind a full hardware re-init, so any hiccup in that check
+        // (queue probe timeout, spooler blip) swallowed the open entirely and the
+        // drawer never moved — while the Settings test card, which initializes
+        // once on mount and then only sends, worked fine. Initialization is now
+        // recovery, not a precondition: the main process validates the configured
+        // printer itself and reports readiness in its own error.
+        const open = () => electronHardwareService.openCashDrawer({ command: 'standard', reason });
+
+        let result = await open();
+        if (!result.success && /not initialized/i.test(result.error ?? '')) {
+            const initialization = await electronHardwareService.initialize();
+            if (!initialization.success) {
+                return {
+                    success: false,
+                    method: 'initialization_failed',
+                    error: initialization.error ?? 'Cash drawer hardware initialization failed.',
+                };
+            }
+            result = await open();
         }
 
-        const result = await electronHardwareService.openCashDrawer({
-            command: 'standard',
-            reason,
-        });
         return {
             success: result.success,
             method: result.success ? result.message ?? 'electron' : 'electron_failed',

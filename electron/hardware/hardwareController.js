@@ -581,6 +581,30 @@ class HardwareController {
     }
   }
 
+  // Readiness for the PRINT/DRAWER entry points. A persisted queue selection is
+  // a real configuration that simply has not been validated yet this boot
+  // (restore leaves isInitialized false on purpose), so refusing outright would
+  // strand the first drawer kick or receipt after every restart. Validates the
+  // configured queue once (TTL-cached) and NEVER runs auto-discovery — an
+  // unconfigured till still gets the old refusal.
+  async ensureReady() {
+    if (this.isInitialized) return { success: true };
+    if (this.printerTransport === 'windows-queue' || this.printerTransport === 'cups-queue') {
+      // Deliberately NO Get-Printer probe here. The spooler write is itself the
+      // existence test and fails with a staged Win32 error ("OpenPrinter failed
+      // (Win32 error 1801)") if the queue is gone, whereas probing first put a
+      // cold PowerShell spawn (15s ceiling, wildcard-sensitive -Name matching)
+      // in front of a physical action the operator is standing there waiting
+      // for — and any hiccup in it swallowed the drawer kick entirely.
+      // Fail-closed still holds where it matters: this cannot reroute anywhere,
+      // the bytes go to the operator's configured queue by exact name.
+      this.isInitialized = true;
+      if (this.printerTransport === 'windows-queue') warmWindowsRawPrintWorker();
+      return { success: true };
+    }
+    return { success: false, error: 'Hardware not initialized' };
+  }
+
   async initialize() {
     try {
       console.log('🔧 Initializing hardware controller...');
@@ -894,7 +918,16 @@ class HardwareController {
     if (process.platform === 'win32') {
       try {
         const psName = String(this.printerName ?? '').replace(/'/g, "''");
-        await runPowerShell(`Get-Printer -Name '${psName}' | Out-Null`, { timeout: 15000 });
+        // Exact-match against the queue list, NOT `Get-Printer -Name` — -Name
+        // does WILDCARD matching, so a queue whose name contains [ ] * or ?
+        // (which winspool's OpenPrinterW matches literally, and which therefore
+        // prints perfectly) would report "not found" here.
+        await runPowerShell(
+          // Both strings single-quoted: in a double-quoted PS string a queue
+          // name containing $ or a backtick would be evaluated, not compared.
+          `if (-not (@(Get-Printer).Name -contains '${psName}')) { throw 'configured print queue not found' }`,
+          { timeout: 15000 },
+        );
         console.log(`✅ Windows print queue found: ${this.printerName}`);
         return { success: true, printer: this.printerName };
       } catch {
@@ -931,8 +964,9 @@ class HardwareController {
 
   async printReceipt(receiptData) {
     try {
-      if (!this.isInitialized) {
-        return { success: false, error: 'Hardware not initialized' };
+      const ready = await this.ensureReady();
+      if (!ready.success) {
+        return { success: false, error: ready.error };
       }
 
       console.log('🖨️ Printing receipt...');
@@ -1158,8 +1192,9 @@ class HardwareController {
 
   async openCashDrawer(options = {}) {
     try {
-      if (!this.isInitialized) {
-        return { success: false, error: 'Hardware not initialized' };
+      const ready = await this.ensureReady();
+      if (!ready.success) {
+        return { success: false, error: ready.error };
       }
 
       console.log('💰 Opening cash drawer...');
@@ -1411,8 +1446,9 @@ class HardwareController {
 
   async testPrinter() {
     try {
-      if (!this.isInitialized) {
-        return { success: false, error: 'Hardware not initialized' };
+      const ready = await this.ensureReady();
+      if (!ready.success) {
+        return { success: false, error: ready.error };
       }
 
       console.log('🧪 Testing printer...');

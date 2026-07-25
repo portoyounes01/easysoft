@@ -370,6 +370,8 @@ const resources = {
                 confirmClosedButton: 'Confirm Drawer Closed',
                 recording: 'Recording...',
                 openWithoutSaleButton: 'Open Without Sale',
+                keyboardDone: 'Done',
+                justificationRequiredHint: 'Tap the box above and enter a justification to enable "Open Without Sale".',
             },
             cashDrawerAudit: {
                 eyebrow: 'Append-only operational log',
@@ -3113,6 +3115,8 @@ const resources = {
                 confirmClosedButton: 'Confirmar Gaveta Fechada',
                 recording: 'A registar...',
                 openWithoutSaleButton: 'Abrir Sem Venda',
+                keyboardDone: 'Concluído',
+                justificationRequiredHint: 'Toque na caixa acima e escreva uma justificação para ativar "Abrir Sem Venda".',
             },
             cashDrawerAudit: {
                 eyebrow: 'Registo operacional apenas de acréscimo',
@@ -5860,7 +5864,9 @@ const resources = {
                 "justificationPlaceholder": "Explica por qué debe abrirse el cajón sin una venta",
                 "confirmClosedButton": "Confirmar cajón cerrado",
                 "recording": "Registrando...",
-                "openWithoutSaleButton": "Abrir sin venta"
+                "openWithoutSaleButton": "Abrir sin venta",
+                "keyboardDone": "Listo",
+                "justificationRequiredHint": "Toque el cuadro de arriba y escriba una justificación para activar \"Abrir sin venta\"."
             },
             "cashDrawerAudit": {
                 "eyebrow": "Registro operativo de solo anexado",

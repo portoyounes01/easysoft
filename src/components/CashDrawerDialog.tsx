@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { WithDialogTokens } from './ui/dialogParts';
 import { Archive, CheckCircle, Lock, Unlock, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,7 @@ import type {
 } from '../types/cashDrawer';
 import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
 import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
+import VirtualKeyboard from './VirtualKeyboard';
 
 interface CashDrawerDialogProps {
     open: boolean;
@@ -49,6 +50,11 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
+    // Touch tills have no physical keyboard: without this the required
+    // justification can never be typed, so the open button stays disabled
+    // forever and the whole dialog reads as broken.
+    const [keyboardOpen, setKeyboardOpen] = useState(false);
+    const keyboardRef = useRef<HTMLDivElement>(null);
 
     const loadStatus = useCallback(async () => {
         setLatestEvent(await cashDrawerAuditService.getLatestForTerminal());
@@ -58,8 +64,18 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
         if (!open) return;
         setMessage('');
         setError('');
+        setKeyboardOpen(false);
         void loadStatus();
     }, [loadStatus, open]);
+
+    // The keyboard mounts below the field and is taller than the remaining
+    // space on a till screen — without this the operator opens it and the
+    // primary button sits below the fold, which looks exactly like the bug
+    // this dialog just had.
+    useEffect(() => {
+        if (!keyboardOpen) return;
+        keyboardRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, [keyboardOpen]);
 
     const handleManualOpen = async () => {
         setBusy(true);
@@ -145,11 +161,45 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
                     <textarea
                         value={justification}
                         onChange={event => setJustification(event.target.value)}
+                        onFocus={() => setKeyboardOpen(true)}
+                        onClick={() => setKeyboardOpen(true)}
                         placeholder={t('cashDrawerDialog.justificationPlaceholder')}
-                        className={`mt-2 min-h-28 font-normal ${tk.cfg ? tk.input : "w-full rounded-2xl border border-slate-300 p-4 outline-none focus:ring-4 focus:ring-slate-200"} ${tk.cfg ? "py-3" : ""}`}
+                        className={`mt-2 min-h-28 font-normal ${tk.cfg ? tk.input : "w-full rounded-2xl border border-slate-300 p-4 outline-none focus:ring-4 focus:ring-slate-200"} ${tk.cfg ? "py-3" : ""} ${keyboardOpen ? 'ring-2 ring-blue-400' : ''}`}
                     />
                 </label>
+
+                {keyboardOpen && (
+                    <div ref={keyboardRef}>
+                        <div className="mb-2 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setKeyboardOpen(false)}
+                                className="min-h-touch-xs rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+                            >
+                                {t('cashDrawerDialog.keyboardDone')}
+                            </button>
+                        </div>
+                        <div className="h-[30vh] max-h-[240px] min-h-[168px]">
+                            <VirtualKeyboard
+                                isOpen
+                                onClose={() => setKeyboardOpen(false)}
+                                onConfirm={setJustification}
+                                title=""
+                                initialValue={justification}
+                                maxLength={200}
+                                allowNumbers
+                                allowLetters
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
+
+            {!justification.trim() && (
+                <p className="mt-3 text-sm text-slate-500">
+                    {t('cashDrawerDialog.justificationRequiredHint')}
+                </p>
+            )}
 
             {message && (
                 <div className="mt-4 flex items-center gap-2 rounded-2xl bg-emerald-50 p-3 text-sm text-emerald-800">
@@ -172,6 +222,9 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
                 onClose={onClose}
                 overlayClassName="z-[85]"
                 footer={
+                    // Disabled primary is flattened to grey: every applied style renders
+                    // it as a filled CTA, and 50% opacity of a saturated fill still reads
+                    // as a live button the operator taps and taps.
                     <div className={buttons.container}>
                         <button
                             type="button"
@@ -185,7 +238,7 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
                             type="button"
                             disabled={busy || !justification.trim()}
                             onClick={() => void handleManualOpen()}
-                            className={`${buttons.primary} disabled:opacity-50`}
+                            className={`${buttons.primary} disabled:bg-slate-300 disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-500 disabled:shadow-none`}
                         >
                             {busy ? t('cashDrawerDialog.recording') : t('cashDrawerDialog.openWithoutSaleButton')}
                         </button>
@@ -199,7 +252,7 @@ const CashDrawerDialog: React.FC<CashDrawerDialogProps> = ({
 
     return (
         <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/55 p-4">
-            <div className="w-full max-w-xl rounded-[2rem] bg-white p-6 shadow-2xl">
+            <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-3">
                         <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
