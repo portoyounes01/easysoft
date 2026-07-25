@@ -13,7 +13,7 @@ const { promisify } = require('util');
 const net = require('net');
 const dns = require('dns');
 const { parseCashDrawerStatus } = require('./cashDrawerStatus.js');
-const { sendRawToWindowsPrinter, encodePowerShell } = require('./windowsRawPrint.js');
+const { sendRawToWindowsPrinter, runPowerShell } = require('./windowsRawPrint.js');
 
 // Import our discovery classes
 const NetworkPrinterDiscovery = require('../../discover-network-printers.js');
@@ -265,16 +265,13 @@ class HardwareController {
   // is version-stable text ("Normal", "Offline", ...). The [Console] line
   // forces UTF-8 stdout: PowerShell 5.1 otherwise writes the OEM codepage and
   // accented queue names (Impressora Térmica) arrive as U+FFFD mojibake that
-  // can never be targeted by OpenPrinter. -EncodedCommand sidesteps cmd.exe
-  // quoting entirely.
+  // can never be targeted by OpenPrinter. runPowerShell (execFile-based)
+  // sidesteps cmd.exe and its 8,191-char command-line cap entirely.
   async winListPrinterQueues() {
     const ps = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; '
       + 'Get-Printer | Select-Object -Property Name, DriverName, PortName, WorkOffline, '
       + '@{n=\'StatusText\';e={"$($_.PrinterStatus)"}} | ConvertTo-Json';
-    const { stdout: winOut } = await execAsync(
-      `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShell(ps)}`,
-      { timeout: 15000, windowsHide: true },
-    );
+    const { stdout: winOut } = await runPowerShell(ps, { timeout: 15000 });
     if (!winOut.trim()) return [];
     const list = JSON.parse(winOut);
     const arr = Array.isArray(list) ? list : [list];
@@ -730,10 +727,7 @@ class HardwareController {
     if (process.platform === 'win32') {
       try {
         const psName = String(this.printerName ?? '').replace(/'/g, "''");
-        await execAsync(
-          `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShell(`Get-Printer -Name '${psName}' | Out-Null`)}`,
-          { timeout: 15000, windowsHide: true },
-        );
+        await runPowerShell(`Get-Printer -Name '${psName}' | Out-Null`, { timeout: 15000 });
         console.log(`✅ Windows print queue found: ${this.printerName}`);
         return { success: true, printer: this.printerName };
       } catch {

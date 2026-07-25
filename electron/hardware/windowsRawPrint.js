@@ -7,14 +7,28 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // UTF-16LE base64 for powershell -EncodedCommand (no shell-quoting pitfalls).
 function encodePowerShell(script) {
   return Buffer.from(script, 'utf16le').toString('base64');
+}
+
+// All PowerShell invocations MUST go through here. execFile (not exec): exec
+// routes through cmd.exe, whose command line caps at 8,191 chars — the raw-print
+// script below (embedded C# helper → UTF-16LE → base64 ≈ 10K chars) dies there
+// with "The command line is too long" before PowerShell ever starts. execFile
+// spawns powershell.exe directly (CreateProcess, 32,767-char limit) and passes
+// the base64 as an argv entry, so no cmd parsing or quoting is in play at all.
+function runPowerShell(script, { timeout = 30000 } = {}) {
+  return execFileAsync(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-EncodedCommand', encodePowerShell(script)],
+    { timeout, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+  );
 }
 
 // W (Unicode) entry points throughout — winspool is natively Unicode, and the ANSI
@@ -102,12 +116,9 @@ async function sendRawToWindowsPrinter(printerName, buffer) {
     ].join('\n');
     let stdout;
     try {
-      ({ stdout } = await execAsync(
-        `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShell(script)}`,
-        { timeout: 30000, windowsHide: true },
-      ));
+      ({ stdout } = await runPowerShell(script, { timeout: 30000 }));
     } catch (execError) {
-      // exec errors embed the whole base64 command line — surface stderr instead
+      // spawn errors embed the whole base64 command line — surface stderr instead
       const stderr = String(execError.stderr || '').trim();
       throw new Error(stderr ? stderr.split('\n')[0].slice(0, 300) : `Raw print failed (${execError.code ?? 'exec error'})`);
     }
@@ -120,4 +131,4 @@ async function sendRawToWindowsPrinter(printerName, buffer) {
   }
 }
 
-module.exports = { sendRawToWindowsPrinter, encodePowerShell };
+module.exports = { sendRawToWindowsPrinter, runPowerShell, encodePowerShell };
