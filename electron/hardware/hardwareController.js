@@ -13,7 +13,7 @@ const { promisify } = require('util');
 const net = require('net');
 const dns = require('dns');
 const { parseCashDrawerStatus } = require('./cashDrawerStatus.js');
-const { sendRawToWindowsPrinter, runPowerShell } = require('./windowsRawPrint.js');
+const { sendRawToWindowsPrinter, runPowerShell, warmWindowsRawPrintWorker, shutdownWindowsRawPrint } = require('./windowsRawPrint.js');
 
 // Import our discovery classes
 const NetworkPrinterDiscovery = require('../../discover-network-printers.js');
@@ -311,6 +311,9 @@ class HardwareController {
       if (receipt.transport) this.printerTransport = receipt.transport;
       // isInitialized stays false here on purpose: initialize() validates the
       // queue still exists (fail-closed) before printing is declared ready.
+      // Boot-time warm-up: compile the raw-print worker in the background so
+      // even the first drawer kick of the day is instant.
+      if (this.printerTransport === 'windows-queue') warmWindowsRawPrintWorker();
       console.log(`💾 Restored receipt printer from config: ${receipt.name} (${receipt.transport || 'unknown transport'})`);
     } catch (error) {
       console.error('Failed to restore printer config:', error.message);
@@ -603,6 +606,9 @@ class HardwareController {
             if (this.discoveryMode === 'network') this.discoveryMode = 'auto';
           }
           this.isInitialized = true;
+          // Pre-compile the raw-print worker so the first receipt/drawer job
+          // of the shift doesn't pay the PowerShell+Add-Type cold start.
+          if (this.printerTransport === 'windows-queue') warmWindowsRawPrintWorker();
           return {
             success: true,
             mode: 'configured-queue',
@@ -1950,6 +1956,9 @@ class HardwareController {
         // it on the next boot).
         if (process.platform === 'win32') {
           this.isInitialized = true;
+          // Warm the raw-print worker: the operator will test-print next, and
+          // the first sale shouldn't pay the compile either.
+          warmWindowsRawPrintWorker();
         }
         // Survive app restarts: the till remembers its printer without anyone
         // reopening the setup dialog.
@@ -2402,7 +2411,9 @@ class HardwareController {
     try {
       // Stop monitoring
       this.stopConnectionMonitoring();
-      
+
+      shutdownWindowsRawPrint(); // no-op when no worker was ever started
+
       if (this.device) {
         this.device.close();
       }
