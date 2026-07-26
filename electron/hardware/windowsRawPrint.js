@@ -321,6 +321,15 @@ async function sendRawOneShot(name, tempFile) {
   return { success: true };
 }
 
+// Delivered-but-no-reply: the bytes may already be on paper. Callers (and the
+// renderer above them) must be able to tell this apart from a clean failure by
+// something sturdier than a message regex, hence the flag.
+function unknownOutcomeError(cause) {
+  const error = new Error(`Print outcome unknown (${cause.message}) — check the printer before reprinting`);
+  error.outcomeUnknown = true;
+  return error;
+}
+
 // Send raw bytes to a Windows print queue. Resolves { success: true } or throws
 // with a diagnosable message (queue missing, offline, WritePrinter refusal).
 async function sendRawToWindowsPrinter(printerName, buffer) {
@@ -343,7 +352,7 @@ async function sendRawToWindowsPrinter(printerName, buffer) {
       // kicked, receipt out). Auto-resending would double-print on a fiscal
       // till — surface the ambiguity instead and let a human decide.
       if (transportError.jobDelivered) {
-        throw new Error(`Print outcome unknown (${transportError.message}) — check the printer before reprinting`);
+        throw unknownOutcomeError(transportError);
       }
       // Provably never sent → one retry with a fresh worker, then the proven
       // one-shot path.
@@ -351,7 +360,7 @@ async function sendRawToWindowsPrinter(printerName, buffer) {
         outcome = await runJobViaWorker(name, tempFile);
       } catch (retryError) {
         if (retryError.jobDelivered) {
-          throw new Error(`Print outcome unknown (${retryError.message}) — check the printer before reprinting`);
+          throw unknownOutcomeError(retryError);
         }
         console.error('[rawprint] worker retry failed, one-shot fallback:', retryError.message);
         return await sendRawOneShot(name, tempFile);

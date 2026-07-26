@@ -456,6 +456,18 @@ ipcMain.handle('hardware:print-receipt', async (event, receiptData) => {
   }
 });
 
+// Raw ESC/POS from the renderer. The receipt layout is built up there (same
+// ReceiptProps the on-screen receipt renders), so receipt changes ship as a UI
+// deploy — this shell only moves the bytes onto the configured transport.
+ipcMain.handle('hardware:print-raw', async (event, payload) => {
+  try {
+    return await hardwareController.printRaw(payload);
+  } catch (error) {
+    console.error('Raw print failed:', error);
+    return { success: false, error: error.message, outcomeUnknown: error.outcomeUnknown === true };
+  }
+});
+
 ipcMain.handle('hardware:open-cash-drawer', async (event, options = {}) => {
   try {
     return await hardwareController.openCashDrawer(options);

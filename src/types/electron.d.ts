@@ -107,6 +107,21 @@ interface ElectronAPI {
       error?: string;
     }>;
     
+    /** Raw ESC/POS bytes (base64) straight onto the configured receipt
+     *  transport. Absent on shells older than 0.1.9 — callers must feature-test
+     *  and fall back to the OS print path.
+     *
+     *  `outcomeUnknown: true` means the job was handed to the spooler but never
+     *  acknowledged: the paper may already be out. Surface it; never resend
+     *  automatically. */
+    printRaw?(base64Bytes: string): Promise<{
+      success: boolean;
+      method?: 'usb' | 'system' | 'system-windows' | 'network';
+      jobId?: string;
+      error?: string;
+      outcomeUnknown?: boolean;
+    }>;
+
     openCashDrawer(options?: CashDrawerOptions): Promise<{
       success: boolean;
       method?: 'usb' | 'system';

@@ -2,6 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { generateQRCodeImage } from '../utils/qrCode';
 import { useSettings } from '../contexts/SettingsContext';
 import { getReceiptT } from '../utils/receiptLanguage';
+import { computeReceiptTotals, formatReceiptCurrency, round2 } from '../utils/receiptTotals';
+import {
+  RECEIPT_CERTIFICATION_PLACEHOLDER,
+  certificationNumberForReceiptDisplay,
+} from '../utils/receiptCertification';
 import type { FiscalOfficialOutput } from '../fiscal/types';
 
 interface ReceiptItem {
@@ -84,17 +89,9 @@ export interface ReceiptProps {
   officialOutput?: FiscalOfficialOutput;
 }
 
-/** Shown on receipt when `certificationNumber` is unset (AT placeholder until assigned). */
-export const RECEIPT_CERTIFICATION_PLACEHOLDER = 'xxxx';
-
-export function certificationNumberForReceiptDisplay(cert?: string): string {
-  const trimmed = cert?.trim();
-  if (!trimmed) {
-    return RECEIPT_CERTIFICATION_PLACEHOLDER;
-  }
-  const withoutSuffix = trimmed.replace(/\s*\/AT\s*$/i, '').trim();
-  return withoutSuffix || RECEIPT_CERTIFICATION_PLACEHOLDER;
-}
+// Moved to utils/receiptCertification so the ESC/POS renderer can reuse it
+// without importing this component; re-exported here for existing callers.
+export { RECEIPT_CERTIFICATION_PLACEHOLDER, certificationNumberForReceiptDisplay };
 
 const ThermalReceipt: React.FC<ReceiptProps> = ({
   documentNumber,
@@ -150,62 +147,19 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
     );
   };
 
-  const formatCurrency = (amount: number): string => {
-    return amount.toFixed(2).replace('.', ',') + ' €';
-  };
+  const formatCurrency = formatReceiptCurrency;
 
-  // Helpers for precise totals based on discount policy (apply discount first, then split VAT)
-  const round2 = (n: number): number => Math.round(n * 100) / 100;
-  const discountPct = totals.discountPercentage || 0;
-
-  // 1) Determine discount factor to apply on item totals (tax-included)
-  const grossBefore = items.reduce((s, it) => s + (it.total || 0), 0);
-  let grossFactor = 1;
-  if (discountPct > 0) {
-    grossFactor = 1 - discountPct / 100;
-  } else if ((totals.discount || 0) > 0 && grossBefore > 0) {
-    // For fixed discount, scale item totals so that their sum matches provided totals.total
-    // Clamp to [0,1] to avoid accidental overflows
-    const desiredGross = typeof totals.total === 'number' ? totals.total : grossBefore;
-    const computed = desiredGross / grossBefore;
-    grossFactor = Math.max(0, Math.min(1, computed));
-  }
-
-  // 2) Aggregate recomputed totals from items AFTER discount (using grossFactor)
-  const recomputed = items.reduce(
-    (acc, item) => {
-      const rate = (item.vatRate || 0) / 100;
-      const grossAfterDiscount = (item.total || 0) * grossFactor; // tax-included
-      const base = grossAfterDiscount / (1 + rate);
-      const vat = grossAfterDiscount - base;
-      acc.gross += grossAfterDiscount;
-      acc.base += base;
-      acc.vat += vat;
-      return acc;
-    },
-    { gross: 0, base: 0, vat: 0 }
-  );
-
-  // 3) Also compute original (BEFORE discount) base and VAT for display of ILÍQUIDO
-  const original = items.reduce(
-    (acc, item) => {
-      const rate = (item.vatRate || 0) / 100;
-      const gross = item.total || 0;
-      const base = gross / (1 + rate);
-      const vat = gross - base;
-      acc.gross += gross;
-      acc.base += base;
-      acc.vat += vat;
-      return acc;
-    },
-    { gross: 0, base: 0, vat: 0 }
-  );
-
-  // Prefer provided totals for final amounts, fall back to recomputed when missing
-  const totalGross = typeof totals.total === 'number' ? round2(totals.total) : round2(recomputed.gross);
-  const totalBase = round2(recomputed.base);
-  const totalVat = typeof totals.vat === 'number' ? round2(totals.vat) : round2(recomputed.vat);
-  const subtotalBeforeDiscount = round2(original.base);
+  // Totals arithmetic is shared with the ESC/POS renderer (services/escpos):
+  // the printed receipt and this preview must never disagree on a cent.
+  const {
+    discountPct,
+    grossFactor,
+    totalGross,
+    totalBase,
+    totalVat,
+    subtotalBeforeDiscount,
+    vatGroups,
+  } = useMemo(() => computeReceiptTotals(items, totals), [items, totals]);
 
   const getDocumentTitle = (): string => {
     switch (documentType) {
@@ -491,31 +445,15 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         <span className="bold">{t('thermalReceipt.vat')}</span>
         <span className="bold cell-end">{t('thermalReceipt.incidence')}</span>
 
-        {(() => {
-          const vatGroups = items.reduce((acc, item) => {
-            const key = item.vatRate;
-            if (!acc[key]) {
-              acc[key] = { incidence: 0, vat: 0 };
-            }
-            const rateFraction = (item.vatRate || 0) / 100;
-            const grossAfterDiscount = item.total * grossFactor;
-            const base = grossAfterDiscount / (1 + rateFraction);
-            const vat = grossAfterDiscount - base;
-            acc[key].incidence += base;
-            acc[key].vat += vat;
-            return acc;
-          }, {} as Record<number, { incidence: number; vat: number }>);
-
-          return Object.entries(vatGroups).map(([rate, amounts]) => (
-            <React.Fragment key={rate}>
-              <span>{rate}</span>
-              <span></span>
-              <span></span>
-              <span>{formatCurrency(amounts.vat)}</span>
-              <span className="cell-end">{formatCurrency(amounts.incidence)}</span>
-            </React.Fragment>
-          ));
-        })()}
+        {vatGroups.map(group => (
+          <React.Fragment key={group.rate}>
+            <span>{group.rate}</span>
+            <span></span>
+            <span></span>
+            <span>{formatCurrency(group.vat)}</span>
+            <span className="cell-end">{formatCurrency(group.incidence)}</span>
+          </React.Fragment>
+        ))}
       </div>
 
       {/* Totals */}

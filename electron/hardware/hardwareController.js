@@ -1,4 +1,5 @@
 const escpos = require('escpos');
+const os = require('os');
 const usbModule = require('usb');
 
 if (typeof usbModule.on !== 'function' && usbModule.usb && typeof usbModule.usb.on === 'function') {
@@ -22,6 +23,36 @@ const AutoPrinterSetup = require('../../auto-printer-setup.js');
 // const HardwareMonitorManager = require('../monitors/hardware-monitor-manager');
 
 const execAsync = promisify(exec);
+
+// printRaw payload guard. The renderer owns the receipt layout, so the bytes
+// arrive from outside the shell: reject anything that is not plausibly a
+// base64 ESC/POS job rather than handing junk to the spooler.
+const MAX_RAW_PAYLOAD_BYTES = 512 * 1024;
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+function normalizeRawPayload(payload) {
+  let buffer;
+  if (typeof payload === 'string') {
+    const compact = payload.replace(/\s/g, '');
+    // Buffer.from(…, 'base64') silently drops invalid characters, so a typo
+    // would print garbage instead of failing — check the alphabet first.
+    if (!compact || !BASE64_RE.test(compact)) {
+      throw new Error('printRaw expects base64-encoded bytes');
+    }
+    buffer = Buffer.from(compact, 'base64');
+  } else if (Buffer.isBuffer(payload)) {
+    buffer = payload;
+  } else if (payload instanceof Uint8Array || Array.isArray(payload)) {
+    buffer = Buffer.from(payload);
+  } else {
+    throw new Error('printRaw expects base64-encoded bytes');
+  }
+  if (buffer.length === 0) throw new Error('printRaw got an empty payload');
+  if (buffer.length > MAX_RAW_PAYLOAD_BYTES) {
+    throw new Error(`printRaw payload too large (${buffer.length} bytes, max ${MAX_RAW_PAYLOAD_BYTES})`);
+  }
+  return buffer;
+}
 
 class HardwareController {
   constructor(options = {}) {
@@ -987,6 +1018,75 @@ class HardwareController {
     } catch (error) {
       console.error('Print receipt error:', error);
       return { success: false, error: error.message };
+    }
+  }
+
+  /** Print caller-supplied ESC/POS bytes on the configured receipt printer.
+   *
+   *  The receipt LAYOUT lives in the renderer (one source of truth with the
+   *  on-screen ThermalReceipt, and fiscal fields the shell knows nothing
+   *  about); the shell owns only the transport. That split is deliberate —
+   *  a receipt change then ships as a UI deploy instead of a fleet update.
+   *
+   *  `payload` is base64 (arrays/typed arrays tolerated for main-process
+   *  callers). Never auto-retries: on Windows a delivered-but-unacknowledged
+   *  job comes back as { outcomeUnknown: true } so a human decides, because a
+   *  blind resend double-prints a fiscal document. */
+  async printRaw(payload) {
+    try {
+      const buffer = normalizeRawPayload(payload);
+
+      const ready = await this.ensureReady();
+      if (!ready.success) {
+        return { success: false, error: ready.error };
+      }
+
+      console.log(`🖨️ Printing raw ESC/POS job (${buffer.length} bytes)...`);
+      return await this.sendRawBytes(buffer);
+    } catch (error) {
+      console.error('Raw print error:', error);
+      return {
+        success: false,
+        error: error.message,
+        outcomeUnknown: error.outcomeUnknown === true,
+      };
+    }
+  }
+
+  /** Transport dispatch shared by printRaw — same branch order as printReceipt
+   *  and openCashDrawer (network → configured direct USB → system queue), with
+   *  the caller's bytes in place of generateReceiptCommands(). */
+  async sendRawBytes(buffer) {
+    if (this.discoveryMode === 'network' && this.networkPrinter) {
+      await this.sendToNetworkPrinter(buffer);
+      console.log(`✅ Raw job printed via network (${this.networkPrinter.ip})`);
+      return { success: true, method: 'network' };
+    }
+
+    if (this.printerTransport === 'direct-usb' && this.printer && this.device) {
+      await new Promise((resolve, reject) => {
+        this.device.write(buffer, (error) => (error ? reject(error) : resolve()));
+      });
+      console.log('✅ Raw job printed via USB');
+      return { success: true, method: 'usb' };
+    }
+
+    if (process.platform === 'win32') {
+      await sendRawToWindowsPrinter(this.printerName, buffer);
+      console.log(`✅ Raw job printed via Windows spooler (${this.printerName})`);
+      return { success: true, method: 'system-windows' };
+    }
+
+    // CUPS. Temp file goes to the OS temp dir, not next to __dirname: in a
+    // packaged app that path is inside the read-only asar.
+    const tempFile = path.join(os.tmpdir(), `pos-escpos-${process.pid}-${Date.now()}.bin`);
+    fs.writeFileSync(tempFile, buffer);
+    try {
+      const { stdout } = await execAsync(`lp -d "${this.printerName}" -o raw "${tempFile}"`);
+      console.log(`✅ Raw job printed via CUPS. Job ID: ${stdout.trim()}`);
+      return { success: true, method: 'system', jobId: stdout.trim() };
+    } finally {
+      try { fs.unlinkSync(tempFile); } catch { /* best effort */ }
     }
   }
 

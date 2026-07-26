@@ -84,6 +84,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   hardware: {
     init: () => ipcRenderer.invoke('hardware:init'),
     printReceipt: (receiptData) => ipcRenderer.invoke('hardware:print-receipt', receiptData),
+    // Raw ESC/POS bytes (base64) — the renderer builds the receipt so its
+    // layout stays one source of truth with the on-screen version and ships
+    // without a shell update. Result may carry outcomeUnknown: true, which
+    // must NOT be auto-retried (double-printed fiscal document).
+    printRaw: (base64Bytes) => ipcRenderer.invoke('hardware:print-raw', base64Bytes),
     openCashDrawer: (options) => ipcRenderer.invoke('hardware:open-cash-drawer', options),
     getDrawerStatus: () => ipcRenderer.invoke('hardware:get-drawer-status'),
     testPrinter: () => ipcRenderer.invoke('hardware:test-printer'),

@@ -6,6 +6,14 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 const resources = {
     en: {
         translation: {
+            receiptPrint: {
+                printing: 'Printing on {{printer}}…',
+                printed: 'Printed on {{printer}}',
+                failed: 'Print failed: {{error}}',
+                outcomeUnknown: 'Print outcome unknown — check the printer before reprinting. Nothing was resent automatically.',
+                unknownError: 'The printer did not report a reason.',
+                viaWindows: 'Use Windows print dialog',
+            },
             orderStatusDisplay: {
                 title: 'Order status',
                 preparingTitle: 'Preparing',
@@ -2751,6 +2759,14 @@ const resources = {
     },
     pt: {
         translation: {
+            receiptPrint: {
+                printing: 'A imprimir em {{printer}}…',
+                printed: 'Impresso em {{printer}}',
+                failed: 'Falha na impressão: {{error}}',
+                outcomeUnknown: 'Resultado da impressão desconhecido — verifique a impressora antes de reimprimir. Nada foi reenviado automaticamente.',
+                unknownError: 'A impressora não indicou o motivo.',
+                viaWindows: 'Usar a janela de impressão do Windows',
+            },
             orderStatusDisplay: {
                 title: 'Estado do pedido',
                 preparingTitle: 'Em preparação',
@@ -5501,6 +5517,14 @@ const resources = {
     },
     es: {
         translation: {
+            "receiptPrint": {
+                "printing": "Imprimiendo en {{printer}}…",
+                "printed": "Impreso en {{printer}}",
+                "failed": "Error de impresión: {{error}}",
+                "outcomeUnknown": "Resultado de la impresión desconocido: revise la impresora antes de reimprimir. No se reenvió nada automáticamente.",
+                "unknownError": "La impresora no indicó el motivo.",
+                "viaWindows": "Usar el cuadro de impresión de Windows"
+            },
             "orderStatusDisplay": {
                 "title": "Estado del pedido",
                 "preparingTitle": "Preparando",
