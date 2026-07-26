@@ -108,3 +108,29 @@ describe('ESC/POS receipt encoder', () => {
         expect(wrapped.every(line => line.length <= 12)).toBe(true);
     });
 });
+
+describe('numeric columns', () => {
+    it('never clips an oversized figure — the row runs long instead', () => {
+        const heavy: ReceiptProps = {
+            ...baseReceipt,
+            items: [
+                {
+                    id: 'w',
+                    description: 'Wholesale flour',
+                    quantity: 1234.567,
+                    unit: 'kg',
+                    unitPrice: 0.92,
+                    vatRate: 6,
+                    total: 1135.8,
+                },
+            ],
+            totals: { ...baseReceipt.totals, total: 1135.8, vat: 64.29 },
+        };
+        const lines = decodeLines(buildReceiptEscPos(heavy, { language: 'pt' }));
+        const row = lines.find(line => line.includes('Wholesale'));
+        expect(row).toBeDefined();
+        expect(row).toContain('1234.567');
+        // decodeLines reads raw code-page bytes, so € (0xD5) is not '€' here.
+        expect(row).toContain('1135,80');
+    });
+});

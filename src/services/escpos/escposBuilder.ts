@@ -151,16 +151,18 @@ export function wrapText(value: string, width: number): string[] {
     return lines.length > 0 ? lines : [''];
 }
 
+// Padding NEVER truncates. An over-wide cell makes the row run long and the
+// printer wraps it — ugly. Clipping a numeric cell instead prints a WRONG
+// FIGURE on a fiscal document (a 6-wide quantity column once turned 0.482 kg
+// into .482 kg). Misaligned beats wrong, always.
 export const padEnd = (value: string, width: number): string => {
-    const chars = charsOf(value);
-    if (chars.length >= width) return chars.slice(0, width).join('');
-    return value + ' '.repeat(width - chars.length);
+    const missing = width - charsOf(value).length;
+    return missing > 0 ? value + ' '.repeat(missing) : value;
 };
 
 export const padStart = (value: string, width: number): string => {
-    const chars = charsOf(value);
-    if (chars.length >= width) return chars.slice(chars.length - width).join('');
-    return ' '.repeat(width - chars.length) + value;
+    const missing = width - charsOf(value).length;
+    return missing > 0 ? ' '.repeat(missing) + value : value;
 };
 
 export type EscPosAlign = 'left' | 'center' | 'right';
@@ -227,9 +229,10 @@ export class EscPosBuilder {
     /** One line printed verbatim — no word wrapping, so column padding
      *  survives (`line()` re-joins on whitespace and would collapse it). */
     fixed(value: string): this {
-        const chars = charsOf(value);
-        const clipped = chars.length > this.columns ? chars.slice(0, this.columns).join('') : value;
-        return this.text(clipped).raw(0x0a);
+        // No clipping here either: the printer wraps an over-long line onto the
+        // next one, which loses nothing. Trimming to `columns` would cut the
+        // right-hand column — on an item row, the money.
+        return this.text(value).raw(0x0a);
     }
 
     /** Label left, value flush right, on one line. */
