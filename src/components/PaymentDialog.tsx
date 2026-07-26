@@ -11,13 +11,23 @@ import { DIALOG_SECONDARY_RADIUS } from '../theme/dialogStyle';
 
 export type PaymentMethod = 'cash' | 'card';
 
+/** What the operator actually chose. The caller must NOT re-derive the method
+ *  from the cash amount: a cash sale tendered exactly leaves the field empty,
+ *  and inferring from `cashReceived > 0` recorded those as card. */
+export interface PaymentConfirmation {
+    method: PaymentMethod;
+    /** Amount tendered. Equals `total` when cash was confirmed without typing one. */
+    cashReceived: number;
+    change: number;
+}
+
 interface PaymentDialogProps {
     open: boolean;
     total: number;
     cashReceived: number;
     onChangeCash: (next: number) => void;
     onClose: () => void;
-    onConfirm: () => void;
+    onConfirm: (confirmation: PaymentConfirmation) => void;
     /** Opens the discount dialog from within the payment screen. */
     onDiscount?: () => void;
     /** Opens the customer / NIF dialog from within the payment screen. */
@@ -65,14 +75,30 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({ open, total, cashReceived
     }, [onChangeCash]);
 
     // 3. Computed values
-    const canConfirm = useMemo(() => {
-        if (method === 'cash') {
-            return cashReceived >= total && total > 0;
-        }
-        return total > 0; // card: allow confirm directly
-    }, [cashReceived, method, total]);
+    /** Empty field = "exact amount", the common case at a counter. Keyed on the
+     *  raw string, not the number: a typed 0 and an untouched field both give
+     *  cashReceived === 0, and a typed 0 on a €12.50 sale is not exact payment. */
+    const cashNotEntered = cashString.trim() === '';
 
+    const canConfirm = useMemo(() => {
+        if (total <= 0) return false;
+        if (method === 'card') return true;
+        // Cash: confirm freely unless an amount was typed that does not cover
+        // the total — that is a mistake worth blocking, not a shortcut.
+        return cashNotEntered || cashReceived >= total;
+    }, [cashNotEntered, cashReceived, method, total]);
+
+    const effectiveCashReceived = method === 'cash' && cashNotEntered ? total : cashReceived;
     const balance = useMemo(() => cashReceived - total, [cashReceived, total]);
+
+    const handleConfirm = useCallback(() => {
+        const tendered = method === 'cash' ? effectiveCashReceived : 0;
+        onConfirm({
+            method,
+            cashReceived: tendered,
+            change: method === 'cash' ? Math.max(0, tendered - total) : 0,
+        });
+    }, [cashNotEntered, effectiveCashReceived, method, onConfirm, total]);
 
     // 5. Render
     const isCash = method === 'cash';
@@ -146,12 +172,21 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({ open, total, cashReceived
                         </div>
                         <div className="flex items-center justify-between">
                             <span className={`${tk.p.subText}`} style={{ fontSize: '1.6vh' }}>{t('pos.cashReceived')}</span>
-                            <span className={`${tk.p.titleText} font-semibold`} style={{ fontSize: '2vh' }}>€{(cashReceived || 0).toFixed(2)}</span>
+                            <span className={`${tk.p.titleText} font-semibold`} style={{ fontSize: '2vh' }}>
+                                €{(isCash ? effectiveCashReceived : 0).toFixed(2)}
+                                {isCash && cashNotEntered && (
+                                    <span className={`${tk.p.subText} font-normal`} style={{ fontSize: '1.4vh', marginLeft: '0.6vh' }}>
+                                        {t('pos.exactAmount')}
+                                    </span>
+                                )}
+                            </span>
                         </div>
                         <div className="flex items-center justify-between" style={{ marginTop: '1.2vh' }}>
                             <span className={`${tk.p.subText}`} style={{ fontSize: '1.6vh' }}>{t('pos.changeDue')}</span>
-                            <span className={`font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`} style={{ fontSize: '2vh' }}>
-                                {balance >= 0 ? `€${balance.toFixed(2)}` : `-€${Math.abs(balance).toFixed(2)}`}
+                            <span className={`font-bold ${balance >= 0 || cashNotEntered ? 'text-green-600' : 'text-red-600'}`} style={{ fontSize: '2vh' }}>
+                                {cashNotEntered
+                                    ? '€0.00'
+                                    : balance >= 0 ? `€${balance.toFixed(2)}` : `-€${Math.abs(balance).toFixed(2)}`}
                             </span>
                         </div>
                     </div>
@@ -188,7 +223,7 @@ const PaymentDialog: React.FC<PaymentDialogProps> = ({ open, total, cashReceived
                     <div style={{ marginTop: '1.5vh' }}>
                         <ActionButton
                             disabled={!canConfirm}
-                            onClick={onConfirm}
+                            onClick={handleConfirm}
                             label={t('pos.confirmPayment')}
                             className={canConfirm ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' : 'bg-gray-300 cursor-not-allowed'}
                             style={{ height: '5.5vh', fontSize: '1.6vh' }}

@@ -7,8 +7,11 @@ import { BaseDialog } from './ui/BaseDialog';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { usePrinterConfig } from '../hooks/usePrinterConfig';
-import { buildReceiptEscPosBase64 } from '../services/escpos/receiptEscPos';
-import { normalizeReceiptLanguage } from '../utils/receiptLanguage';
+import {
+    canPrintThermally,
+    printReceiptThermally,
+    providerOutputKind,
+} from '../services/receiptPrinting';
 import {
     logPostSaleReceiptNotPrinted,
     logPostSaleReceiptPrinted,
@@ -21,13 +24,23 @@ interface ReceiptDialogProps {
     receipt: ReceiptProps;
     /** When set, closing without print logs POST_SALE_RECEIPT_NOT_PRINTED; print logs POST_SALE_RECEIPT_PRINTED. */
     postSalePrintAudit?: PostSalePrintAuditContext | null;
+    /** Carries the outcome of an auto-print that already ran, so the dialog
+     *  opens showing what happened instead of looking untouched. An 'unknown'
+     *  notice deliberately offers no resend. */
+    initialPrintNotice?: { state: 'unknown' | 'failed'; error?: string } | null;
 }
 
 /** 'unknown' = the bytes reached the spooler but it never acknowledged them.
  *  Distinct from 'failed' on purpose: the paper may already be out. */
 type DirectPrintState = 'idle' | 'printing' | 'printed' | 'unknown' | 'failed';
 
-const ReceiptDialog: React.FC<ReceiptDialogProps> = ({ open, onClose, receipt, postSalePrintAudit }) => {
+const ReceiptDialog: React.FC<ReceiptDialogProps> = ({
+    open,
+    onClose,
+    receipt,
+    postSalePrintAudit,
+    initialPrintNotice,
+}) => {
     const { t } = useTranslation();
     const { employee } = useSupabaseAuth();
     const { settings } = useSettings();
@@ -43,11 +56,14 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({ open, onClose, receipt, p
 
     useEffect(() => {
         if (open) {
-            printedRef.current = false;
-            setPrintState('idle');
-            setPrintError('');
+            // An auto-print that came back 'unknown' already set printedRef's
+            // meaning: the paper may be out, so closing must not log
+            // NOT_PRINTED either.
+            printedRef.current = initialPrintNotice?.state === 'unknown';
+            setPrintState(initialPrintNotice?.state ?? 'idle');
+            setPrintError(initialPrintNotice?.error ?? '');
         }
-    }, [open, postSalePrintAudit?.documentNumber]);
+    }, [open, postSalePrintAudit?.documentNumber, initialPrintNotice?.state, initialPrintNotice?.error]);
 
     const handleClose = useCallback(() => {
         const ctx = auditCtxRef.current;
@@ -58,27 +74,13 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({ open, onClose, receipt, p
     }, [employee?.id, onClose]);
 
     const officialOutput = receipt.officialOutput;
-    const hasProviderHtml =
-        officialOutput?.provider === 'vendus' &&
-        officialOutput.format === 'html' &&
-        typeof officialOutput.data === 'string' &&
-        officialOutput.data.trim().length > 0;
-    const hasProviderPdfUrl =
-        officialOutput?.provider === 'vendus' &&
-        officialOutput.format === 'pdf_url' &&
-        typeof officialOutput.url === 'string' &&
-        officialOutput.url.trim().length > 0;
+    const providerKind = providerOutputKind(receipt);
+    // providerOutputKind already proved the field is a non-empty string.
+    const providerHtml = providerKind === 'html' ? String(officialOutput?.data ?? '') : null;
+    const providerPdfUrl = providerKind === 'pdf_url' ? String(officialOutput?.url ?? '') : null;
 
-    /** Provider-rendered documents (Vendus HTML/PDF) must print exactly as the
-     *  provider produced them — ESC/POS cannot reproduce them, so those keep
-     *  the OS print path. Everything else goes straight to the thermal head
-     *  when one is configured. */
     const printerName = printerConfig?.receiptPrinter ?? '';
-    const canPrintDirect =
-        !hasProviderHtml &&
-        !hasProviderPdfUrl &&
-        typeof window.electronAPI?.hardware?.printRaw === 'function' &&
-        printerName.length > 0;
+    const canPrintDirect = canPrintThermally(receipt, printerName);
 
     const printViaOs = useCallback(() => {
         const ctx = auditCtxRef.current;
@@ -92,40 +94,34 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({ open, onClose, receipt, p
     const printDirect = async () => {
         setPrintState('printing');
         setPrintError('');
-        try {
-            const payload = buildReceiptEscPosBase64(receipt, {
-                language: normalizeReceiptLanguage(
-                    receipt.receiptLanguage ?? settings.receipt.receiptLanguage
-                ),
-            });
-            const result = await window.electronAPI?.hardware?.printRaw?.(payload);
 
-            if (result?.success) {
-                printedRef.current = true;
-                const ctx = auditCtxRef.current;
-                if (ctx) void logPostSaleReceiptPrinted(ctx, employee?.id);
-                setPrintState('printed');
-                return;
-            }
+        const result = await printReceiptThermally(receipt, {
+            printerName,
+            language: settings.receipt.receiptLanguage,
+        });
 
-            if (result?.outcomeUnknown) {
-                // Delivered but unacknowledged: the receipt may already be on
-                // paper. Log NEITHER printed nor not-printed — both would be an
-                // assertion we cannot make — and offer no one-tap resend, since
-                // a duplicated fiscal document is worse than one the operator
-                // reprints deliberately from receipt history.
-                printedRef.current = true;
-                setPrintState('unknown');
-                setPrintError(result.error ?? '');
-                return;
-            }
-
-            setPrintState('failed');
-            setPrintError(result?.error ?? t('receiptPrint.unknownError'));
-        } catch (error) {
-            setPrintState('failed');
-            setPrintError(error instanceof Error ? error.message : String(error));
+        if (result.status === 'printed') {
+            printedRef.current = true;
+            const ctx = auditCtxRef.current;
+            if (ctx) void logPostSaleReceiptPrinted(ctx, employee?.id);
+            setPrintState('printed');
+            return;
         }
+
+        if (result.status === 'unknown') {
+            // Delivered but unacknowledged: the receipt may already be on
+            // paper. Log NEITHER printed nor not-printed — both would be an
+            // assertion we cannot make — and offer no one-tap resend, since a
+            // duplicated fiscal document is worse than one the operator
+            // reprints deliberately from receipt history.
+            printedRef.current = true;
+            setPrintState('unknown');
+            setPrintError(result.error ?? '');
+            return;
+        }
+
+        setPrintState('failed');
+        setPrintError(result.error ?? t('receiptPrint.unknownError'));
     };
 
     const handlePrint = () => {
@@ -211,16 +207,16 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({ open, onClose, receipt, p
             }
         >
             <div className="px-6 py-6 flex-1 min-h-0 overflow-y-auto bg-gray-50">
-                {hasProviderHtml ? (
+                {providerHtml !== null ? (
                     <iframe
                         title="Vendus official receipt"
-                        srcDoc={officialOutput.data}
+                        srcDoc={providerHtml}
                         className="min-h-[70vh] w-full rounded-lg border border-gray-200 bg-white"
                     />
-                ) : hasProviderPdfUrl ? (
+                ) : providerPdfUrl !== null ? (
                     <iframe
                         title="Vendus official receipt PDF"
-                        src={officialOutput.url}
+                        src={providerPdfUrl}
                         className="min-h-[70vh] w-full rounded-lg border border-gray-200 bg-white"
                     />
                 ) : (

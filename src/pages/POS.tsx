@@ -40,7 +40,15 @@ import { saftTypeToReceiptDocumentType } from '../fiscal/saleDocumentType';
 import { buildReceiptCustomerProps } from '../fiscal/fiscalCustomer';
 import { ReceiptProps } from '../components/ThermalReceipt';
 import { getReceiptT } from '../utils/receiptLanguage';
-import type { PostSalePrintAuditContext } from '../fiscal/fiscalAuditLog';
+import { logPostSaleReceiptPrinted, type PostSalePrintAuditContext } from '../fiscal/fiscalAuditLog';
+import { usePrinterConfig } from '../hooks/usePrinterConfig';
+import {
+  isFiscalResultPrintable,
+  printReceiptThermally,
+  resolveReceiptPrinterName,
+  type ThermalPrintResult,
+} from '../services/receiptPrinting';
+import type { PaymentConfirmation } from '../components/PaymentDialog';
 // import ReceiptHistorySelector from '../components/ReceiptHistorySelector'; // AGENTS: do not delete — 2.ª via picker (commented until implemented)
 import { CustomerDialog } from '../components/CustomerDialog';
 import PaymentDialog from '../components/PaymentDialog';
@@ -115,6 +123,9 @@ const POSInner: React.FC = () => {
   const [showReceiptHistory, setShowReceiptHistory] = useState(false);
   */
   const [nextReceiptAfterClose, setNextReceiptAfterClose] = useState<ReceiptProps | null>(null);
+  /** Outcome of a post-sale auto-print that did not cleanly succeed, handed to
+   *  the receipt dialog so it opens explaining itself. */
+  const [printNotice, setPrintNotice] = useState<{ state: 'unknown' | 'failed'; error?: string } | null>(null);
   const [postSalePrintAudit, setPostSalePrintAudit] = useState<PostSalePrintAuditContext | null>(null);
   const [lastFiscalInvoiceNo, setLastFiscalInvoiceNo] = useState<string | null>(null);
 
@@ -276,6 +287,7 @@ const POSInner: React.FC = () => {
   });
 
   const [cashReceived, setCashReceived] = useState(0);
+  const printerConfig = usePrinterConfig();
   const [showCashDrawer, setShowCashDrawer] = useState(false);
 
   // Rehydrate a table order whenever this POS screen is entered with an
@@ -567,7 +579,6 @@ const POSInner: React.FC = () => {
         Math.floor(discountAmount * settings.loyalty.pointsPerEuroRedeemed)
       )
     : 0;
-  const changeAmount = cashReceived > finalTotal ? cashReceived - finalTotal : 0;
 
   // (category selection handled inline where used)
 
@@ -1046,9 +1057,15 @@ const POSInner: React.FC = () => {
             setShowPayment(false);
             setCashReceived(0);
           }}
-          onConfirm={async () => {
+          onConfirm={async (confirmation: PaymentConfirmation) => {
             const cartSnapshot = cart.map((ci) => ({ ...ci }));
-            const paymentMethod = cashReceived > 0 ? 'cash' : 'card' as const;
+            // The operator's actual choice, not an inference from the amount:
+            // a cash sale tendered exactly leaves the field empty, and
+            // `cashReceived > 0` used to record those as card (wrong payment
+            // method on the fiscal record, and no drawer kick).
+            const paymentMethod = confirmation.method;
+            const tenderedCash = confirmation.cashReceived;
+            const changeGiven = confirmation.change;
             const employeeId = employee?.id || 'unknown-employee';
             const employeeName = employee?.name || 'Employee';
             const tableOrderId = activeTableOrder?.id;
@@ -1071,7 +1088,7 @@ const POSInner: React.FC = () => {
               const { fiscal, receiptNumber, transactionId } = await processTransaction(
                 {
                   paymentMethod,
-                  amountPaid: cashReceived > 0 ? cashReceived : undefined,
+                  amountPaid: paymentMethod === 'cash' ? tenderedCash : undefined,
                   employeeId,
                   employeeName,
                   employeeNumber: employee?.employee_number,
@@ -1210,29 +1227,71 @@ const POSInner: React.FC = () => {
                   total: Number(finalTotal.toFixed(2)),
                 },
                 payment: {
-                  method: cashReceived > 0 ? 'Numerário' : 'Multibanco',
-                  amountGiven: Number(cashReceived.toFixed(2)),
-                  change: Number(changeAmount.toFixed(2)),
+                  method: paymentMethod === 'cash' ? 'Numerário' : 'Multibanco',
+                  amountGiven: Number(tenderedCash.toFixed(2)),
+                  change: Number(changeGiven.toFixed(2)),
                 },
                 slogan: settings.company.slogan || undefined,
                 softwareInfo: settings.company.softwareInfo || undefined,
                 certificationNumber: settings.company.certificationNumber || undefined,
               };
 
+              // Hand the receipt straight to the thermal head and skip the
+              // preview — but only when the fiscal issuance is complete enough
+              // to give a customer unseen (ATCUD + QR for PT, Veri*factu legend
+              // + QR for ES). Anything less, or any outcome other than a clean
+              // success, falls back to the dialog so the operator sees it.
+              const auditContext: PostSalePrintAuditContext = {
+                documentNumber: fiscal?.invoiceNo || receiptData.documentNumber || '',
+                transactionId: fiscal?.transactionId,
+                fiscalDocumentId: fiscal?.fiscalId,
+              };
+              // Own try/catch: the sale is already committed here, so a
+              // printing problem must never surface as "checkout failed" via
+              // the enclosing handler.
+              let autoPrint: ThermalPrintResult = { status: 'unavailable' };
+              try {
+                if (isFiscalResultPrintable(fiscal, {
+                  spain: Boolean(fiscal?.verifactuLegend?.trim()) || settings.fiscal.issuer === 'sign_es',
+                })) {
+                  autoPrint = await printReceiptThermally(receiptData, {
+                    printerName: await resolveReceiptPrinterName(printerConfig?.receiptPrinter),
+                    language: settings.receipt.receiptLanguage,
+                  });
+                }
+              } catch (printError) {
+                console.error('Sale completed, but the receipt could not be auto-printed', printError);
+                autoPrint = {
+                  status: 'failed',
+                  error: printError instanceof Error ? printError.message : String(printError),
+                };
+              }
+
               setShowPayment(false);
               setReceiptPreviewData(receiptData);
               // setLastCompletedReceipt(receiptData);
               // setRecentReceipts((prev) => [receiptData, ...prev].slice(0, 20));
               setNextReceiptAfterClose(null);
-              setPostSalePrintAudit({
-                documentNumber: fiscal?.invoiceNo || receiptData.documentNumber || '',
-                transactionId: fiscal?.transactionId,
-                fiscalDocumentId: fiscal?.fiscalId,
-              });
               if (fiscal?.invoiceNo) {
                 setLastFiscalInvoiceNo(fiscal.invoiceNo);
               }
-              setShowReceiptPreview(true);
+
+              if (autoPrint.status === 'printed') {
+                // No dialog will mount, so the fiscal audit event is logged
+                // here and the context left null — nothing to resolve later.
+                setPostSalePrintAudit(null);
+                setPrintNotice(null);
+                setShowReceiptPreview(false);
+                void logPostSaleReceiptPrinted(auditContext, employee?.id);
+              } else {
+                setPostSalePrintAudit(auditContext);
+                setPrintNotice(
+                  autoPrint.status === 'unknown' || autoPrint.status === 'failed'
+                    ? { state: autoPrint.status, error: autoPrint.error }
+                    : null
+                );
+                setShowReceiptPreview(true);
+              }
             } catch (e) {
               if (tableOrderId && !fiscalSaleWasIssued) {
                 try {
@@ -1275,6 +1334,7 @@ const POSInner: React.FC = () => {
           onClose={() => {
             setShowReceiptPreview(false);
             setPostSalePrintAudit(null);
+            setPrintNotice(null);
             if (nextReceiptAfterClose) {
               const next = nextReceiptAfterClose;
               setNextReceiptAfterClose(null);
@@ -1284,6 +1344,7 @@ const POSInner: React.FC = () => {
           }}
           receipt={receiptPreviewData}
           postSalePrintAudit={postSalePrintAudit}
+          initialPrintNotice={printNotice}
         />
       )}
 
