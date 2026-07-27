@@ -109,7 +109,7 @@ const ProfileBody: React.FC = () => {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 text-xl font-bold text-white">YF</div>
             <div>
                 <p className={`text-lg font-semibold ${p.titleText}`}>Youne Ferreira</p>
-                <p className={`text-sm ${p.subText}`}>ADMIN001</p>
+                <p className={`text-sm ${p.subText}`}>SYS001</p>
             </div>
             <div className={`rounded-2xl border ${p.border} bg-white p-4`}>
                 <div className="flex items-center justify-between">

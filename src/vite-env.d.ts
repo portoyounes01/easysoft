@@ -9,7 +9,7 @@ interface ImportMetaEnv {
     readonly VITE_FISCAL_SOFTWARE_CERT_NUMBER?: string;
     /** HashControl version for new fiscal documents — not stored in app settings */
     readonly VITE_FISCAL_HASH_CONTROL_VERSION?: string;
-    /** Comma-separated employee_number values treated as system administrator (Definições sensíveis). Default: ADMIN001 */
+    /** Comma-separated employee_number values treated as system administrator (Definições sensíveis). Default: SYS001 */
     readonly VITE_SYSTEM_ADMIN_EMPLOYEE_NUMBERS?: string;
 }
 

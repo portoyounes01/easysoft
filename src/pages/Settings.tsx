@@ -225,7 +225,7 @@ const Settings: React.FC = () => {
     const { settings, updateSettings, resetToDefaults, isLoading } = useSettings();
     const { employee, principal } = useSupabaseAuth();
     // Owner (a membership human with no employee row) is the tenant's top authority and
-    // gets the system-admin surface; till ADMIN001 keeps it via isSystemAdministrator.
+    // gets the system-admin surface; till SYS001 keeps it via isSystemAdministrator.
     const isSystemAdmin = isSystemAdministrator(employee) || principal?.role === 'owner';
     const { t } = useTranslation();
     const { setLanguage } = useLanguage();

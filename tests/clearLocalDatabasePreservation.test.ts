@@ -57,7 +57,7 @@ const issueAttempt: LocalVendusIssueAttempt = {
 const fiscalTransaction: LocalTransaction = {
   id: 'transaction-1',
   transaction_number: 'FT TEST/1',
-  employee_id: 'ADMIN001-id',
+  employee_id: 'SYS001-id',
   employee_name: 'System Administrator',
   customer_id: null,
   customer_name: null,
@@ -145,7 +145,7 @@ describe('clearLocalDatabasePreservingRecovery', () => {
 
   it('preserves configured system admins and fiscal issue recovery attempts', async () => {
     await localDb.employees.bulkPut([
-      employee('ADMIN001', 'System Administrator'),
+      employee('SYS001', 'System Administrator'),
       employee('ADM001', 'Normal Administrator'),
     ]);
     await localDb.vendusIssueAttempts.put(issueAttempt);
@@ -204,9 +204,9 @@ describe('clearLocalDatabasePreservingRecovery', () => {
     });
     expect(await localDb.employees.toArray()).toMatchObject([
       {
-        employee_number: 'ADMIN001',
-        password_hash: 'password-ADMIN001',
-        pin: 'pin-ADMIN001',
+        employee_number: 'SYS001',
+        password_hash: 'password-SYS001',
+        pin: 'pin-SYS001',
       },
     ]);
     expect(await localDb.vendusIssueAttempts.toArray()).toEqual([issueAttempt]);

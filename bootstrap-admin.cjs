@@ -44,7 +44,7 @@ function generateUUID() {
 // Admin user data
 const adminUserData = {
     id: generateUUID(),
-    employee_number: 'ADMIN001',
+    employee_number: 'SYS001',
     name: 'System Administrator',
     email: 'admin@company.com',
     phone: null,
@@ -177,7 +177,7 @@ async function main() {
     if (success) {
         console.log('');
         console.log('🔑 DEFAULT LOGIN CREDENTIALS:');
-        console.log('   Employee Number: ADMIN001');
+        console.log('   Employee Number: SYS001');
         console.log('   Password: admin123');
         console.log('   PIN: 1234');
         console.log('');

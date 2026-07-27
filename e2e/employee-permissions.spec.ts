@@ -18,7 +18,7 @@ async function signInAsSystemAdmin(page: Page): Promise<void> {
         timeout: 60_000,
     });
     await page.getByRole('option', { name: 'Other Employee Custom ID' }).click();
-    await page.getByLabel('Employee ID').fill('ADMIN001');
+    await page.getByLabel('Employee ID').fill('SYS001');
     await page.getByLabel('PIN').fill('password');
     await Promise.all([
         page.waitForURL(/\/pos\/?$/, { timeout: 30_000 }),

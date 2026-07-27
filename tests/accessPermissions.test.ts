@@ -5,7 +5,7 @@ describe('hasEmployeePermission', () => {
   it('gives the configured system administrator unconditional access', () => {
     expect(
       hasEmployeePermission(
-        { employee_number: 'ADMIN001', access_levels: [] },
+        { employee_number: 'SYS001', access_levels: [] },
         'clear_data'
       )
     ).toBe(true);

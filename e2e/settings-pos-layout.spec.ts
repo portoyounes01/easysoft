@@ -43,7 +43,7 @@ async function signInAsSystemAdmin(page: Page): Promise<void> {
     });
 
     await page.getByRole('option', { name: 'Other Employee Custom ID' }).click();
-    await page.locator('#login2-custom-id').fill('ADMIN001');
+    await page.locator('#login2-custom-id').fill('SYS001');
     await page.locator('#login2-custom-pin').fill('password');
 
     await Promise.all([

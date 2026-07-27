@@ -63,8 +63,8 @@ const EmployeesInner: React.FC = () => {
     } = useEmployees();
 
     const { employee: currentUser, principal } = useSupabaseAuth();
-    // IDENTITY check (ADMIN001) — gates who may SEE/GRANT the RESTRICTED access levels
-    // (reports/dashboard/profit_costs/orders/clear_data) and protects ADMIN001 rows.
+    // IDENTITY check (SYS001) — gates who may SEE/GRANT the RESTRICTED access levels
+    // (reports/dashboard/profit_costs/orders/clear_data) and protects SYS001 rows.
     // Extended ONLY to owner (a membership human, the tenant's top authority). Keeping this
     // narrow is critical: folding it into a role check would let every admin grant
     // restricted levels (privilege escalation) — docs/pwa-p1-refactor-plan.md Gap #1.
