@@ -131,6 +131,77 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
     }
   };
 
+  /** One row per physical USB printer. Windows' PnP view is authoritative
+   *  (port, driver binding, existing queues); the libusb scan adds whether
+   *  direct USB is possible. Showing both lists meant the same printer twice. */
+  const usbRows = React.useMemo(() => {
+    const idsFromUri = (uri?: string) => {
+      const m = /vid=([0-9a-f]{4}).*pid=([0-9a-f]{4})/i.exec(uri ?? '');
+      return m ? { vid: m[1].toUpperCase(), pid: m[2].toUpperCase() } : null;
+    };
+    const scanned = new Map<string, USBPrinter>();
+    usbPrinters.forEach(printer => {
+      const ids = idsFromUri(printer.uri);
+      if (ids) scanned.set(`${ids.vid}:${ids.pid}`, printer);
+    });
+
+    const matched = new Set<string>();
+    const rows = usbPrintDevices.map(device => {
+      const key = `${device.vendorId}:${device.productId}`.toUpperCase();
+      const legacy = scanned.get(key);
+      if (legacy) matched.add(key);
+      return {
+        key: device.instanceId,
+        label: device.model,
+        ids: key,
+        port: device.port,
+        queues: device.queues,
+        ownQueue: device.queues.find(
+          q => q.trim().toLowerCase() === device.model.trim().toLowerCase()
+        ),
+        driverState: legacy?.driverState,
+        isThermal: legacy?.isThermal,
+        device,
+        legacy,
+      };
+    });
+
+    usbPrinters.forEach(printer => {
+      const ids = idsFromUri(printer.uri);
+      const key = ids ? `${ids.vid}:${ids.pid}` : '';
+      if (key && matched.has(key)) return;
+      rows.push({
+        key: printer.serial || printer.uri,
+        label: `${printer.brand} ${printer.model}`.trim(),
+        ids: key,
+        port: '',
+        queues: [],
+        ownQueue: undefined,
+        driverState: printer.driverState,
+        isThermal: printer.isThermal,
+        device: undefined as unknown as UsbPrintDevice,
+        legacy: printer,
+      });
+    });
+    return rows;
+  }, [usbPrintDevices, usbPrinters]);
+
+  /** Adopt an existing queue as the receipt printer (Windows). */
+  const useExistingQueue = async (queueName: string) => {
+    setSetupBusyPort(queueName);
+    try {
+      const result = await window.electronAPI?.hardware?.setPrinterRole?.(queueName, 'receipt');
+      if (result && result.success === false) {
+        setCurrentStatus(`Could not select ${queueName}: ${result.error ?? 'unknown error'}`);
+        return;
+      }
+      setCurrentStatus(`Receipt printer set to ${queueName}.`);
+      onPrinterConnected({ success: true, message: `Receipt printer set to: ${queueName}` });
+    } finally {
+      setSetupBusyPort(null);
+    }
+  };
+
   const listUsbPrintDevices = async () => {
     if (!window.electronAPI?.hardware?.listUsbPrintDevices) return;
     setDevicesLoading(true);
@@ -510,138 +581,63 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                 </div>
               )}
 
-              {/* Detected USB printers — what Windows sees BEFORE any queue
-                  exists. A till frequently has no queue named for its printer,
-                  or several queues for other models sharing its port. */}
-              {usbPrintDevices.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="font-medium text-gray-900 mb-2">USB printers Windows can see</h3>
-                  <div className="space-y-3">
-                    {usbPrintDevices.map(device => {
-                      const hasOwnQueue = device.queues.some(
-                        q => q.trim().toLowerCase() === device.model.trim().toLowerCase()
-                      );
-                      const rebound = device.service && device.service.toLowerCase() !== 'usbprint';
-                      return (
-                        <div key={device.instanceId} className="p-4 border border-gray-200 rounded-lg bg-white">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center space-x-2">
-                                <Usb className="h-4 w-4 text-gray-500" />
-                                <span className="font-medium">{device.model}</span>
-                                <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full font-mono">
-                                  {device.port || 'no port'}
-                                </span>
-                              </div>
-                              <div className="mt-1 space-y-1 text-sm text-gray-600">
-                                <p>
-                                  USB <span className="font-mono">{device.vendorId}:{device.productId}</span>
-                                  {' · driver '}
-                                  <span className="font-mono">{device.service || 'none'}</span>
-                                </p>
-                                {rebound && (
-                                  <p className="text-orange-700">
-                                    Bound to {device.service}, not the Windows print driver — it will not appear as a printer.
-                                  </p>
-                                )}
-                                {device.queues.length === 0 ? (
-                                  <p className="text-orange-700">No Windows queue exists for this printer yet.</p>
-                                ) : (
-                                  <p>
-                                    Queues on this port: {device.queues.join(', ')}
-                                    {!hasOwnQueue && ' — none of them is named for this printer.'}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => void setUpDevice(device)}
-                              disabled={setupBusyPort === device.port || !device.port}
-                              className={`${DS2_PRIMARY_BTN} shrink-0 px-4 py-2`}
-                            >
-                              {setupBusyPort === device.port ? (
-                                <Loader className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <CheckCircle className="h-4 w-4" />
-                              )}
-                              <span>{setupBusyPort === device.port ? 'Setting up...' : 'Set up for me'}</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-2 text-xs text-gray-500">
-                    Creates a queue using the driver built into Windows — no download, and it works
-                    regardless of printer model, because receipts are sent as raw ESC/POS.
-                  </p>
-                </div>
-              )}
-              {devicesLoading && usbPrintDevices.length === 0 && (
+              {devicesLoading && usbRows.length === 0 && (
                 <div className="mb-4 flex items-center space-x-2 text-sm text-gray-600">
                   <Loader className="h-4 w-4 animate-spin" />
                   <span>Looking for USB printers...</span>
                 </div>
               )}
 
-              {/* USB Printers */}
-              {usbPrinters.length > 0 && (
+              {usbRows.length > 0 && (
                 <div className="space-y-3">
-                  <h3 className="font-medium text-gray-900">USB Printers:</h3>
-                  {usbPrinters.map((printer) => (
-                    <div
-                      key={printer.serial}
-                      className={`p-4 border rounded-lg ${
-                        printer.recommended
-                          ? 'border-green-300 bg-green-50'
-                          : 'border-gray-200 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-lg">🔌</span>
-                            <span className="font-medium">{printer.brand} {printer.model}</span>
-                            {printer.recommended && (
-                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                                Recommended
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-1 space-y-1">
-                            <p className="text-sm text-green-600">
-                              {printer.isThermal ? 'Thermal Printer ✅' : 'Standard Printer'}
+                  {usbRows.map(row => {
+                    const busy = setupBusyPort === row.port || setupBusyPort === row.ownQueue;
+                    const detail = row.ownQueue
+                      ? `queue “${row.ownQueue}”`
+                      : row.queues.length > 0
+                        ? `no queue of its own — ${row.queues.join(', ')} share this port`
+                        : row.port
+                          ? 'no Windows queue yet'
+                          : row.driverState === 'winusb'
+                            ? 'direct USB available'
+                            : '';
+                    const action = row.ownQueue
+                      ? { label: 'Use this', run: () => void useExistingQueue(row.ownQueue as string) }
+                      : row.port
+                        ? { label: 'Set up for me', run: () => void setUpDevice(row.device) }
+                        : row.legacy
+                          ? { label: 'Connect', run: () => connectToUSBPrinter(row.legacy as USBPrinter) }
+                          : null;
+                    return (
+                      <div key={row.key} className="p-4 border border-gray-200 rounded-lg bg-white">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-lg">🔌</span>
+                              <span className="font-medium">{row.label}</span>
+                              {row.isThermal && (
+                                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Thermal</span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-sm text-gray-600 font-mono">
+                              {[row.ids, row.port, detail].filter(Boolean).join(' · ')}
                             </p>
-                            <p className="text-sm text-gray-600">Serial: {printer.serial}</p>
-                            {printer.driverState === 'windows-driver' && (
-                              <p className="text-xs font-medium text-amber-700">
-                                Managed by a Windows print driver, so direct USB is not available — use “Set up for me”
-                                above, or pick its queue on the System tab.
-                              </p>
-                            )}
-                            {printer.driverState === 'winusb' && (
-                              <p className="text-xs font-medium text-emerald-700">
-                                Direct USB mode available.
-                              </p>
-                            )}
                           </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => connectToUSBPrinter(printer)}
-                          disabled={isConnecting}
-                          className={`${DS2_PRIMARY_BTN} ml-4 shrink-0`}
-                        >
-                          {isConnecting ? (
-                            <Loader className="h-4 w-4 animate-spin" />
-                          ) : (
-                            'Connect'
+                          {action && (
+                            <button
+                              type="button"
+                              onClick={action.run}
+                              disabled={busy || isConnecting}
+                              className={`${DS2_PRIMARY_BTN} shrink-0 px-4 py-2`}
+                            >
+                              {busy ? <Loader className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                              <span>{busy ? 'Working...' : action.label}</span>
+                            </button>
                           )}
-                        </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
