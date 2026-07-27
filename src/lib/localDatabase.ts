@@ -2093,6 +2093,7 @@ export class TransactionLocalService {
                         dispatch: payload.failure.dispatch,
                         externalReference: payload.failure.externalReference ?? null,
                         attemptId: payload.failure.attemptId ?? null,
+                        providerStatus: payload.failure.providerStatus ?? null,
                         operatorAttested: payload.failure.operatorAttested ?? false,
                         totalGross: payload.grossTotal,
                     }),

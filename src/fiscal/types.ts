@@ -233,6 +233,8 @@ export interface NonFiscalFallbackPersistencePayload {
         reason: string;
         externalReference?: string;
         attemptId?: string;
+        /** Upstream HTTP status, when the provider's own refusal was the proof. */
+        providerStatus?: number;
         /** Operator attested at the backoffice that no document exists there. */
         operatorAttested?: boolean;
     };

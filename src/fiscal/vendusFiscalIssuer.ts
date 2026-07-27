@@ -5,7 +5,8 @@ import { connectionStatus, supabase } from '../lib/supabase';
 import type { LocalCustomer, LocalTransactionItem } from '../types/supabase';
 import { generateUUID } from '../utils/uuid';
 import { mapIvaDecimalToSaftTaxCode } from './saft/exportSaft';
-import { asUnresolvedIssueFailure, FiscalBackendUnavailableError } from './fiscalFailure';
+import { asUnresolvedIssueFailure, FiscalBackendUnavailableError, ProviderRejectedError } from './fiscalFailure';
+import { identityKey, resolveIssueAttemptId } from './issueAttemptReuse';
 import type {
     FiscalCheckoutResult,
     FiscalTransactionMetadata,
@@ -97,6 +98,9 @@ interface VendusFunctionResponse {
     taxes?: unknown;
     paymentMethods?: unknown;
     error?: string;
+    /** Upstream HTTP status, present only when the PROVIDER refused (not us). */
+    providerStatus?: number;
+    dispatched?: boolean;
 }
 
 function assertVendusEnabled(settings: SystemSettings): void {
@@ -257,6 +261,13 @@ async function invokeVendusFunction(body: Record<string, unknown>): Promise<Vend
         throw new Error('Vendus Edge Function não devolveu dados.');
     }
     if (data.error) {
+        // `providerStatus` present => Vendus itself answered, and this is its
+        // verdict. Absent => our own fault, or an edge function deployed before
+        // that contract existed; either way the till must assume the request
+        // may have landed.
+        if (typeof data.providerStatus === 'number') {
+            throw new ProviderRejectedError(data.providerStatus, data.error);
+        }
         throw new Error(data.error);
     }
     return data;
@@ -274,37 +285,74 @@ export async function issueVendusSale(params: {
     assertOnlineForVendus();
 
     const draft = buildSaleCheckoutDraft({ cart, selectedCustomer, payment, globalDiscount });
-    const attemptId = generateUUID();
-    const txId = `pos-sale-${attemptId}`;
-    const externalReference = `POS-${attemptId}`;
-    const request: VendusIssueDocumentPayload = {
+
+    // Everything that defines this sale to Vendus, minus the id-derived fields.
+    // Built before the id is chosen, because it is what chooses the id.
+    const saleFields = {
         register_id: parseOptionalInt(settings.fiscal.vendus.registerId) ?? 0,
         store_id: parseOptionalInt(settings.fiscal.vendus.storeId),
         type: settings.fiscal.vendus.documentType,
         mode: vendusMode(settings),
         output: settings.fiscal.vendus.output,
-        tx_id: txId,
-        external_reference: externalReference,
-        return_qrcode: 1,
-        errors_full: 'yes',
         ...(draft.globalDiscountAmount > 0 ? { discount_amount: normalizeMoney(draft.globalDiscountAmount) } : {}),
         client: clientForVendus(selectedCustomer),
         payments: [{ id: paymentMethodIdFor(settings, payment.paymentMethod), amount: normalizeMoney(draft.total) }],
         items: vendusItemsForSale(settings, cart),
     };
+    const identityOfVendusRequest = (r: Record<string, unknown>): string =>
+        identityKey({
+            register_id: r.register_id,
+            store_id: r.store_id,
+            type: r.type,
+            mode: r.mode,
+            output: r.output,
+            discount_amount: r.discount_amount,
+            client: r.client,
+            payments: r.payments,
+            items: r.items,
+        });
 
-    await transactionLocalService.createVendusIssueAttempt({
-        id: attemptId,
+    // Re-running an unresolved sale re-presents its ORIGINAL tx_id. Vendus
+    // documents that as a hard guarantee — "this will ensure that only a
+    // document may be created using the same tx_id, even if multiple requests
+    // are made by mistake" — so the retry returns the first document instead of
+    // signing a second one for the same sale.
+    const { attemptId, reused } = await resolveIssueAttemptId({
+        provider: 'vendus',
         kind: 'sale',
+        identity: identityOfVendusRequest(saleFields as unknown as Record<string, unknown>),
+        identityOfStored: identityOfVendusRequest,
+    });
+    const txId = `pos-sale-${attemptId}`;
+    const externalReference = `POS-${attemptId}`;
+    const request: VendusIssueDocumentPayload = {
+        ...saleFields,
         tx_id: txId,
         external_reference: externalReference,
-        status: 'pending',
-        vendus_document_id: null,
-        local_transaction_id: null,
-        request_json: JSON.stringify(request),
-        response_json: null,
-        error_message: null,
-    });
+        return_qrcode: 1,
+        errors_full: 'yes',
+    } as VendusIssueDocumentPayload;
+
+    if (reused) {
+        await transactionLocalService.updateVendusIssueAttempt(attemptId, {
+            status: 'pending',
+            error_message: null,
+        });
+    } else {
+        await transactionLocalService.createVendusIssueAttempt({
+            id: attemptId,
+            provider: 'vendus',
+            kind: 'sale',
+            tx_id: txId,
+            external_reference: externalReference,
+            status: 'pending',
+            vendus_document_id: null,
+            local_transaction_id: null,
+            request_json: JSON.stringify(request),
+            response_json: null,
+            error_message: null,
+        });
+    }
 
     try {
         const response = await invokeVendusFunction({ action: 'issue_document', document: request });

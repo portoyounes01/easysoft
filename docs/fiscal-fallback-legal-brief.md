@@ -187,3 +187,58 @@ log page. The till **never re-issues these online** — for InvoiceXpress and
 fiskaly that is explicit in the reminder text. `ManualDocumentDialog` captures
 the book's series, number, ATCUD and date (all transcribed, never generated),
 which pairs against the issuance event and clears the reminder.
+
+---
+
+## 7. Retry convergence and the provider fast path (2026-07-28)
+
+Two follow-ups to §6, both aimed at the same question — can a document exist at
+the provider?
+
+### Reusing the attempt id
+
+Re-running an unresolved sale now re-presents its ORIGINAL identity instead of
+minting a fresh one (`src/fiscal/issueAttemptReuse.ts`). What that buys is not
+the same for both providers, and the difference is load-bearing:
+
+| Provider | Mechanism | Effect of reuse |
+|---|---|---|
+| Vendus | `tx_id` — *"this will ensure that only a document may be created using the same tx_id, even if multiple requests are made by mistake"* | Retry is genuinely idempotent |
+| fiskaly | attempt `checkoutId` seeds deterministic `X-Idempotency-Key`s | Retry replays the original record |
+| InvoiceXpress | none documented | Sale becomes identifiable, not deduplicated |
+
+So Retry is offered on an unresolved failure for Vendus and fiskaly, and
+withheld for InvoiceXpress where it could still create a second document.
+
+Note the distinction the UI has to keep straight: a **safe retry** is not proof
+that the first attempt created nothing. Retrying converges on whatever exists;
+falling back to paper asserts that nothing does. The attestation gate therefore
+stays on `unresolved` for every provider, including Vendus.
+
+### The provider's own "no"
+
+A provider that answers with a definitive client error has told us, on the
+record, that it created nothing. That is as good a proof as never having sent
+the request, so it takes the same one-click path — with different wording,
+because a refusal is a fault in the document and will recur, where an outage
+will not.
+
+Four statuses are excluded because a document can exist alongside them: 408
+(may have begun processing), 409 (often means one already exists), 425
+(replayable), 429 (a gateway can emit it after forwarding upstream).
+
+Two safeguards matter more than the rule itself:
+
+1. **Only the provider's refusal counts.** The edge functions raise a typed
+   `UpstreamError` solely from the upstream fetch. Their own faults — missing
+   API key, failed guards, a malformed request — keep the plain 500 and carry
+   no `providerStatus`, so a misconfigured till is never told the provider
+   refused.
+2. **Only before the document exists.** InvoiceXpress creates a draft and then
+   finalizes it. A 4xx on the finalize step means the document EXISTS, which is
+   the opposite of what the fast path assumes, so it is downgraded to a plain
+   error and classified as unresolved.
+
+Absent `providerStatus` — an edge function deployed before this contract — the
+till classifies as `unresolved`. An out-of-date backend degrades to the cautious
+answer, never the permissive one.

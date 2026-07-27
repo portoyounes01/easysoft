@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertTriangle, FileWarning, RefreshCw, X } from 'lucide-react';
 import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
 import { useAppliedDialogStyle } from '../theme/dialogStyle';
-import type { FiscalIssueFailure } from '../fiscal/fiscalFailure';
+import { retryIsIdempotent, type FiscalIssueFailure } from '../fiscal/fiscalFailure';
 import type { NonFiscalFallbackDecision } from '../fiscal/nonFiscalFallback';
 
 interface NonFiscalFallbackDialogProps {
@@ -29,11 +29,16 @@ interface NonFiscalFallbackDialogProps {
  *
  *  • not-dispatched — the request never left the till, so nothing exists at the
  *    provider. Retrying is safe and is offered first.
+ *  • rejected — the provider answered, and refused, with a status that proves
+ *    no document was created. Nothing exists either, so the slip is one click
+ *    away; but the wording says "refused", not "offline", because this is a
+ *    fault in the document rather than an outage and it will recur.
  *  • unresolved — the request was sent and we did not get a usable answer. A
- *    document may already exist there. Retrying is NOT offered (for Vendus and
- *    InvoiceXpress a retry mints a fresh idempotency token and can issue a
- *    second document), and the slip is gated behind the operator confirming
- *    they looked the sale up and found nothing.
+ *    document may already exist there, so the slip is gated behind the operator
+ *    confirming they looked the sale up and found nothing. Retry is offered
+ *    only where the provider deduplicates a re-sent sale (Vendus via tx_id,
+ *    fiskaly via its checkoutId); for InvoiceXpress it would risk a second
+ *    document, so it is withheld.
  */
 export const NonFiscalFallbackDialog: React.FC<NonFiscalFallbackDialogProps> = ({
     failure,
@@ -47,14 +52,18 @@ export const NonFiscalFallbackDialog: React.FC<NonFiscalFallbackDialogProps> = (
     const [attested, setAttested] = useState(false);
 
     const unresolved = failure.dispatch === 'unresolved';
+    const rejected = failure.dispatch === 'rejected';
     const externalReference = 'externalReference' in failure ? failure.externalReference : null;
+    const providerStatus = 'providerStatus' in failure ? failure.providerStatus : null;
     const providerName = t(`nonFiscalFallback.providers.${failure.provider}`);
     const canIssue = !busy && (!unresolved || attested);
+    // Re-sending is only safe where the provider recognises the repeat.
+    const canRetry = !unresolved || retryIsIdempotent(failure.provider);
 
     const interior = (
         <div className="space-y-4">
             <div
-                className={`rounded-2xl border-2 p-4 ${unresolved
+                className={`rounded-2xl border-2 p-4 ${unresolved || rejected
                     ? 'border-red-300 bg-red-50 text-red-900'
                     : 'border-amber-300 bg-amber-50 text-amber-900'
                     }`}
@@ -65,18 +74,25 @@ export const NonFiscalFallbackDialog: React.FC<NonFiscalFallbackDialogProps> = (
                         <p className="font-semibold">
                             {unresolved
                                 ? t('nonFiscalFallback.unresolvedTitle', { provider: providerName })
-                                : t('nonFiscalFallback.offlineTitle', { provider: providerName })}
+                                : rejected
+                                    ? t('nonFiscalFallback.rejectedTitle', { provider: providerName })
+                                    : t('nonFiscalFallback.offlineTitle', { provider: providerName })}
                         </p>
                         <p className="text-sm leading-5">
                             {unresolved
                                 ? t('nonFiscalFallback.unresolvedBody', { provider: providerName })
-                                : t('nonFiscalFallback.offlineBody', { provider: providerName })}
+                                : rejected
+                                    ? t('nonFiscalFallback.rejectedBody', {
+                                        provider: providerName,
+                                        status: providerStatus ?? '',
+                                    })
+                                    : t('nonFiscalFallback.offlineBody', { provider: providerName })}
                         </p>
                     </div>
                 </div>
             </div>
 
-            {externalReference && (
+            {externalReference && unresolved && (
                 <div className="rounded-2xl bg-slate-50 p-4">
                     <p className="text-sm text-slate-600">{t('nonFiscalFallback.lookupLabel')}</p>
                     <p className="mt-1 break-all font-mono text-base font-semibold text-slate-900">
@@ -122,7 +138,7 @@ export const NonFiscalFallbackDialog: React.FC<NonFiscalFallbackDialogProps> = (
             >
                 {t('nonFiscalFallback.cancelSale')}
             </button>
-            {!unresolved && (
+            {canRetry && (
                 <button
                     type="button"
                     onClick={onRetry}

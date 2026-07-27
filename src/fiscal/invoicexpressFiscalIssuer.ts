@@ -3,8 +3,8 @@ import type { SystemSettings } from '../contexts/SettingsContext';
 import { transactionLocalService } from '../lib/localDatabase';
 import { connectionStatus, supabase } from '../lib/supabase';
 import type { LocalCustomer } from '../types/supabase';
-import { generateUUID } from '../utils/uuid';
-import { asUnresolvedIssueFailure, FiscalBackendUnavailableError } from './fiscalFailure';
+import { asUnresolvedIssueFailure, FiscalBackendUnavailableError, ProviderRejectedError } from './fiscalFailure';
+import { identityKey, resolveIssueAttemptId } from './issueAttemptReuse';
 import type {
     ExternalFiscalSnapshot,
     ExternalIssuedItemReference,
@@ -90,6 +90,9 @@ interface InvoiceXpressFunctionResponse {
     account?: unknown;
     sequences?: unknown;
     error?: string;
+    /** Upstream HTTP status, present only when the PROVIDER refused (not us). */
+    providerStatus?: number;
+    dispatched?: boolean;
 }
 
 function assertInvoiceXpressEnabled(settings: SystemSettings): void {
@@ -198,6 +201,13 @@ async function invokeFunction(body: Record<string, unknown>): Promise<InvoiceXpr
         throw new Error('InvoiceXpress Edge Function não devolveu dados.');
     }
     if (data.error) {
+        // `providerStatus` present => InvoiceXpress itself answered, and this is
+        // its verdict. Absent => our own fault, or an edge function deployed
+        // before that contract existed; either way the till must assume the
+        // request may have landed.
+        if (typeof data.providerStatus === 'number') {
+            throw new ProviderRejectedError(data.providerStatus, data.error);
+        }
         throw new Error(data.error);
     }
     return data;
@@ -270,14 +280,12 @@ export async function issueInvoiceXpressSale(params: {
     const ix = settings.fiscal.invoicexpress;
     const draft = buildSaleCheckoutDraft({ cart, selectedCustomer, payment, globalDiscount });
     const type = DOCUMENT_TYPE_TO_SAFT[ix.documentType];
-    const attemptId = generateUUID();
-    const txId = `pos-sale-${attemptId}`;
-    const externalReference = `POS-${attemptId}`;
 
-    const document: InvoiceXpressDocumentPayload = {
+    // Everything that defines this sale, minus the id-derived fields, so the
+    // identity can be computed before the id is chosen.
+    const documentFields = {
         date: toInvoiceXpressDate(draft.transactionDate),
         due_date: toInvoiceXpressDate(draft.transactionDate),
-        reference: externalReference,
         ...(ix.sequenceId?.trim() ? { sequence_id: ix.sequenceId.trim() } : {}),
         ...(hasExemptLine(cart) && ix.exemptTax.code?.trim()
             ? {
@@ -288,6 +296,46 @@ export async function issueInvoiceXpressSale(params: {
         client: clientFor(selectedCustomer),
         items: itemsForSale(cart),
     };
+    const identityOfIxRequest = (r: Record<string, unknown>): string => {
+        const doc = (r.document ?? {}) as Record<string, unknown>;
+        return identityKey({
+            accountName: r.accountName,
+            documentType: r.documentType,
+            finalize: r.finalize,
+            date: doc.date,
+            due_date: doc.due_date,
+            sequence_id: doc.sequence_id,
+            tax_exemption: doc.tax_exemption,
+            tax_exemption_reason: doc.tax_exemption_reason,
+            client: doc.client,
+            items: doc.items,
+        });
+    };
+
+    // ⚠️ Unlike Vendus, InvoiceXpress documents NO server-side idempotency, so
+    // re-presenting the original id does not by itself stop a second document
+    // from being created. What it does buy is identity: the retry carries the
+    // same `reference` / `proprietary_uid`, so a duplicate is detectable and the
+    // operator can find the sale in the backoffice. The non-fiscal fallback
+    // therefore keeps its attestation gate for this provider (register D-FR2).
+    const { attemptId, reused } = await resolveIssueAttemptId({
+        provider: 'invoicexpress',
+        kind: 'sale',
+        identity: identityOfIxRequest({
+            accountName: ix.accountName.trim(),
+            documentType: ix.documentType,
+            finalize: ix.finalizeOnIssue,
+            document: documentFields,
+        }),
+        identityOfStored: identityOfIxRequest,
+    });
+    const txId = `pos-sale-${attemptId}`;
+    const externalReference = `POS-${attemptId}`;
+
+    const document: InvoiceXpressDocumentPayload = {
+        ...documentFields,
+        reference: externalReference,
+    } as InvoiceXpressDocumentPayload;
 
     const request = {
         action: 'issue_document' as const,
@@ -298,19 +346,26 @@ export async function issueInvoiceXpressSale(params: {
         document,
     };
 
-    await transactionLocalService.createVendusIssueAttempt({
-        id: attemptId,
-        provider: 'invoicexpress',
-        kind: 'sale',
-        tx_id: txId,
-        external_reference: externalReference,
-        status: 'pending',
-        vendus_document_id: null,
-        local_transaction_id: null,
-        request_json: JSON.stringify(request),
-        response_json: null,
-        error_message: null,
-    });
+    if (reused) {
+        await transactionLocalService.updateVendusIssueAttempt(attemptId, {
+            status: 'pending',
+            error_message: null,
+        });
+    } else {
+        await transactionLocalService.createVendusIssueAttempt({
+            id: attemptId,
+            provider: 'invoicexpress',
+            kind: 'sale',
+            tx_id: txId,
+            external_reference: externalReference,
+            status: 'pending',
+            vendus_document_id: null,
+            local_transaction_id: null,
+            request_json: JSON.stringify(request),
+            response_json: null,
+            error_message: null,
+        });
+    }
 
     try {
         const response = await invokeFunction(request);

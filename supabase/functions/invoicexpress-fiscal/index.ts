@@ -49,6 +49,26 @@ function serverError(message: string) {
   return jsonResponse({ error: message }, 500);
 }
 
+/** A non-2xx answer from InvoiceXpress itself, as opposed to a fault of ours. */
+class UpstreamError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = 'UpstreamError';
+  }
+}
+
+/**
+ * The provider was reached and refused. Answered 200 on purpose: this function
+ * did its job — it called InvoiceXpress and got a definitive verdict — and the
+ * envelope carries that verdict. Returning non-2xx would make supabase-js
+ * surface a generic "non-2xx status code" and drop the body, which is exactly
+ * the status the till needs to tell a refusal (no document created) from a lost
+ * response (a document may exist). See src/fiscal/fiscalFailure.ts.
+ */
+function upstreamRejection(error: UpstreamError) {
+  return jsonResponse({ error: error.message, providerStatus: error.status, dispatched: true });
+}
+
 function config(accountName: string) {
   const apiKey = Deno.env.get('INVOICEXPRESS_API_KEY')?.trim();
   if (!apiKey) {
@@ -84,7 +104,7 @@ async function ixFetch(baseUrl: string, apiKey: string, path: string, init: Requ
       data && typeof data === 'object' && 'errors' in data
         ? JSON.stringify((data as { errors: unknown }).errors)
         : `InvoiceXpress HTTP ${res.status}`;
-    throw new Error(message);
+    throw new UpstreamError(res.status, message);
   }
   return data;
 }
@@ -124,16 +144,29 @@ async function issueDocument(body: RequestBody) {
 
   let final = created;
 
-  // 2. Finalize (draft -> finalized) so ATCUD / hash are assigned
+  // 2. Finalize (draft -> finalized) so ATCUD / hash are assigned.
+  //
+  // ⚠️ Past this point the document EXISTS at InvoiceXpress. An UpstreamError
+  // from here is NOT proof that nothing was created — it is the opposite — so
+  // it must never reach the caller as a provider rejection, or the till would
+  // offer a paper invoice for a sale that already has a document. Downgrade it
+  // to a plain error, which the till classifies as unresolved.
   if (body.finalize !== false) {
-    await ixFetch(baseUrl, apiKey, `/${map.endpoint}/${id}/change-state.json`, {
-      method: 'PUT',
-      body: JSON.stringify({ [map.root]: { state: 'finalized' } }),
-    });
-    final = unwrapDocument(
-      await ixFetch(baseUrl, apiKey, `/${map.endpoint}/${id}.json`, { method: 'GET' }),
-      map.root
-    );
+    try {
+      await ixFetch(baseUrl, apiKey, `/${map.endpoint}/${id}/change-state.json`, {
+        method: 'PUT',
+        body: JSON.stringify({ [map.root]: { state: 'finalized' } }),
+      });
+      final = unwrapDocument(
+        await ixFetch(baseUrl, apiKey, `/${map.endpoint}/${id}.json`, { method: 'GET' }),
+        map.root
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `InvoiceXpress document ${id} was created but could not be finalized: ${detail}`
+      );
+    }
   }
 
   // 3. QR code (best-effort; not all accounts expose it)
@@ -223,6 +256,12 @@ Deno.serve(async (req) => {
         return badRequest('Unsupported action');
     }
   } catch (error) {
+    // Our own faults (missing API key, a failed guard) keep the plain 500 and
+    // carry no providerStatus — a misconfigured till must never be told the
+    // provider refused, or it would offer a paper invoice for a config bug.
+    if (error instanceof UpstreamError) {
+      return upstreamRejection(error);
+    }
     return serverError(error instanceof Error ? error.message : String(error));
   }
 });

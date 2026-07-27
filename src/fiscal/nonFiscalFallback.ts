@@ -74,10 +74,12 @@ export interface NonFiscalFallbackDecision {
     /** The classified failure that made a fiscal document impossible. */
     failure: FiscalIssueFailure;
     /**
-     * Required when `failure.dispatch === 'unresolved'`: the operator states
-     * they looked the sale up at the provider under its external reference and
-     * no document exists there. Recorded in the audit event, because it is the
-     * grounds on which a second (paper) document is being created.
+     * Required ONLY when `failure.dispatch === 'unresolved'`: the operator
+     * states they looked the sale up at the provider under its external
+     * reference and no document exists there. Recorded in the audit event,
+     * because it is the grounds on which a second (paper) document is created.
+     *
+     * Not needed for `rejected` — the provider's own status is the proof there.
      */
     operatorAttested?: boolean;
 }
@@ -85,12 +87,15 @@ export interface NonFiscalFallbackDecision {
 /**
  * May this failure be resolved with a handwritten invoice right now?
  *
- * An unresolved failure needs the operator's attestation first — otherwise the
- * sale could end up with both a cloud fatura and a paper one.
+ * `not-dispatched` (never sent) and `rejected` (the provider answered "no" with
+ * a status that proves nothing was created) both mean no document can exist, so
+ * the paper invoice is the only one. Only `unresolved` needs the operator's
+ * attestation first — otherwise the sale could end up with both a cloud fatura
+ * and a paper one.
  */
 export function canIssueNonFiscalFallback(decision: NonFiscalFallbackDecision): boolean {
     if (!isNonFiscalFallbackProvider(decision.failure.provider)) return false;
-    if (decision.failure.dispatch === 'not-dispatched') return true;
+    if (decision.failure.dispatch !== 'unresolved') return true;
     return decision.operatorAttested === true;
 }
 
@@ -145,6 +150,8 @@ export async function runNonFiscalFallbackSale(params: {
             reason: failure.message,
             externalReference: 'externalReference' in failure ? failure.externalReference : undefined,
             attemptId: 'attemptId' in failure ? failure.attemptId : undefined,
+            // The upstream status that justified skipping the attestation.
+            providerStatus: 'providerStatus' in failure ? failure.providerStatus : undefined,
             operatorAttested: decision.operatorAttested ?? false,
         },
     });
