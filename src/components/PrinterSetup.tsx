@@ -135,8 +135,11 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
    *  (port, driver binding, existing queues); the libusb scan adds whether
    *  direct USB is possible. Showing both lists meant the same printer twice. */
   const usbRows = React.useMemo(() => {
+    // The scan emits usbwin://vid=0x2aaf&pid=0x6004 — the 0x prefix is optional
+    // here so a format change on either side does not silently unmerge the row
+    // and show the same printer twice.
     const idsFromUri = (uri?: string) => {
-      const m = /vid=([0-9a-f]{4}).*pid=([0-9a-f]{4})/i.exec(uri ?? '');
+      const m = /vid=(?:0x)?([0-9a-f]{4}).*?pid=(?:0x)?([0-9a-f]{4})/i.exec(uri ?? '');
       return m ? { vid: m[1].toUpperCase(), pid: m[2].toUpperCase() } : null;
     };
     const scanned = new Map<string, USBPrinter>();
@@ -600,12 +603,17 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                           ? 'no Windows queue yet'
                           : row.driverState === 'winusb'
                             ? 'direct USB available'
-                            : '';
+                            : row.driverState === 'windows-driver'
+                              ? 'held by a Windows driver — use its queue on the System tab'
+                              : '';
                     const action = row.ownQueue
                       ? { label: 'Use this', run: () => void useExistingQueue(row.ownQueue as string) }
                       : row.port
                         ? { label: 'Set up for me', run: () => void setUpDevice(row.device) }
-                        : row.legacy
+                        : row.legacy && row.driverState !== 'windows-driver'
+                          // A driver-bound device CANNOT be opened directly —
+                          // libusb returns NOT_SUPPORTED. Offering the button
+                          // guarantees a failure message, so don't.
                           ? { label: 'Connect', run: () => connectToUSBPrinter(row.legacy as USBPrinter) }
                           : null;
                     return (
