@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from '../../src/i18n';
 import { initializeLocalDatabase, localDb } from '../../src/lib/localDatabase';
 import { issueInvoiceXpressSale } from '../../src/fiscal/invoicexpressFiscalIssuer';
 import { issueFiskalySale } from '../../src/fiscal/fiskalyFiscalIssuer';
@@ -335,7 +336,7 @@ describe('External fiscal issuers', () => {
                 payment,
                 globalDiscount: { type: 'percentage', value: 10, amount: 1.23 },
             })
-        ).rejects.toThrow(/Desconto global/);
+        ).rejects.toThrow(i18n.t('checkout.fiskalyGlobalDiscountUnsupported'));
         expect(invokeMock).not.toHaveBeenCalled();
     });
 
@@ -343,10 +344,10 @@ describe('External fiscal issuers', () => {
         connectionState = { isOnline: false, isSupabaseOnline: false };
         await expect(
             issueInvoiceXpressSale({ settings: invoiceXpressSettings(), cart: cart(), selectedCustomer: null, payment })
-        ).rejects.toThrow(/bloqueada/);
+        ).rejects.toThrow(i18n.t('checkout.invoiceXpressOffline'));
         await expect(
             issueFiskalySale({ settings: fiskalySettings(), cart: cart(), selectedCustomer: null, payment })
-        ).rejects.toThrow(/bloqueada/);
+        ).rejects.toThrow(i18n.t('checkout.fiskalyOffline'));
         expect(invokeMock).not.toHaveBeenCalled();
     });
 });

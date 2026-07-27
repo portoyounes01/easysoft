@@ -206,7 +206,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             return;
         }
         if (countryIso === 'ES' && postal.length > 0 && !/^\d{5}$/.test(postal)) {
-            setFormError(t('pos.customerForm.invalidPostalEs', { defaultValue: 'Código postal no válido (5 dígitos).' }));
+            setFormError(t('pos.customerForm.invalidPostalEs'));
             return;
         }
 
@@ -349,7 +349,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                             >
                                                 <div className="flex items-center justify-between px-2">
                                                     <p className={`font-semibold ${tk.p.titleText} truncate`} style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>
-                                                        {customer.tax_number || 'N/A'}
+                                                        {customer.tax_number || t('common.notApplicable')}
                                                     </p>
                                                     <p className={`font-semibold ${tk.p.titleText}`} style={{ fontSize: '1.5vh' }}>
                                                         €{(customer.total_spent || 0).toFixed(2)}
@@ -358,7 +358,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                                 <div className={`flex items-center space-x-3 ${tk.p.subText} px-2`} style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
                                                     <span className="font-medium truncate" style={{ fontSize: '1.3vh' }}>{customer.name}</span>
                                                     <span style={{ fontSize: '1.3vh' }}>•</span>
-                                                    <span style={{ fontSize: '1.3vh' }}>{customer.transaction_count || 0} orders</span>
+                                                    <span style={{ fontSize: '1.3vh' }}>{t('pos.customerOrdersCount', { count: customer.transaction_count || 0 })}</span>
                                                 </div>
                                             </li>
                                         ))}
@@ -409,7 +409,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             {/* Personal Info */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <InputField
-                                    label="Name"
+                                    label={t('customers.form.nameLabel')}
                                     value={newCustomerForm.name}
                                     onChange={(e) => handleFormChange('name', e.target.value)}
                                     onClick={() => handleTextFieldClick('name', true, true, 50)}

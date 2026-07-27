@@ -180,7 +180,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <Menu className="w-6 h-6" />
                   </button>
                   <div className="md:hidden flex items-center gap-2 min-w-0">
-                    <span className="text-lg font-bold text-gray-900 truncate">POS System</span>
+                    <span className="text-lg font-bold text-gray-900 truncate">{t("sidebar.brandTitle")}</span>
                   </div>
                   {isPwaHost && (
                     <div className="ml-auto flex items-center">
@@ -203,8 +203,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     className="mb-4 rounded-2xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-amber-950 text-center font-semibold text-lg"
                     role="status"
                   >
-                    FORMAÇÃO — documentos sem valor fiscal. Base de dados local
-                    de treino.
+                    {t("settings.company.trainingModeBanner")}
                   </div>
                 )}
                 {seriesOutsideValidity && (

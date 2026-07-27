@@ -40,6 +40,7 @@ import { saftTypeToReceiptDocumentType } from '../fiscal/saleDocumentType';
 import { buildReceiptCustomerProps } from '../fiscal/fiscalCustomer';
 import { ReceiptProps } from '../components/ThermalReceipt';
 import { getReceiptT } from '../utils/receiptLanguage';
+import { uiLocale } from '../utils/locale';
 import { logPostSaleReceiptPrinted, type PostSalePrintAuditContext } from '../fiscal/fiscalAuditLog';
 import { usePrinterConfig } from '../hooks/usePrinterConfig';
 import {
@@ -76,7 +77,7 @@ const iconMap = {
 
 
 const POSInner: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const appliedDialogStyle = useAppliedDialogStyle();
   const shellButtons = appliedDialogStyle ? dialogButtonClasses(appliedDialogStyle) : null;
@@ -391,7 +392,7 @@ const POSInner: React.FC = () => {
         });
       } catch (error) {
         console.error('Could not save the table order before opening Tables', error);
-        alert('The table order could not be saved. Please try again.');
+        alert(t('pos.tableOrder.saveFailed'));
         return;
       }
     }
@@ -917,12 +918,12 @@ const POSInner: React.FC = () => {
               )}
               {settings.pos.autoClearCart.enabled && settings.pos.autoClearCart.timeoutMinutes > 0 && cart.length > 0 && (
                 <span className="text-orange-600">
-                  Cart: {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
+                  {t('pos.cartTimerLabel')} {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
                 </span>
               )}
               <ScaleStatusIndicator />
               <UpdateStatusIndicator />
-              <span>POS Terminal • {new Date().toLocaleDateString('pt-PT')}</span>
+              <span>{t('pos.terminalLabel')} • {new Date().toLocaleDateString(uiLocale(i18n.language))}</span>
             </div>
           </div>
         </div>
@@ -998,10 +999,10 @@ const POSInner: React.FC = () => {
         loyalty={settings.loyalty}
         saleTotal={subtotal}
         presets={[
-          { id: 'p10', name: 'Promo 10%', type: 'percentage', value: 10, description: 'Seasonal discount' },
+          { id: 'p10', name: 'Promo 10%', type: 'percentage', value: 10, description: t('pos.discountDialog.presets.seasonal') },
           { id: 'p15', name: 'Promo 15%', type: 'percentage', value: 15 },
-          { id: 'f2', name: '€2 Off', type: 'fixed', value: 2 },
-          { id: 'f5', name: '€5 Off', type: 'fixed', value: 5, description: 'Limited time' }
+          { id: 'f2', name: t('pos.discountDialog.presets.off2'), type: 'fixed', value: 2 },
+          { id: 'f5', name: t('pos.discountDialog.presets.off5'), type: 'fixed', value: 5, description: t('pos.discountDialog.presets.limitedTime') }
         ]}
         onApply={(res) => {
           setDiscount({ type: res.type, value: res.value });
@@ -1074,7 +1075,7 @@ const POSInner: React.FC = () => {
 
             try {
               if (tableOrderId && !tableOrderReady) {
-                throw new Error('The table order is still loading. Please wait a moment and try again.');
+                throw new Error(t('pos.tableOrder.stillLoading'));
               }
 
               if (tableOrderId) {
@@ -1227,7 +1228,9 @@ const POSInner: React.FC = () => {
                   total: Number(finalTotal.toFixed(2)),
                 },
                 payment: {
-                  method: paymentMethod === 'cash' ? 'Numerário' : 'Multibanco',
+                  method: paymentMethod === 'cash'
+                    ? getReceiptT(settings.receipt.receiptLanguage)('transactions.receipt.paymentCash')
+                    : getReceiptT(settings.receipt.receiptLanguage)('transactions.receipt.paymentCard'),
                   amountGiven: Number(tenderedCash.toFixed(2)),
                   change: Number(changeGiven.toFixed(2)),
                 },
@@ -1302,12 +1305,12 @@ const POSInner: React.FC = () => {
                 settlingTableOrderId.current = null;
               }
               console.error('Checkout failed', e);
-              alert(e instanceof Error ? e.message : 'Pagamento falhou');
+              alert(e instanceof Error ? e.message : t('pos.checkoutFailed'));
               return;
             }
 
             if (tableSettlementNeedsReview) {
-              alert('The sale was completed, but the table is locked for review to prevent a duplicate payment.');
+              alert(t('pos.tableOrder.settlementNeedsReview'));
             }
           }}
         />

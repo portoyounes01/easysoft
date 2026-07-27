@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { initializeLocalDatabase, localDb } from '../lib/localDatabase';
 import type {
@@ -93,13 +94,13 @@ export const matchPurchaseLines = (
 class PurchaseReceiptService {
     async extract(request: ExtractRequest): Promise<PurchaseDocumentExtraction> {
         if (request.file.size > 10 * 1024 * 1024) {
-            throw new Error('The document is larger than 10 MB. Compress or split it before uploading.');
+            throw new Error(i18n.t('purchaseReceiptImport.fileTooLarge'));
         }
 
         const functionUrl = `${supabaseUrl}/functions/v1/extract-purchase-document`;
         const { data: sessionData } = await supabase.auth.getSession();
         if (!sessionData.session?.access_token) {
-            throw new Error('Your device session has expired. Pair or sign in again.');
+            throw new Error(i18n.t('purchaseReceiptImport.deviceSessionExpired'));
         }
         const response = await fetch(functionUrl, {
             method: 'POST',
@@ -118,30 +119,30 @@ class PurchaseReceiptService {
             }),
         });
         const payload = await response.json() as PurchaseDocumentExtraction & { error?: string };
-        if (!response.ok) throw new Error(payload.error || 'Azure could not extract this purchase document.');
+        if (!response.ok) throw new Error(payload.error || i18n.t('purchaseReceiptImport.extractionFailed'));
         return payload;
     }
 
     async apply(request: ApplyRequest): Promise<string> {
         await initializeLocalDatabase();
         const activeLines = request.lines.filter(line => line.resolution !== 'ignored');
-        if (activeLines.length === 0) throw new Error('Select at least one line to add to stock.');
+        if (activeLines.length === 0) throw new Error(i18n.t('purchaseReceiptImport.selectAtLeastOneLine'));
         if (activeLines.some(line => line.quantity <= 0 || line.unitCost < 0)) {
-            throw new Error('Every included line needs a valid quantity and unit cost.');
+            throw new Error(i18n.t('purchaseReceiptImport.invalidQuantityOrCost'));
         }
         if (activeLines.some(line => line.resolution === 'matched' && !line.matchedProductId)) {
-            throw new Error('Every matched line must have a product selected.');
+            throw new Error(i18n.t('purchaseReceiptImport.matchedLineNeedsProduct'));
         }
         if (activeLines.some(line =>
             line.resolution === 'new_product' &&
             (!line.newProductName.trim() || !line.newProductSku.trim() || !line.newProductCategoryId)
         )) {
-            throw new Error('New products require a name, SKU, and category.');
+            throw new Error(i18n.t('purchaseReceiptImport.newProductNeedsFields'));
         }
         if (activeLines.some(line =>
             line.resolution === 'raw_material' && !line.rawMaterialId && !line.newRawMaterialName.trim()
         )) {
-            throw new Error('New raw materials require a name.');
+            throw new Error(i18n.t('purchaseReceiptImport.newRawMaterialNeedsName'));
         }
 
         const receiptId = generateUUID();
@@ -238,12 +239,12 @@ class PurchaseReceiptService {
                     let product: LocalProduct | undefined;
                     if (line.resolution === 'matched' && line.matchedProductId) {
                         product = await localDb.products.get(line.matchedProductId);
-                        if (!product) throw new Error(`Matched product no longer exists: ${line.description}`);
+                        if (!product) throw new Error(i18n.t('purchaseReceiptImport.matchedProductMissing', { description: line.description }));
                     } else {
                         const category = await localDb.categories.get(line.newProductCategoryId ?? '');
-                        if (!category) throw new Error(`Category is required for ${line.description}`);
+                        if (!category) throw new Error(i18n.t('purchaseReceiptImport.categoryRequiredForLine', { description: line.description }));
                         const duplicateSku = await localDb.products.where('sku').equals(line.newProductSku.trim()).first();
-                        if (duplicateSku) throw new Error(`SKU already exists: ${line.newProductSku}`);
+                        if (duplicateSku) throw new Error(i18n.t('purchaseReceiptImport.skuAlreadyExists', { sku: line.newProductSku }));
 
                         const productId = generateUUID();
                         product = {

@@ -11,6 +11,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "check:buttons": "node scripts/check-button-drift.mjs",
+    "check:i18n": "node scripts/check-i18n-keys.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "validate:saft": "npm test -- --run tests/fiscal/saftExport.test.ts",

@@ -200,10 +200,10 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                 data-testid="order-panel-table-summary"
                             >
                                 <p className="font-semibold text-emerald-900" style={{ fontSize: '1.45vh' }}>
-                                    Table: {tableName}
+                                    {t('pos.tableLabelWithName', { name: tableName })}
                                 </p>
                                 <p className="mt-0.5 text-emerald-700" style={{ fontSize: '1.25vh' }}>
-                                    This order is saved until payment.
+                                    {t('pos.tableOrderHeldHint')}
                                 </p>
                             </div>
                         )}
@@ -217,7 +217,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                 </p>
                                 {customerSummary.taxNumber ? (
                                     <p className="text-gray-600 mt-0.5" style={{ fontSize: '1.35vh' }}>
-                                        NIF {customerSummary.taxNumber}
+                                        {activeProfile().taxId.label} {customerSummary.taxNumber}
                                     </p>
                                 ) : null}
                             </div>

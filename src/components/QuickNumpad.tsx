@@ -1,4 +1,5 @@
 import React, { useCallback, useContext } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DialogShellStyleContext, DIALOG_PALETTES } from '../theme/dialogStyle';
 import { Delete, X } from 'lucide-react';
 
@@ -19,6 +20,7 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
     className = '',
     disabled = false
 }) => {
+    const { t } = useTranslation();
     // Inside an applied dialog shell the numpad follows the style's numpad
     // axis; 'keys' renders the simple bordered grid, 'legacy' (and page
     // surfaces / unstyled dialogs) keep the original framed grid below.
@@ -67,9 +69,9 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
                     <button key={d} type="button" disabled={disabled} onClick={() => appendToken(d)} className={key}>{d}</button>
                 ))}
                 <button type="button" disabled={disabled} onClick={() => handleQuickSet(quickValues[2])} className={quickKey}>{quickValues[2]}</button>
-                <button type="button" disabled={disabled} onClick={handleClear} className={key} aria-label="Clear">×</button>
+                <button type="button" disabled={disabled} onClick={handleClear} className={key} aria-label={t('common.clear')}>×</button>
                 <button type="button" disabled={disabled} onClick={() => appendToken('0')} className={key}>0</button>
-                <button type="button" disabled={disabled} onClick={handleDelete} className={key} aria-label="Delete">⌫</button>
+                <button type="button" disabled={disabled} onClick={handleDelete} className={key} aria-label={t('common.delete')}>⌫</button>
                 <button type="button" disabled={disabled} onClick={() => handleQuickSet(quickValues[3])} className={quickKey}>{quickValues[3]}</button>
             </div>
         );

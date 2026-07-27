@@ -285,7 +285,7 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
                                             <div className="rounded-2xl bg-emerald-50 p-4 text-emerald-900">
                                                 <p className="font-semibold">{matchedCustomer.name}</p>
                                                 <p className="mt-1 text-sm">
-                                                    {matchedCustomer.loyalty_points.toLocaleString()} points available
+                                                    {t('pos.discountDialog.redeem.pointsAvailable', { points: matchedCustomer.loyalty_points.toLocaleString() })}
                                                 </p>
                                             </div>
                                             <InputField
@@ -304,7 +304,7 @@ const DiscountDialog: React.FC<DiscountDialogProps> = ({
                                             />
                                             {requestedPoints > 0 && (
                                                 <div className={`rounded-2xl bg-white p-4 text-sm ${tk.p.subText}`}>
-                                                    {requestedPoints.toLocaleString()} points = €{pointsDiscount.toFixed(2)}
+                                                    {t('pos.discountDialog.redeem.pointsEquals', { points: requestedPoints.toLocaleString(), amount: pointsDiscount.toFixed(2) })}
                                                 </div>
                                             )}
                                         </>

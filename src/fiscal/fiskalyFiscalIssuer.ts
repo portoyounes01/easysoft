@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { SystemSettings } from '../contexts/SettingsContext';
 import { localDb, transactionLocalService } from '../lib/localDatabase';
 import { connectionStatus, supabase } from '../lib/supabase';
@@ -75,18 +76,18 @@ interface FiskalyFunctionResponse {
 
 function assertFiskalyEnabled(settings: SystemSettings): void {
     if (settings.fiscal.issuer !== 'fiskaly' || !settings.fiscal.fiskaly.enabled) {
-        throw new Error('Fiskaly não está ativo nas definições fiscais.');
+        throw new Error(i18n.t('checkout.fiskalyNotEnabled'));
     }
     const f = settings.fiscal.fiskaly;
     if (!f.taxpayerId.trim() || !f.locationId.trim() || !f.systemId.trim()) {
-        throw new Error('Identificadores Fiskaly (taxpayer/location/system) em falta nas definições fiscais.');
+        throw new Error(i18n.t('checkout.fiskalyMissingIds'));
     }
 }
 
 function assertOnline(): void {
     const state = connectionStatus.getStatus();
     if (!state.isOnline || !state.isSupabaseOnline) {
-        throw new Error('Fiskaly está configurado como emissor fiscal. A venda fica bloqueada até existir ligação ao Supabase/Fiskaly.');
+        throw new Error(i18n.t('checkout.fiskalyOffline'));
     }
 }
 
@@ -113,7 +114,7 @@ const VAT_RATE_CODES: Record<string, string> = {
 function vatCodeForRate(pct: number): string {
     const code = VAT_RATE_CODES[String(pct)];
     if (!code) {
-        throw new Error(`Taxa de IVA ${pct}% sem mapeamento para código fiskaly (STANDARD/REDUCED_N). Confirme o mapeamento SIGN PT antes de emitir.`);
+        throw new Error(i18n.t('checkout.fiskalyVatRateUnmapped', { pct }));
     }
     return code;
 }
@@ -127,7 +128,7 @@ function ratePercent(ivaRate: number): number {
 function exemptionCode(settings: SystemSettings): string {
     const code = settings.fiscal.fiskaly.exemptTax.code?.trim().toUpperCase() ?? '';
     if (!/^(NOT_SUBJECT|NOT_TAXABLE|CAUSE_\d{1,2})$/.test(code)) {
-        throw new Error(`Código de isenção "${code || '(vazio)'}" inválido para fiskaly SIGN PT — use NOT_SUBJECT, NOT_TAXABLE ou CAUSE_n (mapeamento dos códigos M no artigo de suporte fiskaly).`);
+        throw new Error(i18n.t('checkout.fiskalyExemptionCodeInvalid', { code: code || '—' }));
     }
     return code;
 }
@@ -279,14 +280,14 @@ function buildRecipients(customer: LocalCustomer | null): Array<Record<string, u
     // BUSINESS recipient (LegalName + Address + VAT id); a CONSUMER recipient needs
     // gender/forename/surname which the POS does not capture.
     if (!customer) {
-        throw new Error('Fatura (FT) via fiskaly requer um cliente com NIF e morada completos.');
+        throw new Error(i18n.t('checkout.fiskalyInvoiceNeedsCustomer'));
     }
     const nif = customer.tax_number?.replace(/\s/g, '').trim();
     const line = customer.address?.trim();
     const code = customer.postal_code?.trim();
     const city = customer.city?.trim();
     if (!nif || !customer.name?.trim() || !line || !code || !city) {
-        throw new Error('Fatura (FT) via fiskaly requer cliente com NIF, nome, morada, código postal e localidade.');
+        throw new Error(i18n.t('checkout.fiskalyInvoiceNeedsCustomerFields'));
     }
     // Address.line is a discriminated OBJECT (only variant STREET_NUMBER, requiring
     // street + number) — a plain string is schema-rejected. Our customer record has a
@@ -322,10 +323,10 @@ function externalItemRefs(localItems: Draft['transactionItems']): ExternalIssued
 async function invokeFunction(body: Record<string, unknown>): Promise<FiskalyFunctionResponse> {
     const { data, error } = await supabase.functions.invoke<FiskalyFunctionResponse>(EDGE_FUNCTION, { body });
     if (error) {
-        throw new Error(`Fiskaly Edge Function falhou: ${error.message}`);
+        throw new Error(i18n.t('checkout.fiskalyEdgeFunctionFailed', { error: error.message }));
     }
     if (!data) {
-        throw new Error('Fiskaly Edge Function não devolveu dados.');
+        throw new Error(i18n.t('checkout.fiskalyEdgeFunctionNoData'));
     }
     if (data.error) {
         throw new Error(data.error);
@@ -352,10 +353,13 @@ function snapshotFrom(
 ): ExternalFiscalSnapshot {
     const id = record.id == null ? '' : String(record.id);
     if (!id) {
-        throw new Error('Resposta Fiskaly inválida: registo sem id.');
+        throw new Error(i18n.t('checkout.fiskalyRecordNoId'));
     }
     if (record.state === 'REJECTED' || record.state === 'FAILED') {
-        throw new Error(`Registo Fiskaly ${record.state}: ${JSON.stringify(record.logs ?? null)}`);
+        throw new Error(i18n.t('checkout.fiskalyRecordRejected', {
+            state: record.state,
+            logs: JSON.stringify(record.logs ?? null),
+        }));
     }
     const atcud = record.compliance?.data?.trim() || '';
     const signatureHash = record.compliance?.signature_hash?.trim() || '';
@@ -366,7 +370,13 @@ function snapshotFrom(
         // attempt ledger keeps id+response, and an identical retry reuses the same
         // checkoutId (see issueFiskalySale), so fiskaly replays the record instead of
         // double-issuing.
-        throw new Error(`Registo Fiskaly incompleto (ATCUD="${atcud || '—'}", signature_hash="${signatureHash || '—'}", qr=${qrData ? 'ok' : '—'}) — state=${record.state ?? '?'} mode=${record.mode ?? '?'}.`);
+        throw new Error(i18n.t('checkout.fiskalyRecordIncomplete', {
+            atcud: atcud || '—',
+            hash: signatureHash || '—',
+            qr: qrData ? 'ok' : '—',
+            state: record.state ?? '?',
+            mode: record.mode ?? '?',
+        }));
     }
     const f = params.settings.fiscal.fiskaly;
     const signedAt = record.journal?.signed_at?.trim();
@@ -423,7 +433,7 @@ export async function issueFiskalySale(params: {
     // record built from the lines would overstate revenue/VAT vs the charged total.
     // Loudly blocked until the first live TEST pass settles discount representation (§6).
     if (globalDiscount && globalDiscount.type !== 'none' && (globalDiscount.value > 0 || globalDiscount.amount > 0)) {
-        throw new Error('Desconto global ainda não é suportado no emissor fiskaly SIGN PT — use descontos por linha.');
+        throw new Error(i18n.t('checkout.fiskalyGlobalDiscountUnsupported'));
     }
 
     const f = settings.fiscal.fiskaly;
@@ -502,7 +512,7 @@ export async function issueFiskalySale(params: {
         operation = buildOperation(documentNumber);
     }
     if (documentNumber.length > 20) {
-        throw new Error(`Número de documento "${documentNumber}" excede os 20 caracteres do DocumentIdentifier fiskaly — encurte a série.`);
+        throw new Error(i18n.t('checkout.fiskalyDocumentNumberTooLong', { number: documentNumber }));
     }
     const txId = `pos-sale-${attemptId}`;
     const externalReference = `POS-${attemptId}`;
@@ -541,7 +551,7 @@ export async function issueFiskalySale(params: {
     try {
         const response = await invokeFunction(request);
         if (!response.record) {
-            throw new Error('Fiskaly não devolveu o registo emitido.');
+            throw new Error(i18n.t('checkout.fiskalyNoRecord'));
         }
         const external = snapshotFrom(response.record, {
             settings,
@@ -602,7 +612,7 @@ export async function issueFiskalyCreditNoteForTransaction(params: {
     creditReason?: string;
 }): Promise<FiscalCheckoutResult> {
     throw new Error(
-        `Notas de crédito Fiskaly ainda não estão implementadas nesta fase de integração (transação ${params.originalTransactionId}).`
+        i18n.t('checkout.fiskalyCreditNotesUnavailable', { transactionId: params.originalTransactionId })
     );
 }
 
@@ -630,10 +640,10 @@ export async function fetchFiskalySaftArchive(params: {
         to,
     });
     if (response.status === 'processing') {
-        throw new Error('O SAF-T ainda está a ser gerado pela fiskaly — tente novamente dentro de momentos.');
+        throw new Error(i18n.t('checkout.fiskalySaftProcessing'));
     }
     if (!response.zip_base64) {
-        throw new Error('Fiskaly não devolveu o ficheiro SAF-T.');
+        throw new Error(i18n.t('checkout.fiskalySaftMissing'));
     }
     const binary = atob(response.zip_base64);
     const bytes = new Uint8Array(binary.length);

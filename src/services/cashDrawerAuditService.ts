@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import { initializeLocalDatabase, localDb } from '../lib/localDatabase';
 import type {
     CashDrawerReasonCode,
@@ -121,7 +122,7 @@ class CashDrawerAuditService {
 
     async openManually(request: ManualOpenRequest): Promise<LocalCashDrawerEvent> {
         const justification = request.justification.trim();
-        if (!justification) throw new Error('A justification is required to open the drawer without a sale.');
+        if (!justification) throw new Error(i18n.t('cashDrawerDialog.justificationRequired'));
 
         const hardware = await this.issueOpenCommand(justification);
         return this.append({

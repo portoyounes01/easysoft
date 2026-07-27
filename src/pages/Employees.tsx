@@ -339,7 +339,7 @@ const EmployeesInner: React.FC = () => {
         const errors: Partial<Record<keyof EmployeeFormData, string>> = {};
 
         if (!formData.name.trim()) {
-            errors.name = 'Name is required';
+            errors.name = t('employees.form.errors.nameRequired');
         }
 
         // Prevent non-admins from assigning admin role
@@ -365,25 +365,25 @@ const EmployeesInner: React.FC = () => {
         // PIN validation for managers and cashiers only
         if ((formData.role === 'manager' || formData.role === 'cashier')) {
             if (!editingEmployee && !formData.pin?.trim()) {
-                errors.pin = 'PIN is required for new employees';
+                errors.pin = t('employees.form.errors.pinRequired');
             } else if (formData.pin?.trim() && formData.pin.length < 4) {
-                errors.pin = 'PIN must be at least 4 digits';
+                errors.pin = t('employees.form.errors.pinTooShort');
             } else if (formData.pin?.trim() && !/^\d+$/.test(formData.pin)) {
-                errors.pin = 'PIN must contain only numbers';
+                errors.pin = t('employees.form.errors.pinDigitsOnly');
             }
         }
 
         if (!formData.hire_date) {
-            errors.hire_date = 'Hire date is required';
+            errors.hire_date = t('employees.form.errors.hireDateRequired');
         }
 
         if (!isSystemAdministrator(editingEmployee) && formData.access_levels.length === 0) {
-            errors.access_levels = 'At least one access level is required';
+            errors.access_levels = t('employees.form.errors.accessLevelRequired');
         }
 
         // Password validation only for new admin employees
         if (formData.role === 'admin' && !editingEmployee && !formData.password?.trim()) {
-            errors.password = 'Password is required for new admin employees';
+            errors.password = t('employees.form.errors.passwordRequired');
         }
 
         setFormErrors(errors);

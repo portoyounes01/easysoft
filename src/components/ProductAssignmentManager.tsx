@@ -142,11 +142,11 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="font-medium text-gray-900 mb-2">Product Assignment</h4>
+        <h4 className="font-medium text-gray-900 mb-2">{t('printerWorkflow.productAssignmentTitle')}</h4>
         <p className="text-sm text-gray-600 mb-3">
-          {station.categoryId === 'receipt' 
-            ? 'Receipt printers automatically print for all orders.'
-            : 'Select products that should print to this station by category.'
+          {station.categoryId === 'receipt'
+            ? t('printerWorkflow.receiptPrintersAutoHint')
+            : t('printerWorkflow.selectProductsByCategoryHint')
           }
         </p>
       </div>
@@ -157,14 +157,14 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <div className="flex items-center justify-between text-sm">
               <span className="text-blue-900 font-medium">
-                {totalAssignedProducts} of {totalAvailableProducts} products assigned
+                {t('printerWorkflow.productsAssignedCount', { assigned: totalAssignedProducts, total: totalAvailableProducts })}
               </span>
               {totalAssignedProducts > 0 && (
                 <button
                   onClick={() => updateProductAssignment([])}
                   className="px-2 py-1 hover:bg-gray-100 text-gray-900 rounded-2xl"
                 >
-                  Clear all
+                  {t('printerWorkflow.clearAllAssignments')}
                 </button>
               )}
             </div>
@@ -183,7 +183,7 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                aria-label="Clear search"
+                aria-label={t('printerWorkflow.clearSearchAria')}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 text-gray-700 rounded-2xl"
               >
                 <X className="h-3 w-3" />
@@ -196,7 +196,7 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
             {categorizedProducts.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>{searchTerm ? 'No products found' : 'No products available'}</p>
+                <p>{searchTerm ? t('printerWorkflow.noProductsFound') : t('printerWorkflow.noProductsAvailable')}</p>
               </div>
             ) : (
               categorizedProducts.map((category) => {
@@ -208,7 +208,7 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
                     <div className="flex items-center gap-2 p-3 bg-gray-50 hover:bg-gray-100">
                       <button
                         onClick={() => toggleCategoryExpansion(category.id)}
-                        aria-label={category.isExpanded ? 'Collapse category' : 'Expand category'}
+                        aria-label={category.isExpanded ? t('printerWorkflow.collapseCategoryAria') : t('printerWorkflow.expandCategoryAria')}
                         className="p-2 hover:bg-gray-100 text-gray-700 rounded-2xl"
                       >
                         {category.isExpanded ? (
@@ -264,7 +264,7 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
                               
                               <div className="flex-1">
                                 <div className="font-medium text-gray-900">{product.name}</div>
-                                <div className="text-sm text-gray-500">SKU: {product.sku}</div>
+                                <div className="text-sm text-gray-500">{t('printerWorkflow.skuLabel', { sku: product.sku })}</div>
                               </div>
                               
                               <div className="text-sm text-gray-700 font-medium">
@@ -291,13 +291,13 @@ const ProductAssignmentManager: React.FC<ProductAssignmentManagerProps> = ({
                 updateProductAssignment(allProductIds);
               }}
               className="flex-1 text-sm"
-              label={`Select All ${searchTerm ? 'Filtered ' : ''}Products`}
+              label={searchTerm ? t('printerWorkflow.selectAllFilteredProducts') : t('printerWorkflow.selectAllProducts')}
             />
             <AdminActionButton
               variant="outline"
               onClick={() => updateProductAssignment([])}
               className="flex-1 text-sm"
-              label="Clear All Selections"
+              label={t('printerWorkflow.clearAllSelections')}
             />
           </div>
         </>

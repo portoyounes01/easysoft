@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import { initializeLocalDatabase, localDb } from '../lib/localDatabase';
 import type { LocalRawMaterial, RawMaterialUnit } from '../types/rawMaterial';
 import { generateUUID } from '../utils/uuid';
@@ -118,7 +119,7 @@ class RawMaterialService {
         await initializeLocalDatabase();
         return localDb.transaction('rw', localDb.rawMaterials, async () => {
             const material = await localDb.rawMaterials.get(id);
-            if (!material) throw new Error('Raw material not found.');
+            if (!material) throw new Error(i18n.t('inventory.rawMaterialNotFound'));
             const next = Math.max(0, material.stock + delta);
             await localDb.rawMaterials.update(id, { stock: next, updated_at: new Date() });
             return next;

@@ -281,24 +281,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
               }
 
               const Icon = item.icon;
-              const label = t(item.labelKey, {
-                defaultValue:
-                  item.labelKey === "sidebar.menu.hr"
-                    ? "HR & Attendance"
-                    : item.labelKey === "sidebar.menu.cashDrawerAudit"
-                      ? "Cash Drawer Audit"
-                      : item.labelKey === "sidebar.menu.purchaseReceipts"
-                        ? "Purchase Imports"
-                      : item.labelKey === "sidebar.menu.inventory"
-                        ? "Inventory"
-                      : item.labelKey === "sidebar.menu.stockProfit"
-                        ? "Stock & Profit"
-                      : item.labelKey === "sidebar.menu.devices"
-                        ? "Tills"
-                      : item.labelKey === "sidebar.menu.platform"
-                        ? "Platform Console"
-                      : item.labelKey,
-              });
+              const label = t(item.labelKey);
               return (
                 <li key={item.path}>
                   <NavLink
@@ -334,7 +317,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, onNavi
             type="button"
             onClick={() => window.dispatchEvent(new Event(OPEN_MY_PROFILE_EVENT))}
             className={`mb-2 flex min-h-touch w-full items-center px-2.5 py-2 text-left transition-colors hover:bg-gray-50 ${isCollapsed ? "justify-center space-x-0" : "space-x-2.5"}`}
-            title={isCollapsed ? "My Profile" : undefined}
+            title={isCollapsed ? t("hr.myProfileTitle") : undefined}
           >
             <div className="flex-shrink-0 rounded-full bg-gray-100 p-1.5">
               <UserCircle className="h-4 w-4 text-gray-500" />

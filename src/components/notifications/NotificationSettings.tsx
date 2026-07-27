@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { Bell, BellRing, Loader2, Check, AlertTriangle, Percent, WifiOff } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
@@ -34,6 +35,7 @@ const toggleClass = (on: boolean) =>
 // directly (RLS scopes it to the signed-in tenant). The triggers already deployed read these values,
 // so a change here re-tunes LARGE_DISCOUNT / offline detection with no redeploy.
 const NotificationSettings: React.FC = () => {
+  const { t } = useTranslation();
   const { principal, session } = useSupabaseAuth();
   const tenantId = principal?.tenantId ?? null;
   const userId = session?.user?.id ?? null;
@@ -128,7 +130,7 @@ const NotificationSettings: React.FC = () => {
     return (
       <div className={`${cardClass} flex items-center gap-3 text-slate-500`}>
         <Loader2 className="h-5 w-5 animate-spin" />
-        <span>Loading alert settings…</span>
+        <span>{t('notifications.settings.loading')}</span>
       </div>
     );
   }
@@ -137,9 +139,9 @@ const NotificationSettings: React.FC = () => {
   const off = cfg.offline;
 
   const pushDisabledMsg: Partial<Record<AlertsState, string>> = {
-    unsupported: "This browser doesn't support background alerts.",
-    'needs-install': 'Install the app to your home screen first, then enable background alerts here.',
-    blocked: 'Notifications are blocked in your browser settings. Re-enable them there, then try again.',
+    unsupported: t('notifications.settings.pushUnsupported'),
+    'needs-install': t('notifications.settings.pushNeedsInstall'),
+    blocked: t('notifications.settings.pushBlocked'),
   };
 
   return (
@@ -152,9 +154,12 @@ const NotificationSettings: React.FC = () => {
               <BellRing className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-sm font-semibold text-slate-950">Background alerts (push)</p>
+              <p className="text-sm font-semibold text-slate-950">{t('notifications.settings.pushTitle')}</p>
               <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                Buzz this device for <span className="font-semibold">critical</span> events (fiscal cancellation, fiscal issuing failed) even when the app is closed.
+                <Trans
+                  i18nKey="notifications.settings.pushBlurb"
+                  components={{ 1: <span className="font-semibold" /> }}
+                />
               </p>
             </div>
           </div>
@@ -179,7 +184,7 @@ const NotificationSettings: React.FC = () => {
         )}
         {!pushDisabledMsg[pushCap] && (
           <p className="mt-4 text-xs text-slate-500">
-            {pushSubscribed ? 'This device will receive background alerts.' : 'Turn on to receive alerts on this device.'}
+            {pushSubscribed ? t('notifications.settings.pushOn') : t('notifications.settings.pushOff')}
           </p>
         )}
       </div>
@@ -192,9 +197,12 @@ const NotificationSettings: React.FC = () => {
               <Percent className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-sm font-semibold text-slate-950">Large discount alert</p>
+              <p className="text-sm font-semibold text-slate-950">{t('notifications.settings.largeDiscountTitle')}</p>
               <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                Notify when a sale's discount is at or above the amount <span className="font-semibold">or</span> the percentage below.
+                <Trans
+                  i18nKey="notifications.settings.largeDiscountBlurb"
+                  components={{ 1: <span className="font-semibold" /> }}
+                />
               </p>
             </div>
           </div>
@@ -202,13 +210,13 @@ const NotificationSettings: React.FC = () => {
             small
             checked={ld.enabled}
             onChange={() => setCfg((c) => ({ ...c, large_discount: { ...c.large_discount, enabled: !c.large_discount.enabled } }))}
-            label="Large discount alert"
+            label={t('notifications.settings.largeDiscountTitle')}
           />
         </div>
 
         <div className={`mt-5 grid gap-4 sm:grid-cols-2 ${ld.enabled ? '' : 'pointer-events-none opacity-50'}`}>
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Amount (€)</span>
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">{t('notifications.settings.amountEuro')}</span>
             <input
               type="number"
               min={0}
@@ -220,7 +228,7 @@ const NotificationSettings: React.FC = () => {
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Percentage (%)</span>
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">{t('notifications.settings.percentage')}</span>
             <input
               type="number"
               min={0}
@@ -243,9 +251,9 @@ const NotificationSettings: React.FC = () => {
               <WifiOff className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-sm font-semibold text-slate-950">Till offline alert</p>
+              <p className="text-sm font-semibold text-slate-950">{t('notifications.settings.offlineTitle')}</p>
               <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                Notify when a till stops checking in for longer than the grace period.
+                {t('notifications.settings.offlineBlurb')}
               </p>
             </div>
           </div>
@@ -253,13 +261,13 @@ const NotificationSettings: React.FC = () => {
             small
             checked={off.enabled}
             onChange={() => setCfg((c) => ({ ...c, offline: { ...c.offline, enabled: !c.offline.enabled } }))}
-            label="Till offline alert"
+            label={t('notifications.settings.offlineTitle')}
           />
         </div>
 
         <div className={`mt-5 ${off.enabled ? '' : 'pointer-events-none opacity-50'}`}>
           <label className="block max-w-[16rem]">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Grace period (seconds)</span>
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">{t('notifications.settings.gracePeriod')}</span>
             <input
               type="number"
               min={120}
@@ -274,7 +282,7 @@ const NotificationSettings: React.FC = () => {
           </label>
           <div className="mt-3 flex items-start gap-2 rounded-2xl bg-slate-100 px-3 py-2 text-xs text-slate-600">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-            <span>A till is flagged offline after this much silence. Minimum 120s (2× the heartbeat); lower values are floored server-side to avoid false alarms on a healthy till.</span>
+            <span>{t('notifications.settings.graceHint')}</span>
           </div>
         </div>
       </div>
@@ -283,12 +291,12 @@ const NotificationSettings: React.FC = () => {
       <div className="flex items-center justify-end gap-3">
         {status === 'saved' && (
           <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600">
-            <Check className="h-4 w-4" /> Saved
+            <Check className="h-4 w-4" /> {t('notifications.settings.saved')}
           </span>
         )}
         {status === 'error' && (
           <span className="inline-flex items-center gap-1.5 text-sm font-medium text-red-600">
-            <AlertTriangle className="h-4 w-4" /> Save failed
+            <AlertTriangle className="h-4 w-4" /> {t('notifications.settings.saveFailed')}
           </span>
         )}
         <AdminActionButton
@@ -299,7 +307,7 @@ const NotificationSettings: React.FC = () => {
           onClick={save}
           disabled={saving || !tenantId}
           className="disabled:opacity-50"
-          label={saving ? 'Saving…' : 'Save alert settings'}
+          label={saving ? t('notifications.settings.saving') : t('notifications.settings.saveButton')}
         />
       </div>
     </div>

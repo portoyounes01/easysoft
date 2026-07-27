@@ -19,6 +19,8 @@ import {
   useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { useTranslation } from 'react-i18next';
+import { uiLocale } from '../utils/locale';
 import '../styles/design-system-2-scope.css';
 
 interface TestResult {
@@ -52,6 +54,7 @@ export interface CashierTestingPanelProps {
 }
 
 export const CashierTestingPanel: React.FC<CashierTestingPanelProps> = ({ embedded = false }) => {
+  const { t, i18n } = useTranslation();
   const { employee } = useSupabaseAuth();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
   const { connectPrinter, connectToAnyDevice, sendToPrinter, disconnectPrinter, isConnected, isSupported } =
@@ -87,7 +90,7 @@ export const CashierTestingPanel: React.FC<CashierTestingPanelProps> = ({ embedd
         if (error.message.includes('relation "cashier_tests" does not exist') ||
           error.message.includes('permission denied')) {
           console.warn('Cashier tests table not available:', error.message);
-          setFetchError('Database tables not yet created. Run tests to initialize.');
+          setFetchError(t('cashierTesting.errors.tablesMissing'));
           setTestLogs([]);
           return;
         }
@@ -545,7 +548,7 @@ export const CashierTestingPanel: React.FC<CashierTestingPanelProps> = ({ embedd
                         }`}></span>
                     </div>
                     <p className="text-xs text-gray-500">
-                      {new Date(log.timestamp).toLocaleString('pt-PT')}
+                      {new Date(log.timestamp).toLocaleString(uiLocale(i18n.language))}
                     </p>
                     {log.test_details && (
                       <div className="mt-2 text-xs text-gray-600">

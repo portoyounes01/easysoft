@@ -130,7 +130,7 @@ indexedDB.deleteDatabase('POSDatabase').onsuccess = () => location.reload();
                 <div className="flex items-start space-x-3 mb-4">
                     <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
                     <div>
-                        <h3 className="text-red-800 font-semibold text-lg">Database Issue Detected</h3>
+                        <h3 className="text-red-800 font-semibold text-lg">{t('database.issueDetectedTitle')}</h3>
                         <p className="text-red-700 text-sm mt-1">
                             The local database has encountered an issue and needs attention.
                         </p>

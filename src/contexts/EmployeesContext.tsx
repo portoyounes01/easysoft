@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import i18n from '../i18n';
 import { Employee, EmployeeFormData, EmployeeFilters, SyncMetadata } from '../types/supabase';
 import { employeeService } from '../services/employeeService';
 
@@ -148,12 +149,12 @@ export const EmployeesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             const employees = await employeeService.getAllEmployees();
             dispatch({ type: 'SET_EMPLOYEES', payload: employees });
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to load employees';
+            const errorMessage = error instanceof Error ? error.message : i18n.t('employees.loadFailed');
             if (afterSync) {
                 // Post-sync refresh must not block login: keep in-memory list, surface as sync-only
                 dispatch({
                     type: 'SET_SYNC_ERROR',
-                    payload: 'Could not refresh staff list after sync: ' + errorMessage
+                    payload: i18n.t('employees.refreshAfterSyncFailed', { error: errorMessage })
                 });
                 console.error('Failed to reload employees after sync:', error);
             } else {
@@ -182,7 +183,7 @@ export const EmployeesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             console.error('Sync error:', details);
             dispatch({
                 type: 'SET_SYNC_ERROR',
-                payload: 'Sync failed: ' + (details?.message || 'Unknown error')
+                payload: i18n.t('employees.syncFailedWithReason', { error: details?.message || i18n.t('common.unknownError') })
             });
         }
     }, [loadEmployees, loadSyncStatus]);
@@ -194,7 +195,7 @@ export const EmployeesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             await loadEmployees();
             return employeeId;
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to create employee';
+            const errorMessage = error instanceof Error ? error.message : i18n.t('employees.createFailed');
             dispatch({ type: 'SET_OPERATION_ERROR', payload: errorMessage });
             throw error;
         }
@@ -206,7 +207,7 @@ export const EmployeesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             await employeeService.updateEmployee(id, updates);
             await loadEmployees();
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to update employee';
+            const errorMessage = error instanceof Error ? error.message : i18n.t('employees.updateFailed');
             dispatch({ type: 'SET_OPERATION_ERROR', payload: errorMessage });
             throw error;
         }
@@ -218,7 +219,7 @@ export const EmployeesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             await employeeService.deleteEmployee(id);
             dispatch({ type: 'REMOVE_EMPLOYEE', payload: id });
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to delete employee';
+            const errorMessage = error instanceof Error ? error.message : i18n.t('employees.deleteFailed');
             dispatch({ type: 'SET_OPERATION_ERROR', payload: errorMessage });
             throw error;
         }
@@ -279,7 +280,7 @@ export const EmployeesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             await loadSyncStatus();
             return result;
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Sync failed';
+            const errorMessage = error instanceof Error ? error.message : i18n.t('employees.syncFailed');
             return { success: false, error: errorMessage };
         }
     }, [loadSyncStatus]);

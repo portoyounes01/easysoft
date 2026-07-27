@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Printer, RefreshCw, Search, Wifi, WifiOff, Usb, Zap } from 'lucide-react';
 import { ConfiguredPrinter } from '../types/electron';
 
@@ -6,6 +7,7 @@ const ACTION_BTN =
   'ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50';
 
 const PrinterManager: React.FC = () => {
+  const { t } = useTranslation();
   const [printers, setPrinters] = useState<ConfiguredPrinter[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
@@ -160,9 +162,9 @@ const PrinterManager: React.FC = () => {
 
   const getTypeDisplay = (type: string) => {
     switch (type) {
-      case 'usb': return 'USB';
-      case 'network': return 'Network';
-      case 'system': return 'System';
+      case 'usb': return t('printerManager.typeUsb');
+      case 'network': return t('printerManager.typeNetwork');
+      case 'system': return t('printerManager.typeSystem');
       default: return type;
     }
   };
@@ -172,12 +174,12 @@ const PrinterManager: React.FC = () => {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-3">
           <Printer className="h-6 w-6 text-blue-600" />
-          <h2 className="text-xl font-semibold text-gray-900">System Printers</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{t('printerManager.title')}</h2>
         </div>
         <div className="flex items-center space-x-3">
           {lastRefresh && (
             <span className="text-sm text-gray-500">
-              Last updated: {lastRefresh.toLocaleTimeString()}
+              {t('printerManager.lastUpdated', { time: lastRefresh.toLocaleTimeString() })}
             </span>
           )}
           {/* One button, two states: it reads Scan until a scan has run, then
@@ -193,7 +195,7 @@ const PrinterManager: React.FC = () => {
             ) : (
               <Search className={`h-4 w-4 ${refreshing ? 'animate-pulse' : ''}`} />
             )}
-            <span>{refreshing ? 'Scanning...' : hasScanned ? 'Refresh' : 'Scan'}</span>
+            <span>{refreshing ? t('printerManager.scanning') : hasScanned ? t('printerManager.refresh') : t('printerManager.scan')}</span>
           </button>
           {/* Connectivity checking has nothing to check before the first scan. */}
           {hasScanned && (
@@ -204,7 +206,7 @@ const PrinterManager: React.FC = () => {
               className={ACTION_BTN}
             >
               <Zap className={`h-4 w-4 ${checkingStatus ? 'animate-pulse' : ''}`} />
-              <span>Check Status</span>
+              <span>{t('printerManager.checkStatus')}</span>
             </button>
           )}
         </div>
@@ -214,18 +216,18 @@ const PrinterManager: React.FC = () => {
         <div className="text-center py-8 text-gray-500">
           <Printer className="h-12 w-12 mx-auto mb-3 opacity-50" />
           {refreshing ? (
-            <p>Looking for printers...</p>
+            <p>{t('printerManager.lookingForPrinters')}</p>
           ) : hasScanned ? (
             <>
-              <p>No printers found on this system</p>
-              <p className="text-sm mt-1">Make sure printers are installed and configured</p>
+              <p>{t('printerManager.noneFound')}</p>
+              <p className="text-sm mt-1">{t('printerManager.noneFoundHint')}</p>
             </>
           ) : (
             // Pre-scan, "none found" would be a false negative — an operator
             // reads that as a fault and goes hunting for one that isn't there.
             <>
-              <p>Printers have not been checked yet</p>
-              <p className="text-sm mt-1">Press Scan to list the printers this system knows about</p>
+              <p>{t('printerManager.notCheckedYet')}</p>
+              <p className="text-sm mt-1">{t('printerManager.preScanHint')}</p>
             </>
           )}
         </div>
@@ -246,16 +248,16 @@ const PrinterManager: React.FC = () => {
                 <h3 className="font-medium text-gray-900">{printer.name}</h3>
                 <div className="flex items-center space-x-4 text-sm text-gray-600">
                   <span className={`font-medium ${getStatusColor(printer)}`}>
-                    {printer.connectionStatus === 'quick_list' ? 'Unknown' :
-                     printer.connectionStatus === 'connected' ? 'Connected' :
-                     printer.connectionStatus === 'offline' ? 'Offline' :
-                     printer.connectionStatus === 'timeout' ? 'Timeout' :
-                     (printer.connected && !printer.isStale ? 
-                      (printer.status === 'ready' ? 'Ready' : 
-                       printer.status === 'not_accepting' ? 'Not Accepting' : 
-                       printer.status === 'default' ? 'Unknown' :
-                       'Unknown') : 
-                      'Offline')}
+                    {printer.connectionStatus === 'quick_list' ? t('common.unknown') :
+                     printer.connectionStatus === 'connected' ? t('printerManager.statusConnected') :
+                     printer.connectionStatus === 'offline' ? t('printerManager.statusOffline') :
+                     printer.connectionStatus === 'timeout' ? t('printerManager.statusTimeout') :
+                     (printer.connected && !printer.isStale ?
+                      (printer.status === 'ready' ? t('printerManager.statusReady') :
+                       printer.status === 'not_accepting' ? t('printerManager.statusNotAccepting') :
+                       printer.status === 'default' ? t('common.unknown') :
+                       t('common.unknown')) :
+                      t('printerManager.statusOffline'))}
                   </span>
                   <span>•</span>
                   <span>{getTypeDisplay(printer.type)}</span>
@@ -263,7 +265,7 @@ const PrinterManager: React.FC = () => {
                     <>
                       <span>•</span>
                       <span className="text-orange-600">
-                        {printer.queueCount} job{printer.queueCount !== 1 ? 's' : ''}
+                        {t('printerManager.jobsCount', { count: printer.queueCount })}
                       </span>
                     </>
                   )}

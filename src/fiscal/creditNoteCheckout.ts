@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { SystemSettings } from '../contexts/SettingsContext';
 import { customerLocalService, transactionLocalService } from '../lib/localDatabase';
 import { CONSUMER_FINAL_CUSTOMER_TAX_ID } from './spec';
@@ -37,20 +38,20 @@ export async function runFiscalCreditNoteForTransaction(params: {
     const { settings, originalTransactionId, payment, creditReason } = params;
     const origTx = await transactionLocalService.getTransactionById(originalTransactionId);
     if (!origTx?.fiscal_document_id) {
-        throw new Error('Transação sem documento fiscal — não é possível emitir nota de crédito.');
+        throw new Error(i18n.t('checkout.creditNoteNoFiscalDocument'));
     }
     const origFiscal = await transactionLocalService.getFiscalDocumentById(origTx.fiscal_document_id);
     if (!origFiscal) {
-        throw new Error('Documento fiscal original em falta.');
+        throw new Error(i18n.t('checkout.creditNoteOriginalFiscalMissing'));
     }
     if (origFiscal.invoice_type === 'NC') {
-        throw new Error('Notas de crédito sobre notas de crédito não são suportadas.');
+        throw new Error(i18n.t('checkout.creditNoteOnCreditNote'));
     }
     if (origFiscal.invoice_type === 'RG' || origFiscal.invoice_type === 'RC') {
-        throw new Error('Nota de crédito deve referenciar uma fatura (FT ou FS), não um recibo.');
+        throw new Error(i18n.t('checkout.creditNoteNeedsInvoice'));
     }
     if (origFiscal.cancelled_at) {
-        throw new Error('Não é possível emitir nota de crédito sobre um documento anulado.');
+        throw new Error(i18n.t('checkout.creditNoteOnCancelledDocument'));
     }
     if (origFiscal.fiscal_provider === 'vendus') {
         const { issueVendusCreditNoteForTransaction } = await import('./vendusFiscalIssuer');
@@ -115,7 +116,7 @@ export async function runFiscalCreditNoteForTransaction(params: {
     const seriesKey = computeSeriesKey(receiptProfile, now);
     const atCode = receiptProfile.atValidationCode.trim();
     if (!atCode) {
-        throw new Error('Código de validação AT da série NC em falta (Definições > Numeração > NC).');
+        throw new Error(i18n.t('checkout.creditNoteMissingAtValidationCode'));
     }
     const chainScope = buildChainScope(atCode, seriesKey);
 

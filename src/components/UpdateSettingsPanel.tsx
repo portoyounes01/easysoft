@@ -62,11 +62,11 @@ export const UpdateSettingsPanel: React.FC<UpdateSettingsPanelProps> = ({ embedd
       const result = await shell.restartToInstall?.();
       // Success normally never returns (the process exits); a response means refusal.
       if (result && result.ok === false) {
-        setRestartError(result.error ?? 'restart refused');
+        setRestartError(result.error ?? t('updateSettings.restartRefused'));
         setRestarting(false);
       }
     } catch (e) {
-      setRestartError(e instanceof Error ? e.message : 'restart failed');
+      setRestartError(e instanceof Error ? e.message : t('updateSettings.restartFailed'));
       setRestarting(false);
     }
   };

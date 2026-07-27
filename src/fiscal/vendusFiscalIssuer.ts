@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { SystemSettings } from '../contexts/SettingsContext';
 import { transactionLocalService } from '../lib/localDatabase';
 import { connectionStatus, supabase } from '../lib/supabase';
@@ -99,17 +100,17 @@ interface VendusFunctionResponse {
 
 function assertVendusEnabled(settings: SystemSettings): void {
     if (settings.fiscal.issuer !== 'vendus' || !settings.fiscal.vendus.enabled) {
-        throw new Error('Vendus não está ativo nas definições fiscais.');
+        throw new Error(i18n.t('checkout.vendusNotEnabled'));
     }
     if (!settings.fiscal.vendus.registerId.trim()) {
-        throw new Error('Register ID Vendus em falta nas definições fiscais.');
+        throw new Error(i18n.t('checkout.vendusMissingRegisterId'));
     }
 }
 
 function assertOnlineForVendus(): void {
     const state = connectionStatus.getStatus();
     if (!state.isOnline || !state.isSupabaseOnline) {
-        throw new Error('Vendus está configurado como emissor fiscal. A venda fica bloqueada até existir ligação ao Supabase/Vendus.');
+        throw new Error(i18n.t('checkout.vendusOffline'));
     }
 }
 
@@ -118,7 +119,7 @@ function parseOptionalInt(raw: string | undefined): number | undefined {
     if (!trimmed) return undefined;
     const n = Number(trimmed);
     if (!Number.isInteger(n) || n <= 0) {
-        throw new Error(`Identificador Vendus inválido: ${raw}`);
+        throw new Error(i18n.t('checkout.vendusInvalidIdentifier', { value: raw }));
     }
     return n;
 }
@@ -126,7 +127,7 @@ function parseOptionalInt(raw: string | undefined): number | undefined {
 function paymentMethodIdFor(settings: SystemSettings, method: FiscalPaymentInput['paymentMethod']): string {
     const id = settings.fiscal.vendus.paymentMethodIds[method]?.trim();
     if (!id) {
-        throw new Error(`Método de pagamento Vendus em falta para ${method}.`);
+        throw new Error(i18n.t('checkout.vendusMissingPaymentMethod', { method }));
     }
     return id;
 }
@@ -367,19 +368,19 @@ export async function issueVendusCreditNoteForTransaction(params: {
 
     const origTx = await transactionLocalService.getTransactionById(originalTransactionId);
     if (!origTx?.fiscal_document_id) {
-        throw new Error('Transação sem documento fiscal — não é possível emitir nota de crédito.');
+        throw new Error(i18n.t('checkout.creditNoteNoFiscalDocument'));
     }
     const origFiscal = await transactionLocalService.getFiscalDocumentById(origTx.fiscal_document_id);
     if (!origFiscal) {
-        throw new Error('Documento fiscal original em falta.');
+        throw new Error(i18n.t('checkout.creditNoteOriginalFiscalMissing'));
     }
     if (origFiscal.fiscal_provider !== 'vendus') {
-        throw new Error('O documento original não foi emitido pela Vendus.');
+        throw new Error(i18n.t('checkout.vendusOriginalNotVendus'));
     }
     const meta = parseMetadata(origTx.fiscal_metadata_json);
     const refs = meta?.vendus?.items || [];
     if (refs.length === 0) {
-        throw new Error('Referências de linhas Vendus em falta para emitir nota de crédito.');
+        throw new Error(i18n.t('checkout.vendusMissingLineReferences'));
     }
 
     const now = new Date();
@@ -413,7 +414,7 @@ export async function issueVendusCreditNoteForTransaction(params: {
     const requestItems: VendusDocumentItem[] = origTx.items.map((item: LocalTransactionItem, index) => {
         const ref = refs[index];
         if (!ref) {
-            throw new Error(`Referência Vendus em falta para a linha ${index + 1}.`);
+            throw new Error(i18n.t('checkout.vendusMissingLineReference', { line: index + 1 }));
         }
         return {
             id: ref.vendusItemId || undefined,
@@ -543,7 +544,7 @@ export async function fetchVendusSaftXml(params: {
         mode: vendusMode(params.settings),
     });
     if (!response.xml) {
-        throw new Error('Vendus não devolveu SAF-T.');
+        throw new Error(i18n.t('checkout.vendusNoSaft'));
     }
     return atob(response.xml);
 }

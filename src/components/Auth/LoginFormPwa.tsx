@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
 import { ActionButton } from '../ui/ActionButton';
 import { AdminActionButton } from '../ui/AdminActionButton';
@@ -8,6 +9,7 @@ import { ListRow } from '../ui/ListRow';
 // edge fn via the auth context. On success the SIGNED_IN handler mints the membership
 // principal and App's /login route redirects. Multi-tenant users get a tenant picker.
 const LoginFormPwa: React.FC = () => {
+  const { t } = useTranslation();
   const { signInWithPwaCredentials, isLoading } = useSupabaseAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +27,7 @@ const LoginFormPwa: React.FC = () => {
       setMemberships(res.memberships);
       return;
     }
-    setError(res.error ?? 'Login failed.');
+    setError(res.error ?? t('loginPwa.loginFailed'));
   };
 
   const busy = submitting || isLoading;
@@ -34,16 +36,16 @@ const LoginFormPwa: React.FC = () => {
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 p-6">
       <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 p-8">
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">Welcome</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{t('login2.welcome')}</h1>
           <p className="text-sm text-slate-500 mt-1">
-            {memberships ? 'Select a workspace to continue' : 'Sign in to your account'}
+            {memberships ? t('loginPwa.selectWorkspace') : t('loginPwa.signInToAccount')}
           </p>
         </div>
 
         {!memberships ? (
           <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Username or email</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{t('loginPwa.usernameOrEmail')}</label>
               <input
                 type="text"
                 autoFocus
@@ -54,7 +56,7 @@ const LoginFormPwa: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{t('login.credentialPassword')}</label>
               <input
                 type="password"
                 autoComplete="current-password"
@@ -69,7 +71,7 @@ const LoginFormPwa: React.FC = () => {
             <ActionButton
               type="submit"
               disabled={busy || !identifier.trim() || !password}
-              label={busy ? 'Signing in…' : 'Sign in'}
+              label={busy ? t('loginPwa.signingIn') : t('login.signIn')}
             />
           </form>
         ) : (
@@ -95,7 +97,7 @@ const LoginFormPwa: React.FC = () => {
               variant="ghost"
               type="button"
               onClick={() => { setMemberships(null); setError(null); }}
-              label="← Back"
+              label={`← ${t('login.back')}`}
               className="w-full text-sm"
             />
           </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Wifi, WifiOff, BellOff } from 'lucide-react';
 import { AdminActionButton } from '../ui/AdminActionButton';
 import { useNotificationFeed } from '../../contexts/NotificationFeedContext';
@@ -12,6 +13,7 @@ interface Props {
 
 // Dropdown body: connection status + the recent-event list. Rendered inside the bell popover.
 const NotificationPanel: React.FC<Props> = ({ onClose }) => {
+  const { t } = useTranslation();
   const { events, lastReadAt, connected } = useNotificationFeed();
   const readMs = lastReadAt ? Date.parse(lastReadAt) : 0;
 
@@ -19,20 +21,20 @@ const NotificationPanel: React.FC<Props> = ({ onClose }) => {
     <div className="w-[22rem] max-w-[calc(100vw-1.5rem)] max-h-[70vh] flex flex-col rounded-xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-900">Notifications</span>
+          <span className="text-sm font-semibold text-gray-900">{t('notifications.title')}</span>
           {connected ? (
-            <span className="inline-flex items-center gap-1 text-[11px] text-green-600" title="Live">
-              <Wifi className="w-3.5 h-3.5" /> Live
+            <span className="inline-flex items-center gap-1 text-[11px] text-green-600" title={t('notifications.live')}>
+              <Wifi className="w-3.5 h-3.5" /> {t('notifications.live')}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-[11px] text-gray-400" title="Reconnecting">
-              <WifiOff className="w-3.5 h-3.5" /> Offline
+            <span className="inline-flex items-center gap-1 text-[11px] text-gray-400" title={t('notifications.reconnecting')}>
+              <WifiOff className="w-3.5 h-3.5" /> {t('login2.connectivityOffline')}
             </span>
           )}
         </div>
         <AdminActionButton
           variant="ghost"
-          label="Close"
+          label={t('common.close')}
           onClick={onClose}
           className="text-xs"
         />
@@ -42,7 +44,7 @@ const NotificationPanel: React.FC<Props> = ({ onClose }) => {
         {events.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-10 text-gray-400">
             <BellOff className="w-6 h-6" />
-            <span className="text-sm">No notifications yet</span>
+            <span className="text-sm">{t('notifications.empty')}</span>
           </div>
         ) : (
           <ul className="divide-y divide-gray-50">

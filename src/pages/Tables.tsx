@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Trans, useTranslation } from 'react-i18next';
 import {
     Check,
     AlertCircle,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import { usePOS } from '../contexts/POSContext';
 import { tableOrderService } from '../services/tableOrderService';
+import { uiLocale } from '../utils/locale';
 import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { ListRow } from '../components/ui/ListRow';
@@ -98,10 +100,10 @@ const EMPTY_LAYOUT: TableLayoutState = {
     showCashier: true,
 };
 
-const capacityLabels: Record<TableCapacity, string> = {
-    2: 'Small · 2 seats',
-    4: 'Medium · 4 seats',
-    6: 'Large · 6 seats',
+const capacityLabelKeys: Record<TableCapacity, string> = {
+    2: 'tables.capacity.small',
+    4: 'tables.capacity.medium',
+    6: 'tables.capacity.large',
 };
 
 const shapeForCapacity = (capacity: TableCapacity): TableShape => {
@@ -198,8 +200,11 @@ const DotCanvas: React.FC<{
 );
 
 const FloorTable: React.FC<FloorTableProps> = ({ table, selected, editable, onSelect, onPointerDown }) => {
+    const { t } = useTranslation();
     const isUsed = table.status !== 'available';
-    const statusLabel = table.status === 'settling' ? 'payment in progress' : table.status;
+    const statusLabel = table.status === 'settling'
+        ? t('tables.status.settling')
+        : t(table.status === 'used' ? 'tables.status.used' : 'tables.status.available');
     const surfaceClass = isUsed
         ? 'border-neutral-200 text-neutral-900'
         : 'border-neutral-200 bg-white text-neutral-900 hover:border-emerald-300';
@@ -216,7 +221,7 @@ const FloorTable: React.FC<FloorTableProps> = ({ table, selected, editable, onSe
                     ? 'repeating-linear-gradient(-45deg, #ffffff 0, #ffffff 6px, #e5e7eb 6px, #e5e7eb 9px)'
                     : undefined,
             }}
-            aria-label={`${table.name}, ${capacityLabels[table.capacity]}, ${statusLabel}`}
+            aria-label={`${table.name}, ${t(capacityLabelKeys[table.capacity])}, ${statusLabel}`}
             data-testid={`table-floor-${table.id}`}
             onClick={event => {
                 event.stopPropagation();
@@ -230,7 +235,7 @@ const FloorTable: React.FC<FloorTableProps> = ({ table, selected, editable, onSe
             </span>
             {table.status === 'settling' && (
                 <span className="pointer-events-none absolute -bottom-2 rounded-full bg-amber-500 px-2 py-0.5 text-[0.65rem] font-bold text-white">
-                    Paying
+                    {t('tables.status.payingBadge')}
                 </span>
             )}
         </button>
@@ -238,6 +243,7 @@ const FloorTable: React.FC<FloorTableProps> = ({ table, selected, editable, onSe
 };
 
 const Dialog: React.FC<DialogProps> = ({ children, onClose, title }) => {
+    const { t } = useTranslation();
     const applied = useAppliedDialogStyle();
 
     if (applied) {
@@ -263,7 +269,7 @@ const Dialog: React.FC<DialogProps> = ({ children, onClose, title }) => {
                         type="button"
                         onClick={onClose}
                         className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                        aria-label="Close dialog"
+                        aria-label={t('tables.dialog.close')}
                     >
                         <X className="h-5 w-5" />
                     </button>
@@ -287,12 +293,13 @@ const tableOrderTotal = (order: LocalTableOrder): number => {
     return Math.max(0, subtotal - discount);
 };
 
-const formatCurrency = (value: number): string => new Intl.NumberFormat('pt-PT', {
+const formatCurrency = (value: number, locale: string): string => new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: 'EUR',
 }).format(value);
 
 const Tables: React.FC = () => {
+    const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
     const navigationState = location.state as TablesNavigationState | null;
@@ -330,11 +337,11 @@ const Tables: React.FC = () => {
             setTableOrders(await tableOrderService.listBlocking());
         } catch (error) {
             console.error('Could not load table orders', error);
-            setToast('Table orders could not be loaded. Please try again.');
+            setToast(i18n.t('tables.toast.loadFailed'));
         } finally {
             setIsLoadingOrders(false);
         }
-    }, []);
+    }, [i18n]);
 
     useEffect(() => {
         void refreshTableOrders();
@@ -393,7 +400,7 @@ const Tables: React.FC = () => {
         const removedOpenTable = tableOrders.find(order => !draft.tables.some(table => table.id === order.table_id));
         if (removedOpenTable) {
             setDialog(null);
-            setToast(`Settle or free ${removedOpenTable.table_name} before removing it from the layout.`);
+            setToast(t('tables.toast.settleBeforeRemoving', { table: removedOpenTable.table_name }));
             return;
         }
 
@@ -403,13 +410,13 @@ const Tables: React.FC = () => {
         setDialog(null);
         setSelectedTableId(null);
         setIsEditing(false);
-        setToast('Table layout saved');
+        setToast(t('tables.toast.layoutSaved'));
     };
 
     const handleConfirmReset = () => {
         if (tableOrders.length > 0) {
             setDialog(null);
-            setToast('Settle or free all active tables before resetting the layout.');
+            setToast(t('tables.toast.settleBeforeReset'));
             return;
         }
 
@@ -420,7 +427,7 @@ const Tables: React.FC = () => {
         setSelectedTableId(null);
         setDialog(null);
         setIsEditing(false);
-        setToast('Table layout reset');
+        setToast(t('tables.toast.layoutReset'));
     };
 
     const handleOpenAdd = () => {
@@ -448,13 +455,13 @@ const Tables: React.FC = () => {
         setDraft(current => ({ ...current, tables: [...current.tables, newTable] }));
         setSelectedTableId(newTable.id);
         setDialog(null);
-        setToast(`${newTable.name} added`);
+        setToast(t('tables.toast.tableAdded', { table: newTable.name }));
     };
 
     const handleOpenEdit = () => {
         if (!selectedTable) return;
         if (selectedTable.order) {
-            setToast(`Settle or free ${selectedTable.name} before renaming it.`);
+            setToast(t('tables.toast.settleBeforeRenaming', { table: selectedTable.name }));
             return;
         }
         setEditForm({ name: selectedTable.name, capacity: selectedTable.capacity });
@@ -482,7 +489,7 @@ const Tables: React.FC = () => {
         if (!selectedTable) return;
         if (selectedTable.order) {
             setDialog(null);
-            setToast(`Settle or free ${selectedTable.name} before deleting it.`);
+            setToast(t('tables.toast.settleBeforeDeleting', { table: selectedTable.name }));
             return;
         }
 
@@ -490,7 +497,7 @@ const Tables: React.FC = () => {
             ...current,
             tables: current.tables.filter(table => table.id !== selectedTable.id),
         }));
-        setToast(`${selectedTable.name} removed`);
+        setToast(t('tables.toast.tableRemoved', { table: selectedTable.name }));
         setSelectedTableId(null);
         setDialog(null);
     };
@@ -533,7 +540,7 @@ const Tables: React.FC = () => {
 
         if (isEditing) return;
         if (table.status === 'settling') {
-            setToast(`${table.name} is locked while payment is being completed.`);
+            setToast(t('tables.toast.lockedWhilePaying', { table: table.name }));
             return;
         }
 
@@ -548,7 +555,7 @@ const Tables: React.FC = () => {
         }
 
         if (activeTableOrder) {
-            setToast(`Finish or move the current order at ${activeTableOrder.tableName} before opening another table.`);
+            setToast(t('tables.toast.finishBeforeOpening', { table: activeTableOrder.tableName }));
             return;
         }
 
@@ -573,7 +580,7 @@ const Tables: React.FC = () => {
             navigate('/pos');
         } catch (error) {
             console.error('Could not assign order to table', error);
-            setToast(error instanceof Error ? error.message : 'Could not assign the table order.');
+            setToast(error instanceof Error ? error.message : t('tables.toast.assignFailed'));
             await refreshTableOrders();
         } finally {
             setIsProcessingOrder(false);
@@ -605,7 +612,7 @@ const Tables: React.FC = () => {
             navigate('/pos');
         } catch (error) {
             console.error('Could not move table order', error);
-            setToast(error instanceof Error ? error.message : 'Could not move the table order.');
+            setToast(error instanceof Error ? error.message : t('tables.toast.moveFailed'));
             await refreshTableOrders();
         } finally {
             setIsProcessingOrder(false);
@@ -620,11 +627,11 @@ const Tables: React.FC = () => {
             if (activeTableOrder?.id === selectedTable.order.id) clearActiveTableOrder();
             setDialog(null);
             setSelectedTableId(null);
-            setToast(`${selectedTable.name} is available again.`);
+            setToast(t('tables.toast.tableAvailableAgain', { table: selectedTable.name }));
             await refreshTableOrders();
         } catch (error) {
             console.error('Could not discard table order', error);
-            setToast(error instanceof Error ? error.message : 'Could not discard the table order.');
+            setToast(error instanceof Error ? error.message : t('tables.toast.discardFailed'));
         } finally {
             setIsProcessingOrder(false);
         }
@@ -636,7 +643,7 @@ const Tables: React.FC = () => {
         try {
             const order = await tableOrderService.getById(activeTableOrder.id);
             if (!order || order.status !== 'open') {
-                throw new Error('This table order is no longer available to park.');
+                throw new Error(t('tables.toast.orderNoLongerParkable'));
             }
             // POS flushes an active table immediately before navigating here;
             // leave that persisted snapshot intact, then clear only the live
@@ -644,10 +651,10 @@ const Tables: React.FC = () => {
             clearCart();
             clearActiveTableOrder();
             setSelectedTableId(null);
-            setToast(`${order.table_name} is parked and ready to reopen later.`);
+            setToast(t('tables.toast.orderParked', { table: order.table_name }));
         } catch (error) {
             console.error('Could not park the current table order', error);
-            setToast(error instanceof Error ? error.message : 'Could not park the current table order.');
+            setToast(error instanceof Error ? error.message : t('tables.toast.parkFailed'));
         } finally {
             setIsProcessingOrder(false);
         }
@@ -659,37 +666,37 @@ const Tables: React.FC = () => {
                 <section className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
                     <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold tracking-tight text-neutral-950">Tables</h1>
+                            <h1 className="text-3xl font-bold tracking-tight text-neutral-950">{t('tables.pageTitle')}</h1>
                             <p className="mt-1 text-sm text-neutral-500">
                                 {isLoadingOrders
-                                    ? 'Loading open table orders…'
+                                    ? t('tables.loadingOrders')
                                     : activeTableOrder
-                                        ? `Current order: ${activeTableOrder.tableName}`
+                                        ? t('tables.currentOrder', { table: activeTableOrder.tableName })
                                         : cart.length > 0
-                                            ? 'Tap an available table to assign the current order.'
-                                            : 'Tap an available table to start a dine-in order.'}
+                                            ? t('tables.hintAssignCurrentOrder')
+                                            : t('tables.hintStartDineIn')}
                             </p>
                         </div>
                         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap xl:justify-end">
                             <label className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
-                                <span className="sr-only">Search table name</span>
+                                <span className="sr-only">{t('tables.searchLabel')}</span>
                                 <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400" />
                                 <input
                                     value={search}
                                     onChange={event => setSearch(event.target.value)}
-                                    placeholder="Search table name…"
+                                    placeholder={t('tables.searchPlaceholder')}
                                     className="min-h-touch-xs w-full rounded-2xl border border-neutral-200 bg-white pl-12 pr-4 text-base text-neutral-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                                 />
                             </label>
                             <select
                                 value={statusFilter}
                                 onChange={event => setStatusFilter(event.target.value as StatusFilter)}
-                                aria-label="Filter by table status"
+                                aria-label={t('tables.filters.statusAriaLabel')}
                                 className="min-h-touch-xs rounded-2xl border border-neutral-200 bg-white px-4 text-base font-semibold text-neutral-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                             >
-                                <option value="all">All tables</option>
-                                <option value="available">Available</option>
-                                <option value="used">Used</option>
+                                <option value="all">{t('tables.filters.allTables')}</option>
+                                <option value="available">{t('tables.filters.available')}</option>
+                                <option value="used">{t('tables.filters.used')}</option>
                             </select>
                             <select
                                 value={capacityFilter}
@@ -697,19 +704,19 @@ const Tables: React.FC = () => {
                                     const value = event.target.value;
                                     setCapacityFilter(value === 'all' ? 'all' : Number(value) as TableCapacity);
                                 }}
-                                aria-label="Filter by capacity"
+                                aria-label={t('tables.filters.capacityAriaLabel')}
                                 className="min-h-touch-xs rounded-2xl border border-neutral-200 bg-white px-4 text-base font-semibold text-neutral-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                             >
-                                <option value="all">All capacities</option>
-                                <option value="2">Small · 2 seats</option>
-                                <option value="4">Medium · 4 seats</option>
-                                <option value="6">Large · 6 seats</option>
+                                <option value="all">{t('tables.filters.allCapacities')}</option>
+                                <option value="2">{t('tables.capacity.small')}</option>
+                                <option value="4">{t('tables.capacity.medium')}</option>
+                                <option value="6">{t('tables.capacity.large')}</option>
                             </select>
                             <AdminActionButton
                                 type="button"
                                 variant="primary"
                                 icon={Edit3}
-                                label="Edit layout"
+                                label={t('tables.actions.editLayout')}
                                 onClick={handleStartEditing}
                                 data-testid="tables-edit-layout"
                             />
@@ -722,14 +729,14 @@ const Tables: React.FC = () => {
                             data-testid="active-table-order"
                         >
                             <div>
-                                <p className="font-semibold text-emerald-900">Order assigned to {activeTableOrder.tableName}</p>
-                                <p className="mt-0.5 text-sm text-emerald-700">Choose another available table to move it, or return to keep taking items.</p>
+                                <p className="font-semibold text-emerald-900">{t('tables.activeOrder.assignedTo', { table: activeTableOrder.tableName })}</p>
+                                <p className="mt-0.5 text-sm text-emerald-700">{t('tables.activeOrder.hint')}</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 <AdminActionButton
                                     type="button"
                                     variant="outline"
-                                    label="Park order"
+                                    label={t('tables.actions.parkOrder')}
                                     onClick={() => void handleParkCurrentOrder()}
                                     disabled={isProcessingOrder}
                                     className="disabled:opacity-40"
@@ -737,7 +744,7 @@ const Tables: React.FC = () => {
                                 <AdminActionButton
                                     type="button"
                                     variant="primary"
-                                    label="Return to order"
+                                    label={t('tables.actions.returnToOrder')}
                                     onClick={() => navigate('/pos')}
                                     disabled={isProcessingOrder}
                                     className="disabled:opacity-50"
@@ -751,7 +758,7 @@ const Tables: React.FC = () => {
                             {visibleTables.length === 0 ? (
                                 <div className="flex h-full min-h-56 flex-col items-center justify-center px-6 text-center text-neutral-500">
                                     <LayoutGrid className="mb-3 h-10 w-10 text-neutral-300" />
-                                    <p className="font-medium">{activeLayout.tables.length === 0 ? 'Your table list will be shown here' : 'No tables match these filters'}</p>
+                                    <p className="font-medium">{activeLayout.tables.length === 0 ? t('tables.list.emptyNoTables') : t('tables.list.noMatches')}</p>
                                 </div>
                             ) : (
                                 <ul>
@@ -764,13 +771,13 @@ const Tables: React.FC = () => {
                                                 <span className={`h-2.5 w-2.5 rounded-full ${table.status === 'available' ? 'bg-emerald-500' : table.status === 'settling' ? 'bg-amber-500' : 'bg-orange-500'}`} aria-hidden="true" />
                                                 <span className="min-w-0 flex-1">
                                                     <span className="block truncate font-semibold text-neutral-900">{table.name}</span>
-                                                    <span className="block text-sm text-neutral-500">{capacityLabels[table.capacity]}</span>
+                                                    <span className="block text-sm text-neutral-500">{t(capacityLabelKeys[table.capacity])}</span>
                                                     {table.order && (
                                                         <span
                                                             className="block text-xs font-medium text-neutral-600"
                                                             data-testid={`table-order-total-${table.id}`}
                                                         >
-                                                            {table.order.lines.length} items · {formatCurrency(tableOrderTotal(table.order))}
+                                                            {t('tables.list.itemsTotal', { count: table.order.lines.length, total: formatCurrency(tableOrderTotal(table.order), uiLocale(i18n.language)) })}
                                                         </span>
                                                     )}
                                                 </span>
@@ -778,7 +785,7 @@ const Tables: React.FC = () => {
                                                     className="rounded-full bg-neutral-100 px-2 py-1 text-xs font-bold text-neutral-600"
                                                     data-testid={`table-status-${table.id}`}
                                                 >
-                                                    {table.status === 'settling' ? 'paying' : table.status}
+                                                    {table.status === 'settling' ? t('tables.status.paying') : t(table.status === 'used' ? 'tables.status.used' : 'tables.status.available')}
                                                 </span>
                                             </ListRow>
                                         </li>
@@ -792,20 +799,20 @@ const Tables: React.FC = () => {
                                 <DotCanvas className="flex min-h-[35rem] flex-col items-center justify-center px-6 text-center" onClick={() => setSelectedTableId(null)}>
                                     <div className="max-w-sm rounded-3xl bg-white/90 p-8 shadow-sm" data-testid="tables-empty-state">
                                         <LayoutGrid className="mx-auto mb-5 h-14 w-14 text-neutral-300" />
-                                        <h2 className="text-3xl font-bold text-neutral-950">No tables set</h2>
-                                        <p className="mt-3 text-lg text-neutral-500">Start customizing your floor layout with Edit layout.</p>
+                                        <h2 className="text-3xl font-bold text-neutral-950">{t('tables.empty.title')}</h2>
+                                        <p className="mt-3 text-lg text-neutral-500">{t('tables.empty.subtitle', { action: t('tables.actions.editLayout') })}</p>
                                     </div>
                                 </DotCanvas>
                             ) : (
                                 <DotCanvas onClick={() => setSelectedTableId(null)}>
                                     <div className="absolute left-5 top-5 z-10 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-white/90 px-3 py-2 text-sm font-medium text-neutral-800 shadow-sm">
-                                        <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-neutral-200 bg-white" />Available</span>
-                                        <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-neutral-200" style={{ backgroundImage: 'repeating-linear-gradient(-45deg, #fff 0, #fff 3px, #e5e7eb 3px, #e5e7eb 6px)' }} />Used</span>
-                                        <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full bg-amber-500" />Paying</span>
-                                        <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full bg-emerald-500" />Selected</span>
+                                        <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-neutral-200 bg-white" />{t('tables.filters.available')}</span>
+                                        <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-neutral-200" style={{ backgroundImage: 'repeating-linear-gradient(-45deg, #fff 0, #fff 3px, #e5e7eb 3px, #e5e7eb 6px)' }} />{t('tables.filters.used')}</span>
+                                        <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full bg-amber-500" />{t('tables.status.payingBadge')}</span>
+                                        <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full bg-emerald-500" />{t('tables.legend.selected')}</span>
                                     </div>
                                     {activeLayout.showCashier && (
-                                        <div className="absolute left-[10%] top-[55%] flex h-44 w-20 -translate-y-1/2 items-center justify-center border border-neutral-200 bg-neutral-50 text-sm font-semibold tracking-wide text-neutral-500 [writing-mode:vertical-rl]">Cashier</div>
+                                        <div className="absolute left-[10%] top-[55%] flex h-44 w-20 -translate-y-1/2 items-center justify-center border border-neutral-200 bg-neutral-50 text-sm font-semibold tracking-wide text-neutral-500 [writing-mode:vertical-rl]">{t('tables.cashier')}</div>
                                     )}
                                     {visibleTables.map(table => (
                                         <FloorTable
@@ -825,17 +832,17 @@ const Tables: React.FC = () => {
             ) : (
                 <section className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
                     <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                        <h1 className="text-3xl font-bold tracking-tight text-neutral-950">Edit tables</h1>
+                        <h1 className="text-3xl font-bold tracking-tight text-neutral-950">{t('tables.editTitle')}</h1>
                         <div className="flex flex-wrap items-center gap-3 xl:justify-end">
                             <button
                                 type="button"
                                 onClick={() => setDialog('reset')}
                                 className="min-h-touch-xs rounded-xl border border-[var(--ds2-danger-border,#fca5a5)] px-4 font-semibold text-[var(--ds2-danger-solid,#dc2626)] transition-colors hover:bg-[var(--ds2-danger-tint-bg,#fef2f2)]"
                             >
-                                Reset layout
+                                {t('tables.actions.resetLayout')}
                             </button>
                             <label className="flex min-h-touch-xs items-center gap-3 rounded-2xl px-3 text-sm font-semibold text-neutral-700">
-                                <span>Show cashier</span>
+                                <span>{t('tables.form.showCashier')}</span>
                                 <input
                                     type="checkbox"
                                     checked={draft.showCashier}
@@ -847,7 +854,7 @@ const Tables: React.FC = () => {
                                 type="button"
                                 variant="outline"
                                 icon={Plus}
-                                label="Add table"
+                                label={t('tables.actions.addTable')}
                                 onClick={handleOpenAdd}
                                 data-testid="tables-add-table"
                             />
@@ -855,14 +862,14 @@ const Tables: React.FC = () => {
                             <AdminActionButton
                                 type="button"
                                 variant="outline"
-                                label="Cancel"
+                                label={t('common.cancel')}
                                 onClick={handleCancelEditing}
                             />
                             <AdminActionButton
                                 type="button"
                                 variant="primary"
                                 icon={Save}
-                                label="Save"
+                                label={t('tables.actions.save')}
                                 onClick={() => setDialog('save')}
                                 data-testid="tables-save-layout"
                             />
@@ -876,7 +883,7 @@ const Tables: React.FC = () => {
                         onClick={() => setSelectedTableId(null)}
                     >
                         {draft.showCashier && (
-                            <div className="absolute left-[10%] top-[55%] flex h-44 w-20 -translate-y-1/2 items-center justify-center border border-neutral-200 bg-neutral-50 text-sm font-semibold tracking-wide text-neutral-500 [writing-mode:vertical-rl]">Cashier</div>
+                            <div className="absolute left-[10%] top-[55%] flex h-44 w-20 -translate-y-1/2 items-center justify-center border border-neutral-200 bg-neutral-50 text-sm font-semibold tracking-wide text-neutral-500 [writing-mode:vertical-rl]">{t('tables.cashier')}</div>
                         )}
                         {displayTables.map(table => (
                             <FloorTable
@@ -894,17 +901,17 @@ const Tables: React.FC = () => {
                                 style={{ left: `${selectedTable.x}%`, top: `calc(${selectedTable.y}% - 4.8rem)` }}
                                 onClick={event => event.stopPropagation()}
                             >
-                                <TableActionButton variant="icon" dark icon={RotateCw} onClick={handleRotate} aria-label={`Rotate ${selectedTable.name}`} />
-                                <TableActionButton variant="icon" dark icon={Edit3} onClick={handleOpenEdit} aria-label={`Edit ${selectedTable.name}`} />
-                                <TableActionButton variant="delete" dark icon={Trash2} onClick={() => setDialog('delete')} aria-label={`Delete ${selectedTable.name}`} />
+                                <TableActionButton variant="icon" dark icon={RotateCw} onClick={handleRotate} aria-label={t('tables.actions.rotateTable', { table: selectedTable.name })} />
+                                <TableActionButton variant="icon" dark icon={Edit3} onClick={handleOpenEdit} aria-label={t('tables.actions.editTable', { table: selectedTable.name })} />
+                                <TableActionButton variant="delete" dark icon={Trash2} onClick={() => setDialog('delete')} aria-label={t('tables.actions.deleteTable', { table: selectedTable.name })} />
                             </div>
                         )}
                         {draft.tables.length === 0 && (
                             <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
                                 <div className="max-w-sm rounded-3xl bg-white/90 p-8 shadow-sm">
                                     <LayoutGrid className="mx-auto mb-5 h-14 w-14 text-neutral-300" />
-                                    <h2 className="text-2xl font-bold text-neutral-950">Add your first table</h2>
-                                    <p className="mt-3 text-neutral-500">Use Add table to start building your floor layout.</p>
+                                    <h2 className="text-2xl font-bold text-neutral-950">{t('tables.editEmpty.title')}</h2>
+                                    <p className="mt-3 text-neutral-500">{t('tables.editEmpty.subtitle', { action: t('tables.actions.addTable') })}</p>
                                 </div>
                             </div>
                         )}
@@ -913,20 +920,20 @@ const Tables: React.FC = () => {
             )}
 
             {dialog === 'add' && (
-                <Dialog title="Add table" onClose={() => setDialog(null)}>
+                <Dialog title={t('tables.actions.addTable')} onClose={() => setDialog(null)}>
                     <div className="space-y-5">
                         <label className="block">
-                            <span className="mb-2 block text-sm font-semibold text-neutral-800">Table name</span>
+                            <span className="mb-2 block text-sm font-semibold text-neutral-800">{t('tables.form.tableName')}</span>
                             <input
                                 value={addForm.name}
                                 onChange={event => setAddForm(current => ({ ...current, name: event.target.value }))}
                                 className="min-h-touch-xs w-full rounded-xl border border-neutral-200 px-4 text-base outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                                placeholder="e.g. Table 21"
+                                placeholder={t('tables.form.tableNamePlaceholder')}
                                 autoFocus
                             />
                         </label>
                         <label className="block">
-                            <span className="mb-2 block text-sm font-semibold text-neutral-800">Type</span>
+                            <span className="mb-2 block text-sm font-semibold text-neutral-800">{t('tables.form.tableType')}</span>
                             <select
                                 value={addForm.capacity}
                                 onChange={event => {
@@ -935,114 +942,118 @@ const Tables: React.FC = () => {
                                 }}
                                 className="min-h-touch-xs w-full rounded-xl border border-neutral-200 bg-white px-4 text-base outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                             >
-                                <option value="">Choose table type</option>
-                                <option value="2">Small · 2 seats</option>
-                                <option value="4">Medium · 4 seats</option>
-                                <option value="6">Large · 6 seats</option>
+                                <option value="">{t('tables.form.chooseTableType')}</option>
+                                <option value="2">{t('tables.capacity.small')}</option>
+                                <option value="4">{t('tables.capacity.medium')}</option>
+                                <option value="6">{t('tables.capacity.large')}</option>
                             </select>
                         </label>
-                        <p className="rounded-xl bg-neutral-50 px-4 py-3 text-sm text-neutral-600">Small tables seat 2, medium tables seat 4, and large tables seat 6.</p>
+                        <p className="rounded-xl bg-neutral-50 px-4 py-3 text-sm text-neutral-600">{t('tables.form.capacityHint')}</p>
                         <div className="grid grid-cols-2 gap-3 pt-1">
-                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
-                            <button type="button" onClick={handlePrepareAdd} disabled={!addForm.name.trim() || addForm.capacity === ''} className={shellButtons ? `${shellButtons.primary} disabled:cursor-not-allowed disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40'}>Add</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>{t('common.cancel')}</button>
+                            <button type="button" onClick={handlePrepareAdd} disabled={!addForm.name.trim() || addForm.capacity === ''} className={shellButtons ? `${shellButtons.primary} disabled:cursor-not-allowed disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40'}>{t('tables.actions.add')}</button>
                         </div>
                     </div>
                 </Dialog>
             )}
 
             {dialog === 'confirm-add' && addForm.capacity !== '' && (
-                <Dialog title="Add table?" onClose={() => setDialog('add')}>
+                <Dialog title={t('tables.dialog.addTableTitle')} onClose={() => setDialog('add')}>
                     <div className="text-center">
                         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-amber-500" />
-                        <p className="text-neutral-600">Add <strong className="text-neutral-900">{addForm.name.trim()}</strong> as a {capacityLabels[addForm.capacity].toLocaleLowerCase()}?</p>
+                        <p className="text-neutral-600">{t('tables.dialog.addTableBody', { table: addForm.name.trim(), type: t(capacityLabelKeys[addForm.capacity]).toLocaleLowerCase() })}</p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog('add')} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Back</button>
-                            <button type="button" onClick={handleConfirmAdd} className={shellButtons ? shellButtons.primary : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700'}>Yes, add</button>
+                            <button type="button" onClick={() => setDialog('add')} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>{t('tables.actions.back')}</button>
+                            <button type="button" onClick={handleConfirmAdd} className={shellButtons ? shellButtons.primary : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700'}>{t('tables.dialog.confirmAdd')}</button>
                         </div>
                     </div>
                 </Dialog>
             )}
 
             {dialog === 'edit' && selectedTable && (
-                <Dialog title={`Edit ${selectedTable.name}`} onClose={() => setDialog(null)}>
+                <Dialog title={t('tables.actions.editTable', { table: selectedTable.name })} onClose={() => setDialog(null)}>
                     <div className="space-y-5">
                         <label className="block">
-                            <span className="mb-2 block text-sm font-semibold text-neutral-800">Table name</span>
+                            <span className="mb-2 block text-sm font-semibold text-neutral-800">{t('tables.form.tableName')}</span>
                             <input value={editForm.name} onChange={event => setEditForm(current => ({ ...current, name: event.target.value }))} className="min-h-touch-xs w-full rounded-xl border border-neutral-200 px-4 text-base outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" autoFocus />
                         </label>
                         <label className="block">
-                            <span className="mb-2 block text-sm font-semibold text-neutral-800">Type</span>
+                            <span className="mb-2 block text-sm font-semibold text-neutral-800">{t('tables.form.tableType')}</span>
                             <select value={editForm.capacity} onChange={event => setEditForm(current => ({ ...current, capacity: Number(event.target.value) as TableCapacity }))} className="min-h-touch-xs w-full rounded-xl border border-neutral-200 bg-white px-4 text-base outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
-                                <option value="2">Small · 2 seats</option>
-                                <option value="4">Medium · 4 seats</option>
-                                <option value="6">Large · 6 seats</option>
+                                <option value="2">{t('tables.capacity.small')}</option>
+                                <option value="4">{t('tables.capacity.medium')}</option>
+                                <option value="6">{t('tables.capacity.large')}</option>
                             </select>
                         </label>
                         <div className="grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
-                            <button type="button" onClick={handleSaveEdit} disabled={!editForm.name.trim() || editForm.capacity === ''} className={shellButtons ? `${shellButtons.primary} disabled:cursor-not-allowed disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40'}>Save</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>{t('common.cancel')}</button>
+                            <button type="button" onClick={handleSaveEdit} disabled={!editForm.name.trim() || editForm.capacity === ''} className={shellButtons ? `${shellButtons.primary} disabled:cursor-not-allowed disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40'}>{t('tables.actions.save')}</button>
                         </div>
                     </div>
                 </Dialog>
             )}
 
             {dialog === 'save' && (
-                <Dialog title="Save changes?" onClose={() => setDialog(null)}>
+                <Dialog title={t('tables.dialog.saveChangesTitle')} onClose={() => setDialog(null)}>
                     <div className="text-center">
                         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-amber-500" />
-                        <p className="text-neutral-600">Your updated table layout will be available on this till.</p>
+                        <p className="text-neutral-600">{t('tables.dialog.saveChangesBody')}</p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
-                            <button type="button" onClick={handleConfirmSave} className={shellButtons ? shellButtons.primary : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700'}>Yes, save</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>{t('common.cancel')}</button>
+                            <button type="button" onClick={handleConfirmSave} className={shellButtons ? shellButtons.primary : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700'}>{t('tables.dialog.confirmSave')}</button>
                         </div>
                     </div>
                 </Dialog>
             )}
 
             {dialog === 'reset' && (
-                <Dialog title="Reset table layout?" onClose={() => setDialog(null)}>
+                <Dialog title={t('tables.dialog.resetTitle')} onClose={() => setDialog(null)}>
                     <div className="text-center">
                         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
-                        <p className="text-neutral-600">This removes every table from this till’s saved layout. You can add them again afterwards.</p>
+                        <p className="text-neutral-600">{t('tables.dialog.resetBody')}</p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
-                            <button type="button" onClick={handleConfirmReset} className={shellButtons ? shellButtons.danger : 'min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700'}>Yes, reset</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>{t('common.cancel')}</button>
+                            <button type="button" onClick={handleConfirmReset} className={shellButtons ? shellButtons.danger : 'min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700'}>{t('tables.dialog.confirmReset')}</button>
                         </div>
                     </div>
                 </Dialog>
             )}
 
             {dialog === 'delete' && selectedTable && (
-                <Dialog title={`Delete ${selectedTable.name}?`} onClose={() => setDialog(null)}>
+                <Dialog title={t('tables.dialog.deleteTableTitle', { table: selectedTable.name })} onClose={() => setDialog(null)}>
                     <div className="text-center">
                         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
-                        <p className="text-neutral-600">This table will be removed from the draft layout when you save.</p>
+                        <p className="text-neutral-600">{t('tables.dialog.deleteBody')}</p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
-                            <button type="button" onClick={handleConfirmDelete} className={shellButtons ? shellButtons.danger : 'min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700'}>Yes, delete</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>{t('common.cancel')}</button>
+                            <button type="button" onClick={handleConfirmDelete} className={shellButtons ? shellButtons.danger : 'min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700'}>{t('tables.dialog.confirmDelete')}</button>
                         </div>
                     </div>
                 </Dialog>
             )}
 
             {dialog === 'assign-order' && selectedTable && (
-                <Dialog title={`Assign ${selectedTable.name}?`} onClose={() => setDialog(null)}>
+                <Dialog title={t('tables.dialog.assignTitle', { table: selectedTable.name })} onClose={() => setDialog(null)}>
                     <div className="text-center">
                         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-emerald-500" />
                         {cart.length > 0 ? (
                             <p className="text-neutral-600">
-                                Save the current {cart.length === 1 ? 'item' : 'items'} to <strong className="text-neutral-900">{selectedTable.name}</strong>?
-                                No fiscal document or stock movement is created until payment.
+                                <Trans
+                                    i18nKey="tables.dialog.assignWithCartBody"
+                                    count={cart.length}
+                                    values={{ table: selectedTable.name }}
+                                    components={{ b: <strong className="text-neutral-900" /> }}
+                                />
                             </p>
                         ) : (
                             <p className="text-neutral-600">
-                                Start a new dine-in order at <strong className="text-neutral-900">{selectedTable.name}</strong>?
+                                {t('tables.dialog.assignEmptyCartBody', { table: selectedTable.name })}
                             </p>
                         )}
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.secondary} disabled:opacity-40` : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40'}>Cancel</button>
+                            <button type="button" onClick={() => setDialog(null)} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.secondary} disabled:opacity-40` : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40'}>{t('common.cancel')}</button>
                             <button type="button" onClick={() => void handleConfirmAssignOrder()} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.primary} disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-40'}>
-                                {isProcessingOrder ? 'Saving…' : 'Assign order'}
+                                {isProcessingOrder ? t('common.saving') : t('tables.actions.assignOrder')}
                             </button>
                         </div>
                     </div>
@@ -1050,44 +1061,48 @@ const Tables: React.FC = () => {
             )}
 
             {dialog === 'open-order' && selectedTable?.order && (
-                <Dialog title={`Open ${selectedTable.name}?`} onClose={() => setDialog(null)}>
+                <Dialog title={t('tables.dialog.openTitle', { table: selectedTable.name })} onClose={() => setDialog(null)}>
                     <div className="text-center">
                         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 text-xl font-bold text-orange-700">
                             {selectedTable.order.lines.length}
                         </div>
                         <p className="text-neutral-600">
-                            This order has {selectedTable.order.lines.length === 1 ? '1 item' : `${selectedTable.order.lines.length} items`} totaling <strong className="text-neutral-900">{formatCurrency(tableOrderTotal(selectedTable.order))}</strong>.
+                            <Trans
+                                i18nKey="tables.dialog.openOrderBody"
+                                count={selectedTable.order.lines.length}
+                                values={{ total: formatCurrency(tableOrderTotal(selectedTable.order), uiLocale(i18n.language)) }}
+                                components={{ b: <strong className="text-neutral-900" /> }}
+                            />
                         </p>
                         {selectedTable.order.customer && (
-                            <p className="mt-2 text-sm text-neutral-500">Customer: {selectedTable.order.customer.name}</p>
+                            <p className="mt-2 text-sm text-neutral-500">{t('tables.dialog.customerLine', { name: selectedTable.order.customer.name })}</p>
                         )}
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>Cancel</button>
-                            <button type="button" onClick={handleConfirmOpenOrder} className={shellButtons ? shellButtons.primary : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700'}>Open order</button>
+                            <button type="button" onClick={() => setDialog(null)} className={shellButtons ? shellButtons.secondary : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50'}>{t('common.cancel')}</button>
+                            <button type="button" onClick={handleConfirmOpenOrder} className={shellButtons ? shellButtons.primary : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700'}>{t('tables.actions.openOrder')}</button>
                         </div>
                         <button
                             type="button"
                             onClick={() => setDialog('discard-order')}
                             className={shellButtons ? `mt-4 ${shellButtons.dangerOutline}` : 'mt-4 min-h-touch-xs px-4 text-sm font-semibold text-red-600 transition-colors hover:text-red-700'}
                         >
-                            Discard unbilled order
+                            {t('tables.actions.discardUnbilledOrder')}
                         </button>
                     </div>
                 </Dialog>
             )}
 
             {dialog === 'move-order' && selectedTable && activeTableOrder && (
-                <Dialog title={`Move order to ${selectedTable.name}?`} onClose={() => setDialog(null)}>
+                <Dialog title={t('tables.dialog.moveTitle', { table: selectedTable.name })} onClose={() => setDialog(null)}>
                     <div className="text-center">
                         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-amber-500" />
                         <p className="text-neutral-600">
-                            Move the saved order from <strong className="text-neutral-900">{activeTableOrder.tableName}</strong> to <strong className="text-neutral-900">{selectedTable.name}</strong>?
-                            The order remains unbilled until payment.
+                            {t('tables.dialog.moveBody', { from: activeTableOrder.tableName, to: selectedTable.name })}
                         </p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog(null)} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.secondary} disabled:opacity-40` : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40'}>Cancel</button>
+                            <button type="button" onClick={() => setDialog(null)} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.secondary} disabled:opacity-40` : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40'}>{t('common.cancel')}</button>
                             <button type="button" onClick={() => void handleConfirmMoveOrder()} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.primary} disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-700 disabled:opacity-40'}>
-                                {isProcessingOrder ? 'Moving…' : 'Move order'}
+                                {isProcessingOrder ? t('tables.actions.moving') : t('tables.actions.moveOrder')}
                             </button>
                         </div>
                     </div>
@@ -1095,16 +1110,16 @@ const Tables: React.FC = () => {
             )}
 
             {dialog === 'discard-order' && selectedTable?.order && (
-                <Dialog title={`Discard ${selectedTable.name}'s order?`} onClose={() => setDialog('open-order')}>
+                <Dialog title={t('tables.dialog.discardTitle', { table: selectedTable.name })} onClose={() => setDialog('open-order')}>
                     <div className="text-center">
                         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
                         <p className="text-neutral-600">
-                            This permanently removes the unbilled table order. It does not cancel or change any fiscal document.
+                            {t('tables.dialog.discardBody')}
                         </p>
                         <div className="mt-6 grid grid-cols-2 gap-3">
-                            <button type="button" onClick={() => setDialog('open-order')} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.secondary} disabled:opacity-40` : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40'}>Keep order</button>
+                            <button type="button" onClick={() => setDialog('open-order')} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.secondary} disabled:opacity-40` : 'min-h-touch-xs rounded-xl border border-neutral-200 font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40'}>{t('tables.actions.keepOrder')}</button>
                             <button type="button" onClick={() => void handleConfirmDiscardOrder()} disabled={isProcessingOrder} className={shellButtons ? `${shellButtons.danger} disabled:opacity-50` : 'min-h-touch-xs rounded-xl bg-red-600 font-semibold text-white hover:bg-red-700 disabled:opacity-40'}>
-                                {isProcessingOrder ? 'Discarding…' : 'Yes, discard'}
+                                {isProcessingOrder ? t('tables.actions.discarding') : t('tables.dialog.confirmDiscard')}
                             </button>
                         </div>
                     </div>

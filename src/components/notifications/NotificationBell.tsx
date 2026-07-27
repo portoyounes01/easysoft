@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bell } from 'lucide-react';
 import { useNotificationFeed } from '../../contexts/NotificationFeedContext';
 import NotificationPanel from './NotificationPanel';
@@ -6,6 +7,7 @@ import NotificationPanel from './NotificationPanel';
 // Header bell for the PWA. Badge shows unread count; opening the panel marks everything
 // read (persists the cursor to notification_read_state). PWA-host-gated by the caller.
 const NotificationBell: React.FC = () => {
+  const { t } = useTranslation();
   const { unreadCount, markAllRead } = useNotificationFeed();
   const [open, setOpen] = useState(false);
 
@@ -22,7 +24,7 @@ const NotificationBell: React.FC = () => {
       <button
         type="button"
         onClick={toggle}
-        aria-label="Notifications"
+        aria-label={t('notifications.title')}
         className="relative p-2 hover:bg-gray-100 text-gray-700 rounded-2xl transition-colors flex-shrink-0"
       >
         <Bell className="w-5 h-5 text-gray-600" />

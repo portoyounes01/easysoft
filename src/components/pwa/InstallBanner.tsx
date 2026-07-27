@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Download, X, Share, Plus } from 'lucide-react';
 import { useInstall } from '../../hooks/useInstall';
 import { AdminActionButton } from '../ui/AdminActionButton';
@@ -9,6 +10,7 @@ const DISMISS_KEY = 'pwa-install-dismissed';
 // it triggers the native install dialog; on iOS Safari (no programmatic install) it reveals
 // the Share -> Add to Home Screen steps. Hidden once installed or dismissed for the session.
 const InstallBanner: React.FC = () => {
+  const { t } = useTranslation();
   const { installable, standalone, ios, promptInstall } = useInstall();
   const [dismissed, setDismissed] = useState(() => sessionStorage.getItem(DISMISS_KEY) === '1');
   const [showIosHelp, setShowIosHelp] = useState(false);
@@ -34,16 +36,16 @@ const InstallBanner: React.FC = () => {
           <Download className="w-5 h-5 text-white" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-emerald-950">Install EasySoft</p>
+          <p className="text-sm font-semibold text-emerald-950">{t('installBanner.title')}</p>
           <p className="text-xs text-emerald-800/80 truncate">
-            Add it to your home screen for a full-screen app.
+            {t('installBanner.blurb')}
           </p>
         </div>
         {installable ? (
           <AdminActionButton
             type="button"
             variant="primary"
-            label="Install"
+            label={t('installBanner.install')}
             onClick={onInstall}
             className="flex-shrink-0 text-sm"
           />
@@ -51,7 +53,7 @@ const InstallBanner: React.FC = () => {
           <AdminActionButton
             type="button"
             variant="outline"
-            label="How"
+            label={t('installBanner.how')}
             onClick={() => setShowIosHelp((v) => !v)}
             className="flex-shrink-0 text-sm"
           />
@@ -61,7 +63,7 @@ const InstallBanner: React.FC = () => {
           variant="icon"
           icon={X}
           onClick={dismiss}
-          aria-label="Dismiss"
+          aria-label={t('login.syncDegradedDismiss')}
           className="flex-shrink-0"
         />
       </div>
@@ -69,18 +71,18 @@ const InstallBanner: React.FC = () => {
       {/* iOS: no programmatic install — show the manual steps. */}
       {ios && showIosHelp && (
         <div className="border-t border-emerald-200 px-4 py-3 text-sm text-emerald-900">
-          <p className="mb-2 font-medium">To install on iPhone/iPad:</p>
+          <p className="mb-2 font-medium">{t('installBanner.iosStepsTitle')}</p>
           <ol className="space-y-1.5 text-emerald-800">
             <li className="flex items-center gap-2">
-              <span className="font-semibold">1.</span> Tap the Share button
+              <span className="font-semibold">1.</span> {t('installBanner.iosStep1')}
               <Share className="w-4 h-4 inline" />
             </li>
             <li className="flex items-center gap-2">
-              <span className="font-semibold">2.</span> Choose "Add to Home Screen"
+              <span className="font-semibold">2.</span> {t('installBanner.iosStep2')}
               <Plus className="w-4 h-4 inline" />
             </li>
             <li className="flex items-center gap-2">
-              <span className="font-semibold">3.</span> Tap "Add"
+              <span className="font-semibold">3.</span> {t('installBanner.iosStep3')}
             </li>
           </ol>
         </div>

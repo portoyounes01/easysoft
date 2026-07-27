@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import i18n from '../i18n';
 import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { Employee, EmployeeLoginResult } from '../types/supabase';
 import { hasEmployeePermission } from '../utils/accessPermissions';
@@ -192,7 +193,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return {
       source: 'platform',
       userId: session.user.id,
-      displayName: session.user.email ?? 'platform admin',
+      displayName: session.user.email ?? i18n.t('common.platformAdmin'),
       role: 'sysadmin',
       tenantId: null,
       storeIds: [],
@@ -262,7 +263,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       // Guard: only attempt Supabase auth when properly configured
       if (!isSupabaseConfigured()) {
-        const msg = 'Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON.';
+        const msg = i18n.t('login.supabaseNotConfiguredEnv');
         setState(prev => ({ ...prev, isLoading: false, error: msg }));
         return { success: false, error: msg };
       }
@@ -279,7 +280,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Employee data will be fetched in the auth state change listener
       return { success: true };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorMessage = error instanceof Error ? error.message : i18n.t('common.unknownErrorOccurred');
       setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
       return { success: false, error: errorMessage };
     }
@@ -291,7 +292,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     try {
       if (!isSupabaseConfigured()) {
-        throw new Error('Supabase is not configured. Device pairing and online login are required.');
+        throw new Error(i18n.t('login.supabaseNotConfiguredPairing'));
       }
 
       const { data: sessionData } = await supabase.auth.getSession();
@@ -304,13 +305,13 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         p_employee_number: employeeNumber,
         p_secret: password,
       });
-      if (error) throw new Error(error.message || 'Employee credential verification failed.');
+      if (error) throw new Error(error.message || i18n.t('login.credentialVerificationFailed'));
 
       const loginResult = (data as EmployeeLoginResult[] | null)?.[0];
       if (!loginResult?.success || !loginResult.employee_id) {
         const message = loginResult?.error === 'locked'
-          ? 'Too many failed attempts. Try again in 15 minutes.'
-          : 'Invalid employee number or credentials.';
+          ? i18n.t('login.tooManyAttempts')
+          : i18n.t('login.invalidEmployeeCredentials');
         setState(prev => ({ ...prev, isLoading: false, error: message }));
         return { success: false, error: message };
       }
@@ -329,7 +330,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         ? sanitizeEmployee(localEmployee)
         : await fetchEmployeeDataForId(deviceSession, loginResult.employee_id);
       if (!employee || !employee.is_active) {
-        throw new Error('Employee roster is out of date. Sync this till and try again.');
+        throw new Error(i18n.t('login.rosterOutOfDate'));
       }
 
       setState(prev => ({
@@ -346,7 +347,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       return { success: true };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorMessage = error instanceof Error ? error.message : i18n.t('common.unknownErrorOccurred');
       setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
       return { success: false, error: errorMessage };
     }
@@ -358,7 +359,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     try {
       if (!isSupabaseConfigured()) {
-        const msg = 'Supabase is not configured.';
+        const msg = i18n.t('login.supabaseNotConfigured');
         setState(prev => ({ ...prev, isLoading: false, error: msg }));
         return { success: false, error: msg };
       }
@@ -386,14 +387,14 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
       // errors — keep them friendly + generic (no enumeration signal).
       const msg = res.status === 401
-        ? 'Invalid username/email or password.'
+        ? i18n.t('login.pwaInvalidCredentials')
         : (body?.error === 'no_membership' || body?.error === 'not_a_member')
-          ? 'This account has no access to a workspace.'
-          : (typeof body?.error === 'string' ? body.error : 'Login failed.');
+          ? i18n.t('login.pwaNoWorkspaceAccess')
+          : (typeof body?.error === 'string' ? body.error : i18n.t('login.loginFailed'));
       setState(prev => ({ ...prev, isLoading: false, error: msg }));
       return { success: false, error: msg };
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Login failed.';
+      const msg = e instanceof Error ? e.message : i18n.t('login.loginFailed');
       setState(prev => ({ ...prev, isLoading: false, error: msg }));
       return { success: false, error: msg };
     }

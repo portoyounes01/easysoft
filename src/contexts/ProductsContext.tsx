@@ -224,7 +224,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // =====================================================
 
     const createProduct = async (productData: ProductFormData): Promise<string> => {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(t('common.pwaViewOnly'));
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -259,13 +259,13 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             return id;
         } catch (error) {
             console.error('Failed to create product:', error);
-            dispatch({ type: 'SET_ERROR', payload: 'Failed to create product' });
+            dispatch({ type: 'SET_ERROR', payload: t('products.createFailed') });
             throw error;
         }
     };
 
     const updateProduct = async (id: string, updates: Partial<LocalProduct>): Promise<void> => {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(t('common.pwaViewOnly'));
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -273,13 +273,13 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             dispatch({ type: 'UPDATE_PRODUCT', payload: { id, updates } });
         } catch (error) {
             console.error('Failed to update product:', error);
-            dispatch({ type: 'SET_ERROR', payload: 'Failed to update product' });
+            dispatch({ type: 'SET_ERROR', payload: t('products.updateFailed') });
             throw error;
         }
     };
 
     const deleteProduct = async (id: string): Promise<void> => {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(t('common.pwaViewOnly'));
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -287,7 +287,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             dispatch({ type: 'REMOVE_PRODUCT', payload: id });
         } catch (error) {
             console.error('Failed to delete product:', error);
-            dispatch({ type: 'SET_ERROR', payload: 'Failed to delete product' });
+            dispatch({ type: 'SET_ERROR', payload: t('products.deleteFailed') });
             throw error;
         }
     };
@@ -329,7 +329,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // =====================================================
 
     const createCategory = async (categoryData: CategoryFormData): Promise<string> => {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(t('common.pwaViewOnly'));
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -348,13 +348,13 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             return id;
         } catch (error) {
             console.error('Failed to create category:', error);
-            dispatch({ type: 'SET_ERROR', payload: 'Failed to create category' });
+            dispatch({ type: 'SET_ERROR', payload: t('products.categoryCreateFailed') });
             throw error;
         }
     };
 
     const updateCategory = async (id: string, updates: Partial<LocalCategory>): Promise<void> => {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(t('common.pwaViewOnly'));
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -362,13 +362,13 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             dispatch({ type: 'UPDATE_CATEGORY', payload: { id, updates } });
         } catch (error) {
             console.error('Failed to update category:', error);
-            dispatch({ type: 'SET_ERROR', payload: 'Failed to update category' });
+            dispatch({ type: 'SET_ERROR', payload: t('products.categoryUpdateFailed') });
             throw error;
         }
     };
 
     const deleteCategory = async (id: string): Promise<void> => {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(t('common.pwaViewOnly'));
         try {
             dispatch({ type: 'SET_ERROR', payload: null });
 
@@ -376,7 +376,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             dispatch({ type: 'REMOVE_CATEGORY', payload: id });
         } catch (error) {
             console.error('Failed to delete category:', error);
-            dispatch({ type: 'SET_ERROR', payload: 'Failed to delete category' });
+            dispatch({ type: 'SET_ERROR', payload: t('products.categoryDeleteFailed') });
             throw error;
         }
     };
@@ -454,7 +454,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             dispatch({ type: 'SET_SYNC_ERROR', payload: null });
         } catch (error) {
             console.error('Sync failed:', error);
-            const message = error instanceof Error ? error.message : 'Sync failed';
+            const message = error instanceof Error ? error.message : t('products.syncFailed');
             dispatch({ type: 'SET_SYNC_ERROR', payload: message });
             dispatch({ type: 'SET_SYNC_STATUS', payload: { isSyncing: false } });
         }

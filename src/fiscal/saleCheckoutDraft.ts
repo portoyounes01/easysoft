@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { LocalCustomer, LocalProduct } from '../types/supabase';
 import { calculatePriceWithoutTax, calculateTaxAmount } from '../types/supabase';
 import { buildFiscalCustomerFields, type FiscalCustomerFields } from './fiscalCustomer';
@@ -47,17 +48,17 @@ export interface SaleCheckoutDraft {
 function assertNoNegativeSaleLineTotals(cart: FiscalCartLine[]): void {
     for (const line of cart) {
         if (line.quantity <= 0) {
-            throw new Error('Quantidade inválida numa linha do carrinho.');
+            throw new Error(i18n.t('checkout.invalidLineQuantity'));
         }
         if (line.product.price < 0) {
-            throw new Error('Preço de produto inválido (negativo).');
+            throw new Error(i18n.t('checkout.invalidProductPrice'));
         }
         const itemTotal = line.product.price * line.quantity;
         const discountAmount = (itemTotal * line.discount) / 100;
         const discountedTotal = itemTotal - discountAmount;
         if (discountedTotal < 0) {
             throw new Error(
-                'Total de linha negativo não é permitido em venda — use nota de crédito para corrigir documentos.'
+                i18n.t('checkout.negativeLineTotal')
             );
         }
     }
@@ -66,12 +67,12 @@ function assertNoNegativeSaleLineTotals(cart: FiscalCartLine[]): void {
 function assertDiscountGuards(cart: FiscalCartLine[], globalDiscount?: FiscalGlobalDiscount): void {
     for (const line of cart) {
         if (line.discount < 0 || line.discount > 100) {
-            throw new Error('Desconto por linha deve estar entre 0% e 100%.');
+            throw new Error(i18n.t('checkout.lineDiscountRange'));
         }
     }
     if (globalDiscount && globalDiscount.type === 'percentage') {
         if (globalDiscount.value < 0 || globalDiscount.value > 100) {
-            throw new Error('Desconto global em percentagem deve estar entre 0% e 100%.');
+            throw new Error(i18n.t('checkout.globalPercentDiscountRange'));
         }
     }
     if (globalDiscount && globalDiscount.type === 'fixed' && globalDiscount.amount > 0) {
@@ -81,7 +82,7 @@ function assertDiscountGuards(cart: FiscalCartLine[], globalDiscount?: FiscalGlo
             return sum + (itemTotal - discountAmount);
         }, 0);
         if (globalDiscount.amount > subAfterLines + 1e-6) {
-            throw new Error('Desconto global fixo não pode exceder o subtotal após descontos por linha.');
+            throw new Error(i18n.t('checkout.globalFixedDiscountTooLarge'));
         }
     }
 }
@@ -141,7 +142,7 @@ export function buildSaleCheckoutDraft(params: {
     const total = finalSubtotal;
 
     if (total <= 0) {
-        throw new Error('O total do documento de venda deve ser superior a zero.');
+        throw new Error(i18n.t('checkout.totalMustBePositive'));
     }
 
     const changeGiven =

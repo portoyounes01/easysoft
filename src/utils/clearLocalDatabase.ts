@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import { localDb } from '../lib/localDatabase';
 import { isSystemAdministrator } from './systemAdmin';
 
@@ -102,7 +103,7 @@ export const clearLocalDatabasePreservingRecovery = async (): Promise<LocalDatab
         }));
     const systemAdmins = preservedEmployees.filter(employee => isSystemAdministrator(employee));
     if (systemAdmins.length === 0) {
-        throw new Error('No local system administrator account was found. The database was not cleared.');
+        throw new Error(i18n.t('seedManagement.clear.noSystemAdmin'));
     }
 
     await clearAndReinitializeDatabase();

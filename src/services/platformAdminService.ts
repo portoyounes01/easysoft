@@ -1,6 +1,7 @@
 // platformAdminService — client for the platform-admin edge function (sysadmin console).
 // Same request shape as deviceManagementService: caller's session JWT + anon apikey;
 // the function re-authorizes against public.platform_admins per request.
+import i18n from '../i18n';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 
 export type TenantStatus = 'provisioning' | 'active' | 'suspended' | 'offboarding';
@@ -108,7 +109,7 @@ const errorMessages: Record<string, string> = {
 async function request<T>(body: Record<string, unknown>): Promise<T> {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
-  if (!accessToken) throw new Error('No active session — sign in again.');
+  if (!accessToken) throw new Error(i18n.t('platformConsole.noActiveSession'));
 
   const response = await fetch(`${supabaseUrl}/functions/v1/platform-admin`, {
     method: 'POST',
@@ -121,7 +122,8 @@ async function request<T>(body: Record<string, unknown>): Promise<T> {
   });
   const result = await response.json().catch(() => ({})) as T & { error?: string; detail?: string };
   if (!response.ok) {
-    const base = errorMessages[result.error ?? ''] ?? `Platform request failed (${result.error ?? response.status}).`;
+    const base = errorMessages[result.error ?? '']
+      ?? i18n.t('platformConsole.requestFailed', { reason: result.error ?? response.status });
     throw new Error(result.detail ? `${base} — ${result.detail}` : base);
   }
   return result;

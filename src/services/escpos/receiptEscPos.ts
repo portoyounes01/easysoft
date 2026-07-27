@@ -220,7 +220,7 @@ function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions
     // Order queue number, last (freshly issued receipts only)
     if (receipt.ticketNumber) {
         b.rule();
-        centered('PEDIDO / ORDER', true);
+        centered(t('thermalReceipt.orderTicketLabel'), true);
         b.align('center').bold(true).size(2, 2).line(receipt.ticketNumber).size(1, 1).bold(false).align('left');
     }
 

@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import { supabase, isSupabaseConfigured, connectionStatus } from '../lib/supabase';
 import { isPwaHost } from '../lib/host';
 import { fetchAllPages } from '../lib/supabasePaging';
@@ -86,6 +87,12 @@ export class EmployeeService {
                     error.message.includes('object store') ||
                     error.message.includes('IndexedDB'))
             ) {
+                // Stays untranslated on purpose. This message becomes EmployeesContext.loadError,
+                // which LoginForm2 (loadErrorIsLocalDb) sniffs for 'database' / 'initialization failed'
+                // to pick the local-DB recovery copy. The pt/es renderings of
+                // employees.databaseInitFailed contain neither substring, so translating here
+                // silently drops that branch on every non-English till. Translate at the render
+                // site in LoginForm2 instead; the key exists and is ready.
                 throw new Error('Database initialization failed. Please refresh the page or clear browser data.');
             }
 
@@ -150,13 +157,13 @@ export class EmployeeService {
 
     // Create new employee
     async createEmployee(employeeData: EmployeeFormData): Promise<string> {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(i18n.t('common.pwaViewOnly'));
         await this.ensureInitialized();
 
         // Validate employee number is unique
         const existing = await this.getEmployeeByNumber(employeeData.employee_number);
         if (existing) {
-            throw new Error('Employee number already exists');
+            throw new Error(i18n.t('employees.numberAlreadyExists'));
         }
 
         // Hash password if provided
@@ -199,7 +206,7 @@ export class EmployeeService {
 
     // Update employee
     async updateEmployee(id: string, updates: Partial<EmployeeFormData>): Promise<void> {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(i18n.t('common.pwaViewOnly'));
         await this.ensureInitialized();
 
         const updateData: Partial<LocalEmployee> = {};
@@ -231,7 +238,7 @@ export class EmployeeService {
 
     // Delete employee (soft delete)
     async deleteEmployee(id: string): Promise<void> {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(i18n.t('common.pwaViewOnly'));
         await this.ensureInitialized();
         await employeeLocalService.deleteEmployee(id);
 

@@ -155,7 +155,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
       return;
     }
     if (countryIso === 'ES' && postal.length > 0 && !/^\d{5}$/.test(postal)) {
-      setFormError(t('pos.customerForm.invalidPostalEs', { defaultValue: 'Código postal no válido (5 dígitos).' }));
+      setFormError(t('pos.customerForm.invalidPostalEs'));
       return;
     }
 

@@ -86,7 +86,7 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
         setSeedStatus({
             isRunning: true,
             success: null,
-            message: 'Starting seeding process...',
+            message: t('seedManagement.starting'),
             details: []
         });
 
@@ -123,7 +123,7 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                     isRunning: false,
                     success: false,
                     message: result.message,
-                    details: ['Check the browser console for detailed error information']
+                    details: [t('seedManagement.failureConsole')]
                 });
             }
         } catch (error) {

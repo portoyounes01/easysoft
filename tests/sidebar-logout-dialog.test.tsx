@@ -29,7 +29,11 @@ vi.mock('../src/lib/host', () => ({
     isPwaHost: false,
 }));
 
-vi.mock('react-i18next', () => ({
+// Only `useTranslation` is stubbed (so assertions can match on key names). The
+// rest of the module stays real: the Sidebar's import graph now reaches
+// `src/i18n.ts`, which needs the genuine `initReactI18next` to initialise.
+vi.mock('react-i18next', async importOriginal => ({
+    ...(await importOriginal<typeof import('react-i18next')>()),
     useTranslation: () => ({
         t: (key: string) => key,
     }),

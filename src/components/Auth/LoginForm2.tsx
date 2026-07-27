@@ -83,6 +83,7 @@ interface LoginPinNumpadProps {
 }
 
 const LoginPinNumpad: React.FC<LoginPinNumpadProps> = ({ disabled, onDigit, onBackspace }) => {
+  const { t } = useTranslation();
   const digits = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
   const keySizing =
@@ -107,7 +108,7 @@ const LoginPinNumpad: React.FC<LoginPinNumpadProps> = ({ disabled, onDigit, onBa
         icon={Delete}
         className={keySizing}
         onClick={onBackspace}
-        aria-label="Backspace"
+        aria-label={t('login2.backspace')}
       />
     </div>
   );
@@ -616,7 +617,7 @@ const LoginForm2Inner: React.FC = () => {
                             onClick={() => navigate('/pair-device')}
                             className="mx-auto mt-2 block rounded-xl bg-[var(--ds2-danger-solid,#dc2626)] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[var(--ds2-danger-hover,#b91c1c)]"
                           >
-                            Re-pair this till
+                            {t('login2.rePairTill')}
                           </button>
                         )}
                       </div>

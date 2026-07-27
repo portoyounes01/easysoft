@@ -311,9 +311,9 @@ const Settings: React.FC = () => {
             ...(isPwaHost
                 ? [{
                     id: 'alerts' as const,
-                    label: t('settings.tabAlertsLabel', { defaultValue: 'Alerts' }),
+                    label: t('settings.tabAlertsLabel'),
                     icon: Bell,
-                    description: t('settings.tabAlertsDesc', { defaultValue: 'Notification thresholds' }),
+                    description: t('settings.tabAlertsDesc'),
                 }]
                 : []),
         ],
@@ -1719,8 +1719,8 @@ const Settings: React.FC = () => {
                             value: c,
                             label: getCountryProfile(c).name,
                             description: c === 'PT'
-                                ? 'Portugal — AT / SAF-T'
-                                : 'España — SIGN ES / Veri*factu',
+                                ? t('settings.operatingCountryPtDesc')
+                                : t('settings.operatingCountryEsDesc'),
                         }))}
                     />
                 </SettingsRow>
@@ -1736,7 +1736,7 @@ const Settings: React.FC = () => {
                             { value: 'vendus', label: 'Vendus', description: t('settings.issuerVendusDesc') },
                             { value: 'invoicexpress', label: 'InvoiceXpress', description: t('settings.issuerIxDesc') },
                             { value: 'fiskaly', label: 'Fiskaly', description: t('settings.issuerFiskalyDesc') },
-                            { value: 'sign_es', label: 'SIGN ES (España)', description: t('settings.issuerSignEsDesc', { defaultValue: 'España — fiskaly SIGN ES / Veri*factu (facturas simplificadas + rectificativas).' }) },
+                            { value: 'sign_es', label: t('settings.issuerSignEsLabel'), description: t('settings.issuerSignEsDesc') },
                         ].filter((o) => countryProfile.fiscalIssuers.includes(o.value as SystemSettings['fiscal']['issuer']))}
                     />
                 </SettingsRow>
@@ -1805,7 +1805,7 @@ const Settings: React.FC = () => {
                                     type="text"
                                     value={ix.accountName}
                                     onChange={e => handleInvoiceXpressSettingChange('accountName', e.target.value)}
-                                    placeholder="minha-empresa"
+                                    placeholder={t('settings.ixAccountNamePlaceholder')}
                                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                 />
                             </SettingsRow>
@@ -1932,13 +1932,13 @@ const Settings: React.FC = () => {
 
     const renderSignEsSetup = () => (
         <SettingCard
-            title={t('settings.signEsSetupTitle', { defaultValue: 'SIGN ES (España) — Veri*factu' })}
-            description={t('settings.signEsSetupDesc', { defaultValue: 'La configuración fiscal de España (entorno, contribuyente, series FS/FC/FR y numeración) se gestiona en el servidor mediante el aprovisionamiento SIGN ES. No hay nada que configurar aquí.' })}
+            title={t('settings.signEsSetupTitle')}
+            description={t('settings.signEsSetupDesc')}
             icon={Cloud}
             accent="from-rose-600 to-orange-500"
         >
             <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
-                {t('settings.signEsSetupNote', { defaultValue: 'El alta del comercio (organización gestionada, claves, contribuyente y clientes/cajas) se realiza una sola vez con la función de aprovisionamiento provision-sign-es. Las facturas se emiten y se registran en AEAT automáticamente.' })}
+                {t('settings.signEsSetupNote')}
             </div>
         </SettingCard>
     );
@@ -2202,7 +2202,7 @@ const Settings: React.FC = () => {
                                 onChange={event =>
                                     updateSettings({ fiscal: { accounting: { accountantEmail: event.target.value } } })
                                 }
-                                placeholder="contabilista@exemplo.pt"
+                                placeholder={t('settings.saft.accountantEmailPlaceholder')}
                                 className={fieldClass}
                             />
                         </div>

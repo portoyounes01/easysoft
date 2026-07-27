@@ -571,7 +571,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         <>
           <div className="separator"></div>
           <div className="ticket-number">
-            <div className="center bold">PEDIDO / ORDER</div>
+            <div className="center bold">{t('thermalReceipt.orderTicketLabel')}</div>
             <div className="center bold" style={{ fontSize: '28px', lineHeight: 1.2 }}>
               {ticketNumber}
             </div>

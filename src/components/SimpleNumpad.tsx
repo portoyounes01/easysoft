@@ -1,4 +1,5 @@
 import React, { useCallback, useContext } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DialogShellStyleContext, DIALOG_PALETTES } from '../theme/dialogStyle';
 import { Delete, X } from 'lucide-react';
 
@@ -15,6 +16,7 @@ const SimpleNumpad: React.FC<SimpleNumpadProps> = ({
     onButtonClick,
     className = ''
 }) => {
+    const { t } = useTranslation();
     const appendToken = useCallback((token: string) => {
         onButtonClick?.();
         const next = (value + token).replace(/[^0-9]/g, '');
@@ -43,9 +45,9 @@ const SimpleNumpad: React.FC<SimpleNumpadProps> = ({
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(digit => (
                     <button key={digit} type="button" onClick={() => appendToken(digit)} className={key}>{digit}</button>
                 ))}
-                <button type="button" onClick={handleClear} className={key} aria-label="Clear">×</button>
+                <button type="button" onClick={handleClear} className={key} aria-label={t('common.clear')}>×</button>
                 <button type="button" onClick={() => appendToken('0')} className={key}>0</button>
-                <button type="button" onClick={handleDelete} className={key} aria-label="Delete">⌫</button>
+                <button type="button" onClick={handleDelete} className={key} aria-label={t('common.delete')}>⌫</button>
             </div>
         );
     }

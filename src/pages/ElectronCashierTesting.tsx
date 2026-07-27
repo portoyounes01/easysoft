@@ -23,6 +23,7 @@ import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { useTranslation } from 'react-i18next';
 import '../styles/design-system-2-scope.css';
 
 const DS2_DANGER_ROW =
@@ -42,6 +43,7 @@ export interface ElectronTestingPanelProps {
 }
 
 export const ElectronTestingPanel: React.FC<ElectronTestingPanelProps> = ({ embedded = false }) => {
+  const { t } = useTranslation();
   const { connectToAnyDevice, sendToPrinter, disconnectPrinter, isConnected, isSupported } = useWebSerialPrinter();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
   // App-wide printer config (SSOT in the main process): the printer selected in
@@ -169,7 +171,7 @@ export const ElectronTestingPanel: React.FC<ElectronTestingPanelProps> = ({ embe
           : [0x1B, 0x70, 0x01, 0x19, 0xFA];
         
         await sendToPrinter(commands);
-        alert('Cash drawer command sent via Web Serial');
+        alert(t('electronTesting.alerts.drawerCommandSent'));
       }
     } catch (error) {
       console.error('Cash drawer test failed:', error);
@@ -426,7 +428,7 @@ Web Hardware Status:
       <div className={embedded ? 'max-w-4xl' : `mx-auto max-w-4xl py-6 ${layoutClasses.contentInsetX}`}>
       {!embedded && (
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Hardware Testing</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t('electronTesting.title')}</h1>
         <p className="mt-2 text-gray-600">
           Test thermal printer and cash drawer functionality in both web and Electron environments
         </p>

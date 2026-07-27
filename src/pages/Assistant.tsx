@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, Trans } from 'react-i18next';
 import { Sparkles, Send, Bot, User, RefreshCw, Lock, MessageCircle, Check, Copy, X, Mic, Square, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -14,6 +14,7 @@ import '../styles/design-system-2-scope.css';
 // "Link WhatsApp" panel: shows linked status, and generates a pairing code the
 // owner texts from their phone to the business WhatsApp number.
 const WhatsAppLink: React.FC = () => {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [connected, setConnected] = useState<{ phone_e164: string; verified_at: string }[]>([]);
   const [code, setCode] = useState<WhatsAppPairCode | null>(null);
@@ -36,7 +37,7 @@ const WhatsAppLink: React.FC = () => {
       if (justLinked === phone) setJustLinked(null);
       setConfirmUnlink(null);
       await load();
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed to disconnect.'); setConfirmUnlink(null); }
+    } catch (e) { setErr(e instanceof Error ? e.message : t('assistant.whatsapp.unlinkFailed')); setConfirmUnlink(null); }
   };
   const getCode = async () => {
     setBusy(true); setErr(null); setQr(null); setJustLinked(null);
@@ -49,7 +50,7 @@ const WhatsAppLink: React.FC = () => {
         const waUrl = `https://wa.me/${digits}?text=${encodeURIComponent(c.code)}`;
         try { setQr(await generateQRCodeImage(waUrl)); } catch { /* qr optional */ }
       }
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Failed.'); }
+    } catch (e) { setErr(e instanceof Error ? e.message : t('assistant.whatsapp.codeFailed')); }
     finally { setBusy(false); }
   };
 
@@ -78,23 +79,23 @@ const WhatsAppLink: React.FC = () => {
       <AdminActionButton variant="ghost" icon={MessageCircle} label="WhatsApp" onClick={toggle} className="text-sm" />
       {open && (
         <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-2xl shadow-xl p-4 z-20 text-sm">
-          <p className="font-semibold text-gray-900 mb-1">Use the assistant on WhatsApp</p>
+          <p className="font-semibold text-gray-900 mb-1">{t('assistant.whatsapp.panelTitle')}</p>
           {justLinked && (
             <div className="mb-3 flex items-start gap-2 bg-green-100 border border-green-300 rounded-xl px-3 py-2 text-green-800">
               <Check className="w-5 h-5 shrink-0 mt-0.5" />
-              <span><b>Connected!</b> {justLinked} is now linked — ask it anything from WhatsApp.</span>
+              <span><Trans i18nKey="assistant.whatsapp.justLinked" values={{ phone: justLinked }} components={{ b: <b /> }} /></span>
             </div>
           )}
           {connected.length > 0 ? (
             <div className="mb-3">
-              <p className="text-xs text-gray-500 mb-1">Connected numbers</p>
+              <p className="text-xs text-gray-500 mb-1">{t('assistant.whatsapp.connectedNumbers')}</p>
               <ul className="space-y-1">
                 {connected.map((c) => (
                   <li key={c.phone_e164} className={`flex items-center gap-2 border rounded-xl px-2.5 py-2 ${c.phone_e164 === justLinked ? 'bg-green-100 border-green-300' : 'bg-green-50 border-green-200'}`}>
                     <Check className="w-4 h-4 text-green-600 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-green-800 leading-tight truncate">{c.phone_e164}</div>
-                      <div className="text-[11px] text-green-600/70 leading-tight">Linked {new Date(c.verified_at).toLocaleDateString()}</div>
+                      <div className="text-[11px] text-green-600/70 leading-tight">{t('assistant.whatsapp.linkedOn', { date: new Date(c.verified_at).toLocaleDateString() })}</div>
                     </div>
                     {confirmUnlink === c.phone_e164 ? (
                       <div className="shrink-0 flex items-center gap-1">
@@ -102,23 +103,23 @@ const WhatsAppLink: React.FC = () => {
                           onClick={() => unlink(c.phone_e164)}
                           className="text-xs font-semibold text-white bg-[var(--ds2-danger-solid,#dc2626)] hover:bg-[var(--ds2-danger-hover,#b91c1c)] px-2 py-1 rounded-xl transition-colors"
                         >
-                          Remove
+                          {t('assistant.whatsapp.remove')}
                         </button>
                         <button
                           onClick={() => setConfirmUnlink(null)}
                           className="text-xs font-medium text-gray-900 hover:bg-gray-100 px-1.5 py-1 rounded-2xl transition-colors"
                         >
-                          Cancel
+                          {t('common.cancel')}
                         </button>
                       </div>
                     ) : (
                       <TableActionButton
                         variant="delete"
                         icon={X}
-                        label="Disconnect"
+                        label={t('assistant.whatsapp.disconnect')}
                         onClick={() => setConfirmUnlink(c.phone_e164)}
-                        title="Disconnect this number"
-                        aria-label="Disconnect"
+                        title={t('assistant.whatsapp.disconnectTitle')}
+                        aria-label={t('assistant.whatsapp.disconnect')}
                         className="shrink-0 gap-1 text-xs font-medium"
                       />
                     )}
@@ -127,11 +128,11 @@ const WhatsAppLink: React.FC = () => {
               </ul>
             </div>
           ) : (
-            <p className="text-gray-500 mb-3">No numbers connected yet. Link your WhatsApp to ask about your business from your phone.</p>
+            <p className="text-gray-500 mb-3">{t('assistant.whatsapp.emptyState')}</p>
           )}
           {!code ? (
             <button onClick={getCode} disabled={busy} className="w-full bg-gradient-primary hover:opacity-90 text-white rounded-xl py-2.5 font-semibold transition-opacity disabled:opacity-50">
-              {busy ? 'Getting code…' : connected.length ? 'Link another number' : 'Get my pairing code'}
+              {busy ? t('assistant.whatsapp.gettingCode') : connected.length ? t('assistant.whatsapp.linkAnother') : t('assistant.whatsapp.getCode')}
             </button>
           ) : (
             <div>
@@ -142,20 +143,20 @@ const WhatsAppLink: React.FC = () => {
                 </button>
               </div>
               <ol className="list-decimal pl-5 space-y-1 text-gray-600">
-                <li>Open WhatsApp on your phone.</li>
-                <li>Send this code{code.business_number ? <> to <b>{code.business_number}</b></> : ' to the business WhatsApp number'}.</li>
-                <li>This panel switches to <b>Connected</b> on its own — no need to refresh.</li>
+                <li>{t('assistant.whatsapp.step1')}</li>
+                <li>{code.business_number ? t('assistant.whatsapp.step2WithNumber', { number: code.business_number }) : t('assistant.whatsapp.step2NoNumber')}</li>
+                <li><Trans i18nKey="assistant.whatsapp.step3" components={{ b: <b /> }} /></li>
               </ol>
               {qr && (
                 <div className="mt-3 text-center border-t border-gray-100 pt-3">
-                  <p className="text-xs text-gray-500 mb-2">📱 Or scan this to open WhatsApp with the code ready — just press send:</p>
-                  <img src={qr} alt="Scan to link WhatsApp" className="mx-auto w-40 h-40 rounded-lg border border-gray-200" />
+                  <p className="text-xs text-gray-500 mb-2">{t('assistant.whatsapp.qrHint')}</p>
+                  <img src={qr} alt={t('assistant.whatsapp.qrAlt')} className="mx-auto w-40 h-40 rounded-lg border border-gray-200" />
                 </div>
               )}
               <div className="mt-3 flex items-center justify-center gap-2 text-xs text-green-700">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Waiting for your code… linking happens automatically.
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" /> {t('assistant.whatsapp.waiting')}
               </div>
-              <p className="text-xs text-gray-400 mt-1.5 text-center">Code expires in {code.expires_in_minutes} minutes.</p>
+              <p className="text-xs text-gray-400 mt-1.5 text-center">{t('assistant.whatsapp.codeExpires', { count: code.expires_in_minutes })}</p>
             </div>
           )}
           {err && <p className="text-red-600 text-xs mt-2">{err}</p>}
@@ -221,7 +222,7 @@ const AssistantInner: React.FC = () => {
           const text = await assistantService.transcribe(blob);
           if (text) setInput((prev) => (prev ? prev.trim() + ' ' : '') + text);
         } catch (e) {
-          setMicError(e instanceof Error ? e.message : 'Could not transcribe. Please try again.');
+          setMicError(e instanceof Error ? e.message : t('assistant.mic.transcribeFailed'));
         } finally {
           setTranscribing(false);
         }
@@ -230,7 +231,7 @@ const AssistantInner: React.FC = () => {
       recorderRef.current = mr;
       setRecording(true);
     } catch {
-      setMicError('Microphone access was blocked. Allow it in your browser to use voice input.');
+      setMicError(t('assistant.mic.blocked'));
     }
   };
 

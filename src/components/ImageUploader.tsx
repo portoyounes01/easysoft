@@ -334,7 +334,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
 
         // Validate file type
         if (!file.type.startsWith('image/')) {
-            const error = 'Please select an image file';
+            const error = t('forms.imageErrorNotAnImage');
             setState(prev => ({ ...prev, error }));
             onError?.(error);
             return;
@@ -342,7 +342,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
 
         // Validate file size (max 10MB before processing)
         if (file.size > IMAGE_CONFIG.MAX_UPLOAD_SIZE) {
-            const error = `Image size must be less than ${IMAGE_CONFIG.MAX_UPLOAD_SIZE / 1024 / 1024}MB`;
+            const error = t('forms.imageErrorTooLarge', { size: IMAGE_CONFIG.MAX_UPLOAD_SIZE / 1024 / 1024 });
             setState(prev => ({ ...prev, error }));
             onError?.(error);
             return;
@@ -408,8 +408,8 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                 const isAuthError = /Not authorized|401|403|permission|unauthor/i.test(message);
                 const { isOnline, isSupabaseOnline } = connectionStatus.getStatus();
                 if (isAuthError) {
-                    setState(prev => ({ ...prev, isUploading: false, error: 'Not authorized to upload images. Contact your manager or admin.' }));
-                    onError?.('Not authorized to upload images.');
+                    setState(prev => ({ ...prev, isUploading: false, error: t('forms.imageErrorNotAuthorizedLong') }));
+                    onError?.(t('forms.imageErrorNotAuthorized'));
                     return;
                 }
                 if (!(isOnline && isSupabaseOnline)) {
@@ -439,7 +439,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                 reader.readAsDataURL(processedFile);
             }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+            const errorMessage = error instanceof Error ? error.message : t('forms.imageErrorUploadFailed');
             setState(prev => ({
                 ...prev,
                 isUploading: false,
@@ -501,7 +501,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
             getImageDimensions(urlInput);
             getUrlImageSize(urlInput);
         } else {
-            const error = 'Please enter a valid image URL';
+            const error = t('forms.imageErrorInvalidUrl');
             setState(prev => ({ ...prev, error }));
             onError?.(error);
         }
@@ -569,8 +569,8 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
             {/* Mode Toggle */}
             <TabToggle
                 options={[
-                    { value: 'upload', label: 'Upload Image', icon: Upload },
-                    { value: 'url', label: 'Image URL', icon: Link },
+                    { value: 'upload', label: t('forms.imageUploadTab'), icon: Upload },
+                    { value: 'url', label: t('forms.imageUrlTab'), icon: Link },
                 ]}
                 value={inputMode}
                 onChange={setInputMode}
@@ -607,7 +607,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                         {state.isUploading ? (
                             <div className="space-y-2">
                                 <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
-                                <p className="text-sm text-gray-600">Uploading image...</p>
+                                <p className="text-sm text-gray-600">{t('forms.imageUploading')}</p>
                                 {state.uploadProgress > 0 && (
                                     <div className="w-full bg-gray-200 rounded-full h-2">
                                         <div
@@ -622,16 +622,16 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                                 <Upload className="w-8 h-8 text-gray-400 mx-auto" />
                                 <div>
                                     <p className="text-sm font-medium text-gray-700">
-                                        Click to upload or drag & drop
+                                        {t('forms.imageDropHint')}
                                     </p>
                                     <p className="text-xs text-gray-500">
-                                        PNG, JPG, GIF, SVG up to {IMAGE_CONFIG.MAX_UPLOAD_SIZE / 1024 / 1024}MB
+                                        {t('forms.imageFormatsHint', { size: IMAGE_CONFIG.MAX_UPLOAD_SIZE / 1024 / 1024 })}
                                     </p>
                                     <p className="text-xs text-gray-400 mt-1">
-                                        Images auto-resized to {IMAGE_CONFIG.MAX_WIDTH}x{IMAGE_CONFIG.MAX_HEIGHT}px for optimal storage
+                                        {t('forms.imageResizeHint', { width: IMAGE_CONFIG.MAX_WIDTH, height: IMAGE_CONFIG.MAX_HEIGHT })}
                                     </p>
                                     <p className="text-xs text-gray-400">
-                                        You can also paste an image from clipboard
+                                        {t('forms.imagePasteHint')}
                                     </p>
                                 </div>
                             </div>
@@ -665,12 +665,12 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                             onClick={handleUrlSubmit}
                             className="px-4 py-2 bg-gradient-primary text-white rounded-xl hover:opacity-90 font-semibold transition-opacity"
                         >
-                            Apply
+                            {t('forms.imageUrlApply')}
                         </button>
                     </div>
 
                     <p className="text-xs text-gray-500">
-                        Enter a direct link to an image file (jpg, png, gif, webp, svg)
+                        {t('forms.imageUrlHint')}
                     </p>
                 </div>
             )}
@@ -686,15 +686,15 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
             {/* Image Preview */}
             {state.previewUrl && (
                 <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-700">Preview</label>
+                    <label className="block text-sm font-medium text-gray-700">{t('forms.imagePreviewLabel')}</label>
                     <div className="relative group">
                         <div className="aspect-square max-w-[200px] relative rounded-lg overflow-hidden border border-gray-200">
                             <img
                                 src={state.previewUrl}
-                                alt="Product preview"
+                                alt={t('forms.imagePreviewAlt')}
                                 className="w-full h-full object-cover"
                                 onError={() => {
-                                    setState(prev => ({ ...prev, error: 'Failed to load image' }));
+                                    setState(prev => ({ ...prev, error: t('forms.imageErrorLoadFailed') }));
                                 }}
                             />
 
@@ -705,7 +705,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                                         type="button"
                                         onClick={() => setShowPreview(true)}
                                         className="p-2 bg-white rounded-2xl hover:bg-gray-100 text-gray-700 transition-colors"
-                                        title="View full size"
+                                        title={t('forms.imageViewFullSize')}
                                     >
                                         <Eye className="w-4 h-4" />
                                     </button>
@@ -713,7 +713,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                                         type="button"
                                         onClick={() => navigator.clipboard.writeText(state.previewUrl!)}
                                         className="p-2 bg-white rounded-2xl hover:bg-gray-100 text-gray-700 transition-colors"
-                                        title="Copy URL"
+                                        title={t('forms.imageCopyUrl')}
                                     >
                                         <Copy className="w-4 h-4" />
                                     </button>
@@ -721,7 +721,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                                         type="button"
                                         onClick={clearImage}
                                         className="p-2 bg-white rounded-2xl hover:bg-gray-100 text-gray-700 transition-colors"
-                                        title="Remove image"
+                                        title={t('forms.imageRemove')}
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
@@ -740,22 +740,22 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                         <div className="mt-2 p-2 bg-gray-50 rounded-lg">
                             <div className="grid grid-cols-2 gap-2 text-xs">
                                 <div>
-                                    <span className="font-medium text-gray-600">Dimensions:</span>
+                                    <span className="font-medium text-gray-600">{t('forms.imageDimensionsLabel')}</span>
                                     <div className="text-gray-700">
                                         {state.imageWidth && state.imageHeight
                                             ? `${state.imageWidth} × ${state.imageHeight}px`
-                                            : 'Loading...'
+                                            : t('common.loading')
                                         }
                                     </div>
                                 </div>
                                 <div>
-                                    <span className="font-medium text-gray-600">File Size:</span>
+                                    <span className="font-medium text-gray-600">{t('forms.imageFileSizeLabel')}</span>
                                     <div className="text-gray-700">
                                         {state.optimizedSize
                                             ? formatFileSize(state.optimizedSize)
                                             : state.originalSize
                                                 ? formatFileSize(state.originalSize)
-                                                : 'Unknown'
+                                                : t('common.unknown')
                                         }
                                     </div>
                                 </div>
@@ -765,24 +765,24 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                             {state.storageMethod && (
                                 <div className="mt-2 pt-2 border-t border-gray-200">
                                     <div className="flex items-center justify-between text-xs">
-                                        <span className="font-medium text-gray-600">Storage Method:</span>
+                                        <span className="font-medium text-gray-600">{t('forms.imageStorageMethodLabel')}</span>
                                         <div className="flex items-center gap-1">
                                             {state.storageMethod === 'supabase' && (
                                                 <>
                                                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                                    <span className="text-green-700 font-medium">Cloud Storage</span>
+                                                    <span className="text-green-700 font-medium">{t('forms.imageStorageCloud')}</span>
                                                 </>
                                             )}
                                             {state.storageMethod === 'base64' && (
                                                 <>
                                                     <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                                                    <span className="text-yellow-700 font-medium">Local Data (Base64)</span>
+                                                    <span className="text-yellow-700 font-medium">{t('forms.imageStorageBase64')}</span>
                                                 </>
                                             )}
                                             {state.storageMethod === 'url' && (
                                                 <>
                                                     <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                                    <span className="text-blue-700 font-medium">External URL</span>
+                                                    <span className="text-blue-700 font-medium">{t('forms.imageStorageExternalUrl')}</span>
                                                 </>
                                             )}
                                         </div>
@@ -792,24 +792,24 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                                     {state.storageMethod && (
                                         <div className="mt-2 pt-2 border-t border-gray-200">
                                             <div className="flex items-center justify-between text-xs">
-                                                <span className="font-medium text-gray-600">Storage Method:</span>
+                                                <span className="font-medium text-gray-600">{t('forms.imageStorageMethodLabel')}</span>
                                                 <div className="flex items-center gap-1">
                                                     {state.storageMethod === 'supabase' && (
                                                         <>
                                                             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                                            <span className="text-green-700 font-medium">Cloud Storage</span>
+                                                            <span className="text-green-700 font-medium">{t('forms.imageStorageCloud')}</span>
                                                         </>
                                                     )}
                                                     {state.storageMethod === 'base64' && (
                                                         <>
                                                             <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                                                            <span className="text-yellow-700 font-medium">Local Data (Base64)</span>
+                                                            <span className="text-yellow-700 font-medium">{t('forms.imageStorageBase64')}</span>
                                                         </>
                                                     )}
                                                     {state.storageMethod === 'url' && (
                                                         <>
                                                             <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                                            <span className="text-blue-700 font-medium">External URL</span>
+                                                            <span className="text-blue-700 font-medium">{t('forms.imageStorageExternalUrl')}</span>
                                                         </>
                                                     )}
                                                 </div>
@@ -818,7 +818,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                                             {/* Technical issue info for base64 fallback */}
                                             {state.storageMethod === 'base64' && (
                                                 <div className="mt-1 text-xs text-yellow-600">
-                                                    ⚠️ Cloud storage unavailable - saved locally
+                                                    ⚠️ {t('forms.imageStorageBase64Warning')}
                                                 </div>
                                             )}
                                         </div>
@@ -831,7 +831,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                         {state.originalSize && state.optimizedSize && state.originalSize !== state.optimizedSize && (
                             <div className="mt-2 p-2 bg-green-50 rounded-lg">
                                 <div className="text-xs text-green-700">
-                                    <span className="font-medium">Optimized:</span> {Math.round((1 - state.optimizedSize / state.originalSize) * 100)}% smaller
+                                    <span className="font-medium">{t('forms.imageOptimizedLabel')}</span> {t('forms.imageOptimizedPercent', { percent: Math.round((1 - state.optimizedSize / state.originalSize) * 100) })}
                                 </div>
                                 <div className="text-xs text-green-600">
                                     {formatFileSize(state.originalSize)} → {formatFileSize(state.optimizedSize)}
@@ -857,7 +857,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                         </button>
                         <img
                             src={state.previewUrl}
-                            alt="Product preview"
+                            alt={t('forms.imagePreviewAlt')}
                             className="max-w-full max-h-full object-contain rounded-lg"
                             onClick={(e) => e.stopPropagation()}
                         />

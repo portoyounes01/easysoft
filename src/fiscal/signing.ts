@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { SystemSettings } from '../contexts/SettingsContext';
 import { isPwaHost } from '../lib/host';
 import { getFiscalRsaPrivateKeyPemFromEnv } from '../utils/fiscalEnvDefaults';
@@ -79,10 +80,7 @@ export class WebCryptoRsaSha1Signer implements FiscalSigner {
         const normalized = pem.trim().replace(/^\uFEFF/, '');
         const kind = detectRsaPrivateKeyPemKind(normalized);
         if (kind === 'encrypted-pkcs8') {
-            throw new Error(
-                'Chave privada encriptada (PEM "ENCRYPTED PRIVATE KEY") não é suportada no browser. ' +
-                    'Exporte PKCS#8 sem password (openssl pkcs8 -topk8 -nocrypt) ou use assinatura segura no Electron.'
-            );
+            throw new Error(i18n.t('checkout.signerEncryptedKeyUnsupported'));
         }
 
         let keyData: ArrayBuffer;
@@ -105,14 +103,10 @@ export class WebCryptoRsaSha1Signer implements FiscalSigner {
         const der = new Uint8Array(keyData);
         if (kind === 'pkcs8') {
             if (derContainsEcPrivateOid(der) && !derContainsRsaOid(der)) {
-                throw new Error(
-                    'A chave PKCS#8 é EC (elíptica), não RSA. A assinatura AT nesta app usa RSA-SHA1; gere um par RSA e exporte PEM PKCS#8 ou PKCS#1.'
-                );
+                throw new Error(i18n.t('checkout.signerKeyIsEc'));
             }
             if (!derContainsRsaOid(der)) {
-                throw new Error(
-                    'O PEM não parece ser uma chave privada RSA (OID RSA em falta). Verifique se colou a chave privada RSA correta, não a pública nem outro algoritmo.'
-                );
+                throw new Error(i18n.t('checkout.signerNotRsaKey'));
             }
         }
 
@@ -136,17 +130,10 @@ export class WebCryptoRsaSha1Signer implements FiscalSigner {
                 }
             }
             if (isData && (kind === 'pkcs8' || kind === 'unknown')) {
-                throw new Error(
-                    'Chave PEM inválida ou corrompida (DataError ao importar PKCS#8). ' +
-                        'Confirme: PEM completo (incluindo primeira e última linha), sem texto extra, chave RSA não encriptada. ' +
-                        'Se a chave for PKCS#1, use `-----BEGIN RSA PRIVATE KEY-----`. ' +
-                        'Se exportar com OpenSSL: `openssl pkcs8 -topk8 -nocrypt -in key.pem -out key.pem`.'
-                );
+                throw new Error(i18n.t('checkout.signerPemInvalidOrCorrupt'));
             }
             if (isData) {
-                throw new Error(
-                    'Falha ao importar chave RSA (DataError). Verifique se o PEM está completo e corresponde a uma chave RSA.'
-                );
+                throw new Error(i18n.t('checkout.signerRsaImportFailed'));
             }
             throw e;
         }
@@ -168,11 +155,11 @@ export class RemoteFiscalSigner implements FiscalSigner {
 export class ElectronSafeStorageSigner implements FiscalSigner {
     async signHashPlaintext(plaintext: string): Promise<FiscalSignResult> {
         if (typeof window === 'undefined' || !window.electronAPI?.fiscal?.signHashPlaintext) {
-            throw new Error('Assinatura fiscal Electron não disponível (IPC em falta).');
+            throw new Error(i18n.t('checkout.signerElectronUnavailable'));
         }
         const res = await window.electronAPI.fiscal.signHashPlaintext(plaintext);
         if (!res.success || !res.hashBase64) {
-            throw new Error(res.error || 'Falha na assinatura fiscal (Electron).');
+            throw new Error(res.error || i18n.t('checkout.signerElectronFailed'));
         }
         return { hashBase64: res.hashBase64, hashPlaintext: plaintext };
     }
@@ -202,9 +189,7 @@ export async function createSignerFromSettings(settings: SystemSettings): Promis
 
     const pem = getFiscalRsaPrivateKeyPemFromEnv()?.trim() || settings.fiscal?.privateKeyPem?.trim();
     if (!pem) {
-        throw new Error(
-            'Chave privada fiscal em falta: defina VITE_FISCAL_RSA_PRIVATE_KEY_PEM no ambiente ou guarde a chave no armazenamento seguro (Electron).'
-        );
+        throw new Error(i18n.t('checkout.signerPrivateKeyMissing'));
     }
     return WebCryptoRsaSha1Signer.fromPkcs8Pem(pem);
 }

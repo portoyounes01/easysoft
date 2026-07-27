@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import { initializeLocalDatabase, localDb } from '../lib/localDatabase';
 import type {
     LocalCustomer,
@@ -30,14 +31,14 @@ export interface MoveTableOrderInput {
 
 export class TableOrderAlreadyOpenError extends Error {
     constructor(tableName: string) {
-        super(`${tableName} already has an open order.`);
+        super(i18n.t('tables.alreadyOpenOrder', { tableName }));
         this.name = 'TableOrderAlreadyOpenError';
     }
 }
 
 export class TableOrderNotOpenError extends Error {
     constructor() {
-        super('This table order is no longer open.');
+        super(i18n.t('tables.orderNoLongerOpen'));
         this.name = 'TableOrderNotOpenError';
     }
 }
@@ -125,7 +126,7 @@ class TableOrderService {
             await localDb.tableOrders.add(created);
         });
 
-        if (!created) throw new Error('Could not create the table order.');
+        if (!created) throw new Error(i18n.t('tables.createOrderFailed'));
         notifyTableOrdersChanged();
         return created;
     }

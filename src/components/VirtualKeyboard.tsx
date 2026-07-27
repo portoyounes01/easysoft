@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Delete, X, Undo2 } from 'lucide-react';
 
 interface VirtualKeyboardProps {
@@ -21,6 +22,7 @@ const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
     allowNumbers = true,
     allowLetters = true
 }) => {
+    const { t } = useTranslation();
     const [value, setValue] = useState(initialValue);
     const [isCapsLock, setIsCapsLock] = useState(false);
     const [isSpecialMode, setIsSpecialMode] = useState(false);
@@ -200,7 +202,7 @@ const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
                             className={`${keyButtonClass} flex-[5.5]`}
                             style={{ fontSize: '1.4vh' }}
                         >
-                            space
+                            {t('virtualKeyboard.space')}
                         </button>
                         <button
                             onClick={handleClear}
@@ -284,7 +286,7 @@ const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
                             className={`${keyButtonClass} flex-[5.5]`}
                             style={{ fontSize: '1.4vh' }}
                         >
-                            space
+                            {t('virtualKeyboard.space')}
                         </button>
                         <button
                             onClick={handleClear}

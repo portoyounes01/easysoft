@@ -1,5 +1,6 @@
 // Calls the read-only AI assistant edge function + the WhatsApp pairing helper.
 // Mirrors the fetch + session pattern in purchaseReceiptService.ts.
+import i18n from '../i18n';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 
 export interface AssistantResponse {
@@ -16,7 +17,7 @@ export interface WhatsAppPairCode {
 async function authedFetch(fnName: string, body: unknown) {
   const { data: sessionData } = await supabase.auth.getSession();
   if (!sessionData.session?.access_token) {
-    throw new Error('Your session has expired. Please sign in again.');
+    throw new Error(i18n.t('assistant.errors.sessionExpired'));
   }
   const res = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
     method: 'POST',
@@ -28,14 +29,14 @@ async function authedFetch(fnName: string, body: unknown) {
     body: JSON.stringify(body),
   });
   const payload = await res.json();
-  if (!res.ok) throw new Error((payload as { error?: string }).error || 'Request failed.');
+  if (!res.ok) throw new Error((payload as { error?: string }).error || i18n.t('assistant.errors.requestFailed'));
   return payload;
 }
 
 class AssistantService {
   async ask(question: string, conversationId?: string | null): Promise<AssistantResponse> {
     const trimmed = question.trim();
-    if (!trimmed) throw new Error('Ask a question.');
+    if (!trimmed) throw new Error(i18n.t('assistant.errors.emptyQuestion'));
     return authedFetch('assistant', { question: trimmed, conversation_id: conversationId ?? undefined }) as Promise<AssistantResponse>;
   }
 
@@ -43,7 +44,7 @@ class AssistantService {
   async transcribe(audio: Blob): Promise<string> {
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData.session?.access_token) {
-      throw new Error('Your session has expired. Please sign in again.');
+      throw new Error(i18n.t('assistant.errors.sessionExpired'));
     }
     const res = await fetch(`${supabaseUrl}/functions/v1/transcribe`, {
       method: 'POST',
@@ -55,7 +56,7 @@ class AssistantService {
       body: audio,
     });
     const payload = await res.json();
-    if (!res.ok) throw new Error((payload as { error?: string }).error || 'Transcription failed.');
+    if (!res.ok) throw new Error((payload as { error?: string }).error || i18n.t('assistant.errors.transcriptionFailed'));
     return (payload as { text?: string }).text ?? '';
   }
 

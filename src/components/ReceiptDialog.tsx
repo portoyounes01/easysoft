@@ -209,13 +209,13 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({
             <div className="px-6 py-6 flex-1 min-h-0 overflow-y-auto bg-gray-50">
                 {providerHtml !== null ? (
                     <iframe
-                        title="Vendus official receipt"
+                        title={t('receiptPrint.officialReceiptFrameTitle')}
                         srcDoc={providerHtml}
                         className="min-h-[70vh] w-full rounded-lg border border-gray-200 bg-white"
                     />
                 ) : providerPdfUrl !== null ? (
                     <iframe
-                        title="Vendus official receipt PDF"
+                        title={t('receiptPrint.officialReceiptPdfFrameTitle')}
                         src={providerPdfUrl}
                         className="min-h-[70vh] w-full rounded-lg border border-gray-200 bg-white"
                     />

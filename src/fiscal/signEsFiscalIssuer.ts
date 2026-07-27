@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { SystemSettings } from '../contexts/SettingsContext';
 import { transactionLocalService } from '../lib/localDatabase';
 import { connectionStatus, supabase } from '../lib/supabase';
@@ -52,7 +53,7 @@ interface SignEsIssueResponse {
 function assertOnline(): void {
     const state = connectionStatus.getStatus();
     if (!state.isOnline || !state.isSupabaseOnline) {
-        throw new Error('SIGN ES é o emissor fiscal — a venda fica bloqueada até existir ligação ao servidor.');
+        throw new Error(i18n.t('checkout.signEsOffline'));
     }
 }
 
@@ -82,7 +83,7 @@ async function invokeSignEs(body: Record<string, unknown>): Promise<SignEsIssueR
         } catch { /* keep default */ }
         throw new Error(`SIGN ES: ${detail}`);
     }
-    if (!data) throw new Error('SIGN ES: resposta vazia do servidor.');
+    if (!data) throw new Error(i18n.t('checkout.signEsEmptyResponse'));
     if (data.error) throw new Error(`SIGN ES: ${data.error}`);
     return data;
 }
@@ -159,7 +160,7 @@ export async function issueSignEsSale(params: {
     });
     const fullAmount = (sumCents / 100).toFixed(2);
     if (Math.abs(sumCents / 100 - draft.total) > 0.02) {
-        throw new Error(`SIGN ES: soma das linhas (${fullAmount}) difere do total (${draft.total.toFixed(2)}).`);
+        throw new Error(i18n.t('checkout.signEsLineSumMismatch', { sum: fullAmount, total: draft.total.toFixed(2) }));
     }
 
     const taxId = selectedCustomer?.tax_number?.replace(/\s/g, '').trim().toUpperCase() ?? '';
@@ -191,7 +192,7 @@ export async function issueSignEsSale(params: {
     try {
         const response = await invokeSignEs(request);
         const doc = response.fiscal_document;
-        if (!doc) throw new Error('SIGN ES não devolveu o documento emitido.');
+        if (!doc) throw new Error(i18n.t('checkout.signEsNoDocument'));
         const external = snapshotFrom(doc, {
             type: wantsComplete ? 'FT' : 'FS',
             txId, externalReference,
@@ -247,15 +248,15 @@ export async function issueSignEsCreditNoteForTransaction(params: {
     assertOnline();
 
     const origTx = await transactionLocalService.getTransactionById(originalTransactionId);
-    if (!origTx?.fiscal_document_id) throw new Error('Transação sem documento fiscal — não é possível rectificar.');
+    if (!origTx?.fiscal_document_id) throw new Error(i18n.t('checkout.signEsNoFiscalDocumentToCorrect'));
     const origFiscal = await transactionLocalService.getFiscalDocumentById(origTx.fiscal_document_id);
-    if (!origFiscal) throw new Error('Documento fiscal original em falta.');
-    if (origFiscal.fiscal_provider !== 'sign_es') throw new Error('O documento original não foi emitido via SIGN ES.');
+    if (!origFiscal) throw new Error(i18n.t('checkout.creditNoteOriginalFiscalMissing'));
+    if (origFiscal.fiscal_provider !== 'sign_es') throw new Error(i18n.t('checkout.signEsOriginalNotSignEs'));
 
     let metadata: { externalDocumentId?: string } | null = null;
     try { metadata = origTx.fiscal_metadata_json ? JSON.parse(origTx.fiscal_metadata_json) : null; } catch { metadata = null; }
     const originalServerDocId = metadata?.externalDocumentId;
-    if (!originalServerDocId) throw new Error('Referência do documento SIGN ES original em falta.');
+    if (!originalServerDocId) throw new Error(i18n.t('checkout.signEsOriginalReferenceMissing'));
 
     const now = new Date();
     const transactionDate = now.toISOString().split('T')[0];
@@ -289,7 +290,7 @@ export async function issueSignEsCreditNoteForTransaction(params: {
     try {
         const response = await invokeSignEs(request);
         const doc = response.fiscal_document;
-        if (!doc) throw new Error('SIGN ES não devolveu a rectificativa emitida.');
+        if (!doc) throw new Error(i18n.t('checkout.signEsNoCorrectiveDocument'));
 
         const grossTotal = Math.abs(origFiscal.gross_total);
         const taxTotal = Math.abs(origFiscal.tax_total);

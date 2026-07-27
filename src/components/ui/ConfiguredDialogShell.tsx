@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, type LucideIcon } from 'lucide-react';
 import {
     DIALOG_OVERLAY_BG,
@@ -41,6 +42,7 @@ export const ConfiguredDialogShell: React.FC<ConfiguredDialogShellProps> = ({
     embedded = false,
     vwvhSize = { width: '50vw', height: '60vh' },
 }) => {
+    const { t } = useTranslation();
     const p = DIALOG_PALETTES[config.palette];
     // Appearances colour vars (--ds2-*) so the primary CTA follows the user's
     // primary colour inside any dialog, even outside a .ds2-visual-scope page.
@@ -54,31 +56,31 @@ export const ConfiguredDialogShell: React.FC<ConfiguredDialogShellProps> = ({
         switch (config.closeButton) {
             case 'slateSquare':
                 return (
-                    <button type="button" onClick={onClose} aria-label="Close" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 hover:bg-slate-200">
+                    <button type="button" onClick={onClose} aria-label={t('common.close')} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 hover:bg-slate-200">
                         <X className="h-5 w-5" />
                     </button>
                 );
             case 'graySquare':
                 return (
-                    <button type="button" onClick={onClose} aria-label="Close" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200">
+                    <button type="button" onClick={onClose} aria-label={t('common.close')} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200">
                         <X className="h-5 w-5" />
                     </button>
                 );
             case 'ghostRound':
                 return (
-                    <button type="button" onClick={onClose} aria-label="Close" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900">
+                    <button type="button" onClick={onClose} aria-label={t('common.close')} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900">
                         <X className="h-5 w-5" />
                     </button>
                 );
             case 'whiteGhost':
                 return (
-                    <button type="button" onClick={onClose} aria-label="Close" className="shrink-0 rounded-xl p-2 text-white hover:bg-white/20">
+                    <button type="button" onClick={onClose} aria-label={t('common.close')} className="shrink-0 rounded-xl p-2 text-white hover:bg-white/20">
                         <X className="h-5 w-5" />
                     </button>
                 );
             case 'textX':
                 return (
-                    <button type="button" onClick={onClose} aria-label="Close" className="shrink-0 rounded-full p-1.5 text-gray-500 hover:bg-gray-200 hover:text-gray-700">
+                    <button type="button" onClick={onClose} aria-label={t('common.close')} className="shrink-0 rounded-full p-1.5 text-gray-500 hover:bg-gray-200 hover:text-gray-700">
                         ✕
                     </button>
                 );

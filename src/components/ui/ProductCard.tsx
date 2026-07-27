@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Package } from 'lucide-react';
 
 // Card width as percentage of viewport width (height is calculated based on aspect ratio)
@@ -33,6 +34,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     onClick,
     outOfStockLabel = 'Out of Stock'
 }) => {
+    const { t } = useTranslation();
     const displayStock = remainingStock !== undefined ? remainingStock : stock;
 
     return (
@@ -144,7 +146,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                         className="text-gray-500"
                         style={{ fontSize: `${CARD_WIDTH_VW * 0.07}vw` }}
                     >
-                        Stock: {soldByWeight ? `${Number(displayStock.toFixed(3))} kg` : displayStock}
+                        {t('products.table.stock')}: {soldByWeight ? `${Number(displayStock.toFixed(3))} kg` : displayStock}
                     </span>
                 </div>
             </div>

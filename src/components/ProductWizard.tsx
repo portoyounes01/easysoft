@@ -321,7 +321,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                 {errors.name && <p className="mt-1.5 text-xs text-red-600">{errors.name}</p>}
             </div>
             <div>
-                <span className={labelClass}>SKU *</span>
+                <span className={labelClass}>{t('products.wizard.skuLabel')} *</span>
                 <input
                     value={sku}
                     onChange={e => { setSku(e.target.value); setSkuTouched(true); setErrors(prev => ({ ...prev, sku: undefined })); }}

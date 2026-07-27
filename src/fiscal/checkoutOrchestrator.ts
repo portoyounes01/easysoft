@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { SystemSettings } from '../contexts/SettingsContext';
 import type { LocalCustomer } from '../types/supabase';
 import { transactionLocalService } from '../lib/localDatabase';
@@ -84,7 +85,7 @@ export async function runFiscalCheckout(params: {
     const seriesKey = computeSeriesKey(receiptProfile, draft.now);
     const atCode = receiptProfile.atValidationCode.trim();
     if (!atCode) {
-        throw new Error('Código de validação AT da série em falta (Definições > Numeração por tipo de documento).');
+        throw new Error(i18n.t('checkout.missingAtValidationCode'));
     }
 
     const chainScope = buildChainScope(atCode, seriesKey);

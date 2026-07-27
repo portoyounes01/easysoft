@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { SystemSettings } from '../contexts/SettingsContext';
 import { transactionLocalService } from '../lib/localDatabase';
 import { connectionStatus, supabase } from '../lib/supabase';
@@ -92,17 +93,17 @@ interface InvoiceXpressFunctionResponse {
 
 function assertInvoiceXpressEnabled(settings: SystemSettings): void {
     if (settings.fiscal.issuer !== 'invoicexpress' || !settings.fiscal.invoicexpress.enabled) {
-        throw new Error('InvoiceXpress não está ativo nas definições fiscais.');
+        throw new Error(i18n.t('checkout.invoiceXpressNotEnabled'));
     }
     if (!settings.fiscal.invoicexpress.accountName.trim()) {
-        throw new Error('Nome de conta InvoiceXpress em falta nas definições fiscais.');
+        throw new Error(i18n.t('checkout.invoiceXpressMissingAccountName'));
     }
 }
 
 function assertOnline(): void {
     const state = connectionStatus.getStatus();
     if (!state.isOnline || !state.isSupabaseOnline) {
-        throw new Error('InvoiceXpress está configurado como emissor fiscal. A venda fica bloqueada até existir ligação ao Supabase/InvoiceXpress.');
+        throw new Error(i18n.t('checkout.invoiceXpressOffline'));
     }
 }
 
@@ -371,7 +372,7 @@ export async function issueInvoiceXpressCreditNoteForTransaction(params: {
     creditReason?: string;
 }): Promise<FiscalCheckoutResult> {
     throw new Error(
-        `Notas de crédito InvoiceXpress ainda não estão implementadas nesta fase de integração (transação ${params.originalTransactionId}).`
+        i18n.t('checkout.invoiceXpressCreditNotesUnavailable', { transactionId: params.originalTransactionId })
     );
 }
 
@@ -389,7 +390,7 @@ export async function fetchInvoiceXpressSaftXml(params: {
         month: params.month,
     });
     if (!response.xml) {
-        throw new Error('InvoiceXpress não devolveu SAF-T.');
+        throw new Error(i18n.t('checkout.invoiceXpressNoSaft'));
     }
     return atob(response.xml);
 }

@@ -30,6 +30,7 @@ import {
   X,
 } from 'lucide-react';
 import { toDataURL } from 'qrcode';
+import { useTranslation } from 'react-i18next';
 import {
   platformAdminService,
   type PlatformAuditEntry,
@@ -76,6 +77,7 @@ const dangerBtnCls =
   'flex min-h-touch-sm items-center gap-2 rounded-xl border border-[var(--ds2-danger-border,#fca5a5)] bg-white px-4 font-semibold text-[var(--ds2-danger-solid,#dc2626)] hover:bg-[var(--ds2-danger-tint-bg,#fef2f2)] disabled:opacity-50';
 
 const PlatformConsole: React.FC = () => {
+  const { t } = useTranslation();
   const { visualStyle, prefs } = useDesignSystem2Customization();
 
   const [tab, setTab] = useState<Tab>('tenants');
@@ -396,7 +398,7 @@ const PlatformConsole: React.FC = () => {
               <h1 className="text-4xl font-bold text-gray-900">Platform Console</h1>
             </div>
             <p className="text-lg text-gray-600">
-              Sysadmin-only: manage every tenant, store, owner account, and till on the platform. Every action is audited.
+              {t('platformConsole.subtitle')}
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -789,7 +791,7 @@ const PlatformConsole: React.FC = () => {
       {deletingTenant && (
         <ConfirmDialog
           tone="danger"
-          title="Delete tenant?"
+          title={t('platformConsole.deleteTenantConfirmTitle')}
           message={`Delete “${deletingTenant.name}” permanently? Only possible while the tenant has NO sales and NO fiscal documents — its stores, accounts, and tills are removed. This cannot be undone.`}
           cancelLabel="Cancel"
           confirmLabel="Yes, delete"

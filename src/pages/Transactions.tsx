@@ -844,7 +844,14 @@ const TransactionsInner: React.FC = () => {
                                                     <div className="flex items-center space-x-2 flex-wrap gap-1">
                                                         <h3 className="font-semibold text-gray-900">{transaction.transactionNumber}</h3>
                                                         <span className={getStatusBadge(transaction.status)}>
-                                                            {transaction.status.replace('_', ' ')}
+                                                            {transaction.status === 'refunded'
+                                                                ? t('transactions.filters.refunded')
+                                                                : transaction.status === 'completed'
+                                                                    ? t('transactions.filters.completed')
+                                                                    // DB CHECK also allows partial_refund / pending / cancelled (see the
+                                                                    // notif producers). Keep the old raw rendering for those rather than
+                                                                    // mislabelling them "Completed".
+                                                                    : String(transaction.status).replace('_', ' ')}
                                                         </span>
                                                     </div>
                                                     <div className="flex flex-col gap-1 text-sm text-gray-600 mt-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
@@ -877,7 +884,7 @@ const TransactionsInner: React.FC = () => {
                                                     onClick={() => setExpandedTransaction(
                                                         expandedTransaction === transaction.id ? null : transaction.id
                                                     )}
-                                                    aria-label={expandedTransaction === transaction.id ? 'Collapse transaction details' : 'Expand transaction details'}
+                                                    aria-label={expandedTransaction === transaction.id ? t('transactions.list.collapseDetails') : t('transactions.list.expandDetails')}
                                                 />
                                             </div>
                                         </div>

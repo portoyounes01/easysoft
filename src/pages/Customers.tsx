@@ -330,7 +330,7 @@ const CustomersInner: React.FC = () => {
                   <td className="border-r border-gray-100 px-4 py-4">{statusBadge(customer)}</td>
                   <td className="border-r border-gray-100 px-4 py-4">
                     <span className="inline-flex rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-emerald-800">
-                      {customer.loyalty_points.toLocaleString()} pts
+                      {customer.loyalty_points.toLocaleString()} {t('customers.table.pointsSuffix')}
                     </span>
                   </td>
                   <td className="whitespace-nowrap border-r border-gray-100 px-4 py-4 text-gray-700">
@@ -382,7 +382,7 @@ const CustomersInner: React.FC = () => {
                   <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                     {customer.city && <span>{customer.city}</span>}
                     <span className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 font-semibold tabular-nums text-emerald-800">
-                      {customer.loyalty_points.toLocaleString()} pts
+                      {customer.loyalty_points.toLocaleString()} {t('customers.table.pointsSuffix')}
                     </span>
                   </div>
                 </button>
@@ -461,7 +461,7 @@ const CustomersInner: React.FC = () => {
           [t('customers.viewModal.email'), viewingCustomer.email ?? '—'],
           [t('customers.viewModal.phone'), viewingCustomer.phone ?? '—'],
           [t('customers.viewModal.city'), viewingCustomer.city ?? '—'],
-          [t('customers.table.points'), `${viewingCustomer.loyalty_points.toLocaleString()} pts`],
+          [t('customers.table.points'), `${viewingCustomer.loyalty_points.toLocaleString()} ${t('customers.table.pointsSuffix')}`],
           [t('customers.table.enrolled'), formatDate(viewingCustomer.created_at)],
           [t('customers.table.lastPurchase'), formatLastPurchase(latestPurchases[viewingCustomer.id])],
         ].map(([label, value]) => (

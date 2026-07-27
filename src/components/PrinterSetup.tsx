@@ -78,22 +78,22 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
   const scanForPrinters = async () => {
     setIsScanning(true);
-    setCurrentStatus('Scanning network for thermal printers...');
+    setCurrentStatus(t('printerSetup.statusScanningNetwork'));
     setDiscoveredPrinters([]);
 
     try {
       // Call the Electron main process to discover printers
       const result = await window.electronAPI?.discoverThermalPrinters();
-      
+
       if (result?.success) {
         setDiscoveredPrinters(result.printers || []);
-        setCurrentStatus(`Found ${result.printers?.length || 0} thermal printer(s)`);
+        setCurrentStatus(t('printerSetup.statusFoundThermal', { n: result.printers?.length || 0 }));
       } else {
-        setCurrentStatus(`Scan failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusScanFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('Printer discovery failed:', error);
-      setCurrentStatus('Scan failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusScanFailedController'));
     } finally {
       setIsScanning(false);
     }
@@ -101,7 +101,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
   const scanForUSBPrinters = async () => {
     setIsScanning(true);
-    setCurrentStatus('Scanning for USB printers...');
+    setCurrentStatus(t('printerSetup.statusScanningUsb'));
     setUsbPrinters([]);
     // Refresh Windows' view alongside the scan, so a scan result can never be
     // merged against a stale (or not-yet-loaded) device list.
@@ -120,15 +120,15 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
         const count = result.printers?.length || 0;
         setCurrentStatus(
           count === 0 && diagnostics?.length
-            ? `Found 0 USB printer(s) — ${diagnostics.join(' · ')}`
-            : `Found ${count} USB printer(s)`,
+            ? t('printerSetup.statusFoundNoUsbWithDiagnostics', { diagnostics: diagnostics.join(' · ') })
+            : t('printerSetup.statusFoundUsb', { n: count }),
         );
       } else {
-        setCurrentStatus(`Scan failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusScanFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('USB printer discovery failed:', error);
-      setCurrentStatus('Scan failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusScanFailedController'));
     } finally {
       setIsScanning(false);
     }
@@ -203,11 +203,11 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
     try {
       const result = await window.electronAPI?.hardware?.setPrinterRole?.(queueName, 'receipt');
       if (result && result.success === false) {
-        setCurrentStatus(`Could not select ${queueName}: ${result.error ?? 'unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusCouldNotSelect', { name: queueName, error: result.error ?? t('printerSetup.unknownErrorLower') }));
         return;
       }
-      setCurrentStatus(`Receipt printer set to ${queueName}.`);
-      onPrinterConnected({ success: true, message: `Receipt printer set to: ${queueName}` });
+      setCurrentStatus(t('printerSetup.statusReceiptPrinterSet', { name: queueName }));
+      onPrinterConnected({ success: true, message: t('printerSetup.messageReceiptPrinterSet', { name: queueName }) });
     } finally {
       setSetupBusyPort(null);
     }
@@ -233,7 +233,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
   const setUpDevice = async (device: UsbPrintDevice) => {
     if (!window.electronAPI?.hardware?.setupUsbPrinter || !device.port) return;
     setSetupBusyPort(device.port);
-    setCurrentStatus(`Setting up ${device.model}...`);
+    setCurrentStatus(t('printerSetup.statusSettingUp', { name: device.model }));
     try {
       const queueName = device.model?.trim() || `Thermal ${device.port}`;
       const result = await window.electronAPI.hardware.setupUsbPrinter({
@@ -247,29 +247,32 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
           // The queue exists but nothing will print to it — do NOT claim the
           // receipt printer was set.
           setCurrentStatus(
-            `${queueName} was created, but selecting it as the receipt printer failed: ${result.error ?? 'unknown error'}. Pick it from the list below.`
+            t('printerSetup.statusQueueCreatedRoleFailed', {
+              queueName,
+              error: result.error ?? t('printerSetup.unknownErrorLower'),
+            })
           );
         } else {
           setCurrentStatus(
             result.alreadyExisted
-              ? `${queueName} was already set up and is now the receipt printer.`
-              : `Created ${queueName} and set it as the receipt printer.`
+              ? t('printerSetup.statusQueueAlreadySetUp', { queueName })
+              : t('printerSetup.statusQueueCreated', { queueName })
           );
           onPrinterConnected({
             success: true,
-            message: `Receipt printer set to: ${queueName}`,
+            message: t('printerSetup.messageReceiptPrinterSet', { name: queueName }),
             details: { model: device.model },
           });
         }
       } else {
         setCurrentStatus(
           result?.needsElevation
-            ? `Windows refused: ${result.error}. Creating a printer needs administrator rights — run the app as administrator and try again.`
-            : `Setup failed: ${result?.error ?? 'unknown error'}`
+            ? t('printerSetup.statusSetupNeedsElevation', { error: result.error })
+            : t('printerSetup.statusSetupFailed', { error: result?.error ?? t('printerSetup.unknownErrorLower') })
         );
       }
     } catch (error) {
-      setCurrentStatus(`Setup failed: ${error instanceof Error ? error.message : String(error)}`);
+      setCurrentStatus(t('printerSetup.statusSetupFailed', { error: error instanceof Error ? error.message : String(error) }));
     } finally {
       setSetupBusyPort(null);
     }
@@ -277,20 +280,20 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
   const listSystemPrinters = async () => {
     setSystemLoading(true);
-    setCurrentStatus('Listing system printers...');
+    setCurrentStatus(t('printerSetup.statusListingSystem'));
     try {
       const result = await window.electronAPI?.hardware.listPrinters();
       if (result?.success) {
         setSystemPrinters(result.printers || []);
-        setCurrentStatus(`Found ${result.printers?.length || 0} system printer(s)`);
+        setCurrentStatus(t('printerSetup.statusFoundSystem', { n: result.printers?.length || 0 }));
       } else {
         setSystemPrinters([]);
-        setCurrentStatus(`Listing failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusListingFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('System printers listing failed:', error);
       setSystemPrinters([]);
-      setCurrentStatus('Listing failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusListingFailedController'));
     } finally {
       setSystemLoading(false);
     }
@@ -298,7 +301,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
   const connectToUSBPrinter = async (printer: USBPrinter) => {
     setIsConnecting(true);
-    setCurrentStatus(`Connecting to USB printer ${printer.brand} ${printer.model}...`);
+    setCurrentStatus(t('printerSetup.statusConnectingUsb', { name: `${printer.brand} ${printer.model}` }));
 
     try {
       const result = await window.electronAPI?.connectToUSBPrinter(
@@ -307,15 +310,15 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
       );
 
       if (result?.success) {
-        setCurrentStatus('USB printer connected successfully!');
+        setCurrentStatus(t('printerSetup.statusUsbConnected'));
         onPrinterConnected(result as PrinterConnectedPayload);
         setTimeout(() => onClose(), 2000);
       } else {
-        setCurrentStatus(`Connection failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusConnectionFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('USB printer connection failed:', error);
-      setCurrentStatus('Connection failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusConnectionFailedController'));
     } finally {
       setIsConnecting(false);
     }
@@ -323,7 +326,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
   const connectToPrinter = async (printer: NetworkPrinter) => {
     setIsConnecting(true);
-    setCurrentStatus(`Connecting to ${printer.ip}:${printer.port}...`);
+    setCurrentStatus(t('printerSetup.statusConnectingTo', { target: `${printer.ip}:${printer.port}` }));
 
     try {
       const result = await window.electronAPI?.connectToNetworkPrinter(
@@ -333,15 +336,15 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
       );
 
       if (result?.success) {
-        setCurrentStatus('Connection successful!');
+        setCurrentStatus(t('printerSetup.statusConnectionSuccessful'));
         onPrinterConnected(result as PrinterConnectedPayload);
         setTimeout(() => onClose(), 2000);
       } else {
-        setCurrentStatus(`Connection failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusConnectionFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('Printer connection failed:', error);
-      setCurrentStatus('Connection failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusConnectionFailedController'));
     } finally {
       setIsConnecting(false);
     }
@@ -349,12 +352,12 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
   const connectToManualPrinter = async () => {
     if (!manualIP.trim()) {
-      setCurrentStatus('Please enter an IP address');
+      setCurrentStatus(t('printerSetup.statusEnterIp'));
       return;
     }
 
     setIsConnecting(true);
-    setCurrentStatus(`Connecting to ${manualIP}:${manualPort}...`);
+    setCurrentStatus(t('printerSetup.statusConnectingTo', { target: `${manualIP}:${manualPort}` }));
 
     try {
       const result = await window.electronAPI?.connectToNetworkPrinter(
@@ -364,15 +367,15 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
       );
 
       if (result?.success) {
-        setCurrentStatus('Connection successful!');
+        setCurrentStatus(t('printerSetup.statusConnectionSuccessful'));
         onPrinterConnected(result as PrinterConnectedPayload);
         setTimeout(() => onClose(), 2000);
       } else {
-        setCurrentStatus(`Connection failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusConnectionFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('Manual printer connection failed:', error);
-      setCurrentStatus('Connection failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusConnectionFailedController'));
     } finally {
       setIsConnecting(false);
     }
@@ -451,13 +454,13 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
               <Printer className="h-6 w-6 text-blue-600" />
-              <h2 className="text-xl font-semibold">Thermal Printer Setup</h2>
+              <h2 className="text-xl font-semibold">{t('printerSetup.title')}</h2>
             </div>
             <button
               type="button"
               onClick={onClose}
               className="rounded-2xl flex min-h-touch-sm min-w-touch-sm items-center justify-center text-2xl font-bold text-gray-700 transition-colors hover:bg-gray-100"
-              aria-label="Close"
+              aria-label={t('common.close')}
             >
               ×
             </button>
@@ -467,10 +470,10 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
           <div className="mb-6">
             <TabToggle
               options={[
-                { value: 'auto', label: 'Network', icon: Search },
-                { value: 'usb', label: 'USB', icon: Usb },
-                { value: 'manual', label: 'Manual', icon: Wifi },
-                { value: 'system', label: 'System', icon: Printer },
+                { value: 'auto', label: t('printerSetup.tabNetwork'), icon: Search },
+                { value: 'usb', label: t('printerSetup.tabUsb'), icon: Usb },
+                { value: 'manual', label: t('printerSetup.tabManual'), icon: Wifi },
+                { value: 'system', label: t('printerSetup.tabSystem'), icon: Printer },
               ]}
               value={activeTab}
               onChange={setActiveTab}
@@ -482,7 +485,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               {/* Auto Discovery Tab */}
               <div className="flex items-center justify-between mb-4">
                 <p className="text-gray-600">
-                  Automatically discover thermal printers on your network
+                  {t('printerSetup.autoIntro')}
                 </p>
                 <button
                   type="button"
@@ -495,7 +498,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   ) : (
                     <Search className="h-4 w-4" />
                   )}
-                  <span>{isScanning ? 'Scanning...' : 'Scan Network'}</span>
+                  <span>{isScanning ? t('printerSetup.scanning') : t('printerSetup.scanNetwork')}</span>
                 </button>
               </div>
 
@@ -509,7 +512,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               {/* Discovered Printers */}
               {discoveredPrinters.length > 0 && (
                 <div className="space-y-3">
-                  <h3 className="font-medium text-gray-900">Discovered Printers:</h3>
+                  <h3 className="font-medium text-gray-900">{t('printerSetup.discoveredHeading')}</h3>
                   {discoveredPrinters.map((printer) => (
                     <div
                       key={`${printer.ip}:${printer.port}`}
@@ -526,20 +529,22 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                             <span className="font-medium">{printer.ip}:{printer.port}</span>
                             {printer.recommended && (
                               <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                                Recommended
+                                {t('printerSetup.recommended')}
                               </span>
                             )}
                           </div>
                           <div className="mt-1 space-y-1">
                             <p className={`text-sm ${getConfidenceColor(printer.confidence)}`}>
-                              Confidence: {printer.confidence}% 
-                              {printer.isThermal ? ' (Thermal)' : ' (Unknown)'}
+                              {t('printerSetup.confidenceLine', {
+                                confidence: printer.confidence,
+                                type: printer.isThermal ? t('printerSetup.thermal') : t('printerSetup.confidenceUnknown'),
+                              })}
                             </p>
                             {printer.brand && (
-                              <p className="text-sm text-gray-600">Brand: {printer.brand}</p>
+                              <p className="text-sm text-gray-600">{t('printerSetup.brandLine', { brand: printer.brand })}</p>
                             )}
                             {printer.identification && (
-                              <p className="text-sm text-gray-500">ID: {printer.identification}</p>
+                              <p className="text-sm text-gray-500">{t('printerSetup.idLine', { id: printer.identification })}</p>
                             )}
                           </div>
                         </div>
@@ -552,7 +557,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                           {isConnecting ? (
                             <Loader className="h-4 w-4 animate-spin" />
                           ) : (
-                            'Connect'
+                            t('printerSetup.connect')
                           )}
                         </button>
                       </div>
@@ -568,7 +573,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               {/* USB Detection Tab */}
               <div className="flex items-center justify-between mb-4">
                 <p className="text-gray-600">
-                  Detect thermal printers connected via USB
+                  {t('printerSetup.usbIntro')}
                 </p>
                 <button
                   type="button"
@@ -581,7 +586,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   ) : (
                     <Usb className="h-4 w-4" />
                   )}
-                  <span>{isScanning ? 'Scanning...' : 'Scan USB'}</span>
+                  <span>{isScanning ? t('printerSetup.scanning') : t('printerSetup.scanUsb')}</span>
                 </button>
               </div>
 
@@ -595,7 +600,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               {devicesLoading && usbRows.length === 0 && (
                 <div className="mb-4 flex items-center space-x-2 text-sm text-gray-600">
                   <Loader className="h-4 w-4 animate-spin" />
-                  <span>Looking for USB printers...</span>
+                  <span>{t('printerSetup.lookingForUsb')}</span>
                 </div>
               )}
 
@@ -604,25 +609,25 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   {usbRows.map(row => {
                     const busy = setupBusyPort === row.port || setupBusyPort === row.ownQueue;
                     const detail = row.ownQueue
-                      ? `queue “${row.ownQueue}”`
+                      ? t('printerSetup.detailQueue', { name: row.ownQueue })
                       : row.queues.length > 0
-                        ? `no queue of its own — ${row.queues.join(', ')} share this port`
+                        ? t('printerSetup.detailSharedPort', { queues: row.queues.join(', ') })
                         : row.port
-                          ? 'no Windows queue yet'
+                          ? t('printerSetup.detailNoQueueYet')
                           : row.driverState === 'winusb'
-                            ? 'direct USB available'
+                            ? t('printerSetup.detailDirectUsb')
                             : row.driverState === 'windows-driver'
-                              ? 'held by a Windows driver — use its queue on the System tab'
+                              ? t('printerSetup.detailDriverHeld')
                               : '';
                     const action = row.ownQueue
-                      ? { label: 'Use this', run: () => void useExistingQueue(row.ownQueue as string) }
+                      ? { label: t('printerSetup.actionUseThis'), run: () => void useExistingQueue(row.ownQueue as string) }
                       : row.port
-                        ? { label: 'Set up for me', run: () => void setUpDevice(row.device) }
+                        ? { label: t('printerSetup.actionSetUpForMe'), run: () => void setUpDevice(row.device) }
                         : row.legacy && row.driverState !== 'windows-driver'
                           // A driver-bound device CANNOT be opened directly —
                           // libusb returns NOT_SUPPORTED. Offering the button
                           // guarantees a failure message, so don't.
-                          ? { label: 'Connect', run: () => connectToUSBPrinter(row.legacy as USBPrinter) }
+                          ? { label: t('printerSetup.connect'), run: () => connectToUSBPrinter(row.legacy as USBPrinter) }
                           : null;
                     return (
                       <div key={row.key} className="p-4 border border-gray-200 rounded-lg bg-white">
@@ -632,7 +637,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                               <span className="text-lg">🔌</span>
                               <span className="font-medium">{row.label}</span>
                               {row.isThermal && (
-                                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Thermal</span>
+                                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">{t('printerSetup.thermal')}</span>
                               )}
                             </div>
                             <p className="mt-1 text-sm text-gray-600 font-mono">
@@ -647,7 +652,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                               className={`${DS2_PRIMARY_BTN} shrink-0 px-4 py-2`}
                             >
                               {busy ? <Loader className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                              <span>{busy ? 'Working...' : action.label}</span>
+                              <span>{busy ? t('printerSetup.working') : action.label}</span>
                             </button>
                           )}
                         </div>
@@ -670,13 +675,13 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      IP Address *
+                      {t('printerSetup.ipLabel')}
                     </label>
                     <input
                       type="text"
                       value={manualIP}
                       onChange={(e) => setManualIP(e.target.value)}
-                      placeholder="e.g., 192.168.1.113"
+                      placeholder={t('printerSetup.ipPlaceholder')}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -708,7 +713,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                     ) : (
                       <CheckCircle className="h-4 w-4" />
                     )}
-                    <span>{isConnecting ? 'Connecting...' : 'Connect to Printer'}</span>
+                    <span>{isConnecting ? t('printerSetup.connecting') : t('printerSetup.connectToPrinter')}</span>
                   </button>
                 </div>
 
@@ -727,7 +732,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               {/* System Printers Tab */}
               <div className="flex items-center justify-between mb-4">
                 <p className="text-gray-600">
-                  Printers available to your OS (CUPS/Windows). Select a printer to use or verify connectivity.
+                  {t('printerSetup.systemIntro')}
                 </p>
                 <button
                   type="button"
@@ -740,7 +745,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                   )}
-                  <span>{systemLoading ? 'Refreshing...' : 'Refresh'}</span>
+                  <span>{systemLoading ? t('printerSetup.refreshing') : t('printerSetup.refresh')}</span>
                 </button>
               </div>
 
@@ -753,7 +758,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
               {systemPrinters.length > 0 ? (
                 <div className="space-y-3">
-                  <h3 className="font-medium text-gray-900">System Printers:</h3>
+                  <h3 className="font-medium text-gray-900">{t('printerSetup.systemPrintersHeading')}</h3>
                   {systemPrinters.map((p: any) => (
                     <div key={p.name} className={`p-4 border rounded-lg ${p.connected ? 'border-gray-200 bg-white' : 'border-orange-200 bg-orange-50'}`}>
                       <div className="flex items-center justify-between">
@@ -762,19 +767,21 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                             <span className="text-lg">🖨️</span>
                             <span className="font-medium">{p.name}</span>
                             {p.connected ? (
-                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Connected</span>
+                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">{t('printerSetup.statusConnected')}</span>
                             ) : (
-                              <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">Offline</span>
+                              <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">{t('printerSetup.statusOffline')}</span>
                             )}
                           </div>
                           <div className="mt-1 space-y-1 text-sm text-gray-600">
-                            <p>Device: <span className="font-mono">{p.device}</span></p>
-                            <p>Type: {p.type?.toUpperCase?.() || 'UNKNOWN'}</p>
+                            <p>{t('printerSetup.deviceLabel')} <span className="font-mono">{p.device}</span></p>
+                            {/* The slot holds the raw device type, uppercased — the
+                                fallback stays untranslated to match it. */}
+                            <p>{t('printerSetup.typeLine', { type: p.type?.toUpperCase?.() || 'UNKNOWN' })}</p>
                             {p.hasQueuedJobs && (
-                              <p className="text-orange-700">Queued jobs: {p.queueCount}</p>
+                              <p className="text-orange-700">{t('printerSetup.queuedJobs', { n: p.queueCount })}</p>
                             )}
                             {p.isStale && (
-                              <p className="text-red-600">Marked as stale/ghost</p>
+                              <p className="text-red-600">{t('printerSetup.markedStale')}</p>
                             )}
                           </div>
                         </div>
@@ -792,21 +799,21 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                               if (isWindows) {
                                 const roleResult = await window.electronAPI?.hardware?.setPrinterRole?.(p.name, 'receipt');
                                 if (roleResult && roleResult.success === false) {
-                                  setCurrentStatus(`Could not select ${p.name}: ${roleResult.error ?? 'unknown error'}`);
+                                  setCurrentStatus(t('printerSetup.statusCouldNotSelect', { name: p.name, error: roleResult.error ?? t('printerSetup.unknownErrorLower') }));
                                   return;
                                 }
                               }
                               onPrinterConnected({
                                 success: true,
                                 message: isWindows
-                                  ? `Receipt printer set to: ${p.name}`
-                                  : `Selected system printer: ${p.name}`,
+                                  ? t('printerSetup.messageReceiptPrinterSet', { name: p.name })
+                                  : t('printerSetup.messageSelectedSystemPrinter', { name: p.name }),
                                 printerName: p.name,
                               });
                             }}
                             className={DS2_PRIMARY_BTN}
                           >
-                            Use This
+                            {t('printerSetup.useThis')}
                           </button>
                         </div>
                       </div>
@@ -815,7 +822,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                 </div>
               ) : (
                 !systemLoading && (
-                  <div className="p-4 border border-dashed rounded-lg text-gray-500 text-sm">No system printers found.</div>
+                  <div className="p-4 border border-dashed rounded-lg text-gray-500 text-sm">{t('printerSetup.noSystemPrinters')}</div>
                 )
               )}
             </div>
@@ -826,12 +833,12 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
             <div className="flex items-start space-x-2">
               <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-blue-800">
-                <p className="font-medium mb-1">Tips:</p>
+                <p className="font-medium mb-1">{t('printerSetup.tipsTitle')}</p>
                 <ul className="space-y-1 text-xs">
-                  <li>• <strong>Network:</strong> Make sure your thermal printer is powered on and connected to the network</li>
-                  <li>• <strong>USB:</strong> Connect your thermal printer via USB cable before scanning</li>
-                  <li>• <strong>Network:</strong> Your computer and printer should be on the same WiFi network</li>
-                  <li>• <strong>Manual:</strong> Check the printer's display for its IP address if manual setup is needed</li>
+                  <li>• <strong>{t('printerSetup.tabNetwork')}:</strong> {t('printerSetup.tipNetworkPowered')}</li>
+                  <li>• <strong>{t('printerSetup.tabUsb')}:</strong> {t('printerSetup.tipUsbCable')}</li>
+                  <li>• <strong>{t('printerSetup.tabNetwork')}:</strong> {t('printerSetup.tipSameWifi')}</li>
+                  <li>• <strong>{t('printerSetup.tabManual')}:</strong> {t('printerSetup.tipManualIp')}</li>
                 </ul>
               </div>
             </div>

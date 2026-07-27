@@ -1,4 +1,5 @@
 import Dexie, { Table } from 'dexie';
+import i18n from '../i18n';
 import { generateUUID } from '../utils/uuid';
 import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage';
 import {
@@ -846,7 +847,7 @@ export class CustomerLocalService {
 
     // Create new customer
     async createCustomer(customerData: Omit<LocalCustomer, 'id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'>): Promise<string> {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(i18n.t('serviceErrors.pwaViewOnly'));
         const taxRaw = customerData.tax_number;
         const normalizedNew =
             taxRaw == null || String(taxRaw).trim() === ''
@@ -890,7 +891,7 @@ export class CustomerLocalService {
 
     // Update customer
     async updateCustomer(id: string, updates: Partial<LocalCustomer>): Promise<void> {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(i18n.t('serviceErrors.pwaViewOnly'));
         const updateData = {
             ...updates,
             updated_at: new Date(),
@@ -905,7 +906,7 @@ export class CustomerLocalService {
 
     // Soft delete customer
     async deleteCustomer(id: string): Promise<void> {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(i18n.t('serviceErrors.pwaViewOnly'));
         await localDb.transaction('rw', [localDb.customers], async () => {
             await localDb.customers.update(id, {
                 deleted_at: new Date(),
@@ -1547,7 +1548,7 @@ export class TransactionLocalService {
                         .equals(transactionId)
                         .count();
                     if (dupCount > 0) {
-                        throw new Error('Já existe documento fiscal para esta transação.');
+                        throw new Error(i18n.t('checkout.fiscalDocumentAlreadyExists'));
                     }
 
                     await localDb.fiscalDocuments.add(fiscalDoc);
@@ -1588,7 +1589,7 @@ export class TransactionLocalService {
             }
         }
 
-        throw new Error('Fiscal checkout: excedidas tentativas (cadeia fiscal avançou durante a assinatura).');
+        throw new Error(i18n.t('checkout.fiscalChainRetriesExceeded'));
     }
 
     async createVendusIssueAttempt(
@@ -2120,9 +2121,7 @@ export class TransactionLocalService {
     async deleteTransaction(id: string): Promise<void> {
         const existing = await localDb.transactions.get(id);
         if (existing?.fiscal_document_id) {
-            throw new Error(
-                'Documentos fiscais finalizados não podem ser eliminados. Utilize anulação ou nota de crédito.'
-            );
+            throw new Error(i18n.t('checkout.finalizedFiscalCannotBeDeleted'));
         }
 
         const now = new Date();

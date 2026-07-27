@@ -117,7 +117,7 @@ const DesignSystem2Inner: React.FC = () => {
             >
                 <div className="p-6 border-b border-slate-700">
                     <h1 className="text-2xl font-bold text-white">{t('designSystemPage.title')}</h1>
-                    <p className="text-sm text-slate-400 mt-1">{t('designSystemPage.subtitle')} — current UI</p>
+                    <p className="text-sm text-slate-400 mt-1">{t('designSystemPage.subtitle')} — {t('designSystemPage.subtitleSuffix')}</p>
                 </div>
                 <nav className="p-4 xl:flex-1">
                     <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:block xl:space-y-2">

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useReducer, useRef } from 'react';
+import i18n from '../i18n';
 import { Transaction, CashDrawer } from '../types';
 import { LocalProduct, LocalCustomer } from '../types/supabase';
 import { transactionLocalService, customerLocalService } from '../lib/localDatabase';
@@ -671,7 +672,7 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     } catch (error) {
       console.error('POS: Transaction processing failed:', error);
-      throw new Error(`Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(i18n.t('pos.transactionFailed', { error: error instanceof Error ? error.message : i18n.t('common.unknownError') }));
     }
   };
 
