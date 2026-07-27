@@ -8,6 +8,59 @@ body,
     height: 100%;
 }
 
+/* Date/time pickers: draw the calendar button ourselves.
+   Chromium builds the chrome inside these inputs from platform assets, and on the
+   Windows till that chrome lands next to the value as empty rectangles instead of a
+   calendar. Painting our own inline SVG (and dropping the Windows-only spin and clear
+   buttons) removes the platform dependency, so every till shows the same control. */
+input[type="date"]::-webkit-inner-spin-button,
+input[type="month"]::-webkit-inner-spin-button,
+input[type="week"]::-webkit-inner-spin-button,
+input[type="time"]::-webkit-inner-spin-button,
+input[type="datetime-local"]::-webkit-inner-spin-button,
+input[type="date"]::-webkit-clear-button,
+input[type="month"]::-webkit-clear-button,
+input[type="week"]::-webkit-clear-button,
+input[type="time"]::-webkit-clear-button,
+input[type="datetime-local"]::-webkit-clear-button {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+    margin: 0;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="week"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex: none;
+    margin: 0 0 0 0.5rem;
+    padding: 0;
+    /* Blank out any glyph the platform paints underneath the image. */
+    color: transparent;
+    background-color: transparent;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    opacity: 0.55;
+    cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="month"]::-webkit-calendar-picker-indicator:hover,
+input[type="week"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 0.9;
+}
+
+/* A time input has no calendar to open — the indicator is dead weight there. */
+input[type="time"]::-webkit-calendar-picker-indicator {
+    display: none;
+}
+
 /* Login2: full viewport, flex layout inside; zoom compensation applied on host via JS */
 .login2-route-host {
     --login2-header-side: clamp(2.75rem, 2.75vw, 3rem);
