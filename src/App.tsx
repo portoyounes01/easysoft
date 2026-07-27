@@ -37,6 +37,7 @@ import StockProfitReport from './pages/StockProfitReport';
 import Devices from './pages/Devices';
 import Assistant from './pages/Assistant';
 import PlatformConsole from './pages/PlatformConsole';
+import SeedManagement from './pages/SeedManagement';
 
 const Router = ['app:', 'file:'].includes(window.location.protocol) ? HashRouter : BrowserRouter;
 
@@ -394,6 +395,20 @@ const AppContent: React.FC = () => {
                   {DEV_TOOLS && <Route path="/electron-testing" element={<Navigate to="/settings?hw=electron" replace />} />}
                   {/* /printer-test stays available — printer setup/recovery is production functionality */}
                   <Route path="/printer-test" element={<Navigate to="/settings?hw=printer" replace />} />
+                  {/* /seed-management: the standalone seed tools page. Deliberately NOT behind
+                      DEV_TOOLS so it stays reachable on the deployed PWA — an unknown path there
+                      falls to the catch-all and lands on PWA_LANDING (/reports), which is what
+                      made this URL look "dead". The `settings` permission is the guard, and the
+                      destructive clear-data block inside is separately gated on `clear_data`.
+                      ⚠️ Re-gate this behind DEV_TOOLS before the first real tenant goes live. */}
+                  <Route
+                    path="/seed-management"
+                    element={
+                      <PermissionRoute permission="settings">
+                        <SeedManagement />
+                      </PermissionRoute>
+                    }
+                  />
                   {DEV_TOOLS && (
                     <>
                       <Route

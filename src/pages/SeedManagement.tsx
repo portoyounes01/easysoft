@@ -18,8 +18,11 @@ import {
     Info,
     ShieldAlert,
     Trash2,
+    UtensilsCrossed,
 } from 'lucide-react';
 import { seedDataService, SeedResult } from '../utils/seedData';
+import { seedRestaurantDataset } from '../utils/seedRestaurantData';
+import { QBELLA_EVORA_DATASET } from '../utils/restaurantSeedDataset';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { useEmployees } from '../contexts/EmployeesContext';
@@ -36,6 +39,9 @@ interface SeedStatus {
     message: string;
     details: string[];
 }
+
+/** Which button is mid-run, so only that one shows a spinner. */
+type SeedAction = 'yaml' | 'restaurant' | 'clear' | null;
 
 export interface SeedManagementPanelProps {
     embedded?: boolean;
@@ -60,6 +66,7 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
         available: string[];
         missing: string[];
     }>({ available: [], missing: [] });
+    const [activeAction, setActiveAction] = useState<SeedAction>(null);
     const [showClearDialog, setShowClearDialog] = useState(false);
     const [clearConfirmation, setClearConfirmation] = useState('');
 
@@ -83,6 +90,7 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
     }, []);
 
     const handleRunSeed = useCallback(async () => {
+        setActiveAction('yaml');
         setSeedStatus({
             isRunning: true,
             success: null,
@@ -139,14 +147,69 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                     t('seedManagement.failureHints.console'),
                 ]
             });
+        } finally {
+            setActiveAction(null);
         }
     }, [refreshEmployees, refreshProducts, t]);
+
+    const handleSeedRestaurant = useCallback(async () => {
+        setActiveAction('restaurant');
+        setSeedStatus({
+            isRunning: true,
+            success: null,
+            message: t('seedManagement.restaurant.starting', { name: QBELLA_EVORA_DATASET.name }),
+            details: []
+        });
+
+        try {
+            const result = await seedRestaurantDataset(QBELLA_EVORA_DATASET);
+
+            const details = [
+                `✅ ${t('seedManagement.restaurant.detailCategories', { count: result.categoriesCount })}`,
+                `✅ ${t('seedManagement.restaurant.detailProducts', { count: result.productsCount })}`,
+                `✅ ${t('seedManagement.restaurant.detailRawMaterials', { count: result.rawMaterialsCount })}`,
+                `✅ ${t('seedManagement.restaurant.detailRecipeLines', { count: result.recipeLinesCount })}`,
+                `✅ ${t('seedManagement.restaurant.detailVariantOptions', { count: result.variantOptionsCount })}`,
+                `✅ ${t('seedManagement.restaurant.detailModifiers', { count: result.modifiersCount })}`,
+                `ℹ️ ${t('seedManagement.restaurant.detailCostsFromRecipes')}`,
+                `ℹ️ ${t('seedManagement.restaurant.detailLocalOnlyInventory')}`,
+            ];
+            if (result.unknownMaterials.length > 0) {
+                details.push(
+                    `⚠️ ${t('seedManagement.restaurant.detailUnknownMaterials', {
+                        materials: result.unknownMaterials.join(', '),
+                    })}`
+                );
+            }
+
+            setSeedStatus({
+                isRunning: false,
+                success: true,
+                message: t('seedManagement.restaurant.success', { name: result.datasetName }),
+                details
+            });
+
+            await refreshProducts();
+        } catch (error) {
+            setSeedStatus({
+                isRunning: false,
+                success: false,
+                message: t('seedManagement.restaurant.failure', {
+                    message: error instanceof Error ? error.message : t('seedManagement.unknownError'),
+                }),
+                details: [t('seedManagement.failureHints.console')]
+            });
+        } finally {
+            setActiveAction(null);
+        }
+    }, [refreshProducts, t]);
 
     const handleClearLocalData = useCallback(async () => {
         if (!canClearLocalData || !employee || clearConfirmation !== 'CLEAR LOCAL DATA') {
             return;
         }
 
+        setActiveAction('clear');
         setSeedStatus({
             isRunning: true,
             success: null,
@@ -294,10 +357,72 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                                     type="button"
                                     variant="primary"
                                     onClick={handleRunSeed}
-                                    isLoading={seedStatus.isRunning}
+                                    isLoading={activeAction === 'yaml'}
+                                    disabled={seedStatus.isRunning}
                                     icon={Play}
-                                    label={seedStatus.isRunning ? t('seedManagement.running') : t('seedManagement.runButton')}
+                                    label={activeAction === 'yaml' ? t('seedManagement.running') : t('seedManagement.runButton')}
                                     className="w-full"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Ready-made restaurant catalogue */}
+                        <div className="min-w-0 bg-white rounded-xl shadow-lg p-6" data-testid="restaurant-seed-card">
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                                {t('seedManagement.restaurant.title')}
+                            </h2>
+                            <div className="space-y-4">
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                    <div className="mb-2 flex min-w-0 items-center gap-2 text-sm text-gray-600">
+                                        <Info className="w-4 h-4 shrink-0" />
+                                        <span className="min-w-0 break-words">
+                                            {t('seedManagement.restaurant.description', {
+                                                name: QBELLA_EVORA_DATASET.name,
+                                            })}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-gray-600">
+                                        {t('seedManagement.restaurant.contents', {
+                                            categories: QBELLA_EVORA_DATASET.categories.length,
+                                            products: QBELLA_EVORA_DATASET.products.length,
+                                            materials: QBELLA_EVORA_DATASET.rawMaterials.length,
+                                        })}
+                                    </p>
+                                    <p className="mt-2 text-xs text-gray-500">
+                                        {t('seedManagement.restaurant.source', {
+                                            source: QBELLA_EVORA_DATASET.source,
+                                        })}
+                                    </p>
+                                    <ul className="mt-2 space-y-1 text-xs text-gray-500">
+                                        <li className="flex min-w-0 items-start gap-2">
+                                            <span className="shrink-0">⚠️</span>
+                                            <span className="min-w-0 break-words">
+                                                {t('seedManagement.restaurant.estimateWarning')}
+                                            </span>
+                                        </li>
+                                        <li className="flex min-w-0 items-start gap-2">
+                                            <span className="shrink-0">•</span>
+                                            <span className="min-w-0 break-words">
+                                                {t('seedManagement.restaurant.rerunHint')}
+                                            </span>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <AdminActionButton
+                                    type="button"
+                                    variant="success"
+                                    onClick={handleSeedRestaurant}
+                                    isLoading={activeAction === 'restaurant'}
+                                    disabled={seedStatus.isRunning}
+                                    icon={UtensilsCrossed}
+                                    label={
+                                        activeAction === 'restaurant'
+                                            ? t('seedManagement.restaurant.running')
+                                            : t('seedManagement.restaurant.button')
+                                    }
+                                    className="w-full"
+                                    data-testid="seed-restaurant-button"
                                 />
                             </div>
                         </div>
