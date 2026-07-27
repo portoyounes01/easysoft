@@ -103,6 +103,9 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
     setIsScanning(true);
     setCurrentStatus('Scanning for USB printers...');
     setUsbPrinters([]);
+    // Refresh Windows' view alongside the scan, so a scan result can never be
+    // merged against a stale (or not-yet-loaded) device list.
+    void listUsbPrintDevices();
 
     try {
       // Call the Electron main process to discover USB printers
@@ -173,6 +176,11 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
       const ids = idsFromUri(printer.uri);
       const key = ids ? `${ids.vid}:${ids.pid}` : '';
       if (key && matched.has(key)) return;
+      // A driver-bound scan hit that did not merge is the SAME printer Windows
+      // already listed, seen through libusb — it has no port, no action (it
+      // cannot be opened directly) and nothing the Windows row does not say.
+      // Rendering it produced a second card for one printer.
+      if (printer.driverState === 'windows-driver' && usbPrintDevices.length > 0) return;
       rows.push({
         key: printer.serial || printer.uri,
         label: `${printer.brand} ${printer.model}`.trim(),
