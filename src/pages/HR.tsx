@@ -25,19 +25,27 @@ import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 import { employeeLocalService, initializeLocalDatabase } from '../lib/localDatabase';
-import { computeHolidayEntitlement, hrService } from '../services/hrService';
+import {
+    CONTRACT_DURATION_PRESETS,
+    computeHolidayEntitlement,
+    contractDurationFromDates,
+    contractEndForDuration,
+    hrService,
+} from '../services/hrService';
+import type { ContractDuration } from '../services/hrService';
 import type {
     EmployeeHrSummary,
     LocalEmployeeHrProfile,
     LocalLeaveRequest,
 } from '../types/hr';
 import type { LocalEmployee } from '../types/supabase';
+import { uiLocale } from '../utils/locale';
 
-const formatContractDate = (value: string | null | undefined): string => {
+const formatContractDate = (value: string | null | undefined, locale: string): string => {
     if (!value) return '—';
     const date = new Date(`${value}T12:00:00`);
     if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+    return new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
 };
 
 const toDateKey = (date: Date): string =>
@@ -95,7 +103,8 @@ const roleToneClasses: Record<string, string> = {
 };
 
 const HR: React.FC = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const locale = uiLocale(i18n.language);
     const appliedDialogStyle = useAppliedDialogStyle();
     const { visualStyle, prefs } = useDesignSystem2Customization();
     const { employee: signedInEmployee } = useSupabaseAuth();
@@ -118,6 +127,10 @@ const HR: React.FC = () => {
     const [mobileEmployeeView, setMobileEmployeeView] = useState<'overview' | 'leave'>('overview');
     const [showMobileEditor, setShowMobileEditor] = useState(false);
     const [showMobileAttendance, setShowMobileAttendance] = useState(false);
+    // The duration is derived from the two contract dates rather than stored, so
+    // it can never drift from them. This flag only covers the one state the dates
+    // cannot express: the user picking "custom" before typing an end date.
+    const [customContractDuration, setCustomContractDuration] = useState(false);
 
     const accrualRate = settings.hr.monthlyHolidayAccrualRate;
     const defaults = useMemo(
@@ -171,6 +184,7 @@ const HR: React.FC = () => {
         setShowMobileAttendance(false);
         setSelectedHolidayDates(new Set());
         setRangeAnchor(null);
+        setCustomContractDuration(false);
         setBookingMonth(new Date());
     };
 
@@ -182,7 +196,64 @@ const HR: React.FC = () => {
         setShowMobileAttendance(false);
         setSelectedHolidayDates(new Set());
         setRangeAnchor(null);
+        setCustomContractDuration(false);
     };
+
+    const storedContractDuration = editingProfile
+        ? contractDurationFromDates(editingProfile.contract_start_date, editingProfile.contract_end_date)
+        : 'endless';
+    const contractDuration: ContractDuration = customContractDuration ? 'custom' : storedContractDuration;
+
+    // Picking a length rewrites the end date; picking "custom" leaves both dates
+    // alone and simply stops the select from snapping back to what they spell out.
+    const applyContractDuration = (value: ContractDuration) => {
+        if (!editingProfile) return;
+        if (value === 'custom') {
+            setCustomContractDuration(true);
+            return;
+        }
+        setCustomContractDuration(false);
+        setEditingProfile({
+            ...editingProfile,
+            contract_end_date: value === 'endless'
+                ? null
+                : contractEndForDuration(editingProfile.contract_start_date, Number(value)),
+        });
+    };
+
+    // Moving the start of a fixed-length contract moves its end with it, so the
+    // chosen length survives. An endless or custom contract keeps its end date.
+    const changeContractStartDate = (value: string) => {
+        if (!editingProfile) return;
+        const months = contractDuration === 'custom' || contractDuration === 'endless'
+            ? null
+            : Number(contractDuration);
+        setCustomContractDuration(false);
+        setEditingProfile({
+            ...editingProfile,
+            contract_start_date: value,
+            contract_end_date: months === null
+                ? editingProfile.contract_end_date
+                : contractEndForDuration(value, months),
+        });
+    };
+
+    // Typing an end date always re-reads the length from the dates themselves, so
+    // hitting a preset exactly snaps the select back onto that preset.
+    const changeContractEndDate = (value: string) => {
+        if (!editingProfile) return;
+        setCustomContractDuration(false);
+        setEditingProfile({ ...editingProfile, contract_end_date: value || null });
+    };
+
+    const contractDurationOptions: Array<{ value: ContractDuration; label: string }> = [
+        ...CONTRACT_DURATION_PRESETS.map(months => ({
+            value: String(months) as ContractDuration,
+            label: t('hr.contractDurationMonths', { count: months }),
+        })),
+        { value: 'custom', label: t('hr.contractDurationCustom') },
+        { value: 'endless', label: t('hr.contractDurationEndless') },
+    ];
 
     const bookedHolidayDates = useMemo(() => {
         const set = new Set<string>();
@@ -294,10 +365,10 @@ const HR: React.FC = () => {
         setError('');
         try {
             const { start, end } = monthKeyToRange(reportMonth);
-            const periodLabel = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' })
+            const periodLabel = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' })
                 .format(start);
-            const rangeLabel = `${new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(start)} – ${new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(end)}`;
-            const generatedOn = new Intl.DateTimeFormat('en-GB', {
+            const rangeLabel = `${new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', year: 'numeric' }).format(start)} – ${new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', year: 'numeric' }).format(end)}`;
+            const generatedOn = new Intl.DateTimeFormat(locale, {
                 day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
             }).format(new Date());
 
@@ -408,7 +479,7 @@ const HR: React.FC = () => {
     };
 
     const selectedSummary = selectedEmployee ? summaries[selectedEmployee.id] : undefined;
-    const mobileReportMonthLabel = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' })
+    const mobileReportMonthLabel = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' })
         .format(monthKeyToRange(reportMonth).start);
     const workingPatternLabel = editingProfile
         ? [
@@ -419,7 +490,7 @@ const HR: React.FC = () => {
     const selectedHolidayRangeLabel = useMemo(() => {
         const selected = [...selectedHolidayDates].sort();
         if (selected.length === 0) return '';
-        const format = (value: string) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' })
+        const format = (value: string) => new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' })
             .format(new Date(`${value}T12:00:00`));
         return selected.length === 1 ? format(selected[0]) : `${format(selected[0])} – ${format(selected[selected.length - 1])}`;
     }, [selectedHolidayDates]);
@@ -493,7 +564,7 @@ const HR: React.FC = () => {
                                         </button>
                                     );
                                 })}
-                                {filteredEmployees.length === 0 && <p className="p-6 text-center text-sm text-slate-500">No employees match your search.</p>}
+                                {filteredEmployees.length === 0 && <p className="p-6 text-center text-sm text-slate-500">{t('hr.noEmployeesMatch')}</p>}
                             </div>
                         </section>
                     </>
@@ -509,30 +580,30 @@ const HR: React.FC = () => {
                         {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>}
 
                         <section className="rounded-3xl border border-green-100 bg-green-50/70 p-5">
-                            <p className="text-4xl font-bold tracking-tight text-green-700">{selectedSummary?.holiday_remaining ?? 0} <span className="text-xl">days</span></p>
+                            <p className="text-4xl font-bold tracking-tight text-green-700">{selectedSummary?.holiday_remaining ?? 0} <span className="text-xl">{t('hr.daysUnit')}</span></p>
                             <p className="mt-1 text-lg font-bold text-slate-950">{t('hr.metricHolidayLeft')}</p>
                             <p className="mt-1 text-sm text-slate-500">{t('hr.daysAbbrev', { count: selectedSummary?.holiday_taken ?? 0 })} {t('hr.metricHolidayTaken').toLowerCase()}</p>
                             <button type="button" onClick={() => setMobileEmployeeView('leave')} className="mt-5 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 text-base font-medium text-neutral-50 shadow-sm hover:from-blue-600 hover:to-blue-700"><CalendarPlus className="h-5 w-5" />{t('hr.bookHoliday')}</button>
                         </section>
 
-                        <section><h2 className="px-1 text-xl font-bold text-slate-950">Employee details</h2><div className="mt-3 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
+                        <section><h2 className="px-1 text-xl font-bold text-slate-950">{t('hr.mobileEmployeeDetails')}</h2><div className="mt-3 overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm">
                             <button type="button" onClick={() => setShowMobileEditor(true)} className="flex min-h-touch w-full items-center gap-3 border-b border-gray-100 px-4 text-left"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><CalendarDays className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-bold text-slate-950">{t('hr.workingDays')}</span><span className="block truncate text-sm text-slate-500">{workingPatternLabel}</span></span><ChevronRight className="h-5 w-5 text-slate-400" /></button>
-                            <button type="button" onClick={() => setShowMobileEditor(true)} className="flex min-h-touch w-full items-center gap-3 border-b border-gray-100 px-4 text-left"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><Briefcase className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-bold text-slate-950">Contract</span><span className="block text-sm text-slate-500">{formatContractDate(selectedSummary?.contract_start_date)}</span></span><ChevronRight className="h-5 w-5 text-slate-400" /></button>
-                            <button type="button" onClick={() => setShowMobileAttendance(true)} className="flex min-h-touch w-full items-center gap-3 border-b border-gray-100 px-4 text-left"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><Clock3 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-bold text-slate-950">Attendance</span><span className="block text-sm text-slate-500">{t('hr.metricDaysWorked')}: {selectedSummary?.days_worked ?? 0}</span></span><ChevronRight className="h-5 w-5 text-slate-400" /></button>
+                            <button type="button" onClick={() => setShowMobileEditor(true)} className="flex min-h-touch w-full items-center gap-3 border-b border-gray-100 px-4 text-left"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><Briefcase className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-bold text-slate-950">{t('hr.mobileContract')}</span><span className="block text-sm text-slate-500">{formatContractDate(selectedSummary?.contract_start_date, locale)}</span></span><ChevronRight className="h-5 w-5 text-slate-400" /></button>
+                            <button type="button" onClick={() => setShowMobileAttendance(true)} className="flex min-h-touch w-full items-center gap-3 border-b border-gray-100 px-4 text-left"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><Clock3 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-bold text-slate-950">{t('hr.mobileAttendance')}</span><span className="block text-sm text-slate-500">{t('hr.metricDaysWorked')}: {selectedSummary?.days_worked ?? 0}</span></span><ChevronRight className="h-5 w-5 text-slate-400" /></button>
                             <button type="button" onClick={() => setShowMobileEditor(true)} className="flex min-h-touch w-full items-center gap-3 px-4 text-left"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><NotebookText className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-bold text-slate-950">{t('hr.internalNotes')}</span><span className="block truncate text-sm text-slate-500">{editingProfile.internal_notes || 'No notes added'}</span></span><ChevronRight className="h-5 w-5 text-slate-400" /></button>
                         </div></section>
-                        <button type="button" onClick={() => setShowMobileEditor(true)} className="min-h-touch-xs w-full rounded-2xl text-base font-bold text-gray-900 hover:bg-gray-100">Edit details</button>
+                        <button type="button" onClick={() => setShowMobileEditor(true)} className="min-h-touch-xs w-full rounded-2xl text-base font-bold text-gray-900 hover:bg-gray-100">{t('hr.mobileEditDetails')}</button>
                     </>
                 )}
 
                 {selectedEmployee && editingProfile && mobileEmployeeView === 'leave' && (
                     <>
-                        <header><button type="button" onClick={() => { setMobileEmployeeView('overview'); setSelectedHolidayDates(new Set()); setRangeAnchor(null); }} className="flex min-h-touch-xs items-center gap-1 rounded-2xl pr-3 text-base font-semibold text-gray-900 hover:bg-gray-100"><ChevronLeft className="h-5 w-5" />{selectedEmployee.name}</button><h1 className="mt-4 text-[32px] font-bold tracking-tight text-slate-950">{t('hr.bookHoliday')}</h1><p className="mt-1 text-base text-slate-500">Choose the days away</p></header>
+                        <header><button type="button" onClick={() => { setMobileEmployeeView('overview'); setSelectedHolidayDates(new Set()); setRangeAnchor(null); }} className="flex min-h-touch-xs items-center gap-1 rounded-2xl pr-3 text-base font-semibold text-gray-900 hover:bg-gray-100"><ChevronLeft className="h-5 w-5" />{selectedEmployee.name}</button><h1 className="mt-4 text-[32px] font-bold tracking-tight text-slate-950">{t('hr.bookHoliday')}</h1><p className="mt-1 text-base text-slate-500">{t('hr.mobileChooseDaysAway')}</p></header>
                         {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">{error}</div>}
                         <TabToggle options={[{ value: 'range', label: t('hr.bookModePeriod') }, { value: 'single', label: t('hr.bookModeSingle') }]} value={bookingMode} onChange={mode => { setBookingMode(mode); setRangeAnchor(null); }} />
                         <p className="-mt-2 px-1 text-sm text-slate-500">{bookingMode === 'range' ? rangeAnchor ? t('hr.hintTapLastDay') : t('hr.hintTapFirstLast') : t('hr.hintTapIndividual')}</p>
                         <section className="rounded-3xl border border-slate-100 bg-white p-3 shadow-sm">
-                            <div className="flex items-center justify-between"><button type="button" onClick={() => setBookingMonth(new Date(bookingMonth.getFullYear(), bookingMonth.getMonth() - 1, 1))} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-2xl text-gray-700 hover:bg-gray-100" aria-label={t('hr.previousMonth')}><ChevronLeft className="h-5 w-5" /></button><span className="text-lg font-bold capitalize text-slate-950">{new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(bookingMonth)}</span><button type="button" onClick={() => setBookingMonth(new Date(bookingMonth.getFullYear(), bookingMonth.getMonth() + 1, 1))} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-2xl text-gray-700 hover:bg-gray-100" aria-label={t('hr.nextMonth')}><ChevronRight className="h-5 w-5" /></button></div>
+                            <div className="flex items-center justify-between"><button type="button" onClick={() => setBookingMonth(new Date(bookingMonth.getFullYear(), bookingMonth.getMonth() - 1, 1))} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-2xl text-gray-700 hover:bg-gray-100" aria-label={t('hr.previousMonth')}><ChevronLeft className="h-5 w-5" /></button><span className="text-lg font-bold text-slate-950 first-letter:uppercase">{new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(bookingMonth)}</span><button type="button" onClick={() => setBookingMonth(new Date(bookingMonth.getFullYear(), bookingMonth.getMonth() + 1, 1))} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-2xl text-gray-700 hover:bg-gray-100" aria-label={t('hr.nextMonth')}><ChevronRight className="h-5 w-5" /></button></div>
                             <div className="mt-4 grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400">{[t('hr.weekdayMon'), t('hr.weekdayTue'), t('hr.weekdayWed'), t('hr.weekdayThu'), t('hr.weekdayFri'), t('hr.weekdaySat'), t('hr.weekdaySun')].map((label, index) => <span key={index}>{label}</span>)}</div>
                             <div className="mt-2 grid grid-cols-7 gap-1">{calendarCells.map((date, index) => { if (!date) return <span key={`mobile-blank-${index}`} />; const key = toDateKey(date); const booked = bookedHolidayDates.has(key); const isSelected = selectedHolidayDates.has(key); const isAnchor = rangeAnchor === key; const isWorkingDay = editingProfile.working_days.includes(date.getDay()); return <button key={key} type="button" disabled={booked} onClick={() => handleSelectHolidayDay(key)} className={`flex min-h-touch-xs items-center justify-center rounded-xl text-sm font-bold transition-colors ${booked ? 'cursor-not-allowed bg-indigo-50 text-indigo-400' : isSelected ? 'bg-green-600 text-white' : isWorkingDay ? 'text-slate-800 active:bg-slate-100' : 'text-slate-300'} ${isAnchor ? 'ring-2 ring-green-800 ring-offset-1' : ''}`}>{date.getDate()}</button>; })}</div>
                         </section>
@@ -540,9 +611,9 @@ const HR: React.FC = () => {
                     </>
                 )}
 
-                {selectedEmployee && editingProfile && showMobileAttendance && <div className="fixed inset-0 z-[90] flex items-end bg-black/45" role="dialog" aria-modal="true" aria-label="Attendance summary"><div className="w-full rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-500">{mobileReportMonthLabel}</p><h2 className="text-2xl font-bold text-slate-950">Attendance</h2></div><button type="button" onClick={() => setShowMobileAttendance(false)} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-2xl text-gray-700 hover:bg-gray-100" aria-label="Close attendance summary"><X className="h-5 w-5" /></button></div><div className="mt-5 grid grid-cols-2 gap-3"><Metric label={t('hr.metricDaysWorked')} value={String(selectedSummary?.days_worked ?? 0)} /><Metric label="Hours worked" value={String(selectedSummary?.hours_worked ?? 0)} /><Metric label={t('hr.metricNoShows')} value={t('hr.daysAbbrev', { count: selectedSummary?.no_show_days ?? 0 })} warning={(selectedSummary?.no_show_days ?? 0) > 0} /><Metric label={t('hr.metricHolidayTaken')} value={t('hr.daysAbbrev', { count: selectedSummary?.holiday_taken ?? 0 })} /></div><button type="button" onClick={() => setShowMobileAttendance(false)} className={appliedDialogStyle ? `mt-5 w-full ${dialogButtonClasses(appliedDialogStyle).primary}` : 'mt-5 min-h-touch w-full rounded-2xl bg-slate-950 font-bold text-white'}>Done</button></div></div>}
+                {selectedEmployee && editingProfile && showMobileAttendance && <div className="fixed inset-0 z-[90] flex items-end bg-black/45" role="dialog" aria-modal="true" aria-label={t('hr.mobileAttendanceAria')}><div className="w-full rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-500">{mobileReportMonthLabel}</p><h2 className="text-2xl font-bold text-slate-950">{t('hr.mobileAttendance')}</h2></div><button type="button" onClick={() => setShowMobileAttendance(false)} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-2xl text-gray-700 hover:bg-gray-100" aria-label={t('hr.mobileCloseAttendanceAria')}><X className="h-5 w-5" /></button></div><div className="mt-5 grid grid-cols-2 gap-3"><Metric label={t('hr.metricDaysWorked')} value={String(selectedSummary?.days_worked ?? 0)} /><Metric label={t('hr.metricHoursWorked')} value={String(selectedSummary?.hours_worked ?? 0)} /><Metric label={t('hr.metricNoShows')} value={t('hr.daysAbbrev', { count: selectedSummary?.no_show_days ?? 0 })} warning={(selectedSummary?.no_show_days ?? 0) > 0} /><Metric label={t('hr.metricHolidayTaken')} value={t('hr.daysAbbrev', { count: selectedSummary?.holiday_taken ?? 0 })} /></div><button type="button" onClick={() => setShowMobileAttendance(false)} className={appliedDialogStyle ? `mt-5 w-full ${dialogButtonClasses(appliedDialogStyle).primary}` : 'mt-5 min-h-touch w-full rounded-2xl bg-slate-950 font-bold text-white'}>{t('hr.mobileDone')}</button></div></div>}
 
-                {selectedEmployee && editingProfile && showMobileEditor && <div className="fixed inset-0 z-[90] flex items-end bg-black/45" role="dialog" aria-modal="true" aria-label="Edit employee details"><div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-500">{selectedEmployee.name}</p><h2 className="text-2xl font-bold text-slate-950">Edit details</h2></div><button type="button" onClick={() => setShowMobileEditor(false)} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-2xl text-gray-700 hover:bg-gray-100" aria-label="Close employee editor"><X className="h-5 w-5" /></button></div><div className="mt-5 space-y-5"><div className="grid grid-cols-2 gap-3"><Field label={t('hr.contractStart')}><input type="date" value={editingProfile.contract_start_date} onChange={event => setEditingProfile({ ...editingProfile, contract_start_date: event.target.value })} className="min-h-touch-xs w-full rounded-xl border border-slate-200 px-3 text-sm" /></Field><Field label={t('hr.contractEnd')}><input type="date" value={editingProfile.contract_end_date ?? ''} onChange={event => setEditingProfile({ ...editingProfile, contract_end_date: event.target.value || null })} className="min-h-touch-xs w-full rounded-xl border border-slate-200 px-3 text-sm" /></Field></div><Field label={t('hr.carriedDays')}><input type="number" step="0.5" value={editingProfile.carried_holiday_days} onChange={event => setEditingProfile({ ...editingProfile, carried_holiday_days: Number(event.target.value) })} className="min-h-touch-xs w-full rounded-xl border border-slate-200 px-3" /></Field><Field label={t('hr.workingDays')}><div className="grid grid-cols-4 gap-2">{[[1, t('hr.weekdayMon')], [2, t('hr.weekdayTue')], [3, t('hr.weekdayWed')], [4, t('hr.weekdayThu')], [5, t('hr.weekdayFri')], [6, t('hr.weekdaySat')], [0, t('hr.weekdaySun')]].map(([day, label]) => { const numericDay = Number(day); const selected = editingProfile.working_days.includes(numericDay); return <button key={day} type="button" onClick={() => setEditingProfile({ ...editingProfile, working_days: selected ? editingProfile.working_days.filter(item => item !== numericDay) : [...editingProfile.working_days, numericDay] })} className={`min-h-touch-xs rounded-lg border text-sm ${selected ? 'border-green-500 bg-green-50 font-semibold text-green-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>{label}</button>; })}</div></Field><Field label={t('hr.internalNotes')}><textarea value={editingProfile.internal_notes} onChange={event => setEditingProfile({ ...editingProfile, internal_notes: event.target.value })} className="min-h-28 w-full rounded-2xl border border-slate-200 p-3" /></Field></div><button type="button" disabled={saving} onClick={() => void saveProfile(false)} className="mt-6 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 font-medium text-neutral-50 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50"><FilePenLine className="h-5 w-5" />{saving ? t('common.saving') : t('hr.saveProfile')}</button></div></div>}
+                {selectedEmployee && editingProfile && showMobileEditor && <div className="fixed inset-0 z-[90] flex items-end bg-black/45" role="dialog" aria-modal="true" aria-label={t('hr.mobileEditDetailsAria')}><div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-sm text-slate-500">{selectedEmployee.name}</p><h2 className="text-2xl font-bold text-slate-950">{t('hr.mobileEditDetails')}</h2></div><button type="button" onClick={() => setShowMobileEditor(false)} className="flex min-h-touch-xs min-w-touch-xs items-center justify-center rounded-2xl text-gray-700 hover:bg-gray-100" aria-label={t('hr.mobileCloseEditorAria')}><X className="h-5 w-5" /></button></div><div className="mt-5 space-y-5"><div className="grid grid-cols-2 gap-3"><Field label={t('hr.contractStart')}><input type="date" value={editingProfile.contract_start_date} onChange={event => changeContractStartDate(event.target.value)} className="min-h-touch-xs w-full rounded-xl border border-slate-200 px-3 text-sm" /></Field><Field label={t('hr.contractEnd')}><input type="date" value={editingProfile.contract_end_date ?? ''} onChange={event => changeContractEndDate(event.target.value)} className="min-h-touch-xs w-full rounded-xl border border-slate-200 px-3 text-sm" /></Field></div><Field label={t('hr.contractDuration')}><select value={contractDuration} onChange={event => applyContractDuration(event.target.value as ContractDuration)} className="min-h-touch-xs w-full rounded-xl border border-slate-200 px-3 text-sm">{contractDurationOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field><Field label={t('hr.carriedDays')}><input type="number" step="0.5" value={editingProfile.carried_holiday_days} onChange={event => setEditingProfile({ ...editingProfile, carried_holiday_days: Number(event.target.value) })} className="min-h-touch-xs w-full rounded-xl border border-slate-200 px-3" /></Field><Field label={t('hr.workingDays')}><div className="grid grid-cols-4 gap-2">{[[1, t('hr.weekdayMon')], [2, t('hr.weekdayTue')], [3, t('hr.weekdayWed')], [4, t('hr.weekdayThu')], [5, t('hr.weekdayFri')], [6, t('hr.weekdaySat')], [0, t('hr.weekdaySun')]].map(([day, label]) => { const numericDay = Number(day); const selected = editingProfile.working_days.includes(numericDay); return <button key={day} type="button" onClick={() => setEditingProfile({ ...editingProfile, working_days: selected ? editingProfile.working_days.filter(item => item !== numericDay) : [...editingProfile.working_days, numericDay] })} className={`min-h-touch-xs rounded-lg border text-sm ${selected ? 'border-green-500 bg-green-50 font-semibold text-green-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}>{label}</button>; })}</div></Field><Field label={t('hr.internalNotes')}><textarea value={editingProfile.internal_notes} onChange={event => setEditingProfile({ ...editingProfile, internal_notes: event.target.value })} className="min-h-28 w-full rounded-2xl border border-slate-200 p-3" /></Field></div><button type="button" disabled={saving} onClick={() => void saveProfile(false)} className="mt-6 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 font-medium text-neutral-50 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50"><FilePenLine className="h-5 w-5" />{saving ? t('common.saving') : t('hr.saveProfile')}</button></div></div>}
             </div>
 
             <div className="hidden space-y-6 pt-6 md:block">
@@ -640,9 +711,9 @@ const HR: React.FC = () => {
                                     <Metric label={t('hr.metricNoShows')} value={t('hr.daysAbbrev', { count: summary?.no_show_days ?? 0 })} warning={(summary?.no_show_days ?? 0) > 0} />
                                     <Metric label={t('hr.metricHolidayTaken')} value={t('hr.daysAbbrev', { count: summary?.holiday_taken ?? 0 })} />
                                     <Metric label={t('hr.metricHolidayLeft')} value={t('hr.daysAbbrev', { count: summary?.holiday_remaining ?? 0 })} />
-                                    <Metric label={t('hr.contractStart')} value={formatContractDate(summary?.contract_start_date)} />
+                                    <Metric label={t('hr.contractStart')} value={formatContractDate(summary?.contract_start_date, locale)} />
                                     {summary?.contract_end_date && (
-                                        <Metric label={t('hr.contractEnd')} value={formatContractDate(summary.contract_end_date)} />
+                                        <Metric label={t('hr.contractEnd')} value={formatContractDate(summary.contract_end_date, locale)} />
                                     )}
                                 </div>
                             </button>
@@ -660,7 +731,7 @@ const HR: React.FC = () => {
                                 <input
                                     type="date"
                                     value={editingProfile.contract_start_date}
-                                    onChange={event => setEditingProfile({ ...editingProfile, contract_start_date: event.target.value })}
+                                    onChange={event => changeContractStartDate(event.target.value)}
                                     className={tk.cfg ? tk.input : "min-h-touch-sm w-full rounded-2xl border border-slate-300 px-4"}
                                 />
                             </Field>
@@ -668,9 +739,29 @@ const HR: React.FC = () => {
                                 <input
                                     type="date"
                                     value={editingProfile.contract_end_date ?? ''}
-                                    onChange={event => setEditingProfile({ ...editingProfile, contract_end_date: event.target.value || null })}
+                                    onChange={event => changeContractEndDate(event.target.value)}
                                     className={tk.cfg ? tk.input : "min-h-touch-sm w-full rounded-2xl border border-slate-300 px-4"}
                                 />
+                            </Field>
+                            <Field label={t('hr.contractDuration')}>
+                                <select
+                                    value={contractDuration}
+                                    onChange={event => applyContractDuration(event.target.value as ContractDuration)}
+                                    className={tk.cfg ? tk.input : "min-h-touch-sm w-full rounded-2xl border border-slate-300 px-4"}
+                                >
+                                    {contractDurationOptions.map(option => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </select>
+                                <p className={`mt-1.5 text-xs font-normal ${tk.p.subText}`}>
+                                    {contractDuration === 'endless'
+                                        ? t('hr.contractDurationEndlessHint')
+                                        : contractDuration === 'custom'
+                                            ? t('hr.contractDurationCustomHint')
+                                            : t('hr.contractDurationPresetHint', {
+                                                date: formatContractDate(editingProfile.contract_end_date, locale),
+                                            })}
+                                </p>
                             </Field>
                             <Field label={t('hr.carriedDays')}>
                                 <input
@@ -687,7 +778,7 @@ const HR: React.FC = () => {
                                         {t('hr.entitlementDays', { count: computeHolidayEntitlement(editingProfile, accrualRate) })}
                                     </span>
                                     <span className={`text-xs ${tk.p.subText}`}>
-                                        {t('hr.accruedSince', { rate: accrualRate, date: editingProfile.contract_start_date })}
+                                        {t('hr.accruedSince', { rate: accrualRate, date: formatContractDate(editingProfile.contract_start_date, locale) })}
                                         {summaries[selectedEmployee.id]
                                             ? t('hr.accruedTakenLeft', { taken: summaries[selectedEmployee.id].holiday_taken, remaining: summaries[selectedEmployee.id].holiday_remaining })
                                             : ''}
@@ -773,8 +864,8 @@ const HR: React.FC = () => {
                                 >
                                     <ChevronLeft className="h-5 w-5" />
                                 </button>
-                                <span className="font-semibold capitalize text-slate-950">
-                                    {new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(bookingMonth)}
+                                <span className="font-semibold text-slate-950 first-letter:uppercase">
+                                    {new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(bookingMonth)}
                                 </span>
                                 <button
                                     type="button"
