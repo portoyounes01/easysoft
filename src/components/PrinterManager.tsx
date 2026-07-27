@@ -24,10 +24,13 @@ const PrinterManager: React.FC = () => {
       console.warn('⚠️ startMonitoring not available in electronAPI');
       return;
     }
-    monitoringStarted.current = true;
     try {
       const result = await window.electronAPI.startMonitoring(5000);
-      if (!result?.success) {
+      // Latch only on success: a failed start must stay retryable by pressing
+      // Refresh, not leave hot-plug detection dead until the panel remounts.
+      if (result?.success) {
+        monitoringStarted.current = true;
+      } else {
         console.error('❌ Failed to start hardware monitoring:', result?.error);
       }
     } catch (error) {
