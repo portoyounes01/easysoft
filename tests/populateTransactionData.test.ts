@@ -23,6 +23,21 @@ vi.mock('../src/utils/hashUtils', () => ({
   hashPassword: vi.fn((password: string) => Promise.resolve(`hashed_${password}`)),
 }));
 
+// The local clear is the whole of clearTransactionData now — mock it so the test
+// asserts the delegation and the reported counts, not Dexie's behaviour.
+const mockClearLocalDatabasePreservingRecovery = vi.fn(() =>
+  Promise.resolve({
+    preservedSystemAdmins: 1,
+    preservedFiscalIssueAttempts: 2,
+    preservedFiscalDocuments: 3,
+    preservedFiscalTransactions: 4,
+  })
+);
+
+vi.mock('../src/utils/clearLocalDatabase', () => ({
+  clearLocalDatabasePreservingRecovery: mockClearLocalDatabasePreservingRecovery,
+}));
+
 const mockSupabase = vi.mocked(supabase);
 
 describe('populateTransactionData utility functions', () => {
@@ -159,27 +174,41 @@ describe('populateTransactionData utility functions', () => {
   });
 
   describe('clearTransactionData', () => {
-    it('calls clear_all_transaction_data RPC when available', async () => {
-      mockRpc.mockResolvedValue({ error: null });
-
+    it('clears the local database and reports what was preserved', async () => {
       const result = await clearTransactionData();
 
-      expect(result).toEqual({ success: true });
-      expect(mockRpc).toHaveBeenCalledWith('clear_all_transaction_data');
+      expect(mockClearLocalDatabasePreservingRecovery).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({
+        success: true,
+        preservedSystemAdmins: 1,
+        preservedFiscalIssueAttempts: 2,
+        preservedFiscalDocuments: 3,
+        preservedFiscalTransactions: 4,
+      });
     });
 
-    it('throws and does NOT mass-delete when the RPC returns an error (Phase 0 hardening)', async () => {
-      mockRpc.mockResolvedValue({ error: { message: 'function not found' } });
-      const gte = vi.fn().mockResolvedValue({ error: null });
-      mockDelete.mockReturnValue({ gte });
+    it('never calls the excluded clear_all_transaction_data RPC', async () => {
+      // The genesis baseline deliberately EXCLUDES that function (it was
+      // SECURITY DEFINER + granted to anon and wiped every tenant's catalogue),
+      // so calling it could only ever fail — after local data was already gone.
+      await clearTransactionData();
 
-      // The raw per-table delete fallback was removed for safety: a failing/missing RPC must
-      // surface loudly, never mass-DELETE every table directly via the anon client.
-      await expect(clearTransactionData()).rejects.toThrow();
+      expect(mockRpc).not.toHaveBeenCalledWith('clear_all_transaction_data');
+    });
 
-      expect(mockRpc).toHaveBeenCalledWith('clear_all_transaction_data');
+    it('touches no cloud table directly', async () => {
+      await clearTransactionData();
+
       expect(mockFrom).not.toHaveBeenCalledWith('daily_sales_summary');
       expect(mockFrom).not.toHaveBeenCalledWith('transaction_items');
+      expect(mockFrom).not.toHaveBeenCalledWith('transactions');
+      expect(mockDelete).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a failing local clear instead of reporting success', async () => {
+      mockClearLocalDatabasePreservingRecovery.mockRejectedValueOnce(new Error('IndexedDB blocked'));
+
+      await expect(clearTransactionData()).rejects.toThrow('IndexedDB blocked');
     });
   });
 

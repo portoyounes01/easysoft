@@ -102,11 +102,16 @@ const DataSetup: React.FC = () => {
         clearResults();
 
         try {
-            setCurrentStep('Clearing all transaction data...');
-            await clearTransactionData();
+            setCurrentStep('Clearing the local database...');
+            const cleared = await clearTransactionData();
             addResult({
                 success: true,
-                message: 'All transaction data cleared successfully'
+                message:
+                    'Local database cleared — ready to seed. Cloud data was NOT touched. ' +
+                    `Kept: ${cleared.preservedSystemAdmins} system-admin login(s), ` +
+                    `${cleared.preservedFiscalDocuments} sealed fiscal document(s), ` +
+                    `${cleared.preservedFiscalTransactions} supporting transaction(s), ` +
+                    `${cleared.preservedFiscalIssueAttempts} fiscal issue recovery attempt(s).`
             });
 
             // Refresh contexts to reflect cleared data
@@ -165,7 +170,7 @@ const DataSetup: React.FC = () => {
                             ) : (
                                 <RefreshCw className="w-5 h-5" />
                             )}
-                            <span>Clear All Data</span>
+                            <span>Clear Local Data</span>
                         </button>
                     </div>
 
