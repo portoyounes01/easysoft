@@ -396,16 +396,26 @@ const TransactionsInner: React.FC = () => {
             ? await transactionLocalService.getFiscalDocumentById(trx.fiscal_document_id)
             : undefined;
 
-        const verificationCode = fiscal?.atcud_body ?? meta?.atcudBody ?? header.receipt_number ?? header.transaction_number;
-        const qrPayload = fiscal?.qr_payload ?? meta?.qrPayload;
+        // A sale completed on the non-fiscal fallback has no fiscal document to
+        // infer its nature from — only this marker on the transaction row. Miss
+        // it and the reprint hands out a "FATURA" whose ATCUD is really the slip
+        // reference (the `?? receipt_number` fallback below).
+        const nonFiscalSlip = meta?.nonFiscal === true;
+
+        const verificationCode = nonFiscalSlip
+            ? ''
+            : fiscal?.atcud_body ?? meta?.atcudBody ?? header.receipt_number ?? header.transaction_number;
+        const qrPayload = nonFiscalSlip ? undefined : fiscal?.qr_payload ?? meta?.qrPayload;
         const qrCodeImage = qrPayload ? await generateQRCodeImage(qrPayload) : undefined;
 
         const customerRow = header.customer_id
             ? await customerLocalService.getCustomerById(header.customer_id)
             : undefined;
-        const documentType: ReceiptProps['documentType'] = fiscal?.invoice_type
-            ? saftTypeToReceiptDocumentType(fiscal.invoice_type)
-            : 'FATURA';
+        const documentType: ReceiptProps['documentType'] = nonFiscalSlip
+            ? 'TALAO_NAO_FISCAL'
+            : fiscal?.invoice_type
+                ? saftTypeToReceiptDocumentType(fiscal.invoice_type)
+                : 'FATURA';
 
         const creditNoteDisplay =
             documentType === 'NOTA_CREDITO'

@@ -55,7 +55,12 @@ interface ReceiptTotals {
 
 export interface ReceiptProps {
   documentNumber: string;
-  documentType: 'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO';
+  /** TALAO_NAO_FISCAL is the fallback slip printed when fiscal issuance is
+   *  impossible (offline / backend unreachable / no valid ATCUD+QR). It is NOT
+   *  a fiscal document: it carries no ATCUD, no QR, no fatura number and no
+   *  certification line — the legal invoice for that sale is the handwritten
+   *  one from the AT-authorised book. See docs/fiscal-fallback-legal-brief.md. */
+  documentType: 'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO' | 'TALAO_NAO_FISCAL';
   date: Date;
   counter: string;
   ticketNumber?: string;
@@ -161,6 +166,11 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
     vatGroups,
   } = useMemo(() => computeReceiptTotals(items, totals), [items, totals]);
 
+  // Kept in lockstep with the ESC/POS builder (services/escpos/receiptEscPos.ts):
+  // the preview the operator approves and the paper the customer receives must
+  // suppress exactly the same fiscal elements.
+  const nonFiscal = documentType === 'TALAO_NAO_FISCAL';
+
   const getDocumentTitle = (): string => {
     switch (documentType) {
       case 'FATURA':
@@ -169,6 +179,8 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         return t('thermalReceipt.docFaturaSimplificada');
       case 'NOTA_CREDITO':
         return t('thermalReceipt.docNotaCredito');
+      case 'TALAO_NAO_FISCAL':
+        return t('thermalReceipt.docTalaoNaoFiscal');
       default:
         return t('thermalReceipt.docGeneric');
     }
@@ -357,7 +369,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       <div className="separator"></div>
 
       {/* Cliente: nome, NIF, morada (uma linha) */}
-      {customer && (customer.name || customer.taxNumber || customer.address) && (
+      {!nonFiscal && customer && (customer.name || customer.taxNumber || customer.address) && (
         <>
           {customer.name ? (
             <div className="left small-text">{t('thermalReceipt.clientLineName', { name: customer.name })}</div>
@@ -388,7 +400,10 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       {/* Document Header */}
       <div className="center bold">{getDocumentTitle()}</div>
       <div className="center">
-        {documentNumber} {documentLabel || t('thermalReceipt.original')}
+        {nonFiscal
+          // No fatura number: the slip must never consume one from the fiscal series.
+          ? `${t('thermalReceipt.internalIdLabel')} ${documentNumber}`
+          : `${documentNumber} ${documentLabel || t('thermalReceipt.original')}`}
       </div>
       <div className="center">
         {t('thermalReceipt.dateLabel')} {formatDate(date)} {counter}
@@ -496,29 +511,38 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       <div className="separator"></div>
 
-      {/* ATCUD + QR + Q (below total, before slogan) */}
+      {/* ATCUD + QR + Q (below total, before slogan) — fiscal documents only.
+          The slip gets the "this is not an invoice" notice in their place; an
+          empty QR placeholder there would read as a printing fault rather than
+          as a deliberate absence. */}
       <div className="atcud-after-separator">
-        {verificationCode ? (
-          <div className="center small-text bold">
-            {t('thermalReceipt.atcudPrefix')} {verificationCode}
-          </div>
-        ) : null}
-        <div className="receipt-qr-block">
-          {qrCodeImage ? (
-            <img
-              className="receipt-qr-img"
-              src={qrCodeImage}
-              alt={t('thermalReceipt.qrAlt')}
-            />
-          ) : (
-            <div className="qr-placeholder">{t('thermalReceipt.qrPlaceholder')}</div>
-          )}
-        </div>
-        {documentHash && !hashFourChars ? (
-          <div className="center small-text" style={{ fontSize: '8px', wordBreak: 'break-all' }}>
-            {t('thermalReceipt.hashLabel')} {documentHash.substring(0, 24)}…
-          </div>
-        ) : null}
+        {nonFiscal ? (
+          <div className="center small-text bold">{t('thermalReceipt.nonFiscalNotice')}</div>
+        ) : (
+          <>
+            {verificationCode ? (
+              <div className="center small-text bold">
+                {t('thermalReceipt.atcudPrefix')} {verificationCode}
+              </div>
+            ) : null}
+            <div className="receipt-qr-block">
+              {qrCodeImage ? (
+                <img
+                  className="receipt-qr-img"
+                  src={qrCodeImage}
+                  alt={t('thermalReceipt.qrAlt')}
+                />
+              ) : (
+                <div className="qr-placeholder">{t('thermalReceipt.qrPlaceholder')}</div>
+              )}
+            </div>
+            {documentHash && !hashFourChars ? (
+              <div className="center small-text" style={{ fontSize: '8px', wordBreak: 'break-all' }}>
+                {t('thermalReceipt.hashLabel')} {documentHash.substring(0, 24)}…
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
 
       <div className="separator"></div>
@@ -554,7 +578,11 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       <div className="separator"></div>
 
       {/* Legal — ES: the Veri*factu legend; PT: 4 hash chars + AT certification phrase (LogicPOS layout) */}
-      {verifactuLegend?.trim() ? (
+      {nonFiscal ? (
+        // Neither the AT certification phrase nor the Veri*factu legend may
+        // appear on a document that was not issued through the certified path.
+        <div className="center small-text">{t('thermalReceipt.nonFiscalIssueHint')}</div>
+      ) : verifactuLegend?.trim() ? (
         <div className="center small-text bold">{verifactuLegend.trim()}</div>
       ) : (
         <div className="center small-text">

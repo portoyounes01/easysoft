@@ -5,6 +5,7 @@ import { connectionStatus, supabase } from '../lib/supabase';
 import type { LocalCustomer, LocalTransactionItem } from '../types/supabase';
 import { generateUUID } from '../utils/uuid';
 import { mapIvaDecimalToSaftTaxCode } from './saft/exportSaft';
+import { asUnresolvedIssueFailure, FiscalBackendUnavailableError } from './fiscalFailure';
 import type {
     FiscalCheckoutResult,
     FiscalTransactionMetadata,
@@ -107,10 +108,12 @@ function assertVendusEnabled(settings: SystemSettings): void {
     }
 }
 
+// Runs before the issue-attempt row is created, so a throw here is the one
+// failure that provably left no trace at Vendus (see fiscalFailure.ts).
 function assertOnlineForVendus(): void {
     const state = connectionStatus.getStatus();
     if (!state.isOnline || !state.isSupabaseOnline) {
-        throw new Error(i18n.t('checkout.vendusOffline'));
+        throw new FiscalBackendUnavailableError('vendus', i18n.t('checkout.vendusOffline'));
     }
 }
 
@@ -343,7 +346,14 @@ export async function issueVendusSale(params: {
             status: 'failed',
             error_message: error instanceof Error ? error.message : String(error),
         });
-        throw error;
+        // Past the network call: Vendus may hold a document for this sale even
+        // though we never got a usable one back. Mark it unresolved so the sale
+        // cannot silently fall back onto a paper invoice as well.
+        throw asUnresolvedIssueFailure(error, {
+            provider: 'vendus',
+            externalReference,
+            attemptId,
+        });
     }
 }
 

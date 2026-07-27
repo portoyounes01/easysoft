@@ -4,6 +4,7 @@ import { localDb, transactionLocalService } from '../lib/localDatabase';
 import { connectionStatus, supabase } from '../lib/supabase';
 import type { LocalCustomer } from '../types/supabase';
 import { generateUUID } from '../utils/uuid';
+import { asUnresolvedIssueFailure, FiscalBackendUnavailableError } from './fiscalFailure';
 import type {
     ExternalFiscalSnapshot,
     ExternalIssuedItemReference,
@@ -84,10 +85,12 @@ function assertFiskalyEnabled(settings: SystemSettings): void {
     }
 }
 
+// Runs before the issue-attempt row is created, so a throw here is the one
+// failure that provably left no trace at fiskaly (see fiscalFailure.ts).
 function assertOnline(): void {
     const state = connectionStatus.getStatus();
     if (!state.isOnline || !state.isSupabaseOnline) {
-        throw new Error(i18n.t('checkout.fiskalyOffline'));
+        throw new FiscalBackendUnavailableError('fiskaly', i18n.t('checkout.fiskalyOffline'));
     }
 }
 
@@ -601,7 +604,14 @@ export async function issueFiskalySale(params: {
             status: 'failed',
             error_message: error instanceof Error ? error.message : String(error),
         });
-        throw error;
+        // Past the network call: the correlative number is burned and fiskaly may
+        // hold a record for it. The attempt row above is what a retry converges
+        // on; a paper invoice on top of that would double-invoice the sale.
+        throw asUnresolvedIssueFailure(error, {
+            provider: 'fiskaly',
+            externalReference,
+            attemptId,
+        });
     }
 }
 

@@ -10,6 +10,7 @@ import { connectionStatus } from '../lib/supabase';
 import { calculateTaxAmount, calculatePriceWithoutTax } from '../types/supabase';
 import type { SystemSettings, DeepPartial } from './SettingsContext';
 import { runFiscalCheckout, type FiscalCheckoutResult, type FiscalCartLine } from '../fiscal/checkoutOrchestrator';
+import { runNonFiscalFallbackSale, type NonFiscalFallbackDecision } from '../fiscal/nonFiscalFallback';
 import { localTransactionToServerInsert, localTransactionItemsToServerInsert } from '../fiscal/pushServer';
 
 /** Options chosen in the POS item-options dialog for one cart line. */
@@ -103,7 +104,15 @@ interface POSContextType extends POSState {
     lifecycle?: {
       /** Runs immediately after the fiscal document is durably persisted. */
       onFiscalDocumentPersisted?: (fiscal: FiscalCheckoutResult) => void | Promise<void>;
-    }
+    },
+    /**
+     * Present only on the operator-confirmed retry after a fiscal issuance
+     * failed: complete this sale on a non-fiscal slip instead of a fatura.
+     * Skips the fiscal issuer entirely rather than re-attempting it — a second
+     * attempt could succeed after the operator already committed to writing the
+     * paper invoice, leaving the sale with two legal documents.
+     */
+    nonFiscalFallback?: NonFiscalFallbackDecision
   ) => Promise<{ receiptNumber: string; transactionId?: string; fiscal?: FiscalCheckoutResult }>;
 }
 
@@ -320,7 +329,8 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
     lifecycle?: {
       onFiscalDocumentPersisted?: (fiscal: FiscalCheckoutResult) => void | Promise<void>;
-    }
+    },
+    nonFiscalFallback?: NonFiscalFallbackDecision
   ): Promise<{ receiptNumber: string; transactionId?: string; fiscal?: FiscalCheckoutResult }> => {
     try {
       if (fiscalContext) {
@@ -344,20 +354,32 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               discount: ci.discount,
             }));
         const customerSnapshot = overrides ? overrides.customer : stateRef.current.selectedCustomer;
-        const fiscalRes = await runFiscalCheckout({
-          settings: fiscalContext.settings,
-          cart: cartForSale,
-          selectedCustomer: customerSnapshot,
-          payment: paymentData,
-          globalDiscount,
-        });
+        const fiscalRes = nonFiscalFallback
+          ? await runNonFiscalFallbackSale({
+              settings: fiscalContext.settings,
+              cart: cartForSale,
+              selectedCustomer: customerSnapshot,
+              payment: paymentData,
+              globalDiscount,
+              decision: nonFiscalFallback,
+            })
+          : await runFiscalCheckout({
+              settings: fiscalContext.settings,
+              cart: cartForSale,
+              selectedCustomer: customerSnapshot,
+              payment: paymentData,
+              globalDiscount,
+            });
 
         // Consumers that carry non-fiscal workflow state (for example a
         // restaurant table) can lock it down as soon as the immutable
         // fiscal document exists, before any best-effort stock/sync work.
         await lifecycle?.onFiscalDocumentPersisted?.(fiscalRes);
 
-        if (fiscalRes.invoiceTypeSaft === 'FS' || fiscalRes.invoiceTypeSaft === 'FT') {
+        // A non-fiscal slip took no number from any série, so the counter must
+        // not move: advancing it here would reserve a fatura number against a
+        // document that does not exist and never will.
+        if (!fiscalRes.nonFiscal && (fiscalRes.invoiceTypeSaft === 'FS' || fiscalRes.invoiceTypeSaft === 'FT')) {
           fiscalContext.updateSettings({
             receipt: {
               seriesProfiles: {

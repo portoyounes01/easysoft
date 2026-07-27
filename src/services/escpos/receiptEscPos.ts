@@ -48,6 +48,9 @@ function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions
     const t = getReceiptT(language);
     const dateLocale = language === 'pt' ? 'pt-PT' : language === 'es' ? 'es-ES' : 'en-GB';
     const money = formatReceiptCurrency;
+    // The fallback slip: same layout, minus everything that makes a document
+    // fiscal. See docs/fiscal-fallback-legal-brief.md.
+    const nonFiscal = receipt.documentType === 'TALAO_NAO_FISCAL';
 
     const b = new EscPosBuilder({ codePage: options.codePage, columns: options.columns });
     const width = b.columns;
@@ -87,7 +90,7 @@ function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions
     b.rule();
 
     // Customer
-    const customer = receipt.customer;
+    const customer = nonFiscal ? undefined : receipt.customer;
     if (customer && (customer.name || customer.taxNumber || customer.address)) {
         if (customer.name) b.line(t('thermalReceipt.clientLineName', { name: customer.name }));
         if (customer.taxNumber) {
@@ -104,7 +107,12 @@ function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions
 
     // Document header
     centered(documentTitle(receipt.documentType, t), true);
-    centered(`${receipt.documentNumber} ${receipt.documentLabel || t('thermalReceipt.original')}`);
+    if (nonFiscal) {
+        // No fatura number: the slip must never consume one from the fiscal series.
+        centered(`${t('thermalReceipt.internalIdLabel')} ${receipt.documentNumber}`);
+    } else {
+        centered(`${receipt.documentNumber} ${receipt.documentLabel || t('thermalReceipt.original')}`);
+    }
     centered(`${t('thermalReceipt.dateLabel')} ${formatReceiptDate(receipt.date, dateLocale)} ${receipt.counter}`);
 
     if (receipt.documentType === 'NOTA_CREDITO' && receipt.originalInvoice) {
@@ -176,14 +184,17 @@ function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions
     b.bold(true).size(1, 2).pair(t('thermalReceipt.total'), money(totalGross)).size(1, 1).bold(false);
     b.rule();
 
-    // ATCUD + QR + hash
-    if (receipt.verificationCode) {
+    // ATCUD + QR + hash — fiscal documents only.
+    if (nonFiscal) {
+        centered(t('thermalReceipt.nonFiscalNotice'), true);
+    }
+    if (!nonFiscal && receipt.verificationCode) {
         centered(`${t('thermalReceipt.atcudPrefix')} ${receipt.verificationCode}`, true);
     }
-    if (receipt.qrCodeData) {
+    if (!nonFiscal && receipt.qrCodeData) {
         b.feed(1).qr(receipt.qrCodeData).feed(1);
     }
-    if (receipt.documentHash && !receipt.hashFourChars) {
+    if (!nonFiscal && receipt.documentHash && !receipt.hashFourChars) {
         centered(`${t('thermalReceipt.hashLabel')} ${receipt.documentHash.substring(0, 24)}...`);
     }
 
@@ -206,7 +217,11 @@ function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions
     b.rule();
 
     // Legal line — ES: Veri*factu legend; PT: hash chars + certification phrase
-    if (receipt.verifactuLegend?.trim()) {
+    if (nonFiscal) {
+        // Neither the AT certification phrase nor the Veri*factu legend may
+        // appear on a document that was not issued through the certified path.
+        centered(t('thermalReceipt.nonFiscalIssueHint'));
+    } else if (receipt.verifactuLegend?.trim()) {
         centered(receipt.verifactuLegend.trim(), true);
     } else {
         centered(
@@ -251,6 +266,8 @@ function documentTitle(
             return t('thermalReceipt.docFaturaSimplificada');
         case 'NOTA_CREDITO':
             return t('thermalReceipt.docNotaCredito');
+        case 'TALAO_NAO_FISCAL':
+            return t('thermalReceipt.docTalaoNaoFiscal');
         default:
             return t('thermalReceipt.docGeneric');
     }

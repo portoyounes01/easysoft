@@ -176,6 +176,66 @@ export interface FiscalCheckoutResult {
     officialOutput?: FiscalOfficialOutput;
     /** Spain / Veri*factu compliance legend for the receipt (e.g. "VERI*FACTU"); undefined for PT. */
     verifactuLegend?: string;
+    /**
+     * Set ONLY by the non-fiscal fallback (src/fiscal/nonFiscalFallback.ts).
+     *
+     * The sale completed, but no fiscal document was issued and none exists:
+     * there is no fiscal row, `fiscalId` is empty, and `invoiceNo` holds the
+     * internal slip reference rather than a document number. `atcudBody`,
+     * `qrPayload`, `hashBase64` and `hashFourChars` are empty by construction.
+     *
+     * Every consumer that treats this result as proof of a fiscal document —
+     * printing it as a fatura, advancing the série counter, exporting it to
+     * SAF-T — MUST check this flag first.
+     */
+    nonFiscal?: true;
+    /** The slip reference, when `nonFiscal`. Never a document number. */
+    slipReference?: string;
+}
+
+/**
+ * Input to atomic persistence of a non-fiscal fallback sale.
+ *
+ * Deliberately has no série, no AT validation code and no signer: nothing here
+ * feeds a fiscal numbering sequence. The slip number comes from its own counter
+ * (see `slipPrefix`), which exists only so two slips from the same till can be
+ * told apart when the paper invoices are reconciled.
+ */
+export interface NonFiscalFallbackPersistencePayload {
+    /** Per-till slip prefix, e.g. `TNF-3F9A21-`. Must not resemble a série. */
+    slipPrefix: string;
+    slipNumericWidth: number;
+    certificationMode: CertificationMode;
+    transactionDate: string;
+    transactionTime: string;
+    systemEntryDate: string;
+    grossTotal: number;
+    netRounded: number;
+    taxTotal: number;
+    totalDiscountAmount: number;
+    originalSubtotal: number;
+    total: number;
+    changeGiven: number;
+    transactionBase: FiscalCheckoutTransactionBase;
+    transactionItems: FiscalCheckoutItemBase[];
+    customerTaxId: string | null;
+    payment: {
+        paymentMethod: 'cash' | 'card' | 'mixed';
+        amountPaid?: number;
+        employeeId: string;
+        employeeName: string;
+        employeeNumber?: string;
+    };
+    /** Why no fiscal document exists — recorded verbatim in the audit log. */
+    failure: {
+        provider: ExternalFiscalProvider;
+        dispatch: string;
+        reason: string;
+        externalReference?: string;
+        attemptId?: string;
+        /** Operator attested at the backoffice that no document exists there. */
+        operatorAttested?: boolean;
+    };
 }
 
 /** Row slice for fiscal checkout before invoice / hash exist (filled inside atomic DB txn). */
@@ -312,6 +372,20 @@ export interface FiscalTransactionMetadata {
         items: ExternalIssuedItemReference[];
         meta?: Record<string, unknown>;
     };
+    /**
+     * Non-fiscal fallback marker, mirrored onto the transaction row so a
+     * reprint months later still knows this was a slip and not a fatura —
+     * the transaction has no fiscal document to infer it from.
+     */
+    nonFiscal?: true;
+    nonFiscalFallback?: {
+        slipReference: string;
+        /** Backend that could not issue, so the reprint can explain which one. */
+        provider: ExternalFiscalProvider;
+        /** 'not-dispatched' | 'unresolved' — see fiscalFailure.ts. */
+        dispatch: string;
+        reason: string;
+    };
 }
 
 export type FiscalAuditEventType =
@@ -321,6 +395,14 @@ export type FiscalAuditEventType =
     | 'REPRINT_REQUESTED'
     | 'POST_SALE_RECEIPT_PRINTED'
     | 'POST_SALE_RECEIPT_NOT_PRINTED'
+    /** Fiscal issuance was impossible, so a NON-FISCAL sale slip was printed
+     *  instead and the operator must write the invoice in the AT-authorised
+     *  paper book. See docs/fiscal-fallback-legal-brief.md. */
+    | 'NON_FISCAL_FALLBACK_ISSUED'
+    /** The operator recorded which paper-book document covered a fallback sale
+     *  (series / number / ATCUD), i.e. the "recovery into the certified
+     *  program" that Ofício-Circulado 30213 requires. */
+    | 'MANUAL_DOCUMENT_RECORDED'
     | 'CREDIT_NOTE_ISSUED'
     | 'RECIBO_ISSUED'
     | 'COMPANY_INFO_CHANGED'

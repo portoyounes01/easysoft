@@ -55,6 +55,9 @@ import { CustomerDialog } from '../components/CustomerDialog';
 import PaymentDialog from '../components/PaymentDialog';
 import CashDrawerDialog from '../components/CashDrawerDialog';
 import ReceiptDialog from '../components/ReceiptDialog';
+import NonFiscalFallbackDialog from '../components/NonFiscalFallbackDialog';
+import { classifyFiscalIssueFailure, type FiscalIssueFailure } from '../fiscal/fiscalFailure';
+import { isNonFiscalFallbackProvider, type NonFiscalFallbackDecision } from '../fiscal/nonFiscalFallback';
 import { CategoryFilterButton } from '../components/ui/CategoryFilterButton';
 import { ProductCard } from '../components/ui/ProductCard';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
@@ -268,6 +271,14 @@ const POSInner: React.FC = () => {
 
   // Quantity increases from product grid; order panel line tap removes one unit
   const [showPayment, setShowPayment] = useState(false);
+  // Set when a fiscal issuance failed and the sale may be completed on a
+  // non-fiscal slip instead. Holds the confirmation so the identical sale can be
+  // re-entered once the operator decides.
+  const [fallbackPrompt, setFallbackPrompt] = useState<{
+    confirmation: PaymentConfirmation;
+    failure: FiscalIssueFailure;
+  } | null>(null);
+  const [fallbackBusy, setFallbackBusy] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [serviceType, setServiceType] = useState<ServiceType>('dine-in');
   const [discount, setDiscount] = useState({ type: 'none' as 'none' | 'percentage' | 'fixed', value: 0 });
@@ -693,6 +704,288 @@ const POSInner: React.FC = () => {
     };
   }, [refreshData]);
 
+  /**
+   * Complete a sale. Extracted from the PaymentDialog callback so the same
+   * path can be re-entered with `nonFiscalFallback` after the operator
+   * confirms the fallback — the post-sale work (queue ticket, drawer,
+   * receipt, printing) is identical whether a fatura or a slip was issued.
+   */
+  const handlePaymentConfirmed = async (
+    confirmation: PaymentConfirmation,
+    nonFiscalFallback?: NonFiscalFallbackDecision
+  ): Promise<boolean> => {
+    const cartSnapshot = cart.map((ci) => ({ ...ci }));
+    // The operator's actual choice, not an inference from the amount:
+    // a cash sale tendered exactly leaves the field empty, and
+    // `cashReceived > 0` used to record those as card (wrong payment
+    // method on the fiscal record, and no drawer kick).
+    const paymentMethod = confirmation.method;
+    const tenderedCash = confirmation.cashReceived;
+    const changeGiven = confirmation.change;
+    const employeeId = employee?.id || 'unknown-employee';
+    const employeeName = employee?.name || 'Employee';
+    const tableOrderId = activeTableOrder?.id;
+    let fiscalSaleWasIssued = false;
+    let tableSettlementNeedsReview = false;
+
+    try {
+      if (tableOrderId && !tableOrderReady) {
+        throw new Error(t('pos.tableOrder.stillLoading'));
+      }
+
+      if (tableOrderId) {
+        // Persist the safety state before fiscal issuance. A crash in
+        // the narrow window after issuance cannot make the table
+        // payable again; it stays blocked for reconciliation instead.
+        settlingTableOrderId.current = tableOrderId;
+        await tableOrderService.beginSettlement(tableOrderId);
+      }
+
+      const { fiscal, receiptNumber, transactionId } = await processTransaction(
+        {
+          paymentMethod,
+          amountPaid: paymentMethod === 'cash' ? tenderedCash : undefined,
+          employeeId,
+          employeeName,
+          employeeNumber: employee?.employee_number,
+        },
+        () => {
+          setDiscount({ type: 'none', value: 0 });
+          setPointsRedemption(null);
+        },
+        {
+          type: discount.type,
+          value: discount.value,
+          amount: discountAmount + customerDiscountAmount,
+        },
+        { settings, updateSettings },
+        {
+          enabled: settings.loyalty.enabled,
+          pointsPerEuroEarned: settings.loyalty.pointsPerEuroEarned,
+          pointsRedeemed: actualPointsRedeemed,
+          customerId: pointsRedemption?.customerId,
+        },
+        undefined,
+        tableOrderId
+          ? {
+            onFiscalDocumentPersisted: async issuedFiscal => {
+              fiscalSaleWasIssued = true;
+              try {
+                await tableOrderService.markSettled(tableOrderId, issuedFiscal.transactionId);
+                clearActiveTableOrder();
+              } catch (settlementError) {
+                // Never reopen a table after fiscal issuance. The order
+                // remains "payment in progress" until it is reconciled.
+                tableSettlementNeedsReview = true;
+                clearActiveTableOrder();
+                console.error('Fiscal sale completed, but table settlement could not be recorded', settlementError);
+              } finally {
+                settlingTableOrderId.current = null;
+              }
+            },
+          }
+          : undefined,
+        nonFiscalFallback
+      );
+
+      if (paymentMethod === 'cash' && employee) {
+        try {
+          const drawerEvent = await cashDrawerAuditService.openForSale({
+            operator: {
+              id: employee.id,
+              name: employee.name,
+              employeeNumber: employee.employee_number,
+            },
+            terminal: { label: settings.receipt.counterLabel },
+            transactionId: fiscal?.transactionId || transactionId,
+            transactionReference: fiscal?.invoiceNo || receiptNumber,
+            saleAmount: finalTotal,
+          });
+          if (!drawerEvent.success) {
+            console.warn('Cash sale completed, but the drawer open command failed:', drawerEvent.error_message);
+          }
+        } catch (drawerError) {
+          console.error('Cash sale completed, but the drawer action could not be logged:', drawerError);
+        }
+      }
+
+      let queueTicketNumber: string | undefined;
+      if (settings.orderQueue.enabled) {
+        try {
+          const queueTicket = await queueTicketService.issueTicket(
+            fiscal?.invoiceNo || receiptNumber,
+            {
+              prefix: settings.orderQueue.prefix,
+              startNumber: settings.orderQueue.startNumber,
+              padding: settings.orderQueue.padding,
+            }
+          );
+          queueTicketNumber = queueTicket.display_number;
+        } catch (queueError) {
+          console.error('Sale completed, but the order ticket could not be created', queueError);
+        }
+      }
+
+      if (isSupabaseConfigured() && await checkSupabaseConnection()) {
+        try {
+          syncManager.forceSync().catch(() => { });
+        } catch {
+          /* ignore */
+        }
+      }
+
+      // A non-fiscal slip carries no QR by construction; generating one from an
+      // empty payload would put a scannable-looking square on a document the AT
+      // cannot validate.
+      const qrCodeImage = fiscal && !fiscal.nonFiscal
+        ? await generateQRCodeImage(fiscal.qrPayload)
+        : undefined;
+
+      const receiptData: ReceiptProps = {
+        documentType: fiscal?.nonFiscal
+          ? 'TALAO_NAO_FISCAL'
+          : fiscal
+            ? saftTypeToReceiptDocumentType(fiscal.invoiceTypeSaft)
+            : 'FATURA',
+        date: new Date(),
+        counter: settings.receipt.counterLabel,
+        ticketNumber: queueTicketNumber,
+        verificationCode: fiscal?.atcudBody || '',
+        verifactuLegend: fiscal?.verifactuLegend,
+        documentNumber: fiscal?.invoiceNo || '',
+        documentHash: fiscal?.hashBase64,
+        hashFourChars: fiscal?.hashFourChars,
+        qrCodeData: fiscal?.qrPayload,
+        qrCodeImage,
+        trainingMode: fiscal ? fiscal.certificationMode === 'training' : settings.fiscal.trainingMode,
+        officialOutput: fiscal?.officialOutput,
+        documentLabel: getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.original'),
+        emitterName: employeeName,
+        company: {
+          name: settings.company.name,
+          address: settings.company.address,
+          postalCode: settings.company.postalCode,
+          city: settings.company.city,
+          taxNumber: settings.company.taxNumber,
+          phone: settings.company.phone || undefined,
+          email: settings.company.email || undefined,
+        },
+        customer: buildReceiptCustomerProps(selectedCustomer),
+        items: cartSnapshot.map((ci) => ({
+          id: ci.lineId,
+          description: ci.options ? `${ci.product.name} (${cartLineOptionsSummary(ci.options)})` : ci.product.name,
+          quantity: ci.quantity,
+          unit: ci.product.sold_by_weight ? ('kg' as const) : ('un' as const),
+          unitPrice: cartLineUnitPrice(ci),
+          vatRate: Math.round((ci.product.iva_rate || 0) * 100),
+          total: Number((cartLineUnitPrice(ci) * ci.quantity).toFixed(2)),
+        })),
+        totals: {
+          subtotal: Number(subtotal.toFixed(2)),
+          discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
+          discountPercentage: discount.type === 'percentage' ? discount.value : 0,
+          net: Number(finalSubtotal.toFixed(2)),
+          vat: Number(adjustedFinalTax.toFixed(2)),
+          total: Number(finalTotal.toFixed(2)),
+        },
+        payment: {
+          method: paymentMethod === 'cash'
+            ? getReceiptT(settings.receipt.receiptLanguage)('transactions.receipt.paymentCash')
+            : getReceiptT(settings.receipt.receiptLanguage)('transactions.receipt.paymentCard'),
+          amountGiven: Number(tenderedCash.toFixed(2)),
+          change: Number(changeGiven.toFixed(2)),
+        },
+        slogan: settings.company.slogan || undefined,
+        softwareInfo: settings.company.softwareInfo || undefined,
+        certificationNumber: settings.company.certificationNumber || undefined,
+      };
+
+      // Hand the receipt straight to the thermal head and skip the
+      // preview — but only when the fiscal issuance is complete enough
+      // to give a customer unseen (ATCUD + QR for PT, Veri*factu legend
+      // + QR for ES). Anything less, or any outcome other than a clean
+      // success, falls back to the dialog so the operator sees it.
+      const auditContext: PostSalePrintAuditContext = {
+        documentNumber: fiscal?.invoiceNo || receiptData.documentNumber || '',
+        transactionId: fiscal?.transactionId,
+        fiscalDocumentId: fiscal?.fiscalId,
+      };
+      // Own try/catch: the sale is already committed here, so a
+      // printing problem must never surface as "checkout failed" via
+      // the enclosing handler.
+      let autoPrint: ThermalPrintResult = { status: 'unavailable' };
+      try {
+        if (isFiscalResultPrintable(fiscal, {
+          spain: Boolean(fiscal?.verifactuLegend?.trim()) || settings.fiscal.issuer === 'sign_es',
+        })) {
+          autoPrint = await printReceiptThermally(receiptData, {
+            printerName: await resolveReceiptPrinterName(printerConfig?.receiptPrinter),
+            language: settings.receipt.receiptLanguage,
+          });
+        }
+      } catch (printError) {
+        console.error('Sale completed, but the receipt could not be auto-printed', printError);
+        autoPrint = {
+          status: 'failed',
+          error: printError instanceof Error ? printError.message : String(printError),
+        };
+      }
+
+      setShowPayment(false);
+      setReceiptPreviewData(receiptData);
+      // setLastCompletedReceipt(receiptData);
+      // setRecentReceipts((prev) => [receiptData, ...prev].slice(0, 20));
+      setNextReceiptAfterClose(null);
+      if (fiscal?.invoiceNo) {
+        setLastFiscalInvoiceNo(fiscal.invoiceNo);
+      }
+
+      if (autoPrint.status === 'printed') {
+        // No dialog will mount, so the fiscal audit event is logged
+        // here and the context left null — nothing to resolve later.
+        setPostSalePrintAudit(null);
+        setPrintNotice(null);
+        setShowReceiptPreview(false);
+        void logPostSaleReceiptPrinted(auditContext, employee?.id);
+      } else {
+        setPostSalePrintAudit(auditContext);
+        setPrintNotice(
+          autoPrint.status === 'unknown' || autoPrint.status === 'failed'
+            ? { state: autoPrint.status, error: autoPrint.error }
+            : null
+        );
+        setShowReceiptPreview(true);
+      }
+    } catch (e) {
+      if (tableOrderId && !fiscalSaleWasIssued) {
+        try {
+          await tableOrderService.restoreOpen(tableOrderId);
+        } catch (restoreError) {
+          console.error('Could not reopen the table order after a failed checkout', restoreError);
+        }
+        settlingTableOrderId.current = null;
+      }
+      console.error('Checkout failed', e);
+
+      // The fiscal backend could not issue. Offer to complete the sale on a
+      // non-fiscal slip against a handwritten invoice — but only offer it, and
+      // only once: a fallback that itself failed is a plain error.
+      const issueFailure = nonFiscalFallback ? null : classifyFiscalIssueFailure(e);
+      if (issueFailure && isNonFiscalFallbackProvider(issueFailure.provider)) {
+        setFallbackPrompt({ confirmation, failure: issueFailure });
+        return false;
+      }
+
+      alert(e instanceof Error ? e.message : t('pos.checkoutFailed'));
+      return false;
+    }
+
+    if (tableSettlementNeedsReview) {
+      alert(t('pos.tableOrder.settlementNeedsReview'));
+    }
+    return true;
+  };
+
   return (
     <div
       className="ds2-visual-scope flex h-full min-h-0 w-full bg-neutral-50"
@@ -1058,259 +1351,42 @@ const POSInner: React.FC = () => {
             setShowPayment(false);
             setCashReceived(0);
           }}
-          onConfirm={async (confirmation: PaymentConfirmation) => {
-            const cartSnapshot = cart.map((ci) => ({ ...ci }));
-            // The operator's actual choice, not an inference from the amount:
-            // a cash sale tendered exactly leaves the field empty, and
-            // `cashReceived > 0` used to record those as card (wrong payment
-            // method on the fiscal record, and no drawer kick).
-            const paymentMethod = confirmation.method;
-            const tenderedCash = confirmation.cashReceived;
-            const changeGiven = confirmation.change;
-            const employeeId = employee?.id || 'unknown-employee';
-            const employeeName = employee?.name || 'Employee';
-            const tableOrderId = activeTableOrder?.id;
-            let fiscalSaleWasIssued = false;
-            let tableSettlementNeedsReview = false;
+          onConfirm={handlePaymentConfirmed}
+        />
+      )}
 
+      {/* Fiscal issuance failed — offer the handwritten-invoice fallback. */}
+      {fallbackPrompt && (
+        <NonFiscalFallbackDialog
+          failure={fallbackPrompt.failure}
+          busy={fallbackBusy}
+          onCancel={() => setFallbackPrompt(null)}
+          onRetry={async () => {
+            const pending = fallbackPrompt;
+            // Cleared first so a second failure can raise its own prompt. Note
+            // the retry is not free: if the connection came back and THIS
+            // attempt times out, the failure escalates from not-dispatched to
+            // unresolved, and the slip then needs the operator's attestation.
+            setFallbackPrompt(null);
+            setFallbackBusy(true);
             try {
-              if (tableOrderId && !tableOrderReady) {
-                throw new Error(t('pos.tableOrder.stillLoading'));
-              }
-
-              if (tableOrderId) {
-                // Persist the safety state before fiscal issuance. A crash in
-                // the narrow window after issuance cannot make the table
-                // payable again; it stays blocked for reconciliation instead.
-                settlingTableOrderId.current = tableOrderId;
-                await tableOrderService.beginSettlement(tableOrderId);
-              }
-
-              const { fiscal, receiptNumber, transactionId } = await processTransaction(
-                {
-                  paymentMethod,
-                  amountPaid: paymentMethod === 'cash' ? tenderedCash : undefined,
-                  employeeId,
-                  employeeName,
-                  employeeNumber: employee?.employee_number,
-                },
-                () => {
-                  setDiscount({ type: 'none', value: 0 });
-                  setPointsRedemption(null);
-                },
-                {
-                  type: discount.type,
-                  value: discount.value,
-                  amount: discountAmount + customerDiscountAmount,
-                },
-                { settings, updateSettings },
-                {
-                  enabled: settings.loyalty.enabled,
-                  pointsPerEuroEarned: settings.loyalty.pointsPerEuroEarned,
-                  pointsRedeemed: actualPointsRedeemed,
-                  customerId: pointsRedemption?.customerId,
-                },
-                undefined,
-                tableOrderId
-                  ? {
-                    onFiscalDocumentPersisted: async issuedFiscal => {
-                      fiscalSaleWasIssued = true;
-                      try {
-                        await tableOrderService.markSettled(tableOrderId, issuedFiscal.transactionId);
-                        clearActiveTableOrder();
-                      } catch (settlementError) {
-                        // Never reopen a table after fiscal issuance. The order
-                        // remains "payment in progress" until it is reconciled.
-                        tableSettlementNeedsReview = true;
-                        clearActiveTableOrder();
-                        console.error('Fiscal sale completed, but table settlement could not be recorded', settlementError);
-                      } finally {
-                        settlingTableOrderId.current = null;
-                      }
-                    },
-                  }
-                  : undefined
-              );
-
-              if (paymentMethod === 'cash' && employee) {
-                try {
-                  const drawerEvent = await cashDrawerAuditService.openForSale({
-                    operator: {
-                      id: employee.id,
-                      name: employee.name,
-                      employeeNumber: employee.employee_number,
-                    },
-                    terminal: { label: settings.receipt.counterLabel },
-                    transactionId: fiscal?.transactionId || transactionId,
-                    transactionReference: fiscal?.invoiceNo || receiptNumber,
-                    saleAmount: finalTotal,
-                  });
-                  if (!drawerEvent.success) {
-                    console.warn('Cash sale completed, but the drawer open command failed:', drawerEvent.error_message);
-                  }
-                } catch (drawerError) {
-                  console.error('Cash sale completed, but the drawer action could not be logged:', drawerError);
-                }
-              }
-
-              let queueTicketNumber: string | undefined;
-              if (settings.orderQueue.enabled) {
-                try {
-                  const queueTicket = await queueTicketService.issueTicket(
-                    fiscal?.invoiceNo || receiptNumber,
-                    {
-                      prefix: settings.orderQueue.prefix,
-                      startNumber: settings.orderQueue.startNumber,
-                      padding: settings.orderQueue.padding,
-                    }
-                  );
-                  queueTicketNumber = queueTicket.display_number;
-                } catch (queueError) {
-                  console.error('Sale completed, but the order ticket could not be created', queueError);
-                }
-              }
-
-              if (isSupabaseConfigured() && await checkSupabaseConnection()) {
-                try {
-                  syncManager.forceSync().catch(() => { });
-                } catch {
-                  /* ignore */
-                }
-              }
-
-              const qrCodeImage = fiscal
-                ? await generateQRCodeImage(fiscal.qrPayload)
-                : undefined;
-
-              const receiptData: ReceiptProps = {
-                documentType: fiscal
-                  ? saftTypeToReceiptDocumentType(fiscal.invoiceTypeSaft)
-                  : 'FATURA',
-                date: new Date(),
-                counter: settings.receipt.counterLabel,
-                ticketNumber: queueTicketNumber,
-                verificationCode: fiscal?.atcudBody || '',
-                verifactuLegend: fiscal?.verifactuLegend,
-                documentNumber: fiscal?.invoiceNo || '',
-                documentHash: fiscal?.hashBase64,
-                hashFourChars: fiscal?.hashFourChars,
-                qrCodeData: fiscal?.qrPayload,
-                qrCodeImage,
-                trainingMode: fiscal ? fiscal.certificationMode === 'training' : settings.fiscal.trainingMode,
-                officialOutput: fiscal?.officialOutput,
-                documentLabel: getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.original'),
-                emitterName: employeeName,
-                company: {
-                  name: settings.company.name,
-                  address: settings.company.address,
-                  postalCode: settings.company.postalCode,
-                  city: settings.company.city,
-                  taxNumber: settings.company.taxNumber,
-                  phone: settings.company.phone || undefined,
-                  email: settings.company.email || undefined,
-                },
-                customer: buildReceiptCustomerProps(selectedCustomer),
-                items: cartSnapshot.map((ci) => ({
-                  id: ci.lineId,
-                  description: ci.options ? `${ci.product.name} (${cartLineOptionsSummary(ci.options)})` : ci.product.name,
-                  quantity: ci.quantity,
-                  unit: ci.product.sold_by_weight ? ('kg' as const) : ('un' as const),
-                  unitPrice: cartLineUnitPrice(ci),
-                  vatRate: Math.round((ci.product.iva_rate || 0) * 100),
-                  total: Number((cartLineUnitPrice(ci) * ci.quantity).toFixed(2)),
-                })),
-                totals: {
-                  subtotal: Number(subtotal.toFixed(2)),
-                  discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
-                  discountPercentage: discount.type === 'percentage' ? discount.value : 0,
-                  net: Number(finalSubtotal.toFixed(2)),
-                  vat: Number(adjustedFinalTax.toFixed(2)),
-                  total: Number(finalTotal.toFixed(2)),
-                },
-                payment: {
-                  method: paymentMethod === 'cash'
-                    ? getReceiptT(settings.receipt.receiptLanguage)('transactions.receipt.paymentCash')
-                    : getReceiptT(settings.receipt.receiptLanguage)('transactions.receipt.paymentCard'),
-                  amountGiven: Number(tenderedCash.toFixed(2)),
-                  change: Number(changeGiven.toFixed(2)),
-                },
-                slogan: settings.company.slogan || undefined,
-                softwareInfo: settings.company.softwareInfo || undefined,
-                certificationNumber: settings.company.certificationNumber || undefined,
-              };
-
-              // Hand the receipt straight to the thermal head and skip the
-              // preview — but only when the fiscal issuance is complete enough
-              // to give a customer unseen (ATCUD + QR for PT, Veri*factu legend
-              // + QR for ES). Anything less, or any outcome other than a clean
-              // success, falls back to the dialog so the operator sees it.
-              const auditContext: PostSalePrintAuditContext = {
-                documentNumber: fiscal?.invoiceNo || receiptData.documentNumber || '',
-                transactionId: fiscal?.transactionId,
-                fiscalDocumentId: fiscal?.fiscalId,
-              };
-              // Own try/catch: the sale is already committed here, so a
-              // printing problem must never surface as "checkout failed" via
-              // the enclosing handler.
-              let autoPrint: ThermalPrintResult = { status: 'unavailable' };
-              try {
-                if (isFiscalResultPrintable(fiscal, {
-                  spain: Boolean(fiscal?.verifactuLegend?.trim()) || settings.fiscal.issuer === 'sign_es',
-                })) {
-                  autoPrint = await printReceiptThermally(receiptData, {
-                    printerName: await resolveReceiptPrinterName(printerConfig?.receiptPrinter),
-                    language: settings.receipt.receiptLanguage,
-                  });
-                }
-              } catch (printError) {
-                console.error('Sale completed, but the receipt could not be auto-printed', printError);
-                autoPrint = {
-                  status: 'failed',
-                  error: printError instanceof Error ? printError.message : String(printError),
-                };
-              }
-
-              setShowPayment(false);
-              setReceiptPreviewData(receiptData);
-              // setLastCompletedReceipt(receiptData);
-              // setRecentReceipts((prev) => [receiptData, ...prev].slice(0, 20));
-              setNextReceiptAfterClose(null);
-              if (fiscal?.invoiceNo) {
-                setLastFiscalInvoiceNo(fiscal.invoiceNo);
-              }
-
-              if (autoPrint.status === 'printed') {
-                // No dialog will mount, so the fiscal audit event is logged
-                // here and the context left null — nothing to resolve later.
-                setPostSalePrintAudit(null);
-                setPrintNotice(null);
-                setShowReceiptPreview(false);
-                void logPostSaleReceiptPrinted(auditContext, employee?.id);
-              } else {
-                setPostSalePrintAudit(auditContext);
-                setPrintNotice(
-                  autoPrint.status === 'unknown' || autoPrint.status === 'failed'
-                    ? { state: autoPrint.status, error: autoPrint.error }
-                    : null
-                );
-                setShowReceiptPreview(true);
-              }
-            } catch (e) {
-              if (tableOrderId && !fiscalSaleWasIssued) {
-                try {
-                  await tableOrderService.restoreOpen(tableOrderId);
-                } catch (restoreError) {
-                  console.error('Could not reopen the table order after a failed checkout', restoreError);
-                }
-                settlingTableOrderId.current = null;
-              }
-              console.error('Checkout failed', e);
-              alert(e instanceof Error ? e.message : t('pos.checkoutFailed'));
-              return;
+              await handlePaymentConfirmed(pending.confirmation);
+            } finally {
+              setFallbackBusy(false);
             }
-
-            if (tableSettlementNeedsReview) {
-              alert(t('pos.tableOrder.settlementNeedsReview'));
+          }}
+          onIssueSlip={async decision => {
+            const pending = fallbackPrompt;
+            setFallbackBusy(true);
+            try {
+              // Dismiss only once the slip actually exists. If issuing it fails
+              // the operator keeps the dialog — and the sale — instead of being
+              // dropped back to an empty till with nothing recorded anywhere.
+              if (await handlePaymentConfirmed(pending.confirmation, decision)) {
+                setFallbackPrompt(null);
+              }
+            } finally {
+              setFallbackBusy(false);
             }
           }}
         />

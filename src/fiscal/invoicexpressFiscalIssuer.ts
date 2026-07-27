@@ -4,6 +4,7 @@ import { transactionLocalService } from '../lib/localDatabase';
 import { connectionStatus, supabase } from '../lib/supabase';
 import type { LocalCustomer } from '../types/supabase';
 import { generateUUID } from '../utils/uuid';
+import { asUnresolvedIssueFailure, FiscalBackendUnavailableError } from './fiscalFailure';
 import type {
     ExternalFiscalSnapshot,
     ExternalIssuedItemReference,
@@ -100,10 +101,12 @@ function assertInvoiceXpressEnabled(settings: SystemSettings): void {
     }
 }
 
+// Runs before the issue-attempt row is created, so a throw here is the one
+// failure that provably left no trace at InvoiceXpress (see fiscalFailure.ts).
 function assertOnline(): void {
     const state = connectionStatus.getStatus();
     if (!state.isOnline || !state.isSupabaseOnline) {
-        throw new Error(i18n.t('checkout.invoiceXpressOffline'));
+        throw new FiscalBackendUnavailableError('invoicexpress', i18n.t('checkout.invoiceXpressOffline'));
     }
 }
 
@@ -361,7 +364,14 @@ export async function issueInvoiceXpressSale(params: {
             status: 'failed',
             error_message: error instanceof Error ? error.message : String(error),
         });
-        throw error;
+        // Past the network call: InvoiceXpress may hold a document for this sale
+        // even though we never got a usable one back. Mark it unresolved so the
+        // sale cannot silently fall back onto a paper invoice as well.
+        throw asUnresolvedIssueFailure(error, {
+            provider: 'invoicexpress',
+            externalReference,
+            attemptId,
+        });
     }
 }
 

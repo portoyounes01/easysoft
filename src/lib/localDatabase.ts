@@ -27,6 +27,7 @@ import type {
     FiscalCheckoutAtomicPayload,
     FiscalCheckoutResult,
     FiscalTransactionMetadata,
+    NonFiscalFallbackPersistencePayload,
     VendusFiscalCheckoutPersistencePayload,
 } from '../fiscal/types';
 import type {
@@ -1992,6 +1993,151 @@ export class TransactionLocalService {
                 ? (typeof ext.providerMeta?.legend === 'string' && ext.providerMeta.legend.trim() ? ext.providerMeta.legend : 'VERI*FACTU')
                 : undefined,
         };
+    }
+
+    /**
+     * Persist a sale that completed WITHOUT a fiscal document, because the cloud
+     * issuer could not produce one and the operator chose to invoice it by hand
+     * from the AT-authorised paper book (docs/fiscal-fallback-legal-brief.md).
+     *
+     * Writes no fiscal_documents row on purpose. That absence is what keeps the
+     * slip out of SAF-T (exportSaft takes fiscal documents, not transactions),
+     * out of the AT hash chain, and out of every série counter. The audit event
+     * goes in the SAME IndexedDB transaction as the sale: a slip that exists
+     * without its reminder is a paper invoice nobody knows is owed.
+     */
+    async createNonFiscalFallbackAtomic(
+        payload: NonFiscalFallbackPersistencePayload
+    ): Promise<FiscalCheckoutResult> {
+        const transactionId = generateUUID();
+        const persistedAt = new Date();
+        const payment = payload.payment;
+        const sourceId = payment.employeeNumber?.trim() || payment.employeeId.slice(0, 12);
+        const prefix = payload.slipPrefix;
+
+        let result: FiscalCheckoutResult | undefined;
+        let pendingQueue: { transaction: LocalTransaction; transactionItems: LocalTransactionItem[] } | undefined;
+        await localDb.transaction(
+            'rw',
+            [localDb.transactions, localDb.transactionItems, localDb.fiscalAuditEvents],
+            async () => {
+                // Next slip number for THIS till, read inside the write transaction
+                // so two concurrent tabs cannot mint the same reference.
+                const existing = await localDb.transactions
+                    .where('transaction_number')
+                    .startsWith(prefix)
+                    .toArray();
+                const highest = existing.reduce((max, row) => {
+                    const suffix = Number(row.transaction_number.slice(prefix.length));
+                    return Number.isFinite(suffix) && suffix > max ? suffix : max;
+                }, 0);
+                const slipReference = `${prefix}${String(highest + 1).padStart(payload.slipNumericWidth, '0')}`;
+
+                const fiscalMetadata: FiscalTransactionMetadata = {
+                    // No document exists, so every fiscal field is empty rather
+                    // than absent — a reprint must never find a plausible-looking
+                    // ATCUD or QR here and render this slip as a fatura.
+                    invoiceNo: slipReference,
+                    atcudBody: '',
+                    hashBase64: '',
+                    hashFourChars: '',
+                    hashControl: '',
+                    qrPayload: '',
+                    chainScope: '',
+                    sequentialNumber: highest + 1,
+                    certificationMode: payload.certificationMode,
+                    nonFiscal: true,
+                    nonFiscalFallback: {
+                        slipReference,
+                        provider: payload.failure.provider,
+                        dispatch: payload.failure.dispatch,
+                        reason: payload.failure.reason,
+                    },
+                };
+
+                const transaction: LocalTransaction = {
+                    ...payload.transactionBase,
+                    id: transactionId,
+                    fiscal_document_id: null,
+                    transaction_number: slipReference,
+                    receipt_number: slipReference,
+                    fiscal_metadata_json: JSON.stringify(fiscalMetadata),
+                    created_at: persistedAt,
+                    updated_at: persistedAt,
+                    needs_push: true,
+                    is_conflicted: false,
+                    last_synced_at: null,
+                };
+
+                const transactionItems: LocalTransactionItem[] = payload.transactionItems.map(item => ({
+                    ...item,
+                    id: generateUUID(),
+                    transaction_id: transactionId,
+                    created_at: persistedAt,
+                    updated_at: persistedAt,
+                    needs_push: true,
+                    is_conflicted: false,
+                    last_synced_at: null,
+                }));
+
+                await localDb.transactions.add(transaction);
+                await localDb.transactionItems.bulkAdd(transactionItems);
+                await localDb.fiscalAuditEvents.add({
+                    id: generateUUID(),
+                    event_type: 'NON_FISCAL_FALLBACK_ISSUED',
+                    payload_json: JSON.stringify({
+                        slipReference,
+                        transactionId,
+                        provider: payload.failure.provider,
+                        reason: payload.failure.reason,
+                        dispatch: payload.failure.dispatch,
+                        externalReference: payload.failure.externalReference ?? null,
+                        attemptId: payload.failure.attemptId ?? null,
+                        operatorAttested: payload.failure.operatorAttested ?? false,
+                        totalGross: payload.grossTotal,
+                    }),
+                    employee_id: payment.employeeId,
+                    created_at: new Date().toISOString(),
+                });
+
+                result = {
+                    transactionId,
+                    fiscalId: '',
+                    invoiceNo: slipReference,
+                    slipReference,
+                    nonFiscal: true,
+                    atcudBody: '',
+                    hashBase64: '',
+                    hashFourChars: '',
+                    qrPayload: '',
+                    hashControl: '',
+                    certificationMode: payload.certificationMode,
+                    grossTotal: payload.grossTotal,
+                    netTotal: payload.netRounded,
+                    taxTotal: payload.taxTotal,
+                    systemEntryDate: payload.systemEntryDate,
+                    invoiceDate: payload.transactionDate,
+                    // SAF-T type of the sale that WOULD have been issued. Kept for
+                    // reporting shape only; `nonFiscal` gates every fiscal use.
+                    invoiceTypeSaft: 'FS',
+                    sourceId,
+                    sequentialNumber: highest + 1,
+                    seriesKey: '',
+                    fiscalProvider: payload.failure.provider,
+                };
+
+                // Captured for the post-transaction sync queue below.
+                pendingQueue = { transaction, transactionItems };
+            }
+        );
+
+        if (pendingQueue) {
+            await this.queueOperation('CREATE', transactionId, {
+                ...pendingQueue.transaction,
+                items: pendingQueue.transactionItems,
+            });
+        }
+        return result as FiscalCheckoutResult;
     }
 
     /** Mark fiscal rows included in a SAF-T export (optional anti-duplicate workflow). */
