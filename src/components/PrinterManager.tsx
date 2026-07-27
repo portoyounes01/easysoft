@@ -1,12 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { Printer, RefreshCw, Wifi, WifiOff, Usb, Zap } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Printer, RefreshCw, Search, Wifi, WifiOff, Usb, Zap } from 'lucide-react';
 import { ConfiguredPrinter } from '../types/electron';
+
+const ACTION_BTN =
+  'ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50';
 
 const PrinterManager: React.FC = () => {
   const [printers, setPrinters] = useState<ConfiguredPrinter[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  // Nothing is enumerated until the operator asks for it. Opening this panel
+  // used to run a cold printer scan (and start a 5s polling monitor), which on
+  // an old till is a visible freeze just for navigating to Settings.
+  const [hasScanned, setHasScanned] = useState(false);
+  const monitoringStarted = useRef(false);
+
+  // Live hot-plug detection costs a poll every 5s, so it starts with the first
+  // scan rather than on mount — before that there is no list to keep current.
+  const startHardwareMonitoring = async () => {
+    if (monitoringStarted.current) return;
+    if (!window.electronAPI?.startMonitoring) {
+      console.warn('⚠️ startMonitoring not available in electronAPI');
+      return;
+    }
+    monitoringStarted.current = true;
+    try {
+      const result = await window.electronAPI.startMonitoring(5000);
+      if (!result?.success) {
+        console.error('❌ Failed to start hardware monitoring:', result?.error);
+      }
+    } catch (error) {
+      console.error('❌ Error starting hardware monitoring:', error);
+    }
+  };
 
   const loadPrinters = async () => {
     setRefreshing(true);
@@ -23,7 +50,12 @@ const PrinterManager: React.FC = () => {
       console.error('Error loading printers:', error);
       setPrinters([]);
     } finally {
+      // Marked on the attempt, not on success: a till with no queue yet is
+      // exactly the machine this panel exists for, and keying off the result
+      // would leave it showing "Scan" forever.
+      setHasScanned(true);
       setRefreshing(false);
+      void startHardwareMonitoring();
     }
   };
 
@@ -45,31 +77,7 @@ const PrinterManager: React.FC = () => {
   };
 
   useEffect(() => {
-    // Load printers immediately on mount
-    loadPrinters().then(() => {
-      // Only start hardware monitoring AFTER initial load completes
-      const startHardwareMonitoring = async () => {
-        try {
-          console.log('🚀 Starting hardware monitoring from PrinterManager...');
-          if (window.electronAPI?.startMonitoring) {
-            const result = await window.electronAPI.startMonitoring(5000); // Check every 5 seconds
-            if (result?.success) {
-              console.log('✅ Hardware monitoring started successfully');
-            } else {
-              console.error('❌ Failed to start hardware monitoring:', result?.error);
-            }
-          } else {
-            console.warn('⚠️ startMonitoring not available in electronAPI');
-          }
-        } catch (error) {
-          console.error('❌ Error starting hardware monitoring:', error);
-        }
-      };
-
-      // Start monitoring immediately after load completes
-      startHardwareMonitoring();
-    });
-
+    // Mount does no hardware work at all — the first scan is a click away.
     // Set up hardware change listener
     let hardwareChangeCleanup: (() => void) | undefined;
     
@@ -156,49 +164,6 @@ const PrinterManager: React.FC = () => {
     }
   };
 
-  if (printers.length === 0 && !refreshing) {
-    return (
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <Printer className="h-6 w-6 text-blue-600" />
-            <h2 className="text-xl font-semibold text-gray-900">System Printers</h2>
-          </div>
-          <div className="flex items-center space-x-3">
-            {lastRefresh && (
-              <span className="text-sm text-gray-500">
-                Last updated: {lastRefresh.toLocaleTimeString()}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={loadPrinters}
-              disabled={refreshing}
-              className="ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
-            <button
-              type="button"
-              onClick={checkPrinterStatus}
-              disabled={checkingStatus}
-              className="ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Zap className={`h-4 w-4 ${checkingStatus ? 'animate-pulse' : ''}`} />
-              <span>Check Status</span>
-            </button>
-          </div>
-        </div>
-        <div className="text-center py-8 text-gray-500">
-          <Printer className="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p>No printers found on this system</p>
-          <p className="text-sm mt-1">Make sure printers are installed and configured</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <div className="flex items-center justify-between mb-4">
@@ -212,26 +177,56 @@ const PrinterManager: React.FC = () => {
               Last updated: {lastRefresh.toLocaleTimeString()}
             </span>
           )}
+          {/* One button, two states: it reads Scan until a scan has run, then
+              Refresh. Nothing enumerates printers before it is clicked. */}
           <button
             type="button"
             onClick={loadPrinters}
             disabled={refreshing}
-            className="ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
+            className={ACTION_BTN}
           >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
+            {hasScanned ? (
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            ) : (
+              <Search className={`h-4 w-4 ${refreshing ? 'animate-pulse' : ''}`} />
+            )}
+            <span>{refreshing ? 'Scanning...' : hasScanned ? 'Refresh' : 'Scan'}</span>
           </button>
-          <button
-            type="button"
-            onClick={checkPrinterStatus}
-            disabled={checkingStatus}
-            className="ds2-control-radius-lg inline-flex min-h-touch-sm items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Zap className={`h-4 w-4 ${checkingStatus ? 'animate-pulse' : ''}`} />
-            <span>Check Status</span>
-          </button>
+          {/* Connectivity checking has nothing to check before the first scan. */}
+          {hasScanned && (
+            <button
+              type="button"
+              onClick={checkPrinterStatus}
+              disabled={checkingStatus || refreshing}
+              className={ACTION_BTN}
+            >
+              <Zap className={`h-4 w-4 ${checkingStatus ? 'animate-pulse' : ''}`} />
+              <span>Check Status</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {printers.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          <Printer className="h-12 w-12 mx-auto mb-3 opacity-50" />
+          {refreshing ? (
+            <p>Looking for printers...</p>
+          ) : hasScanned ? (
+            <>
+              <p>No printers found on this system</p>
+              <p className="text-sm mt-1">Make sure printers are installed and configured</p>
+            </>
+          ) : (
+            // Pre-scan, "none found" would be a false negative — an operator
+            // reads that as a fault and goes hunting for one that isn't there.
+            <>
+              <p>Printers have not been checked yet</p>
+              <p className="text-sm mt-1">Press Scan to list the printers this system knows about</p>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="space-y-3">
         {printers.map((printer, index) => (
