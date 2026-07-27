@@ -15,6 +15,7 @@ const net = require('net');
 const dns = require('dns');
 const { parseCashDrawerStatus } = require('./cashDrawerStatus.js');
 const { sendRawToWindowsPrinter, runPowerShell, warmWindowsRawPrintWorker, shutdownWindowsRawPrint } = require('./windowsRawPrint.js');
+const { listUsbPrintDevices, setupUsbPrinterQueue } = require('./windowsPrinterSetup.js');
 
 // Import our discovery classes
 const NetworkPrinterDiscovery = require('../../discover-network-printers.js');
@@ -2045,6 +2046,33 @@ class HardwareController {
     } else {
       return 'system';
     }
+  }
+
+  /** USB print devices with their real driver binding, the port each occupies,
+   *  and which queues share that port. See windowsPrinterSetup for why this
+   *  replaces the interface-claim guess the USB scan uses. */
+  async listUsbPrintDevices() {
+    return listUsbPrintDevices();
+  }
+
+  /** Create a working queue for a USB printer using the in-box driver, then
+   *  make it the receipt printer. Removes the vendor-driver hunt entirely: the
+   *  RAW datatype bypasses driver rendering, so any queue on the right port
+   *  prints ESC/POS correctly. */
+  async setupUsbPrinter({ port, queueName, assignReceiptRole = true }) {
+    const result = await setupUsbPrinterQueue({ port, queueName });
+    if (!result.success) return result;
+
+    if (assignReceiptRole) {
+      const role = await this.setPrinterRole(result.queue, 'receipt');
+      if (role && role.success === false) {
+        // The queue exists and is usable; only the role assignment failed, so
+        // say exactly that rather than implying nothing was created.
+        return { ...result, roleAssigned: false, error: role.error };
+      }
+      return { ...result, roleAssigned: true };
+    }
+    return { ...result, roleAssigned: false };
   }
 
   async setPrinterRole(printerName, role) {

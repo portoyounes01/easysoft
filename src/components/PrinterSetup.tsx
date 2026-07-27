@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Wifi, Printer, Search, CheckCircle, AlertCircle, Loader, Usb, RefreshCw } from 'lucide-react';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import { TabToggle } from './ui/TabToggle';
+import type { UsbPrintDevice } from '../types/electron';
 import '../styles/design-system-2-scope.css';
 
 export interface PrinterConnectedDetails {
@@ -68,6 +69,12 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
   const [activeTab, setActiveTab] = useState<'auto' | 'usb' | 'manual' | 'system'>('auto');
   const [systemPrinters, setSystemPrinters] = useState<any[]>([]);
   const [systemLoading, setSystemLoading] = useState(false);
+  // Windows: printers as the OS sees them BEFORE any queue exists, with their
+  // real driver binding. A till often has no queue named for its printer at
+  // all (the reference till had two queues for other models on its port).
+  const [usbPrintDevices, setUsbPrintDevices] = useState<UsbPrintDevice[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [setupBusyPort, setSetupBusyPort] = useState<string | null>(null);
 
   const scanForPrinters = async () => {
     setIsScanning(true);
@@ -121,6 +128,68 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
       setCurrentStatus('Scan failed: Unable to communicate with hardware controller');
     } finally {
       setIsScanning(false);
+    }
+  };
+
+  const listUsbPrintDevices = async () => {
+    if (!window.electronAPI?.hardware?.listUsbPrintDevices) return;
+    setDevicesLoading(true);
+    try {
+      const result = await window.electronAPI.hardware.listUsbPrintDevices();
+      setUsbPrintDevices(result?.success ? result.devices ?? [] : []);
+    } catch (error) {
+      console.error('USB print device listing failed:', error);
+      setUsbPrintDevices([]);
+    } finally {
+      setDevicesLoading(false);
+    }
+  };
+
+  // One click: stage the in-box driver, create a queue on the printer's port,
+  // adopt it as the receipt printer. No vendor driver, no version matching —
+  // the RAW datatype we print with bypasses driver rendering entirely.
+  const setUpDevice = async (device: UsbPrintDevice) => {
+    if (!window.electronAPI?.hardware?.setupUsbPrinter || !device.port) return;
+    setSetupBusyPort(device.port);
+    setCurrentStatus(`Setting up ${device.model}...`);
+    try {
+      const queueName = device.model?.trim() || `Thermal ${device.port}`;
+      const result = await window.electronAPI.hardware.setupUsbPrinter({
+        port: device.port,
+        queueName,
+      });
+      if (result?.success) {
+        await listUsbPrintDevices();
+        await listSystemPrinters();
+        if (result.roleAssigned === false) {
+          // The queue exists but nothing will print to it — do NOT claim the
+          // receipt printer was set.
+          setCurrentStatus(
+            `${queueName} was created, but selecting it as the receipt printer failed: ${result.error ?? 'unknown error'}. Pick it from the list below.`
+          );
+        } else {
+          setCurrentStatus(
+            result.alreadyExisted
+              ? `${queueName} was already set up and is now the receipt printer.`
+              : `Created ${queueName} and set it as the receipt printer.`
+          );
+          onPrinterConnected({
+            success: true,
+            message: `Receipt printer set to: ${queueName}`,
+            details: { model: device.model },
+          });
+        }
+      } else {
+        setCurrentStatus(
+          result?.needsElevation
+            ? `Windows refused: ${result.error}. Creating a printer needs administrator rights — run the app as administrator and try again.`
+            : `Setup failed: ${result?.error ?? 'unknown error'}`
+        );
+      }
+    } catch (error) {
+      setCurrentStatus(`Setup failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSetupBusyPort(null);
     }
   };
 
@@ -247,6 +316,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
     setCurrentStatus('');
     if (activeTab === 'system') {
       listSystemPrinters();
+      void listUsbPrintDevices();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -580,6 +650,81 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   <span>{systemLoading ? 'Refreshing...' : 'Refresh'}</span>
                 </button>
               </div>
+
+              {/* Detected USB printers — what Windows sees BEFORE any queue
+                  exists. A till frequently has no queue named for its printer,
+                  or several queues for other models sharing its port. */}
+              {usbPrintDevices.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="font-medium text-gray-900 mb-2">Detected USB printers</h3>
+                  <div className="space-y-3">
+                    {usbPrintDevices.map(device => {
+                      const hasOwnQueue = device.queues.some(
+                        q => q.trim().toLowerCase() === device.model.trim().toLowerCase()
+                      );
+                      const rebound = device.service && device.service.toLowerCase() !== 'usbprint';
+                      return (
+                        <div key={device.instanceId} className="p-4 border border-gray-200 rounded-lg bg-white">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center space-x-2">
+                                <Usb className="h-4 w-4 text-gray-500" />
+                                <span className="font-medium">{device.model}</span>
+                                <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full font-mono">
+                                  {device.port || 'no port'}
+                                </span>
+                              </div>
+                              <div className="mt-1 space-y-1 text-sm text-gray-600">
+                                <p>
+                                  USB <span className="font-mono">{device.vendorId}:{device.productId}</span>
+                                  {' · driver '}
+                                  <span className="font-mono">{device.service || 'none'}</span>
+                                </p>
+                                {rebound && (
+                                  <p className="text-orange-700">
+                                    Bound to {device.service}, not the Windows print driver — it will not appear as a printer.
+                                  </p>
+                                )}
+                                {device.queues.length === 0 ? (
+                                  <p className="text-orange-700">No Windows queue exists for this printer yet.</p>
+                                ) : (
+                                  <p>
+                                    Queues on this port: {device.queues.join(', ')}
+                                    {!hasOwnQueue && ' — none of them is named for this printer.'}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void setUpDevice(device)}
+                              disabled={setupBusyPort === device.port || !device.port}
+                              className={`${DS2_PRIMARY_BTN} shrink-0 px-4 py-2`}
+                            >
+                              {setupBusyPort === device.port ? (
+                                <Loader className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <CheckCircle className="h-4 w-4" />
+                              )}
+                              <span>{setupBusyPort === device.port ? 'Setting up...' : 'Set up for me'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Creates a queue using the driver built into Windows — no download, and it works
+                    regardless of printer model, because receipts are sent as raw ESC/POS.
+                  </p>
+                </div>
+              )}
+              {devicesLoading && usbPrintDevices.length === 0 && (
+                <div className="mb-4 flex items-center space-x-2 text-sm text-gray-600">
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>Looking for USB printers...</span>
+                </div>
+              )}
 
               {/* Status */}
               {currentStatus && activeTab === 'system' && (

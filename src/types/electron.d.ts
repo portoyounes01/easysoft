@@ -122,6 +122,27 @@ interface ElectronAPI {
       outcomeUnknown?: boolean;
     }>;
 
+    /** Windows only; absent on shells older than 0.1.10. */
+    listUsbPrintDevices?(): Promise<{
+      success: boolean;
+      devices: UsbPrintDevice[];
+      queues: Array<{ name: string; port: string; driver: string }>;
+      error?: string;
+    }>;
+
+    /** Stage the in-box driver, create a queue on `port`, adopt it as the
+     *  receipt printer. `needsElevation` means the spooler refused for rights. */
+    setupUsbPrinter?(options: { port: string; queueName: string; assignReceiptRole?: boolean }): Promise<{
+      success: boolean;
+      queue?: string;
+      driverStaged?: boolean;
+      queueCreated?: boolean;
+      alreadyExisted?: boolean;
+      roleAssigned?: boolean;
+      needsElevation?: boolean;
+      error?: string;
+    }>;
+
     openCashDrawer(options?: CashDrawerOptions): Promise<{
       success: boolean;
       method?: 'usb' | 'system';
@@ -374,6 +395,23 @@ interface ElectronAPI {
 
 // App-wide printer-config SSOT snapshot (owned by the main-process hardware
 // controller; renderer cards subscribe instead of keeping private connect state).
+/** A USB printer as Windows sees it, before any queue exists. */
+interface UsbPrintDevice {
+  /** Model reported by the device, e.g. "HPRTTP80K". */
+  model: string;
+  instanceId: string;
+  /** Bound kernel driver — 'usbprint' for a normal printer, 'WinUSB'/'libusbK'
+   *  if something re-bound it. This is the column Zadig displays. */
+  service: string;
+  vendorId: string;
+  productId: string;
+  /** Spooler port, e.g. "USB001". */
+  port: string;
+  status: string;
+  /** Existing queues on the same port (often mislabelled or duplicated). */
+  queues: string[];
+}
+
 interface PrinterConfigSnapshot {
   receiptPrinter: string | null;
   mode: 'windows-queue' | 'cups-queue' | 'direct-usb' | 'network' | null;
@@ -436,4 +474,5 @@ export {
   ScaleProbeResult,
   ShellUpdateStatus,
   PrinterConfigSnapshot,
+  UsbPrintDevice,
 };

@@ -459,6 +459,30 @@ ipcMain.handle('hardware:print-receipt', async (event, receiptData) => {
 // Raw ESC/POS from the renderer. The receipt layout is built up there (same
 // ReceiptProps the on-screen receipt renders), so receipt changes ship as a UI
 // deploy — this shell only moves the bytes onto the configured transport.
+// USB print devices with their REAL driver binding (the column Zadig shows),
+// the port each occupies, and the queues sharing it.
+ipcMain.handle('hardware:list-usb-print-devices', async () => {
+  try {
+    return await hardwareController.listUsbPrintDevices();
+  } catch (error) {
+    console.error('List USB print devices failed:', error);
+    return { success: false, error: error.message, devices: [], queues: [] };
+  }
+});
+
+// Stage the in-box driver, create a queue on the printer's port, and adopt it
+// as the receipt printer — no vendor driver download.
+ipcMain.handle('hardware:setup-usb-printer', async (event, options = {}) => {
+  try {
+    const result = await hardwareController.setupUsbPrinter(options);
+    if (result.success) broadcastPrinterConfig();
+    return result;
+  } catch (error) {
+    console.error('USB printer setup failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('hardware:print-raw', async (event, payload) => {
   try {
     return await hardwareController.printRaw(payload);

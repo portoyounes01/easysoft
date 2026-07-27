@@ -89,6 +89,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // without a shell update. Result may carry outcomeUnknown: true, which
     // must NOT be auto-retried (double-printed fiscal document).
     printRaw: (base64Bytes) => ipcRenderer.invoke('hardware:print-raw', base64Bytes),
+    // Windows: real driver bindings + one-click queue creation with the in-box
+    // driver, so no one hunts a model/OS-matched vendor driver per till.
+    listUsbPrintDevices: () => ipcRenderer.invoke('hardware:list-usb-print-devices'),
+    setupUsbPrinter: (options) => ipcRenderer.invoke('hardware:setup-usb-printer', options),
     openCashDrawer: (options) => ipcRenderer.invoke('hardware:open-cash-drawer', options),
     getDrawerStatus: () => ipcRenderer.invoke('hardware:get-drawer-status'),
     testPrinter: () => ipcRenderer.invoke('hardware:test-printer'),
