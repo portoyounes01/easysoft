@@ -26,6 +26,8 @@ export interface LocalRawMaterial {
     cost: number;
     /** Low-stock threshold; surfaced as a warning on the inventory page. */
     min_stock: number;
+    /** See LocalProduct.store_stock_dirty — this store's stock owes a push. */
+    store_stock_dirty?: boolean;
     supplier: string | null;
     is_active: boolean;
     // Optional because rows created before these fields existed return

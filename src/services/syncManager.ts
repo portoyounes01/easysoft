@@ -4,6 +4,7 @@ import { employeeService } from './employeeService';
 import { productSyncService } from './productService';
 import { customerSyncService } from './customerSyncService';
 import { pullTenantReceiptLogo } from './receiptBrandingSync';
+import { pullStoreScopedCatalogue } from './storeScopedSyncService';
 import { transactionSyncService } from './transactionSyncService';
 
 // Types for sync status
@@ -197,6 +198,15 @@ export class SyncManager {
             // transactions so a till that syncs and then prints has the logo.
             await this.syncEntity('receipt_branding', () => pullTenantReceiptLogo());
 
+            // 2c. Store-scoped catalogue and stock. AFTER products, because the
+            // store rows fold price/stock onto product records that must already
+            // exist locally. This is what makes `product.price` and
+            // `rawMaterial.stock` mean THIS store's figures rather than a pool
+            // shared with every other store in the tenant.
+            await this.syncEntity('store_catalogue', async () => {
+                await pullStoreScopedCatalogue();
+            });
+
             // 3. Finally transactions (depends on employees, products, customers)
             await this.syncEntity('transactions', () => 
                 transactionSyncService.fullSync(this.config.transactionWindowDays)
@@ -338,6 +348,11 @@ export class SyncManager {
             await this.syncEntity('employees', () => employeeService.performSync());
             await this.syncEntity('categories', () => productSyncService.pullCategories());
             await this.syncEntity('products', () => productSyncService.pullProducts());
+            // A fresh install must land the store's own price/stock too, or the
+            // first shift runs against the tenant defaults.
+            await this.syncEntity('store_catalogue', async () => {
+                await pullStoreScopedCatalogue();
+            });
             await this.syncEntity('customers', () => customerSyncService.fullSync());
             await this.syncEntity('transactions', () => 
                 transactionSyncService.bootstrapTransactions(30) // Bootstrap last 30 days

@@ -516,6 +516,14 @@ export interface LocalProduct extends Omit<ProductRow, 'created_at' | 'updated_a
     updated_at: Date;
     last_synced_at: Date | null;
     deleted_at: Date | null;
+    /**
+     * A sale changed this store's stock and it has not reached `store_products`
+     * yet. Separate from `needs_push` on purpose: stock belongs to the store
+     * row, catalogue fields belong to the tenant row, and pushing the two to the
+     * same place is what let one store's sale draw down another's inventory.
+     * Not indexed — Dexie needs no schema bump for a plain field.
+     */
+    store_stock_dirty?: boolean;
 
     // Sync flags
     needs_push: boolean;

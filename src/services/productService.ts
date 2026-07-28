@@ -613,6 +613,16 @@ export class ProductSyncService {
             // Convert to server format
             const serverProducts = pendingProducts.map(prod => ({
                 ...prod,
+                // Stock belongs to THIS store's store_products row, not the
+                // tenant product. The Dexie 'updating' hook marks a product
+                // needs_push on any change including a sale's deduction, so
+                // without this two tills would take turns writing their own
+                // store's stock onto the shared tenant row. NULL tells
+                // upsert_products to preserve what is there
+                // (20260808000000); storeScopedSyncService pushes the real
+                // figure to the store row.
+                stock: null,
+                min_stock: null,
                 created_at: prod.created_at.toISOString(),
                 updated_at: prod.updated_at.toISOString(),
                 last_synced_at: prod.last_synced_at?.toISOString() || null,

@@ -2345,8 +2345,14 @@ export class TransactionLocalService {
                     await localDb.products.update(item.product_id, {
                         stock: newStock,
                         updated_at: new Date(),
-                        needs_push: true,
-                    });
+                        // NOT needs_push: stock belongs to THIS store's row now,
+                        // not the tenant product. Pushing it to the tenant would
+                        // have two tills overwriting each other with figures that
+                        // describe neither. storeScopedSyncService pushes it to
+                        // store_products instead; needs_push stays for genuine
+                        // catalogue edits (name, price, category).
+                        store_stock_dirty: true,
+                    } as never);
                 }
             }
         });
