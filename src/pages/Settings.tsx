@@ -47,7 +47,7 @@ import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import type { LoyaltyVoucher, SystemSettings } from '../contexts/SettingsContext';
-import { cloneSettingsSnapshot, logCommittedSettingsChanges } from '../fiscal/fiscalAuditLog';
+import { cloneSettingsSnapshot, collectCompanyInfoChanges, logCommittedSettingsChanges } from '../fiscal/fiscalAuditLog';
 import { buildSaftAuditFileXml } from '../fiscal/saft/exportSaft';
 import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
 import { checkVendusFiscalHealth, fetchVendusSaftXml } from '../fiscal/vendusFiscalIssuer';
@@ -435,6 +435,8 @@ const Settings: React.FC = () => {
         readDevicePairingScope()?.storeId ?? null
     );
     const [companyPublishError, setCompanyPublishError] = useState('');
+    /** Whether the slogan being edited is this store's or the tenant default. */
+    const [sloganScope, setSloganScope] = useState<'store' | 'tenant'>('tenant');
 
     useEffect(() => {
         if (!isSupabaseConfigured() || !canEditCompany) return;
@@ -715,18 +717,36 @@ const Settings: React.FC = () => {
             const baseline = savedSettingsBaselineRef.current ?? cloneSettingsSnapshot(settings);
             await logCommittedSettingsChanges(baseline, settings, employee?.id);
 
-            // Publish the company block the server owns. Without this the next
-            // sync would pull the old values back and quietly undo the edit.
-            // Identity is absent on purpose — see the card.
+            // Publish the company block the server owns — but ONLY the fields
+            // touched since the last save. Publishing the whole block would send
+            // the shipped placeholders ("Morada", "Lisboa") for every field the
+            // operator never edited, and since a non-empty server value wins on
+            // sync, those placeholders would then spread to every till in the
+            // store. Identity is absent on purpose — see the card.
             if (isSupabaseConfigured() && canEditCompany && companyStoreId) {
-                await saveStoreCompany(companyStoreId, {
-                    address: settings.company.address,
-                    postalCode: settings.company.postalCode,
-                    city: settings.company.city,
-                    phone: settings.company.phone ?? '',
-                    email: settings.company.email ?? '',
-                });
-                await saveCompanySlogan(settings.company.slogan ?? '', companyStoreId);
+                const touched = new Set(
+                    collectCompanyInfoChanges(baseline.company, settings.company).map(change => change.field)
+                );
+                const pick = (field: 'address' | 'postalCode' | 'city' | 'phone' | 'email') =>
+                    touched.has(field) ? (settings.company[field] ?? '') : null;
+
+                if (['address', 'postalCode', 'city', 'phone', 'email'].some(field => touched.has(field as never))) {
+                    await saveStoreCompany(companyStoreId, {
+                        address: pick('address'),
+                        postalCode: pick('postalCode'),
+                        city: pick('city'),
+                        phone: pick('phone'),
+                        email: pick('email'),
+                    });
+                }
+                if (touched.has('slogan')) {
+                    // null scope = the tenant default, so a single-brand chain
+                    // sets it once instead of once per store.
+                    await saveCompanySlogan(
+                        settings.company.slogan ?? '',
+                        sloganScope === 'tenant' ? null : companyStoreId
+                    );
+                }
             }
 
             savedSettingsBaselineRef.current = cloneSettingsSnapshot(settings);
@@ -744,7 +764,7 @@ const Settings: React.FC = () => {
         setTimeout(() => {
             setSaveStatus('idle');
         }, 2000);
-    }, [employee?.id, settings, canEditCompany, companyStoreId]);
+    }, [employee?.id, settings, canEditCompany, companyStoreId, sloganScope]);
 
     const handleReset = useCallback(() => {
         if (confirm(t('settings.confirm.resetAll'))) {
@@ -1650,6 +1670,25 @@ const Settings: React.FC = () => {
                         onChange={event => handleSettingsChange('company', 'slogan', event.target.value)}
                         className={fieldClass}
                     />
+                    {/* Scoped like the logo: a chain with one brand sets the
+                        slogan once as the tenant default rather than repeating
+                        it per store. */}
+                    {isSupabaseConfigured() && canEditCompany && (
+                        <select
+                            value={sloganScope}
+                            onChange={event => {
+                                setSloganScope(event.target.value as 'store' | 'tenant');
+                                markChanged();
+                            }}
+                            className={`${fieldClass} mt-2`}
+                            aria-label={t('settings.company.sloganScope')}
+                        >
+                            <option value="tenant">{t('settings.company.sloganScopeTenant')}</option>
+                            <option value="store" disabled={!companyStoreId}>
+                                {t('settings.company.sloganScopeStore')}
+                            </option>
+                        </select>
+                    )}
                 </div>
                 <div>
                     <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.softwareLineLabel')}</label>

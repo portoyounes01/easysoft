@@ -5,6 +5,7 @@ import {
     type CompanyProfile,
 } from '../src/services/companyProfileService';
 import { writeCompanyProfileToStorage } from '../src/services/companyProfileSync';
+import { collectCompanyInfoChanges } from '../src/fiscal/fiscalAuditLog';
 
 function profile(overrides: Partial<CompanyProfile> = {}): CompanyProfile {
     return {
@@ -61,6 +62,64 @@ describe('mergeCompanyProfileIntoSettings', () => {
         const merged = mergeCompanyProfileIntoSettings(bare, profile({ phone: '266000000' }));
         expect(merged.phone).toBe('266000000');
         expect(merged.email).toBe('');
+    });
+});
+
+// The publish path only sends fields the operator actually touched. Sending the
+// whole block would push the shipped placeholders ("Morada", "Lisboa",
+// "1000-001") for every untouched field the first time anyone saved an
+// unrelated setting — and because a non-empty server value wins on sync, those
+// placeholders would then propagate to every till in the store as truth.
+describe('publish patch is limited to touched fields', () => {
+    const DEFAULTS = {
+        name: 'Nome da Empresa',
+        address: 'Morada',
+        postalCode: '1000-001',
+        city: 'Lisboa',
+        taxNumber: '000000000',
+        phone: '',
+        email: '',
+        slogan: 'Slogan',
+    };
+
+    function patchFor(before: typeof DEFAULTS, after: typeof DEFAULTS) {
+        const touched = new Set(collectCompanyInfoChanges(before, after).map(c => c.field));
+        const pick = (f: 'address' | 'postalCode' | 'city' | 'phone' | 'email') =>
+            touched.has(f) ? (after[f] ?? '') : null;
+        return {
+            address: pick('address'),
+            postalCode: pick('postalCode'),
+            city: pick('city'),
+            phone: pick('phone'),
+            email: pick('email'),
+        };
+    }
+
+    it('sends nothing when an unrelated setting was saved', () => {
+        expect(patchFor(DEFAULTS, DEFAULTS)).toEqual({
+            address: null,
+            postalCode: null,
+            city: null,
+            phone: null,
+            email: null,
+        });
+    });
+
+    it('sends only the edited field, leaving placeholders unpublished', () => {
+        const after = { ...DEFAULTS, phone: '266000000' };
+        expect(patchFor(DEFAULTS, after)).toEqual({
+            address: null,       // still "Morada" locally — must NOT reach the server
+            postalCode: null,
+            city: null,
+            phone: '266000000',
+            email: null,
+        });
+    });
+
+    it('sends an empty string when a field is deliberately cleared', () => {
+        const before = { ...DEFAULTS, phone: '266000000' };
+        const after = { ...DEFAULTS, phone: '' };
+        expect(patchFor(before, after).phone).toBe('');
     });
 });
 

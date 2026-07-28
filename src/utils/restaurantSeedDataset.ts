@@ -932,7 +932,7 @@ export const QBELLA_EVORA_DATASET: RestaurantSeedDataset = {
         'IVA is assigned by kind: 13% prepared food and juices, 23% soft drinks, 6% water. Confirm against the operator’s own fiscal setup.',
         'Pick limits ("5 ingredients", "3 on the kids menu", "2 sides") are advisory: modifiers carry no min/max in the product model, so the till does not enforce a count.',
         'Variants and modifiers need migration 20260731000000_product_options on the Supabase project. Pushing them to a project without it is harmless — the server ignores unknown keys — but they will not come back on pull until it is applied.',
-        'Seeding overwrites the company block in Settings → Company & Fiscal with the operating company below.',
+        'Seeding overwrites the company block in Settings → Company & Fiscal with the operating company below — on THIS device only. Supabase is the source of truth for a connected till (migration 20260810000000), so the next sync replaces anything the server holds a value for. Treat the seeded company block as local-testing data, not as a way to configure a real install.',
         'Company registry extract: VERDE HONORÁRIO LDA, NIPC 517430940, natureza jurídica SOCIEDADE POR QUOTAS; distrito Évora, concelho Évora, freguesia Malagueira e Horta das Figueiras. Natureza jurídica and freguesia have no field in the company block and are not seeded; distrito and concelho are both Évora, which `city` already carries.',
     ],
     // Operating company (certidão permanente). The address stops at the shopping

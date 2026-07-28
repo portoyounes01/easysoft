@@ -36,13 +36,22 @@ export interface CompanyStoreOption {
     city: string | null;
 }
 
-/** The location fields an owner/admin may edit. Identity is not among them. */
+/**
+ * The location fields an owner/admin may edit. Identity is not among them.
+ *
+ * A field left `null` is NOT written. That is deliberate and load-bearing: the
+ * caller edits a settings blob whose untouched fields still hold the shipped
+ * placeholders ("Morada", "Lisboa", "1000-001"), so sending the whole block on
+ * every save would publish those placeholders the first time anyone saved an
+ * unrelated setting — and a non-empty server value wins on sync, so they would
+ * then spread to every till in the store. Empty string means "clear it".
+ */
 export interface StoreCompanyPatch {
-    address: string;
-    postalCode: string;
-    city: string;
-    phone: string;
-    email: string;
+    address?: string | null;
+    postalCode?: string | null;
+    city?: string | null;
+    phone?: string | null;
+    email?: string | null;
 }
 
 interface CompanyProfileRow {
@@ -125,15 +134,19 @@ export async function listCompanyStores(): Promise<CompanyStoreOption[] | undefi
     }
 }
 
-/** Save the location half for a store. Throws unless the caller is owner/admin. */
+/**
+ * Save the location half for a store. Only the fields present in `patch` are
+ * written; the rest are left as they are. Throws unless the caller is
+ * owner/admin.
+ */
 export async function saveStoreCompany(storeId: string, patch: StoreCompanyPatch): Promise<void> {
     const { error } = await supabase.rpc('upsert_store_company', {
         p_store_id: storeId,
-        p_address: patch.address,
-        p_postal_code: patch.postalCode,
-        p_city: patch.city,
-        p_phone: patch.phone,
-        p_email: patch.email,
+        p_address: patch.address ?? null,
+        p_postal_code: patch.postalCode ?? null,
+        p_city: patch.city ?? null,
+        p_phone: patch.phone ?? null,
+        p_email: patch.email ?? null,
     });
     if (error) throw new Error(error.message);
 }

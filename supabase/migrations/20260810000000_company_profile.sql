@@ -400,6 +400,14 @@ GRANT  EXECUTE ON FUNCTION public.list_company_stores() TO authenticated;
 -- Note what is NOT here: legal_name and nif. Those stay with the platform
 -- console. A till or a shop owner changing the NIF would break the fiscal
 -- chain and the provisioning bound to it.
+--
+-- NULL means "leave this column alone"; the empty string means "clear it".
+-- The distinction is not decoration. The caller edits a local settings blob
+-- whose untouched fields still hold the shipped placeholders ("Morada",
+-- "Lisboa", "1000-001"), so a writer that took every field on every save would
+-- publish those placeholders the first time an operator saved ANY unrelated
+-- setting — and, because a non-empty server value wins on sync, they would then
+-- spread to every till in the store as truth.
 -- ---------------------------------------------------------------------
 
 DROP FUNCTION IF EXISTS public.upsert_store_company(uuid, text, text, text, text, text);
@@ -434,12 +442,19 @@ BEGIN
     RAISE EXCEPTION 'store_not_visible' USING ERRCODE = '42501';
   END IF;
 
+  -- Nothing named: nothing to do. Saying so beats bumping updated_at on every
+  -- unrelated settings save.
+  IF p_address IS NULL AND p_postal_code IS NULL AND p_city IS NULL
+     AND p_phone IS NULL AND p_email IS NULL THEN
+    RETURN v_now;
+  END IF;
+
   UPDATE public.stores
-     SET address     = NULLIF(btrim(coalesce(p_address, '')), ''),
-         postal_code = NULLIF(btrim(coalesce(p_postal_code, '')), ''),
-         city        = NULLIF(btrim(coalesce(p_city, '')), ''),
-         phone       = NULLIF(btrim(coalesce(p_phone, '')), ''),
-         email       = NULLIF(btrim(coalesce(p_email, '')), ''),
+     SET address     = CASE WHEN p_address     IS NULL THEN address     ELSE NULLIF(btrim(p_address), '')     END,
+         postal_code = CASE WHEN p_postal_code IS NULL THEN postal_code ELSE NULLIF(btrim(p_postal_code), '') END,
+         city        = CASE WHEN p_city        IS NULL THEN city        ELSE NULLIF(btrim(p_city), '')        END,
+         phone       = CASE WHEN p_phone       IS NULL THEN phone       ELSE NULLIF(btrim(p_phone), '')       END,
+         email       = CASE WHEN p_email       IS NULL THEN email       ELSE NULLIF(btrim(p_email), '')       END,
          updated_at  = v_now
    WHERE id = p_store_id AND tenant_id = v_tenant;
 
