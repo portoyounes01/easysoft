@@ -39,6 +39,10 @@ vi.mock('../src/contexts/ProductsContext', () => ({
 vi.mock('../src/contexts/SupabaseAuthContext', () => ({
     useSupabaseAuth: () => ({ employee: { id: 'e1' }, hasPermission: () => false }),
 }));
+const updateSettings = vi.fn();
+vi.mock('../src/contexts/SettingsContext', () => ({
+    useSettings: () => ({ updateSettings }),
+}));
 vi.mock('../src/contexts/DesignSystem2CustomizationContext', () => ({
     useDesignSystem2Customization: () => ({
         visualStyle: {},
@@ -57,6 +61,7 @@ describe('SeedManagement restaurant seed button', () => {
     beforeEach(() => {
         seedRestaurantDataset.mockClear();
         refreshProducts.mockClear();
+        updateSettings.mockClear();
     });
 
     it('offers the ready-made restaurant catalogue alongside the YAML seeder', async () => {
@@ -81,6 +86,25 @@ describe('SeedManagement restaurant seed button', () => {
         expect(screen.getByText(/50 inventory raw materials seeded/)).toBeInTheDocument();
         expect(screen.getByText(/200 recipe ingredient lines seeded/)).toBeInTheDocument();
         expect(screen.getByText(/300 modifiers seeded/)).toBeInTheDocument();
+    });
+
+    it('applies the dataset company block to settings and says so', async () => {
+        const user = userEvent.setup();
+        render(<SeedManagementPanel embedded />);
+
+        await user.click(await screen.findByTestId('seed-restaurant-button'));
+
+        await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
+        expect(updateSettings).toHaveBeenCalledWith({
+            company: {
+                name: 'VERDE HONORÁRIO LDA',
+                taxNumber: '517430940',
+                address: 'Rua Luis Adelino Fonseca, 2, Loja 1.06 — Centro Comercial Évora Plaza',
+                postalCode: '7005-345',
+                city: 'Évora',
+            },
+        });
+        expect(await screen.findByText(/VERDE HONORÁRIO LDA/)).toBeInTheDocument();
     });
 
     it('surfaces a failure instead of reporting success', async () => {

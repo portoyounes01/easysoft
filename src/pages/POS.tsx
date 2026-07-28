@@ -102,6 +102,8 @@ const POSInner: React.FC = () => {
   } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
   const { settings, updateSettings } = useSettings();
+  /** Same signal the page-wide banner used before it moved into the status bar. */
+  const trainingMode = settings.fiscal.trainingMode;
   const {
     categories: allCategories,
     getProductsByCategory,
@@ -859,6 +861,8 @@ const POSInner: React.FC = () => {
         qrCodeImage,
         trainingMode: fiscal ? fiscal.certificationMode === 'training' : settings.fiscal.trainingMode,
         officialOutput: fiscal?.officialOutput,
+        // The sale slip IS the original, so it says so explicitly rather than
+        // falling through to the 2.ª via default.
         documentLabel: getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.original'),
         emitterName: employeeName,
         company: {
@@ -1186,32 +1190,52 @@ const POSInner: React.FC = () => {
           </div>
         </div>
 
-        {/* Bottom User Status Bar — spans categories + products, not cart */}
-        <div id="pos-status-bar" className="flex-none bg-white border-t border-gray-200 px-3 py-1">
+        {/* Bottom User Status Bar — spans categories + products, not cart.
+            In training mode the whole bar goes orange and carries the notice:
+            this replaced the page-wide banner, and it is the only place the
+            till advertises that issued documents have no fiscal value. */}
+        <div
+          id="pos-status-bar"
+          className={`flex-none px-3 py-1 ${
+            trainingMode ? 'bg-orange-100 border-t-2 border-orange-400' : 'bg-white border-t border-gray-200'
+          }`}
+        >
           <div className="flex items-center justify-between max-w-7xl mx-auto">
             <div className="flex items-center space-x-3">
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new Event(OPEN_MY_PROFILE_EVENT))}
-                className="min-h-touch-xs rounded-2xl px-2 text-left text-xs font-medium text-gray-900 transition-colors hover:bg-gray-100"
+                className={`min-h-touch-xs rounded-2xl px-2 text-left text-xs font-medium transition-colors ${
+                  trainingMode ? 'text-orange-950 hover:bg-orange-200' : 'text-gray-900 hover:bg-gray-100'
+                }`}
               >
-                {employee?.name} • <span className="capitalize text-gray-600">{employee?.role}</span>
-                <span className="ml-2 text-emerald-700">{t('pos.myProfile')}</span>
+                {employee?.name} • <span className={`capitalize ${trainingMode ? 'text-orange-800' : 'text-gray-600'}`}>{employee?.role}</span>
+                <span className={`ml-2 ${trainingMode ? 'text-orange-900' : 'text-emerald-700'}`}>{t('pos.myProfile')}</span>
               </button>
+              {trainingMode && (
+                <span className="flex items-center gap-2 text-xs" role="status">
+                  <span className="rounded-full bg-orange-600 px-2 py-0.5 font-bold uppercase tracking-wide text-white">
+                    {t('pos.trainingBadge')}
+                  </span>
+                  <span className="hidden font-semibold text-orange-900 sm:inline">
+                    {t('pos.trainingBarNotice')}
+                  </span>
+                </span>
+              )}
               {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
-                <span className="text-green-600 text-xs font-medium">
+                <span className={`text-xs font-medium ${trainingMode ? 'text-green-800' : 'text-green-600'}`}>
                   {t('pos.saleInProgress')}
                 </span>
               )}
             </div>
-            <div className="flex items-center space-x-3 text-xs text-gray-500">
+            <div className={`flex items-center space-x-3 text-xs ${trainingMode ? 'text-orange-900' : 'text-gray-500'}`}>
               {settings.autoLogout.enabled && (
                 <span>
                   {Math.floor(timeUntilAutoLogout / 60000)}:{String(Math.floor((timeUntilAutoLogout % 60000) / 1000)).padStart(2, '0')}
                 </span>
               )}
               {settings.pos.autoClearCart.enabled && settings.pos.autoClearCart.timeoutMinutes > 0 && cart.length > 0 && (
-                <span className="text-orange-600">
+                <span className={trainingMode ? 'font-bold text-orange-950' : 'text-orange-600'}>
                   {t('pos.cartTimerLabel')} {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
                 </span>
               )}

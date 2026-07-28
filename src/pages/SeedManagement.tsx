@@ -28,6 +28,7 @@ import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useProducts } from '../contexts/ProductsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -53,6 +54,7 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
     const { refreshEmployees } = useEmployees();
     const { refreshData: refreshProducts } = useProducts();
     const { employee, hasPermission } = useSupabaseAuth();
+    const { updateSettings } = useSettings();
     const applied = useAppliedDialogStyle();
     const shellButtons = applied ? dialogButtonClasses(applied) : null;
     const canClearLocalData = hasPermission('clear_data');
@@ -164,6 +166,11 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
         try {
             const result = await seedRestaurantDataset(QBELLA_EVORA_DATASET);
 
+            // The seeder only writes local rows; the company block lives in
+            // settings, so the panel applies it once the catalogue is in.
+            const seedCompany = QBELLA_EVORA_DATASET.company;
+            if (seedCompany) updateSettings({ company: seedCompany });
+
             const details = [
                 `✅ ${t('seedManagement.restaurant.detailCategories', { count: result.categoriesCount })}`,
                 `✅ ${t('seedManagement.restaurant.detailProducts', { count: result.productsCount })}`,
@@ -174,6 +181,9 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                 `ℹ️ ${t('seedManagement.restaurant.detailCostsFromRecipes')}`,
                 `ℹ️ ${t('seedManagement.restaurant.detailLocalOnlyInventory')}`,
             ];
+            if (seedCompany) {
+                details.push(`✅ ${t('seedManagement.restaurant.detailCompany', { name: seedCompany.name })}`);
+            }
             if (result.unknownMaterials.length > 0) {
                 details.push(
                     `⚠️ ${t('seedManagement.restaurant.detailUnknownMaterials', {
@@ -202,7 +212,7 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
         } finally {
             setActiveAction(null);
         }
-    }, [refreshProducts, t]);
+    }, [refreshProducts, t, updateSettings]);
 
     const handleClearLocalData = useCallback(async () => {
         if (!canClearLocalData || !employee || clearConfirmation !== 'CLEAR LOCAL DATA') {

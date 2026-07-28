@@ -124,7 +124,8 @@ function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions
         centered(`${t('thermalReceipt.internalIdLabel')} ${receipt.documentNumber}`);
     } else {
         centered(documentTitle(receipt.documentType, t), true);
-        centered(`${receipt.documentNumber} ${receipt.documentLabel || t('thermalReceipt.original')}`);
+        // Defaults to 2.ª via, not Original — see ThermalReceipt.tsx.
+        centered(`${receipt.documentNumber} ${receipt.documentLabel || t('thermalReceipt.secondCopy')}`);
     }
     centered(`${t('thermalReceipt.dateLabel')} ${formatReceiptDate(receipt.date, dateLocale)} ${receipt.counter}`);
 

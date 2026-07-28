@@ -88,7 +88,10 @@ export interface ReceiptProps {
   certificationNumber?: string;
   originalInvoice?: string; // For credit notes
   creditReason?: string; // For credit notes
-  documentLabel?: string; // e.g. Original (first issue) or 2.ª via (reprint) — use i18n keys thermalReceipt.original / secondCopy
+  /** Document marking. Only the sale slip and the Transactions "view receipt"
+   *  preview pass thermalReceipt.original; everything else leaves this unset
+   *  and renders as 2.ª via, so no path can accidentally claim to be original. */
+  documentLabel?: string;
   /** Cashier / operator name for AT evidence */
   emitterName?: string;
   /** Overrides settings receipt language when set (e.g. receipt demo). */
@@ -421,7 +424,11 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         {nonFiscal
           // No fatura number: the slip must never consume one from the fiscal series.
           ? `${t('thermalReceipt.internalIdLabel')} ${documentNumber}`
-          : `${documentNumber} ${documentLabel || t('thermalReceipt.original')}`}
+          // Defaults to 2.ª via, NOT Original: only the two callers that really
+          // are showing the original say so. An unlabelled render is some
+          // reproduction of an already-issued document, and the safe reading of
+          // an unmarked reproduction is a copy, never a second original.
+          : `${documentNumber} ${documentLabel || t('thermalReceipt.secondCopy')}`}
       </div>
       <div className="center">
         {t('thermalReceipt.dateLabel')} {formatDate(date)} {counter}

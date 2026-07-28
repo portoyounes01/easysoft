@@ -45,6 +45,11 @@ import '../styles/design-system-2-scope.css';
 import { customerLocalService, initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import { generateQRCodeImage } from '../utils/qrCode';
 import { getReceiptT } from '../utils/receiptLanguage';
+import {
+    logReproducedDocument,
+    type PostSalePrintAuditContext,
+    type ReproducedDocumentEvent,
+} from '../fiscal/fiscalAuditLog';
 import type { FiscalTransactionMetadata } from '../fiscal/types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { runFiscalCreditNoteForTransaction } from '../fiscal/creditNoteCheckout';
@@ -169,6 +174,10 @@ const TransactionsInner: React.FC = () => {
 
     const [showReceiptPreview, setShowReceiptPreview] = useState(false);
     const [receiptPreviewData, setReceiptPreviewData] = useState<ReceiptProps | null>(null);
+    /** Which reproduction event the open preview should log if it prints. */
+    const [reprintAudit, setReprintAudit] = useState<
+        { event: ReproducedDocumentEvent; context: PostSalePrintAuditContext } | null
+    >(null);
     const [pdfJob, setPdfJob] = useState<{ receipt: ReceiptProps; filename: string } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedDate, setSelectedDate] = useState('');
@@ -507,18 +516,31 @@ const TransactionsInner: React.FC = () => {
         return receipt;
     };
 
+    // "View receipt" reproduces the document marked Original, same as the slip
+    // handed over at the sale. Opening it logs nothing — looking at a document
+    // is not an act. Printing it does: ORIGINAL_REPRINTED, fired from the
+    // dialog only once paper is actually out.
     const handleViewReceipt = async (id: string) => {
         try {
-            const receipt = await buildReceiptPropsForTransaction(id, undefined);
-            if (receipt) {
-                setReceiptPreviewData(receipt);
-                setShowReceiptPreview(true);
-            }
+            const receipt = await buildReceiptPropsForTransaction(
+                id,
+                getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.original')
+            );
+            if (!receipt) return;
+            setReprintAudit({
+                event: 'ORIGINAL_REPRINTED',
+                context: { documentNumber: receipt.documentNumber, transactionId: id },
+            });
+            setReceiptPreviewData(receipt);
+            setShowReceiptPreview(true);
         } catch (e) {
             console.error('Failed to build receipt preview:', e);
         }
     };
 
+    // The 2.ª via preview. Opening it IS an act worth recording, so it logs
+    // SECOND_COPY_VIEWED here; REPRINT_REQUESTED is left to the dialog and
+    // means what its name says — the copy reached the printer.
     const handleSegundaVia = async (id: string) => {
         if (!employee) {
             window.alert(t('transactions.creditNote.needEmployee'));
@@ -530,11 +552,9 @@ const TransactionsInner: React.FC = () => {
                 getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.secondCopy')
             );
             if (!receipt) return;
-            await transactionLocalService.appendFiscalAuditEvent({
-                event_type: 'REPRINT_REQUESTED',
-                payload_json: JSON.stringify({ transactionId: id, documentNumber: receipt.documentNumber }),
-                employee_id: employee.id,
-            });
+            const context = { documentNumber: receipt.documentNumber, transactionId: id };
+            await logReproducedDocument('SECOND_COPY_VIEWED', context, employee.id);
+            setReprintAudit({ event: 'REPRINT_REQUESTED', context });
             setReceiptPreviewData(receipt);
             setShowReceiptPreview(true);
         } catch (e) {
@@ -1015,8 +1035,14 @@ const TransactionsInner: React.FC = () => {
                 {showReceiptPreview && receiptPreviewData && (
                     <ReceiptDialog
                         open={showReceiptPreview}
-                        onClose={() => setShowReceiptPreview(false)}
+                        onClose={() => {
+                            setShowReceiptPreview(false);
+                            // Cleared with the preview so the next one cannot
+                            // inherit the previous document's audit context.
+                            setReprintAudit(null);
+                        }}
                         receipt={receiptPreviewData}
+                        reprintAudit={reprintAudit}
                     />
                 )}
                 {pdfJob && (

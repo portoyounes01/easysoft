@@ -394,7 +394,16 @@ export type FiscalAuditEventType =
     | 'FISCAL_DOCUMENT_CREATED'
     | 'VOID_REQUESTED'
     | 'FISCAL_DOCUMENT_CANCELLED'
+    /** Paper actually came out of a 2.ª via preview. Opening that preview is
+     *  SECOND_COPY_VIEWED — looking is not reprinting, and the log should say
+     *  which of the two happened. */
     | 'REPRINT_REQUESTED'
+    /** The operator opened the 2.ª via preview for an issued document. */
+    | 'SECOND_COPY_VIEWED'
+    /** Paper came out of the "view receipt" preview, which reproduces the
+     *  document marked Original — a second physical original exists from here
+     *  on, so it is logged apart from the sale-time print. */
+    | 'ORIGINAL_REPRINTED'
     | 'POST_SALE_RECEIPT_PRINTED'
     | 'POST_SALE_RECEIPT_NOT_PRINTED'
     /** Fiscal issuance was impossible, so a NON-FISCAL sale slip was printed

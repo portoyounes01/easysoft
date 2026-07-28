@@ -136,6 +136,29 @@ export async function logPostSaleReceiptNotPrinted(
     await appendFiscalAuditEventTyped('POST_SALE_RECEIPT_NOT_PRINTED', ctx, employeeId);
 }
 
+/**
+ * Reproducing an already-issued document, from the Transactions page.
+ *
+ * Split three ways on purpose, because "someone looked" and "paper came out"
+ * are different facts and only the second one puts a document in a customer's
+ * hand:
+ *   - SECOND_COPY_VIEWED  — the 2.ª via preview was opened.
+ *   - REPRINT_REQUESTED   — that preview actually printed.
+ *   - ORIGINAL_REPRINTED  — the "view receipt" preview (marked Original)
+ *                           actually printed, so a second original now exists.
+ * There is deliberately no not-printed counterpart: closing a preview without
+ * printing is not a fiscal omission the way it is at the point of sale.
+ */
+export type ReproducedDocumentEvent = 'SECOND_COPY_VIEWED' | 'REPRINT_REQUESTED' | 'ORIGINAL_REPRINTED';
+
+export async function logReproducedDocument(
+    event: ReproducedDocumentEvent,
+    ctx: PostSalePrintAuditContext,
+    employeeId: string | null | undefined
+): Promise<void> {
+    await appendFiscalAuditEventTyped(event, { ...ctx }, employeeId);
+}
+
 /** Log company + series edits once, when settings are saved (diff vs last saved baseline). */
 export async function logCommittedSettingsChanges(
     before: SystemSettings,

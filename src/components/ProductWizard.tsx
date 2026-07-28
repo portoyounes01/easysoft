@@ -80,6 +80,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
     const [takeawayPrice, setTakeawayPrice] = useState<number | null>(null);
     const [cost, setCost] = useState<number | null>(null);
     const [ivaRate, setIvaRate] = useState<number>(defaultIvaRate);
+    const [soldByWeight, setSoldByWeight] = useState(false);
 
     const [variants, setVariants] = useState<ProductVariantAttribute[]>([]);
     const [expandedAttrs, setExpandedAttrs] = useState<Set<string>>(new Set());
@@ -109,6 +110,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
         setTakeawayPrice(product?.takeaway_price ?? null);
         setCost(product ? product.cost : null);
         setIvaRate(product?.iva_rate ?? defaultIvaRate);
+        setSoldByWeight(product?.sold_by_weight ?? false);
         setVariants(product?.variants ?? []);
         setExpandedAttrs(new Set());
         setModifiers(product?.modifiers ?? []);
@@ -187,6 +189,7 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                 price: price ?? 0,
                 cost: cost ?? 0,
                 iva_rate: ivaRate,
+                sold_by_weight: soldByWeight,
                 image_url: imageUrl || null,
                 is_active: asDraft ? false : isActive,
                 takeaway_price: takeawayPrice,
@@ -205,7 +208,6 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
                     stock: 0,
                     min_stock: 0,
                     track_stock: false,
-                    sold_by_weight: false,
                     supplier: null,
                     location: null,
                     display_order: 0,
@@ -346,8 +348,24 @@ const ProductWizard: React.FC<ProductWizardProps> = ({ isOpen, onClose, onSucces
 
     const pricingStep = (
         <div className="space-y-4">
+            {/* Sold by weight belongs in this step, not inventory: its primary
+                effect is on pricing — the price entered below becomes €/kg and
+                the cashier weighs the item on the scale at checkout. Inventory
+                items sold from the Inventory page still derive the flag from
+                their unit, and re-syncing a linked item overrides what is set
+                here (see rawMaterialService.syncLinkedProduct). */}
+            <DialogToggleRow
+                title={t('products.form.soldByWeight')}
+                help={t('products.form.soldByWeightHint')}
+                checked={soldByWeight}
+                onChange={() => setSoldByWeight(v => !v)}
+            />
             <div>
-                <span className={labelClass}>{t('products.wizard.priceLabel', { currency })} *</span>
+                <span className={labelClass}>
+                    {soldByWeight
+                        ? t('products.wizard.pricePerKgLabel', { currency })
+                        : t('products.wizard.priceLabel', { currency })} *
+                </span>
                 <input
                     type="number" step="any" min="0"
                     value={price ?? ''}

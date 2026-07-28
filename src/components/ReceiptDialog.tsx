@@ -15,7 +15,9 @@ import {
 import {
     logPostSaleReceiptNotPrinted,
     logPostSaleReceiptPrinted,
+    logReproducedDocument,
     type PostSalePrintAuditContext,
+    type ReproducedDocumentEvent,
 } from '../fiscal/fiscalAuditLog';
 
 interface ReceiptDialogProps {
@@ -24,6 +26,10 @@ interface ReceiptDialogProps {
     receipt: ReceiptProps;
     /** When set, closing without print logs POST_SALE_RECEIPT_NOT_PRINTED; print logs POST_SALE_RECEIPT_PRINTED. */
     postSalePrintAudit?: PostSalePrintAuditContext | null;
+    /** Reproduction of an already-issued document (Transactions page): an
+     *  actual print logs `event`. No close-without-print counterpart — walking
+     *  away from a reprint is not a fiscal omission. */
+    reprintAudit?: { event: ReproducedDocumentEvent; context: PostSalePrintAuditContext } | null;
     /** Carries the outcome of an auto-print that already ran, so the dialog
      *  opens showing what happened instead of looking untouched. An 'unknown'
      *  notice deliberately offers no resend. */
@@ -39,6 +45,7 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({
     onClose,
     receipt,
     postSalePrintAudit,
+    reprintAudit,
     initialPrintNotice,
 }) => {
     const { t } = useTranslation();
@@ -47,12 +54,26 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({
     const printerConfig = usePrinterConfig();
     const printedRef = useRef(false);
     const auditCtxRef = useRef(postSalePrintAudit);
+    const reprintCtxRef = useRef(reprintAudit);
     const [printState, setPrintState] = useState<DirectPrintState>('idle');
     const [printError, setPrintError] = useState('');
 
     useEffect(() => {
         auditCtxRef.current = postSalePrintAudit;
     }, [postSalePrintAudit]);
+
+    useEffect(() => {
+        reprintCtxRef.current = reprintAudit;
+    }, [reprintAudit]);
+
+    /** Paper is out. Both audit channels are optional and mutually exclusive in
+     *  practice — POS passes the first, Transactions the second. */
+    const logPrinted = useCallback(() => {
+        const saleCtx = auditCtxRef.current;
+        if (saleCtx) void logPostSaleReceiptPrinted(saleCtx, employee?.id);
+        const reprint = reprintCtxRef.current;
+        if (reprint) void logReproducedDocument(reprint.event, reprint.context, employee?.id);
+    }, [employee?.id]);
 
     useEffect(() => {
         if (open) {
@@ -83,13 +104,10 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({
     const canPrintDirect = canPrintThermally(receipt, printerName);
 
     const printViaOs = useCallback(() => {
-        const ctx = auditCtxRef.current;
-        if (ctx) {
-            printedRef.current = true;
-            void logPostSaleReceiptPrinted(ctx, employee?.id);
-        }
+        if (auditCtxRef.current) printedRef.current = true;
+        logPrinted();
         window.print();
-    }, [employee?.id]);
+    }, [logPrinted]);
 
     const printDirect = async () => {
         setPrintState('printing');
@@ -102,8 +120,7 @@ const ReceiptDialog: React.FC<ReceiptDialogProps> = ({
 
         if (result.status === 'printed') {
             printedRef.current = true;
-            const ctx = auditCtxRef.current;
-            if (ctx) void logPostSaleReceiptPrinted(ctx, employee?.id);
+            logPrinted();
             setPrintState('printed');
             return;
         }

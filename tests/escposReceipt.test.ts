@@ -102,6 +102,23 @@ describe('ESC/POS receipt encoder', () => {
         expect(withQr.length).toBeGreaterThan(withoutQr.length + 1000);
     });
 
+    it('an unlabelled print defaults to a copy marking, never Original', () => {
+        // The physical print path has its own header builder, so the on-screen
+        // preview passing this is not evidence the printed slip does.
+        const lines = decodeLines(buildReceiptEscPos(baseReceipt, { language: 'pt' }));
+        expect(lines.some(line => line.includes('FS 2026A/000137'))).toBe(true);
+        expect(lines.some(line => /Original/i.test(line))).toBe(false);
+    });
+
+    it('prints the marking a caller passes', () => {
+        // ASCII label on purpose: decodeLines reads raw code-page bytes, so an
+        // accented marking would compare against its encoded byte, not "ª".
+        const lines = decodeLines(
+            buildReceiptEscPos({ ...baseReceipt, documentLabel: 'DUPLICADO' }, { language: 'pt' })
+        );
+        expect(lines.some(line => line.includes('FS 2026A/000137') && line.includes('DUPLICADO'))).toBe(true);
+    });
+
     it('wraps long words without dropping characters', () => {
         const wrapped = wrapText('Supercalifragilisticexpialidocious pão', 12);
         expect(wrapped.join('').replace(/\s/g, '')).toBe('Supercalifragilisticexpialidociouspão'.replace(/\s/g, ''));

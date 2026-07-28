@@ -198,14 +198,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               }
             >
               <ChromeScope>
-                {settings.fiscal.trainingMode && (
-                  <div
-                    className="mb-4 rounded-2xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-amber-950 text-center font-semibold text-lg"
-                    role="status"
-                  >
-                    {t("settings.company.trainingModeBanner")}
-                  </div>
-                )}
+                {/* Training mode no longer shows a page banner here: the POS
+                    status bar turns orange and carries the notice instead, so
+                    the till (the only place documents are issued) signals it
+                    without stealing a band of content from every screen. */}
                 {seriesOutsideValidity && (
                   <div className="mb-4 rounded-2xl border-2 border-red-300 bg-red-50 px-4 py-3 text-red-900 text-center font-semibold text-lg">
                     {t("settings.company.seriesOutsideValidityBanner")}
