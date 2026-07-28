@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildReceiptEscPos } from '../src/services/escpos/receiptEscPos';
-import { bytesToBase64, ditherToMonochrome, packedRowBytes } from '../src/utils/receiptLogo';
+import { bytesToBase64, ditherToMonochrome, packBits, packedRowBytes } from '../src/utils/receiptLogo';
 import type { ReceiptProps } from '../src/components/ThermalReceipt';
 
 const HEAD_BYTES_PER_ROW = 576 / 8;
@@ -50,7 +50,7 @@ const logo = (() => {
         for (let x = 0; x < LOGO_W; x += 1) gray[y * LOGO_W + x] = x < LOGO_W / 2 ? 0 : 255;
     }
     const { bits } = ditherToMonochrome(gray, LOGO_W, LOGO_H);
-    return { dataUrl: 'data:image/png;base64,AA', widthDots: LOGO_W, heightDots: LOGO_H, bitmapBase64: bytesToBase64(bits) };
+    return { widthDots: LOGO_W, heightDots: LOGO_H, bitmap: bytesToBase64(packBits(bits)) };
 })();
 
 const base: ReceiptProps = {
@@ -117,5 +117,22 @@ describe('printing the company logo', () => {
 
     it('packs the source bitmap at ceil(width / 8) per row', () => {
         expect(Math.ceil(LOGO_W / 8)).toBe(packedRowBytes(LOGO_W));
+    });
+
+    // The logo now arrives over the network. A corrupt payload must cost the
+    // logo, never the receipt.
+    it('still builds a receipt when the stored logo is corrupt', () => {
+        for (const bad of ['not base64 !!!', '', 'AAAA']) {
+            const receipt = { ...slip, company: { ...slip.company, logo: { ...logo, bitmap: bad } } };
+            expect(() => build(receipt)).not.toThrow();
+            expect(rasters(build(receipt))).toHaveLength(0);
+            expect(decodeLines(build(receipt)).join('\n')).toContain('Padaria');
+        }
+    });
+
+    it('still builds a receipt when the stored geometry does not match', () => {
+        const receipt = { ...slip, company: { ...slip.company, logo: { ...logo, heightDots: LOGO_H + 1 } } };
+        expect(rasters(build(receipt))).toHaveLength(0);
+        expect(decodeLines(build(receipt)).join('\n')).toContain('Padaria');
     });
 });

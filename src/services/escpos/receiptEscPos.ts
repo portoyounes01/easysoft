@@ -10,7 +10,7 @@ import { certificationNumberForReceiptDisplay } from '../../utils/receiptCertifi
 import { computeReceiptTotals, formatReceiptCurrency, round2 } from '../../utils/receiptTotals';
 import { getReceiptT, normalizeReceiptLanguage, type ReceiptLanguage } from '../../utils/receiptLanguage';
 import { EscPosBuilder, padEnd, padStart, wrapText, type EscPosCodePage } from './escposBuilder';
-import { base64ToBytes } from '../../utils/receiptLogo';
+import { decodeReceiptLogo } from '../../utils/receiptLogo';
 
 export interface BuildReceiptOptions {
     /** Defaults to the receipt's own override, then 'pt'. */
@@ -83,9 +83,12 @@ function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions
     // The raster was packed when the operator chose the image
     // (utils/receiptLogo.ts) precisely because this function is synchronous and
     // decoding an image is not. No logo configured => nothing prints here.
-    const logo = receipt.company.logo;
-    if (logo?.bitmapBase64 && logo.widthDots > 0 && logo.heightDots > 0) {
-        b.bitmap(base64ToBytes(logo.bitmapBase64), logo.widthDots, logo.heightDots);
+    // A corrupt payload (it now arrives over the network) decodes to null and
+    // simply prints no logo. A receipt that fails to print is far worse than one
+    // without a logo.
+    const logo = decodeReceiptLogo(receipt.company.logo);
+    if (logo) {
+        b.bitmap(logo.bits, logo.widthDots, logo.heightDots);
     }
     b.align('center').bold(true);
     b.line(receipt.company.name);

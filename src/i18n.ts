@@ -2718,6 +2718,8 @@ const resources = {
                     remove: 'Remove',
                     dots: 'dots',
                     failed: 'That image could not be prepared.',
+                    notPublished: 'Saved on this till only — you do not have permission to publish it to the other tills.',
+                    publishFailed: 'Saved on this till, but it could not be sent to the other tills. It will stay local until you try again.',
                 },
                 receiptSloganLabel: 'Receipt slogan',
                 softwareLineLabel: 'Software line',
@@ -6309,6 +6311,8 @@ const resources = {
                     remove: 'Remover',
                     dots: 'pontos',
                     failed: 'Não foi possível preparar essa imagem.',
+                    notPublished: 'Guardado apenas nesta caixa — não tem permissão para o publicar nas outras caixas.',
+                    publishFailed: 'Guardado nesta caixa, mas não foi possível enviá-lo para as outras. Fica local até tentar novamente.',
                 },
                 receiptSloganLabel: 'Slogan do recibo',
                 softwareLineLabel: 'Linha de software',
@@ -9914,7 +9918,9 @@ const resources = {
                     "replace": "Sustituir imagen",
                     "remove": "Quitar",
                     "dots": "puntos",
-                    "failed": "No se pudo preparar esa imagen."
+                    "failed": "No se pudo preparar esa imagen.",
+                    "notPublished": "Guardado solo en esta caja: no tiene permiso para publicarlo en las demás.",
+                    "publishFailed": "Guardado en esta caja, pero no se pudo enviar a las demás. Seguirá siendo local hasta que lo intente de nuevo."
                 },
                 "receiptSloganLabel": "Eslogan del ticket",
                 "softwareLineLabel": "Línea de software",

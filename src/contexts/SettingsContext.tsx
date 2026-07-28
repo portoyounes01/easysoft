@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, ReactNode } fr
 
 import { applyFiscalSecretsFromEnv, settingsWithoutPersistedFiscalSecrets } from '../utils/fiscalEnvDefaults';
 import type { ReceiptLogo } from '../utils/receiptLogo';
+import { RECEIPT_LOGO_CHANGED_EVENT } from '../services/receiptBrandingSync';
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { defaultSeriesProfiles, normalizeStoredSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { normalizeReceiptLanguage, type ReceiptLanguage } from '../utils/receiptLanguage';
@@ -720,6 +721,18 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     // Keep the module-level active country (used by country-aware formatters/validators) and a
     // lightweight localStorage mirror in sync. The mirror lets LanguageContext — which is mounted
+    // A sync that pulls a new tenant logo writes it straight into the persisted
+    // settings blob (services/receiptBrandingSync). Mirror it into live state so
+    // a till that syncs mid-shift prints the new logo without a reload.
+    useEffect(() => {
+        const onLogoChanged = (event: Event) => {
+            const logo = (event as CustomEvent).detail as SystemSettings['company']['logo'] | null;
+            dispatch({ type: 'UPDATE_SETTINGS', payload: { company: { logo: logo ?? undefined } } });
+        };
+        window.addEventListener(RECEIPT_LOGO_CHANGED_EVENT, onLogoChanged);
+        return () => window.removeEventListener(RECEIPT_LOGO_CHANGED_EVENT, onLogoChanged);
+    }, []);
+
     // ABOVE SettingsProvider — resolve the country's default language at init time.
     useEffect(() => {
         setActiveCountry(state.settings.operatingCountry);

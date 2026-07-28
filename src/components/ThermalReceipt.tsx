@@ -8,7 +8,7 @@ import {
   certificationNumberForReceiptDisplay,
 } from '../utils/receiptCertification';
 import type { FiscalOfficialOutput } from '../fiscal/types';
-import type { ReceiptLogo } from '../utils/receiptLogo';
+import { receiptLogoDataUrl, type ReceiptLogo } from '../utils/receiptLogo';
 
 interface ReceiptItem {
   id: string;
@@ -173,6 +173,9 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   // the preview the operator approves and the paper the customer receives must
   // suppress exactly the same fiscal elements.
   const nonFiscal = documentType === 'TALAO_NAO_FISCAL';
+  // Painted from the same bits the thermal head gets, so preview and paper
+  // cannot drift. Synchronous — only decoding an ENCODED image needs onload.
+  const logoDataUrl = useMemo(() => receiptLogoDataUrl(company.logo), [company.logo]);
 
   const getDocumentTitle = (): string => {
     switch (documentType) {
@@ -355,10 +358,10 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       {/* Logo. The stored preview is the dithered bitmap, so this is exactly
           what the thermal head prints. No logo configured => nothing here; a
           placeholder string on a customer's receipt reads as broken software. */}
-      {company.logo?.dataUrl && (
+      {logoDataUrl && (
         <div className="center company-logo">
           <img
-            src={company.logo.dataUrl}
+            src={logoDataUrl}
             alt=""
             style={{ maxWidth: '100%', height: 'auto', imageRendering: 'pixelated' }}
           />

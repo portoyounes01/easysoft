@@ -3,6 +3,7 @@ import { isPwaHost } from '../lib/host';
 import { employeeService } from './employeeService';
 import { productSyncService } from './productService';
 import { customerSyncService } from './customerSyncService';
+import { pullTenantReceiptLogo } from './receiptBrandingSync';
 import { transactionSyncService } from './transactionSyncService';
 
 // Types for sync status
@@ -191,6 +192,10 @@ export class SyncManager {
 
             // 2. Then customers (needed for transactions)
             await this.syncEntity('customers', () => customerSyncService.fullSync());
+
+            // 2b. Receipt branding — a singleton, no dependencies. Pulled before
+            // transactions so a till that syncs and then prints has the logo.
+            await this.syncEntity('receipt_branding', () => pullTenantReceiptLogo());
 
             // 3. Finally transactions (depends on employees, products, customers)
             await this.syncEntity('transactions', () => 

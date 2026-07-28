@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
     base64ToBytes,
     bytesToBase64,
+    decodeReceiptLogo,
     ditherToMonochrome,
     fitLogoDots,
+    packBits,
     packedRowBytes,
+    unpackBits,
     RECEIPT_LOGO_MAX_HEIGHT_DOTS,
     RECEIPT_LOGO_MAX_WIDTH_DOTS,
 } from '../src/utils/receiptLogo';
@@ -85,5 +88,109 @@ describe('ditherToMonochrome', () => {
         const set = black.filter(Boolean).length;
         expect(set).toBeGreaterThan(0);
         expect(set).toBeLessThan(black.length);
+    });
+});
+
+
+describe('PackBits codec', () => {
+    const roundTrip = (bytes: number[]) => {
+        const input = Uint8Array.from(bytes);
+        return Array.from(unpackBits(packBits(input)));
+    };
+
+    it('round-trips random noise (the incompressible case)', () => {
+        let seed = 12345;
+        const noise = Array.from({ length: 5000 }, () => {
+            seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+            return seed % 256;
+        });
+        expect(roundTrip(noise)).toEqual(noise);
+    });
+
+    it('round-trips a long uniform run', () => {
+        const run = new Array(5000).fill(0xff);
+        expect(roundTrip(run)).toEqual(run);
+    });
+
+    it('round-trips alternating bytes, which must not be coded as runs', () => {
+        const alt = Array.from({ length: 1000 }, (_, i) => (i % 2 ? 0xff : 0x00));
+        expect(roundTrip(alt)).toEqual(alt);
+    });
+
+    it('round-trips the empty and single-byte cases', () => {
+        expect(roundTrip([])).toEqual([]);
+        expect(roundTrip([0x5a])).toEqual([0x5a]);
+    });
+
+    // 128 is the no-op control byte and the classic PackBits bug site: a codec
+    // correct on real logos can still be wrong exactly at the run boundaries.
+    it('round-trips runs of exactly 127, 128 and 129', () => {
+        for (const length of [127, 128, 129]) {
+            const run = new Array(length).fill(0x42);
+            expect(roundTrip(run)).toEqual(run);
+        }
+    });
+
+    it('round-trips a boundary-length literal stretch', () => {
+        for (const length of [127, 128, 129]) {
+            const literal = Array.from({ length }, (_, i) => i % 251);
+            expect(roundTrip(literal)).toEqual(literal);
+        }
+    });
+
+    it('actually compresses a logo-shaped payload', () => {
+        const mostlyWhite = new Uint8Array(48 * 200);
+        mostlyWhite.fill(0xff, 1000, 1100);
+        expect(packBits(mostlyWhite).length).toBeLessThan(mostlyWhite.length / 10);
+    });
+
+    it('never grows beyond the worst case the format guarantees', () => {
+        let seed = 999;
+        const noise = Uint8Array.from({ length: 4096 }, () => {
+            seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+            return seed % 256;
+        });
+        expect(packBits(noise).length).toBeLessThanOrEqual(noise.length + Math.ceil(noise.length / 128) + 1);
+    });
+
+    it('throws on truncated input rather than returning a short buffer', () => {
+        expect(() => unpackBits(Uint8Array.from([0x05, 0x01, 0x02]))).toThrow();
+        expect(() => unpackBits(Uint8Array.from([0xfe]))).toThrow();
+    });
+
+    it('throws when the decoded length is not what the geometry demands', () => {
+        const bits = packBits(new Uint8Array(48 * 10));
+        expect(() => unpackBits(bits, 48 * 11)).toThrow();
+    });
+});
+
+describe('decodeReceiptLogo', () => {
+    const good = (() => {
+        const bits = new Uint8Array(packedRowBytes(64) * 32);
+        bits.fill(0b10101010);
+        return { widthDots: 64, heightDots: 32, bitmap: bytesToBase64(packBits(bits)) };
+    })();
+
+    it('decodes a well-formed logo', () => {
+        expect(decodeReceiptLogo(good)?.bits.length).toBe(packedRowBytes(64) * 32);
+    });
+
+    // The payload now arrives over the network, so every malformed shape has to
+    // degrade to "no logo" rather than throwing on the print path.
+    it('returns null for anything malformed instead of throwing', () => {
+        expect(decodeReceiptLogo(undefined)).toBeNull();
+        expect(decodeReceiptLogo({ ...good, bitmap: 'not base64 !!!' })).toBeNull();
+        expect(decodeReceiptLogo({ ...good, bitmap: '' })).toBeNull();
+        expect(decodeReceiptLogo({ ...good, heightDots: 31 })).toBeNull();   // geometry mismatch
+        expect(decodeReceiptLogo({ ...good, widthDots: 0 })).toBeNull();
+        expect(decodeReceiptLogo({ ...good, widthDots: 9999 })).toBeNull();  // beyond the head
+        expect(decodeReceiptLogo({ ...good, heightDots: 9999 })).toBeNull();
+        expect(decodeReceiptLogo({ ...good, widthDots: 12.5 })).toBeNull();
+    });
+
+    // The shape shipped before compression had `bitmapBase64` + `dataUrl`.
+    it('treats a pre-compression stored logo as no logo', () => {
+        const legacy = { widthDots: 64, heightDots: 32, bitmapBase64: 'AAAA', dataUrl: 'data:,' };
+        expect(decodeReceiptLogo(legacy as never)).toBeNull();
     });
 });

@@ -1548,6 +1548,7 @@ const Settings: React.FC = () => {
                     <ReceiptLogoPicker
                         value={settings.company.logo}
                         onChange={logo => handleSettingsChange('company', 'logo', logo)}
+                        canPublish={isSystemAdmin || principal?.role === 'owner' || principal?.role === 'admin'}
                     />
                 </div>
                 <div>

@@ -20,17 +20,25 @@ const DEFAULT_WIDTH_DOTS = 384;
 const MAX_HEIGHT_DOTS = 240;
 
 export interface ReceiptLogo {
-    /** Dithered preview (PNG data URI) — what the operator sees is what prints. */
-    dataUrl: string;
     widthDots: number;
     heightDots: number;
-    /** Packed rows, ceil(width/8) bytes each, MSB = leftmost dot, 1 = black. */
-    bitmapBase64: string;
+    /**
+     * PackBits-compressed packed rows (ceil(width/8) bytes each, MSB = leftmost
+     * dot, 1 = black), base64.
+     *
+     * The ONLY stored representation. There is deliberately no separate preview
+     * image: one source of truth means the settings preview and the paper
+     * cannot drift, and it halves what crosses the network on every sync.
+     * Render with {@link receiptLogoDataUrl}, which is synchronous.
+     */
+    bitmap: string;
 }
 
 export const RECEIPT_LOGO_MAX_WIDTH_DOTS = PRINTER_DOT_WIDTH;
 export const RECEIPT_LOGO_DEFAULT_WIDTH_DOTS = DEFAULT_WIDTH_DOTS;
 export const RECEIPT_LOGO_MAX_HEIGHT_DOTS = MAX_HEIGHT_DOTS;
+/** Refuse anything larger than this compressed; it is synced to every till. */
+export const RECEIPT_LOGO_MAX_BYTES = 64 * 1024;
 
 export function bytesToBase64(bytes: Uint8Array): string {
     // Chunked: String.fromCharCode(...bytes) overflows the call stack on
@@ -48,6 +56,84 @@ export function base64ToBytes(base64: string): Uint8Array {
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
     return bytes;
+}
+
+// ---------------------------------------------------------------------------
+// PackBits (Apple/TIFF run-length coding).
+//
+// Chosen over CompressionStream for the same reason the raster is precomputed:
+// decompression happens on the synchronous print path, and CompressionStream is
+// async. PackBits decodes in a tight synchronous loop with no dependency, and a
+// logo — long runs of white — compresses hard. Its worst case is 1/128 growth,
+// so even incompressible input cannot blow up.
+// ---------------------------------------------------------------------------
+
+/** Control byte 128 is a no-op in the format and is never emitted. */
+export function packBits(input: Uint8Array): Uint8Array {
+    const out: number[] = [];
+    let i = 0;
+    while (i < input.length) {
+        // A run is worth coding from 3 identical bytes up (2 breaks even).
+        let runLength = 1;
+        while (
+            runLength < 128 &&
+            i + runLength < input.length &&
+            input[i + runLength] === input[i]
+        ) {
+            runLength += 1;
+        }
+
+        if (runLength >= 3) {
+            out.push(257 - runLength, input[i]);
+            i += runLength;
+            continue;
+        }
+
+        // Otherwise gather a literal run, stopping before the next real run.
+        const literalStart = i;
+        let literal = 0;
+        while (i < input.length && literal < 128) {
+            const same =
+                i + 2 < input.length && input[i] === input[i + 1] && input[i] === input[i + 2];
+            if (same) break;
+            i += 1;
+            literal += 1;
+        }
+        out.push(literal - 1);
+        for (let k = literalStart; k < literalStart + literal; k += 1) out.push(input[k]);
+    }
+    return Uint8Array.from(out);
+}
+
+/**
+ * Decode PackBits. Throws on truncated or malformed input rather than returning
+ * a short buffer — this data now arrives over the network, and a silently short
+ * bitmap prints as a sheared logo on a customer's fatura.
+ */
+export function unpackBits(input: Uint8Array, expectedLength?: number): Uint8Array {
+    const out: number[] = [];
+    let i = 0;
+    while (i < input.length) {
+        const control = input[i];
+        i += 1;
+        if (control === 128) continue;
+        if (control < 128) {
+            const count = control + 1;
+            if (i + count > input.length) throw new Error('Logo bitmap is truncated.');
+            for (let k = 0; k < count; k += 1) out.push(input[i + k]);
+            i += count;
+        } else {
+            const count = 257 - control;
+            if (i >= input.length) throw new Error('Logo bitmap is truncated.');
+            const value = input[i];
+            i += 1;
+            for (let k = 0; k < count; k += 1) out.push(value);
+        }
+    }
+    if (expectedLength !== undefined && out.length !== expectedLength) {
+        throw new Error(`Logo bitmap is ${out.length} bytes, expected ${expectedLength}.`);
+    }
+    return Uint8Array.from(out);
 }
 
 /** Row stride of the packed bitmap, in bytes. */
@@ -172,26 +258,79 @@ export async function prepareReceiptLogo(
             gray[i] = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
         }
 
-        const { bits, black } = ditherToMonochrome(gray, widthDots, heightDots);
-
-        // Preview from the DITHERED pixels, so the operator approves the real thing.
-        for (let i = 0; i < black.length; i += 1) {
-            const p = i * 4;
-            const value = black[i] ? 0 : 255;
-            data[p] = value;
-            data[p + 1] = value;
-            data[p + 2] = value;
-            data[p + 3] = 255;
+        const { bits } = ditherToMonochrome(gray, widthDots, heightDots);
+        const compressed = packBits(bits);
+        if (compressed.length > RECEIPT_LOGO_MAX_BYTES) {
+            // Every till re-pulls this on every sync; a pathological image must
+            // not become a permanent tax on the whole fleet.
+            throw new Error('That image is too detailed to print. Try a simpler one.');
         }
-        ctx.putImageData(new ImageData(data, widthDots, heightDots), 0, 0);
 
-        return {
-            dataUrl: canvas.toDataURL('image/png'),
-            widthDots,
-            heightDots,
-            bitmapBase64: bytesToBase64(bits),
-        };
+        return { widthDots, heightDots, bitmap: bytesToBase64(compressed) };
     } finally {
         URL.revokeObjectURL(objectUrl);
     }
+}
+
+/**
+ * Decode a stored logo to its packed rows, or `null` if it is unusable.
+ *
+ * Never throws. The logo now arrives over the network, and a corrupt payload
+ * must degrade to "no logo" — a receipt that fails to print is far worse than
+ * one without a logo, and a half-decoded bitmap prints as a sheared smear.
+ */
+export function decodeReceiptLogo(logo: ReceiptLogo | undefined | null): {
+    bits: Uint8Array;
+    widthDots: number;
+    heightDots: number;
+} | null {
+    if (!logo || typeof logo.bitmap !== 'string' || !logo.bitmap) return null;
+    const { widthDots, heightDots } = logo;
+    if (!Number.isInteger(widthDots) || !Number.isInteger(heightDots)) return null;
+    if (widthDots <= 0 || heightDots <= 0) return null;
+    if (widthDots > PRINTER_DOT_WIDTH || heightDots > MAX_HEIGHT_DOTS) return null;
+
+    try {
+        const expected = packedRowBytes(widthDots) * heightDots;
+        const bits = unpackBits(base64ToBytes(logo.bitmap), expected);
+        return { bits, widthDots, heightDots };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Render a stored logo to a PNG data URI for display.
+ *
+ * Synchronous: painting raw bits onto a canvas needs no image decode — only
+ * loading an ENCODED file does. That is what lets the single stored
+ * representation feed both the on-screen receipt and the settings preview
+ * without a second copy that could drift from the paper.
+ */
+export function receiptLogoDataUrl(logo: ReceiptLogo | undefined | null): string | null {
+    const decoded = decodeReceiptLogo(logo);
+    if (!decoded || typeof document === 'undefined') return null;
+
+    const { bits, widthDots, heightDots } = decoded;
+    const canvas = document.createElement('canvas');
+    canvas.width = widthDots;
+    canvas.height = heightDots;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const image = ctx.createImageData(widthDots, heightDots);
+    const stride = packedRowBytes(widthDots);
+    for (let y = 0; y < heightDots; y += 1) {
+        for (let x = 0; x < widthDots; x += 1) {
+            const black = (bits[y * stride + (x >> 3)] & (0x80 >> (x & 7))) !== 0;
+            const p = (y * widthDots + x) * 4;
+            const value = black ? 0 : 255;
+            image.data[p] = value;
+            image.data[p + 1] = value;
+            image.data[p + 2] = value;
+            image.data[p + 3] = 255;
+        }
+    }
+    ctx.putImageData(image, 0, 0);
+    return canvas.toDataURL('image/png');
 }
