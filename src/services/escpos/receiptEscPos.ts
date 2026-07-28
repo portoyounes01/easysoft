@@ -105,12 +105,13 @@ function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions
         b.rule();
     }
 
-    // Document header
-    centered(documentTitle(receipt.documentType, t), true);
+    // Document header. The slip carries no document-type title at all: it is not
+    // a document type, and naming it invites the customer to read it as one.
     if (nonFiscal) {
         // No fatura number: the slip must never consume one from the fiscal series.
         centered(`${t('thermalReceipt.internalIdLabel')} ${receipt.documentNumber}`);
     } else {
+        centered(documentTitle(receipt.documentType, t), true);
         centered(`${receipt.documentNumber} ${receipt.documentLabel || t('thermalReceipt.original')}`);
     }
     centered(`${t('thermalReceipt.dateLabel')} ${formatReceiptDate(receipt.date, dateLocale)} ${receipt.counter}`);
@@ -200,41 +201,53 @@ function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions
 
     b.rule();
 
+    // Trailer. Each block closes with its OWN separator, and the queue number
+    // opens with none — so a slip that omits several blocks ends with one rule
+    // rather than a stack of them. (A fatura printed without a software line
+    // used to double them up here too.)
     if (receipt.slogan) {
         centered(receipt.slogan, true);
         b.rule();
     }
-    if (receipt.softwareInfo) centered(receipt.softwareInfo);
-    b.rule();
-
-    // Payment
-    b.line(t('thermalReceipt.paidWith', { method: receipt.payment.method }));
-    if (CASH_METHODS.includes(receipt.payment.method)) {
-        b.pair(t('thermalReceipt.cashReceived'), money(receipt.payment.amountGiven));
-        b.pair(t('thermalReceipt.change'), money(receipt.payment.change));
+    if (receipt.softwareInfo) {
+        centered(receipt.softwareInfo);
+        b.rule();
     }
 
-    b.rule();
+    // Payment + legal line — fiscal documents only.
+    //
+    // The slip is not a receipt. Stating a tender, an amount given and change
+    // would present it as proof of payment, which is exactly the reading the
+    // "não serve como fatura" line exists to prevent — the handwritten invoice
+    // is what evidences this sale. The cashier's instruction to write it lives
+    // in the till UI and the fiscal log, not on the customer's copy.
+    //
+    // The legal line goes the same way: neither the AT certification phrase nor
+    // the Veri*factu legend may appear on a document that was not issued through
+    // the certified path, and nothing takes their place.
+    if (!nonFiscal) {
+        b.line(t('thermalReceipt.paidWith', { method: receipt.payment.method }));
+        if (CASH_METHODS.includes(receipt.payment.method)) {
+            b.pair(t('thermalReceipt.cashReceived'), money(receipt.payment.amountGiven));
+            b.pair(t('thermalReceipt.change'), money(receipt.payment.change));
+        }
+        b.rule();
 
-    // Legal line — ES: Veri*factu legend; PT: hash chars + certification phrase
-    if (nonFiscal) {
-        // Neither the AT certification phrase nor the Veri*factu legend may
-        // appear on a document that was not issued through the certified path.
-        centered(t('thermalReceipt.nonFiscalIssueHint'));
-    } else if (receipt.verifactuLegend?.trim()) {
-        centered(receipt.verifactuLegend.trim(), true);
-    } else {
-        centered(
-            t('thermalReceipt.certifiedLine', {
-                hashPrefix: receipt.hashFourChars?.trim() ? `${receipt.hashFourChars.trim()}-` : '',
-                num: certificationNumberForReceiptDisplay(receipt.certificationNumber),
-            })
-        );
+        if (receipt.verifactuLegend?.trim()) {
+            centered(receipt.verifactuLegend.trim(), true);
+        } else {
+            centered(
+                t('thermalReceipt.certifiedLine', {
+                    hashPrefix: receipt.hashFourChars?.trim() ? `${receipt.hashFourChars.trim()}-` : '',
+                    num: certificationNumberForReceiptDisplay(receipt.certificationNumber),
+                })
+            );
+        }
+        b.rule();
     }
 
     // Order queue number, last (freshly issued receipts only)
     if (receipt.ticketNumber) {
-        b.rule();
         centered(t('thermalReceipt.orderTicketLabel'), true);
         b.align('center').bold(true).size(2, 2).line(receipt.ticketNumber).size(1, 1).bold(false).align('left');
     }

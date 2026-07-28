@@ -71,6 +71,13 @@ const slipReceipt: ReceiptProps = {
 const linesOf = (receipt: ReceiptProps) =>
     decodeLines(buildReceiptEscPos(receipt, { language: 'pt' })).join('\n');
 
+/** Consecutive separator lines with nothing between them. */
+const doubledRules = (receipt: ReceiptProps): number => {
+    const lines = decodeLines(buildReceiptEscPos(receipt, { language: 'pt' }));
+    const isRule = (line: string) => /^[-=]{10,}$/.test(line.trim());
+    return lines.filter((line, i) => i > 0 && isRule(line) && isRule(lines[i - 1])).length;
+};
+
 describe('non-fiscal slip (ESC/POS)', () => {
     it('never prints an ATCUD', () => {
         expect(linesOf(fiscalReceipt)).toContain('CSDF7T5H-0137');
@@ -83,11 +90,35 @@ describe('non-fiscal slip (ESC/POS)', () => {
     });
 
     // The AT certification phrase asserts the document came out of certified
-    // software. It did not.
-    it('replaces the certification line with the paper-book instruction', () => {
+    // software. It did not, and nothing takes its place.
+    it('drops the certification line and puts nothing in its place', () => {
         const printed = linesOf(slipReceipt);
         expect(printed).not.toContain('9999');
-        expect(printed.toLowerCase()).toContain('fatura');
+        expect(printed.toLowerCase()).not.toContain('emita a fatura');
+        expect(printed.toLowerCase()).not.toContain('livro');
+    });
+
+    // It records WHAT was ordered. Naming a tender, an amount given and change
+    // would present it as proof of payment — the very reading the "não serve
+    // como fatura" line exists to prevent.
+    it('prints no payment block', () => {
+        const fiscal = linesOf(fiscalReceipt);
+        expect(fiscal.toLowerCase()).toContain('pago em');
+
+        const printed = linesOf(slipReceipt).toLowerCase();
+        expect(printed).not.toContain('pago em');
+        expect(printed).not.toContain('troco');
+        expect(printed).not.toContain('numer');   // the tender name itself
+    });
+
+    // Naming a document type invites the customer to read it as one.
+    it('prints no document-type title', () => {
+        expect(linesOf(fiscalReceipt).toUpperCase()).toContain('FATURA SIMPLIFICADA');
+
+        const printed = linesOf(slipReceipt).toUpperCase();
+        expect(printed).not.toContain('DE VENDA');
+        // The ID is the first thing under the company block.
+        expect(printed).toContain('ID: TNF-3F9A21-000004');
     });
 
     // Accents come back as code-page bytes through the decoder, so assert on
@@ -111,6 +142,13 @@ describe('non-fiscal slip (ESC/POS)', () => {
         expect(printed).not.toContain('FS 2026A/000137');
     });
 
+    // Dropping three blocks must not leave the separators that framed them.
+    it('never stacks separators, on either document', () => {
+        expect(doubledRules({ ...slipReceipt, slogan: 'OBRIGADO', ticketNumber: 'A-014' })).toBe(0);
+        expect(doubledRules(slipReceipt)).toBe(0);
+        expect(doubledRules(fiscalReceipt)).toBe(0);
+    });
+
     // Everything the customer needs to check what they paid still prints.
     it('keeps the commercial content of the sale', () => {
         const printed = linesOf(slipReceipt);
@@ -118,5 +156,6 @@ describe('non-fiscal slip (ESC/POS)', () => {
         expect(printed).toContain('Padaria S');
         expect(printed).toContain('1,05');       // total, pt decimal separator
         expect(printed.toUpperCase()).toContain('TOTAL');
+        expect(printed.toUpperCase()).toContain('IVA');
     });
 });

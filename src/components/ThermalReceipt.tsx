@@ -397,8 +397,10 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         </>
       )}
 
-      {/* Document Header */}
-      <div className="center bold">{getDocumentTitle()}</div>
+      {/* Document header. The slip carries no document-type title at all: it is
+          not a document type, and naming it invites the customer to read it as
+          one. It goes straight to the internal ID. */}
+      {!nonFiscal && <div className="center bold">{getDocumentTitle()}</div>}
       <div className="center">
         {nonFiscal
           // No fatura number: the slip must never consume one from the fiscal series.
@@ -560,37 +562,43 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       <div className="separator"></div>
 
-      {/* Payment Info */}
-      <div className="left">{t('thermalReceipt.paidWith', { method: payment.method })}</div>
-      {isCashPayment && (
+      {/* Payment + legal line — fiscal documents only.
+
+          The slip is not a receipt. Stating a tender, an amount given and change
+          would present it as proof of payment, which is exactly the reading the
+          "não serve como fatura" line exists to prevent — the handwritten
+          invoice is what evidences this sale. Neither the AT certification
+          phrase nor the Veri*factu legend may appear either, and nothing takes
+          their place. */}
+      {!nonFiscal && (
         <>
-          <div className="item-row">
-            <span>{t('thermalReceipt.cashReceived')}</span>
-            <span>{formatCurrency(payment.amountGiven)}</span>
-          </div>
-          <div className="item-row">
-            <span>{t('thermalReceipt.change')}</span>
-            <span>{formatCurrency(payment.change)}</span>
-          </div>
+          <div className="left">{t('thermalReceipt.paidWith', { method: payment.method })}</div>
+          {isCashPayment && (
+            <>
+              <div className="item-row">
+                <span>{t('thermalReceipt.cashReceived')}</span>
+                <span>{formatCurrency(payment.amountGiven)}</span>
+              </div>
+              <div className="item-row">
+                <span>{t('thermalReceipt.change')}</span>
+                <span>{formatCurrency(payment.change)}</span>
+              </div>
+            </>
+          )}
+
+          <div className="separator"></div>
+
+          {verifactuLegend?.trim() ? (
+            <div className="center small-text bold">{verifactuLegend.trim()}</div>
+          ) : (
+            <div className="center small-text">
+              {t('thermalReceipt.certifiedLine', {
+                hashPrefix: hashFourChars?.trim() ? `${hashFourChars.trim()}-` : '',
+                num: certificationNumberForReceiptDisplay(certificationNumber),
+              })}
+            </div>
+          )}
         </>
-      )}
-
-      <div className="separator"></div>
-
-      {/* Legal — ES: the Veri*factu legend; PT: 4 hash chars + AT certification phrase (LogicPOS layout) */}
-      {nonFiscal ? (
-        // Neither the AT certification phrase nor the Veri*factu legend may
-        // appear on a document that was not issued through the certified path.
-        <div className="center small-text">{t('thermalReceipt.nonFiscalIssueHint')}</div>
-      ) : verifactuLegend?.trim() ? (
-        <div className="center small-text bold">{verifactuLegend.trim()}</div>
-      ) : (
-        <div className="center small-text">
-          {t('thermalReceipt.certifiedLine', {
-            hashPrefix: hashFourChars?.trim() ? `${hashFourChars.trim()}-` : '',
-            num: certificationNumberForReceiptDisplay(certificationNumber),
-          })}
-        </div>
       )}
 
       {/* Order queue number — printed last, below a dashed separator. Only present
