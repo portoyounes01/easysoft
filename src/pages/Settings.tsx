@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import ReceiptLogoPicker from '../components/ReceiptLogoPicker';
+import { readDevicePairingScope } from '../utils/devicePairingStorage';
 import { DialogSwitch } from '../components/ui/dialogParts';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { TableActionButton } from '../components/ui/TableActionButton';
@@ -1549,6 +1550,7 @@ const Settings: React.FC = () => {
                         value={settings.company.logo}
                         onChange={logo => handleSettingsChange('company', 'logo', logo)}
                         canPublish={isSystemAdmin || principal?.role === 'owner' || principal?.role === 'admin'}
+                        storeId={readDevicePairingScope()?.storeId ?? (principal?.storeIds?.length === 1 ? principal.storeIds[0] : null)}
                     />
                 </div>
                 <div>

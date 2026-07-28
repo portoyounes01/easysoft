@@ -9,6 +9,8 @@ interface ReceiptLogoPickerProps {
     onChange: (logo: ReceiptLogo | undefined) => void;
     /** False when the signed-in human may not publish tenant branding. */
     canPublish?: boolean;
+    /** This till's store, when one is resolvable — enables the store-only scope. */
+    storeId?: string | null;
 }
 
 /**
@@ -28,10 +30,14 @@ export const ReceiptLogoPicker: React.FC<ReceiptLogoPickerProps> = ({
     value,
     onChange,
     canPublish = true,
+    storeId = null,
 }) => {
     const { t } = useTranslation();
     const inputRef = useRef<HTMLInputElement>(null);
     const [busy, setBusy] = useState(false);
+    // Default to the tenant: one brand across every location is the common
+    // case, and it is the choice that does not need repeating per store.
+    const [scopeToStore, setScopeToStore] = useState(false);
     // Rendered from the stored bits, so this preview IS the printed image.
     const preview = useMemo(() => receiptLogoDataUrl(value), [value]);
     const [error, setError] = useState<string | null>(null);
@@ -50,7 +56,7 @@ export const ReceiptLogoPicker: React.FC<ReceiptLogoPickerProps> = ({
             return;
         }
         try {
-            await saveTenantReceiptLogo(logo);
+            await saveTenantReceiptLogo(logo, { storeId: scopeToStore ? storeId : null });
             setError(null);
         } catch {
             setError(t('settings.receiptLogo.publishFailed'));
@@ -94,11 +100,40 @@ export const ReceiptLogoPicker: React.FC<ReceiptLogoPickerProps> = ({
 
                 <div className="min-w-0 flex-1 space-y-2">
                     <p className="text-sm text-slate-600">{t('settings.receiptLogo.help')}</p>
+                    {storeId && (
+                        <p className="text-sm text-slate-500">
+                            {scopeToStore
+                                ? t('settings.receiptLogo.scopeStoreHint')
+                                : t('settings.receiptLogo.scopeTenantHint')}
+                        </p>
+                    )}
                     {value && (
                         <p className="font-mono text-xs text-slate-500">
                             {value.widthDots} × {value.heightDots} {t('settings.receiptLogo.dots')}
                         </p>
                     )}
+                    {storeId && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            {[false, true].map(storeOnly => (
+                                <button
+                                    key={String(storeOnly)}
+                                    type="button"
+                                    onClick={() => setScopeToStore(storeOnly)}
+                                    aria-pressed={scopeToStore === storeOnly}
+                                    data-testid={storeOnly ? 'logo-scope-store' : 'logo-scope-tenant'}
+                                    className={`min-h-touch-sm rounded-xl border-2 px-4 py-2 text-sm font-semibold ${scopeToStore === storeOnly
+                                        ? 'border-slate-800 bg-slate-800 text-white'
+                                        : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    {storeOnly
+                                        ? t('settings.receiptLogo.scopeStore')
+                                        : t('settings.receiptLogo.scopeTenant')}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     <div className="flex flex-wrap gap-2">
                         <button
                             type="button"
