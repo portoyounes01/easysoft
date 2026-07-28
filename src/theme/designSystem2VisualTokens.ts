@@ -436,19 +436,86 @@ export function radiusBasePxForPreset(preset: DesignSystem2RadiusPreset, customP
     return Math.round((RADIUS_MULT[preset] ?? 1) * DS2_RADIUS_BASE_PX);
 }
 
-export function getRadiusCssVars(preset: DesignSystem2RadiusPreset, customPx: number = DS2_RADIUS_BASE_PX): CssVarMap {
+/** Unscaled px per radius token — one preset multiplier scales them together. */
+const RADIUS_TOKEN_BASE_PX = {
+    sm: 6,
+    md: 10,
+    lg: 8,
+    xl: 12,
+    '2xl': 16,
+    toggle: 10,
+    action: 12,
+} as const;
+
+type RadiusToken = keyof typeof RADIUS_TOKEN_BASE_PX;
+
+const RADIUS_TOKENS: readonly RadiusToken[] = ['sm', 'md', 'lg', 'xl', '2xl', 'toggle', 'action'];
+
+/** No `button.rounded-sm` rule exists, so the button scale stops at the six tokens that have one. */
+const BUTTON_RADIUS_TOKENS: readonly RadiusToken[] = ['md', 'lg', 'xl', '2xl', 'toggle', 'action'];
+
+/**
+ * Both radius scales run through here, so the button axis and the general axis
+ * are the same arithmetic under two variable prefixes — equal presets emit
+ * equal pixels, which is what makes backfilling one from the other exact.
+ */
+function radiusScaleVars(
+    prefix: string,
+    preset: DesignSystem2RadiusPreset,
+    customPx: number,
+    tokens: readonly RadiusToken[]
+): CssVarMap {
     const mult = preset === 'custom'
         ? radiusBasePxForPreset(preset, customPx) / DS2_RADIUS_BASE_PX
         : RADIUS_MULT[preset] ?? 1;
-    const r = (px: number) => `${Math.round(px * mult * 100) / 100}px`;
+    const out: CssVarMap = {};
+    tokens.forEach((token) => {
+        out[`${prefix}-${token}`] = `${Math.round(RADIUS_TOKEN_BASE_PX[token] * mult * 100) / 100}px`;
+    });
+    return out;
+}
+
+export function getRadiusCssVars(preset: DesignSystem2RadiusPreset, customPx: number = DS2_RADIUS_BASE_PX): CssVarMap {
+    return radiusScaleVars('--ds2-radius', preset, customPx, RADIUS_TOKENS);
+}
+
+/** Corner scale for buttons only — see the `button.rounded-*` block in design-system-2-scope.css. */
+export function getButtonRadiusCssVars(preset: DesignSystem2RadiusPreset, customPx: number = DS2_RADIUS_BASE_PX): CssVarMap {
+    return radiusScaleVars('--ds2-btn-radius', preset, customPx, BUTTON_RADIUS_TOKENS);
+}
+
+/**
+ * Button height axis, expressed against the `min-h-touch*` tiers it drives.
+ *
+ * The floor is min-h-touch-xs itself: 44px is the smallest touch tier the app
+ * already ships and the usual minimum touch target, and a till is operated with
+ * a fingertip on a greasy screen — anything shorter is a mis-tap generator, so
+ * the axis can only make buttons taller, never shorter. The ceiling puts the
+ * tallest tier at 5rem, the kiosk height PairingButton already uses, so no
+ * setting produces a button bigger than one the app renders today.
+ */
+export const DS2_BUTTON_HEIGHT_MIN_PX = 44;
+export const DS2_BUTTON_HEIGHT_MAX_PX = 64;
+export const DS2_BUTTON_HEIGHT_BASE_PX = 44;
+
+export function clampButtonHeightPx(px: number): number {
+    return Math.min(DS2_BUTTON_HEIGHT_MAX_PX, Math.max(DS2_BUTTON_HEIGHT_MIN_PX, Math.round(px)));
+}
+
+/**
+ * The three tiers are an arithmetic 0.5rem ladder (2.75 / 3.25 / 3.75rem), so
+ * the axis offsets them rather than scaling them — the steps between tiers are
+ * the design, and a multiplier would stretch a numpad key far more than the
+ * chip next to it. Emitted in rem because the tokens are rem: they track the
+ * root font size, and dropping to px would quietly remove that.
+ */
+export function getButtonHeightCssVars(px: number = DS2_BUTTON_HEIGHT_BASE_PX): CssVarMap {
+    const base = clampButtonHeightPx(px) / 16;
+    const rem = (value: number) => `${Math.round(value * 10000) / 10000}rem`;
     return {
-        '--ds2-radius-sm': r(6),
-        '--ds2-radius-md': r(10),
-        '--ds2-radius-lg': r(8),
-        '--ds2-radius-xl': r(12),
-        '--ds2-radius-2xl': r(16),
-        '--ds2-radius-toggle': r(10),
-        '--ds2-radius-action': r(12),
+        '--ds2-btn-h-touch': rem(base + 1),
+        '--ds2-btn-h-touch-sm': rem(base + 0.5),
+        '--ds2-btn-h-touch-xs': rem(base),
     };
 }
 

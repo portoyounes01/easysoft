@@ -21,11 +21,16 @@ const HardwareController = require('./hardware/hardwareController');
 const { registerFiscalSigningIpc } = require('./fiscalSigning');
 const { registerScaleIpc } = require('./scaleIpc');
 const { registerDeviceStoreIpc } = require('./deviceStore');
-const { initAutoUpdater, quitAndInstallIfPending } = require('./updater');
+const { initAutoUpdater, quitAndInstallIfPending, isGateInstallHeld } = require('./updater');
+const { configureUpdaterSplash, showSplashState, closeSplash, isSplashOpen } = require('./updaterWindow');
+const { evaluateMarkerAtBoot } = require('./updateMarker');
 
 let mainWindow;
 let hardwareController;
 let scaleController;
+// Set once at boot from the update marker; surfaced as a non-blocking gate row
+// only after auto-install has been suppressed.
+let updateNotice = null;
 
 // Windows toast notifications (the updater's "installing…" toast) only display
 // when the process carries the shortcut's AppUserModelID — electron-builder
@@ -111,10 +116,13 @@ function resolveAppProtocolPath(requestUrl) {
     pathname = '/index.html';
   }
 
-  // Host routing: app://gate/* serves the installer-local readiness gate
-  // (electron/gate — must render with no network and no dist/); every other
-  // host (app://pos/*) serves the bundled web build.
-  const root = url.host === 'gate' ? rendererConfig.gateRoot : rendererConfig.root;
+  // Host routing: app://gate/* serves the installer-local readiness gate and
+  // app://updater/* the installer-local update splash (both must render with no
+  // network and no dist/); every other host (app://pos/*) serves the bundled
+  // web build.
+  const root = url.host === 'gate' ? rendererConfig.gateRoot
+    : url.host === 'updater' ? rendererConfig.updaterRoot
+    : rendererConfig.root;
   const filePath = path.normalize(path.join(root, pathname));
   const rootWithSeparator = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
 
@@ -227,6 +235,7 @@ async function getGateState() {
     rendererConfig,
     hardwareController,
     shellVersion: app.getVersion(),
+    updateNotice,
   });
   state.autoProceed = autoProceedAllowed();
   return state;
@@ -347,8 +356,18 @@ async function createWindow() {
     mainWindow.show();
   });
 
+  // Safety net behind the deterministic close in gate:proceed — the update
+  // splash must never still be on screen once the POS is up. Production only:
+  // there the pre-handoff URL is always app://gate, whereas in dev the window
+  // sits on the dev server, so any hot reload would close the --pos-updater-
+  // splash preview and make it look broken.
+  mainWindow.webContents.on('did-navigate', (event, url) => {
+    if (!isDev && !url.startsWith('app://gate')) closeSplash('left-gate');
+  });
+
   // Handle window closed
   mainWindow.on('closed', () => {
+    closeSplash('main-window-closed');
     mainWindow = null;
     if (hardwareController) {
       hardwareController.cleanup();
@@ -367,10 +386,61 @@ async function createWindow() {
   await loadRenderer();
 }
 
+// None of the updater splash can be exercised end-to-end on a Mac (the updater
+// is inert in dev and refuses darwin; app:// is unregistered outside
+// production), so dev gets a scripted preview of each phase behind an argv flag.
+function startUpdaterSplashPreview() {
+  const phase = process.argv.find((arg) => arg.startsWith('--pos-updater-splash='));
+  if (!phase) return;
+  const requested = phase.slice('--pos-updater-splash='.length);
+  if (requested !== 'downloading') {
+    showSplashState(requested, { version: '0.1.11' });
+    return;
+  }
+  let percent = 0;
+  showSplashState('downloading', { version: '0.1.11', percent });
+  const timer = setInterval(() => {
+    percent += 5;
+    if (percent > 100) {
+      clearInterval(timer);
+      showSplashState('installing', { version: '0.1.11' });
+      return;
+    }
+    showSplashState('downloading', { version: '0.1.11', percent });
+  }, 400);
+}
+
 // App event handlers
 app.whenReady().then(async () => {
   registerProductionProtocol();
+
+  // Read before the window exists: the gate page asks for its state DURING
+  // loadURL, so a notice assigned after createWindow() would miss the first
+  // render and only appear on the 5s recheck.
+  const bootMarker = isDev ? { outcome: 'none' } : evaluateMarkerAtBoot();
+  updateNotice = bootMarker.suppressVersion
+    ? { version: bootMarker.version, attempts: bootMarker.attempts }
+    : null;
+
   await createWindow();
+
+  configureUpdaterSplash({
+    getMainWindow: () => mainWindow,
+    useAppProtocol: rendererConfig.mode === 'production',
+    getCurrentVersion: () => app.getVersion(),
+  });
+
+  // Runs regardless of feed config: this is a confirmation of what already
+  // happened, not an updater action.
+  if (bootMarker.outcome === 'updated') {
+    showSplashState('updated', { version: bootMarker.version });
+  } else if (bootMarker.outcome === 'failed' && bootMarker.suppressVersion) {
+    // Only once suppression trips — a power-cut boot must not flash a failure
+    // panel every single time.
+    showSplashState('failed', { version: bootMarker.version });
+  }
+
+  if (isDev) startUpdaterSplashPreview();
 
   // Auto-update channel (D-U5): inert without update_feed_url in config.json;
   // downloads in background, installs on quit — never interrupts selling.
@@ -379,6 +449,12 @@ app.whenReady().then(async () => {
     isDev,
     getWindow: () => mainWindow,
     ipcMain,
+    splash: {
+      set: (phase, payload) => showSplashState(phase, payload),
+      close: (reason) => closeSplash(reason || 'updater'),
+      isOpen: () => isSplashOpen(),
+    },
+    suppressVersion: bootMarker.suppressVersion || null,
   });
 
   app.on('activate', () => {
@@ -767,6 +843,13 @@ ipcMain.handle('gate:proceed', async (event) => {
   if (!event.sender.getURL().startsWith('app://gate')) {
     return { ok: false, error: 'not-at-gate' };
   }
+  // An install is seconds from taking the process down; handing off now would
+  // kill the POS mid-load. Bounded by the updater's own self-expiring
+  // timestamp, so this can only ever REFUSE a handoff, never permit one, and
+  // returning fresh state re-enables the gate's Continue button immediately.
+  if (isGateInstallHeld()) {
+    return { ok: false, error: 'update-installing', state: await getGateState() };
+  }
   // Manual Continue and the 5s auto-proceed can race; a second loadURL would
   // abort a good handoff and log a phantom failure. First caller wins.
   if (proceedInFlight) return { ok: false, error: 'busy' };
@@ -779,6 +862,7 @@ ipcMain.handle('gate:proceed', async (event) => {
     }
 
     try {
+      closeSplash('handoff'); // deterministic; the splash can never outlive the handoff
       await mainWindow.loadURL(rendererConfig.url);
       scheduleBlankUiWatchdog();
       return { ok: true };

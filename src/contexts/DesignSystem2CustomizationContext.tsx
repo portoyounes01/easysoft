@@ -16,9 +16,13 @@ import {
     getSecondaryCssVars,
     getPairingCssVars,
     getRadiusCssVars,
+    getButtonRadiusCssVars,
+    getButtonHeightCssVars,
+    clampButtonHeightPx,
     DS2_RADIUS_BASE_PX,
     DS2_RADIUS_MIN_PX,
     DS2_RADIUS_MAX_PX,
+    DS2_BUTTON_HEIGHT_BASE_PX,
     type DesignSystem2ColorChoiceId,
     type DesignSystem2RadiusPreset,
     type DesignSystem2BaseColorId,
@@ -59,9 +63,16 @@ export interface DesignSystem2Prefs {
     baseColorId: DesignSystem2BaseColorId;
     /** Which gray family maps `neutral-*` utilities in the preview scope */
     neutralFamilyId: DesignSystem2NeutralFamilyId;
+    /** Corners for everything except buttons — cards, inputs, panels, chips. */
     radiusPreset: DesignSystem2RadiusPreset;
     /** Base radius in px used when radiusPreset === 'custom' (the 'default' preset ≙ 10px). */
     radiusCustomPx: number;
+    /** Corners for buttons, independent of radiusPreset since buttons split off. */
+    buttonRadiusPreset: DesignSystem2RadiusPreset;
+    /** Base radius in px used when buttonRadiusPreset === 'custom'. */
+    buttonRadiusCustomPx: number;
+    /** Height of the min-h-touch-xs tier; the taller tiers follow by a fixed offset. */
+    buttonHeightPx: number;
     schemaVersion: number;
 }
 
@@ -77,6 +88,9 @@ const defaultPrefs: DesignSystem2Prefs = {
     neutralFamilyId: 'gray',
     radiusPreset: 'default',
     radiusCustomPx: DS2_RADIUS_BASE_PX,
+    buttonRadiusPreset: 'default',
+    buttonRadiusCustomPx: DS2_RADIUS_BASE_PX,
+    buttonHeightPx: DS2_BUTTON_HEIGHT_BASE_PX,
     schemaVersion: PREFS_SCHEMA_VERSION,
 };
 
@@ -147,6 +161,22 @@ function normalizePrefs(raw: LegacyPartial): DesignSystem2Prefs {
         ? Math.min(DS2_RADIUS_MAX_PX, Math.max(DS2_RADIUS_MIN_PX, Math.round(m.radiusCustomPx)))
         : defaultPrefs.radiusCustomPx;
 
+    // Buttons used to take their corners from radiusPreset; a device that stored
+    // its prefs before the split must not change shape on upgrade, so the button
+    // axis starts from whatever the general one was already giving it. Reads the
+    // validated values above, not the raw ones, so a corrupt stored preset is not
+    // copied forward.
+    if (raw.buttonRadiusPreset === undefined) m.buttonRadiusPreset = m.radiusPreset;
+    if (raw.buttonRadiusCustomPx === undefined) m.buttonRadiusCustomPx = m.radiusCustomPx;
+
+    if (!RADIUS_ALLOWED.includes(m.buttonRadiusPreset)) m.buttonRadiusPreset = defaultPrefs.buttonRadiusPreset;
+    m.buttonRadiusCustomPx = Number.isFinite(m.buttonRadiusCustomPx)
+        ? Math.min(DS2_RADIUS_MAX_PX, Math.max(DS2_RADIUS_MIN_PX, Math.round(m.buttonRadiusCustomPx)))
+        : defaultPrefs.buttonRadiusCustomPx;
+    m.buttonHeightPx = Number.isFinite(m.buttonHeightPx)
+        ? clampButtonHeightPx(m.buttonHeightPx)
+        : defaultPrefs.buttonHeightPx;
+
     return m;
 }
 
@@ -157,6 +187,8 @@ function buildVisualStyle(prefs: DesignSystem2Prefs): CSSProperties {
         ...getSecondaryCssVars(prefs.secondaryColorId),
         ...getPairingCssVars(prefs.primaryColorId, prefs.secondaryColorId),
         ...getRadiusCssVars(prefs.radiusPreset, prefs.radiusCustomPx),
+        ...getButtonRadiusCssVars(prefs.buttonRadiusPreset, prefs.buttonRadiusCustomPx),
+        ...getButtonHeightCssVars(prefs.buttonHeightPx),
     } as CSSProperties;
 }
 

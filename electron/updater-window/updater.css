@@ -1,0 +1,68 @@
+/* Update splash — same framework-free, high-contrast voice as the boot gate
+   (gate.css), and deliberately NOT the POS design system: this panel has to
+   render while the bundle NSIS is about to overwrite has never loaded. To the
+   operator it is the till talking about itself, so it must look like the gate. */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif;
+  background: #0f1420;
+  color: #e8ecf4;
+  height: 100vh;
+  overflow: hidden;
+  cursor: pointer; /* the whole body dismisses; nothing here is a control */
+  user-select: none;
+}
+
+.splash {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  align-content: center;
+  gap: 16px;
+  padding: 20px 26px;
+  border: 1px solid #1d2536;
+}
+
+.dot {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  margin-top: 5px;
+  justify-self: center;
+}
+.dot.green  { background: #2ecc71; }
+.dot.red    { background: #ff4d5e; box-shadow: 0 0 12px #ff4d5e88; }
+.dot.yellow { background: #f5b83d; }
+.dot.blue   { background: #4aa3ff; }
+
+.lines { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+.title { font-size: 17px; font-weight: 600; }
+.sub   { color: #93a0b8; font-size: 13px; }
+.hint  { color: #ffce8a; font-size: 12px; line-height: 1.5; }
+
+.bar {
+  height: 6px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: #1d2536;
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: #4aa3ff;
+  transition: width 200ms linear;
+}
+/* No percentage to show (install, or a feed that reports no total): keep the
+   bar moving so a stalled-looking panel is not mistaken for a frozen till. */
+.fill.indeterminate {
+  width: 35%;
+  transition: none;
+  animation: slide 1.4s ease-in-out infinite;
+}
+@keyframes slide {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(320%); }
+}

@@ -173,7 +173,7 @@ async function checkHardware(hardwareController) {
   }
 }
 
-async function runPreflight({ rendererConfig, hardwareController, shellVersion }) {
+async function runPreflight({ rendererConfig, hardwareController, shellVersion, updateNotice }) {
   const runtime = rendererConfig.runtime;
 
   // -- config.json validity (blocking when present-but-broken; absent is fine) --
@@ -202,6 +202,17 @@ async function runPreflight({ rendererConfig, hardwareController, shellVersion }
   ]);
 
   const checks = [configCheck, internetCheck, backendCheck, uiCheck, shellCheck, ...hardwareChecks];
+
+  // Repeated silent install failures (updateMarker) — info, never blocking: a
+  // till that cannot update must still sell. The fix names the gate's own
+  // Reiniciar button, which routes through quitAndInstallIfPending and is
+  // reachable even when the POS UI is not.
+  if (updateNotice) {
+    checks.push(check('update-install', 'info', 'yellow', 'Atualização por instalar / Pending update',
+      `a instalação da versão ${updateNotice.version} falhou ${updateNotice.attempts}× — instalação automática suspensa`,
+      'Prima “Reiniciar” para tentar de novo; se persistir, contacte o suporte com o código GATE-UPDATE'));
+  }
+
   const allBlockingGreen = checks.every((c) => c.class !== 'blocking' || c.status === 'green');
 
   return {
