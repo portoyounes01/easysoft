@@ -8,6 +8,7 @@ import {
   certificationNumberForReceiptDisplay,
 } from '../utils/receiptCertification';
 import type { FiscalOfficialOutput } from '../fiscal/types';
+import type { ReceiptLogo } from '../utils/receiptLogo';
 
 interface ReceiptItem {
   id: string;
@@ -29,6 +30,8 @@ interface ReceiptCompany {
   taxNumber: string;
   phone?: string;
   email?: string;
+  /** Prepared once when chosen (utils/receiptLogo.ts); absent = print nothing. */
+  logo?: ReceiptLogo;
 }
 
 /** `address` = full morada (single line), not split by postal/city. */
@@ -349,8 +352,18 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         </div>
       )}
 
-      {/* Logo/Header */}
-      <div className="center company-logo">{t('thermalReceipt.logoPlaceholder')}</div>
+      {/* Logo. The stored preview is the dithered bitmap, so this is exactly
+          what the thermal head prints. No logo configured => nothing here; a
+          placeholder string on a customer's receipt reads as broken software. */}
+      {company.logo?.dataUrl && (
+        <div className="center company-logo">
+          <img
+            src={company.logo.dataUrl}
+            alt=""
+            style={{ maxWidth: '100%', height: 'auto', imageRendering: 'pixelated' }}
+          />
+        </div>
+      )}
 
       {/* Company Info */}
       <div className="center bold">{company.name}</div>

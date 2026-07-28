@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import ReceiptLogoPicker from '../components/ReceiptLogoPicker';
 import { DialogSwitch } from '../components/ui/dialogParts';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { TableActionButton } from '../components/ui/TableActionButton';
@@ -1541,6 +1542,12 @@ const Settings: React.FC = () => {
                         value={settings.company.email || ''}
                         onChange={event => handleSettingsChange('company', 'email', event.target.value)}
                         className={fieldClass}
+                    />
+                </div>
+                <div className="md:col-span-2">
+                    <ReceiptLogoPicker
+                        value={settings.company.logo}
+                        onChange={logo => handleSettingsChange('company', 'logo', logo)}
                     />
                 </div>
                 <div>

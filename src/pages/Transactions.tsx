@@ -454,6 +454,7 @@ const TransactionsInner: React.FC = () => {
                 postalCode: settings.company.postalCode,
                 city: settings.company.city,
                 taxNumber: settings.company.taxNumber,
+                logo: settings.company.logo,
                 phone: settings.company.phone || undefined,
                 email: settings.company.email || undefined,
             },

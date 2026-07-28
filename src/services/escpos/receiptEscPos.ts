@@ -10,6 +10,7 @@ import { certificationNumberForReceiptDisplay } from '../../utils/receiptCertifi
 import { computeReceiptTotals, formatReceiptCurrency, round2 } from '../../utils/receiptTotals';
 import { getReceiptT, normalizeReceiptLanguage, type ReceiptLanguage } from '../../utils/receiptLanguage';
 import { EscPosBuilder, padEnd, padStart, wrapText, type EscPosCodePage } from './escposBuilder';
+import { base64ToBytes } from '../../utils/receiptLogo';
 
 export interface BuildReceiptOptions {
     /** Defaults to the receipt's own override, then 'pt'. */
@@ -77,8 +78,16 @@ function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions
         b.feed(1);
     }
 
-    // Logo placeholder + company block
-    b.align('center').bold(true).size(1, 2).line(t('thermalReceipt.logoPlaceholder')).size(1, 1);
+    // Logo + company block.
+    //
+    // The raster was packed when the operator chose the image
+    // (utils/receiptLogo.ts) precisely because this function is synchronous and
+    // decoding an image is not. No logo configured => nothing prints here.
+    const logo = receipt.company.logo;
+    if (logo?.bitmapBase64 && logo.widthDots > 0 && logo.heightDots > 0) {
+        b.bitmap(base64ToBytes(logo.bitmapBase64), logo.widthDots, logo.heightDots);
+    }
+    b.align('center').bold(true);
     b.line(receipt.company.name);
     b.line(`${t('thermalReceipt.nifLabel')} ${receipt.company.taxNumber.replace(/\s/g, '')}`);
     b.bold(false);

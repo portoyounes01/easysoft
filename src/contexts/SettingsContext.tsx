@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 
 import { applyFiscalSecretsFromEnv, settingsWithoutPersistedFiscalSecrets } from '../utils/fiscalEnvDefaults';
+import type { ReceiptLogo } from '../utils/receiptLogo';
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { defaultSeriesProfiles, normalizeStoredSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { normalizeReceiptLanguage, type ReceiptLanguage } from '../utils/receiptLanguage';
@@ -268,6 +269,10 @@ export interface SystemSettings {
         softwareInfo?: string;
         certificationNumber?: string;
         softwareCertNumber?: string; // AT software certification number
+        /** Printed at the top of every receipt. Prepared once when chosen
+         *  (utils/receiptLogo.ts) because the ESC/POS builder is synchronous.
+         *  Per-device: settings live in localStorage and are not synced. */
+        logo?: ReceiptLogo;
     };
     receipt: {
         defaultDocumentType: 'FATURA' | 'FATURA_SIMPLIFICADA';

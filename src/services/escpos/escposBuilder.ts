@@ -261,9 +261,51 @@ export class EscPosBuilder {
         return this.feed(4).raw(0x1d, 0x56, 0x00);
     }
 
-    /** QR as a raster bitmap (GS v 0) rather than the native GS ( k symbol:
-     *  a bitmap prints on any ESC/POS head, and it is centred by padding here
-     *  instead of trusting the printer to honour alignment for images. */
+    /**
+     * Raster bitmap (GS v 0), centred on the paper.
+     *
+     * Every row is emitted at the FULL head width and the image is centred by
+     * left-padding here, rather than by trusting the printer to honour an
+     * alignment command for images — heads disagree about that, and a logo
+     * that silently prints flush-left on some models is worse than none.
+     *
+     * @param dotAt returns true when the dot at (x, y) of the image is black.
+     */
+    raster(imageWidthDots: number, imageHeightDots: number, dotAt: (x: number, y: number) => boolean): this {
+        const bytesPerRow = PRINTER_DOT_WIDTH / 8;
+        const width = Math.min(imageWidthDots, PRINTER_DOT_WIDTH);
+        const leftPad = Math.max(0, Math.floor((PRINTER_DOT_WIDTH - width) / 2));
+
+        this.align('left').raw(
+            0x1d, 0x76, 0x30, 0x00,
+            bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff,
+            imageHeightDots & 0xff, (imageHeightDots >> 8) & 0xff,
+        );
+
+        for (let y = 0; y < imageHeightDots; y += 1) {
+            const row = new Array<number>(bytesPerRow).fill(0);
+            for (let x = 0; x < width; x += 1) {
+                if (!dotAt(x, y)) continue;
+                const dot = leftPad + x;
+                if (dot >= PRINTER_DOT_WIDTH) continue;
+                row[dot >> 3] |= 0x80 >> (dot & 7);
+            }
+            for (const byte of row) this.bytes.push(byte);
+        }
+        return this;
+    }
+
+    /** A pre-packed 1-bit image: rows of ceil(width/8) bytes, MSB leftmost. */
+    bitmap(bits: Uint8Array, widthDots: number, heightDots: number): this {
+        const stride = Math.ceil(widthDots / 8);
+        return this.raster(widthDots, heightDots, (x, y) => {
+            const byte = bits[y * stride + (x >> 3)];
+            return byte === undefined ? false : (byte & (0x80 >> (x & 7))) !== 0;
+        });
+    }
+
+    /** QR as a raster bitmap rather than the native GS ( k symbol: a bitmap
+     *  prints on any ESC/POS head. */
     qr(data: string, options: { scale?: number; quietZone?: number } = {}): this {
         const matrix = createQrMatrix(data, { errorCorrectionLevel: 'M' }).modules;
         const quiet = options.quietZone ?? 4;
@@ -271,31 +313,14 @@ export class EscPosBuilder {
         const scale = options.scale
             ?? Math.max(QR_MIN_MODULE_DOTS, Math.floor(QR_TARGET_DOTS / moduleSpan));
         const imageDots = Math.min(moduleSpan * scale, PRINTER_DOT_WIDTH);
-        const bytesPerRow = PRINTER_DOT_WIDTH / 8;
-        const leftPad = Math.max(0, Math.floor((PRINTER_DOT_WIDTH - imageDots) / 2));
 
-        this.align('left').raw(
-            0x1d, 0x76, 0x30, 0x00,
-            bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff,
-            imageDots & 0xff, (imageDots >> 8) & 0xff,
-        );
-
-        for (let y = 0; y < imageDots; y += 1) {
-            const row = new Array<number>(bytesPerRow).fill(0);
+        return this.raster(imageDots, imageDots, (x, y) => {
             const moduleRow = Math.floor(y / scale) - quiet;
-            if (moduleRow >= 0 && moduleRow < matrix.size) {
-                for (let x = 0; x < imageDots; x += 1) {
-                    const moduleCol = Math.floor(x / scale) - quiet;
-                    if (moduleCol < 0 || moduleCol >= matrix.size) continue;
-                    if (!matrix.data[moduleRow * matrix.size + moduleCol]) continue;
-                    const dot = leftPad + x;
-                    if (dot >= PRINTER_DOT_WIDTH) continue;
-                    row[dot >> 3] |= 0x80 >> (dot & 7);
-                }
-            }
-            for (const byte of row) this.bytes.push(byte);
-        }
-        return this;
+            const moduleCol = Math.floor(x / scale) - quiet;
+            if (moduleRow < 0 || moduleRow >= matrix.size) return false;
+            if (moduleCol < 0 || moduleCol >= matrix.size) return false;
+            return Boolean(matrix.data[moduleRow * matrix.size + moduleCol]);
+        });
     }
 
     build(): Uint8Array {
