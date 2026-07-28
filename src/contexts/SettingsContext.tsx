@@ -3,6 +3,7 @@ import React, { createContext, useContext, useReducer, useEffect, ReactNode } fr
 import { applyFiscalSecretsFromEnv, settingsWithoutPersistedFiscalSecrets } from '../utils/fiscalEnvDefaults';
 import type { ReceiptLogo } from '../utils/receiptLogo';
 import { RECEIPT_LOGO_CHANGED_EVENT } from '../services/receiptBrandingSync';
+import { COMPANY_PROFILE_CHANGED_EVENT } from '../services/companyProfileSync';
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { defaultSeriesProfiles, normalizeStoredSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { normalizeReceiptLanguage, type ReceiptLanguage } from '../utils/receiptLanguage';
@@ -731,6 +732,18 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         };
         window.addEventListener(RECEIPT_LOGO_CHANGED_EVENT, onLogoChanged);
         return () => window.removeEventListener(RECEIPT_LOGO_CHANGED_EVENT, onLogoChanged);
+    }, []);
+
+    // Same bridge for the company block (services/companyProfileSync). The
+    // server owns it now, so a till that syncs mid-shift starts printing the
+    // corrected header without a reload.
+    useEffect(() => {
+        const onCompanyChanged = (event: Event) => {
+            const company = (event as CustomEvent).detail as Partial<SystemSettings['company']>;
+            dispatch({ type: 'UPDATE_SETTINGS', payload: { company } });
+        };
+        window.addEventListener(COMPANY_PROFILE_CHANGED_EVENT, onCompanyChanged);
+        return () => window.removeEventListener(COMPANY_PROFILE_CHANGED_EVENT, onCompanyChanged);
     }, []);
 
     // ABOVE SettingsProvider — resolve the country's default language at init time.

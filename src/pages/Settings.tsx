@@ -57,6 +57,13 @@ import { ivaRatesForCountry } from '../types/supabase';
 import { getCountryProfile, OPERATING_COUNTRIES, type OperatingCountry } from '../lib/countryProfile';
 import { useLanguage } from '../contexts/LanguageContext';
 import { isSystemAdministrator } from '../utils/systemAdmin';
+import { isSupabaseConfigured } from '../lib/supabase';
+import {
+    listCompanyStores,
+    saveCompanySlogan,
+    saveStoreCompany,
+    type CompanyStoreOption,
+} from '../services/companyProfileService';
 import { generateUUID } from '../utils/uuid';
 import type { ReceiptLanguage } from '../utils/receiptLanguage';
 import { PrinterSettingsPanel, type HardwareSettingsTool } from './PrinterTestPage';
@@ -416,6 +423,36 @@ const Settings: React.FC = () => {
         }
     }, [searchParams, devToolsEnabled]);
 
+    // Company block: the server owns it (migration 20260810000000), so the
+    // fields below are edited locally and published on Save. Identity (FIRMA,
+    // NIPC) is NOT published from here — it belongs to the platform console.
+    const canEditCompany = isSystemAdmin || principal?.role === 'owner' || principal?.role === 'admin';
+    /** Identity comes from the tenant record once there IS a tenant record.
+     *  A local install with no Supabase keeps typing it here. */
+    const companyIdentityLocked = isSupabaseConfigured() && !isSystemAdministrator(employee);
+    const [companyStores, setCompanyStores] = useState<CompanyStoreOption[]>([]);
+    const [companyStoreId, setCompanyStoreId] = useState<string | null>(
+        readDevicePairingScope()?.storeId ?? null
+    );
+    const [companyPublishError, setCompanyPublishError] = useState('');
+
+    useEffect(() => {
+        if (!isSupabaseConfigured() || !canEditCompany) return;
+        let cancelled = false;
+        void (async () => {
+            const stores = await listCompanyStores();
+            if (cancelled || !stores) return;
+            setCompanyStores(stores);
+            // A till already knows its store. A back office with exactly one
+            // store has no real choice to make, so it is picked for them; with
+            // several, the picker starts empty rather than guessing one.
+            setCompanyStoreId(prev => prev ?? (stores.length === 1 ? stores[0].id : null));
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [canEditCompany]);
+
     const markChanged = useCallback(() => {
         setPendingChanges(true);
         setSaveStatus('idle');
@@ -673,21 +710,41 @@ const Settings: React.FC = () => {
 
     const handleSave = useCallback(async () => {
         setSaveStatus('saving');
+        setCompanyPublishError('');
         try {
             const baseline = savedSettingsBaselineRef.current ?? cloneSettingsSnapshot(settings);
             await logCommittedSettingsChanges(baseline, settings, employee?.id);
+
+            // Publish the company block the server owns. Without this the next
+            // sync would pull the old values back and quietly undo the edit.
+            // Identity is absent on purpose — see the card.
+            if (isSupabaseConfigured() && canEditCompany && companyStoreId) {
+                await saveStoreCompany(companyStoreId, {
+                    address: settings.company.address,
+                    postalCode: settings.company.postalCode,
+                    city: settings.company.city,
+                    phone: settings.company.phone ?? '',
+                    email: settings.company.email ?? '',
+                });
+                await saveCompanySlogan(settings.company.slogan ?? '', companyStoreId);
+            }
+
             savedSettingsBaselineRef.current = cloneSettingsSnapshot(settings);
             setSaveStatus('saved');
             setPendingChanges(false);
         } catch (error) {
-            console.error('Failed to save settings audit log:', error);
+            // Local settings already hold the edit; only the publish failed, and
+            // saying so is better than a green tick over a value the next sync
+            // will overwrite.
+            console.error('Failed to save settings:', error);
+            setCompanyPublishError(error instanceof Error ? error.message : String(error));
             setSaveStatus('error');
         }
 
         setTimeout(() => {
             setSaveStatus('idle');
         }, 2000);
-    }, [employee?.id, settings]);
+    }, [employee?.id, settings, canEditCompany, companyStoreId]);
 
     const handleReset = useCallback(() => {
         if (confirm(t('settings.confirm.resetAll'))) {
@@ -1482,13 +1539,41 @@ const Settings: React.FC = () => {
             accent="from-slate-900 to-slate-600"
         >
             <div className="grid gap-4 lg:grid-cols-2">
+                {/* Which store's address is being edited. A till is bound to one
+                    store and never sees this; a back office with several has to
+                    say which one, because the address is per store. */}
+                {companyStores.length > 1 && (
+                    <div className="lg:col-span-2">
+                        <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.company.storeScope')}</label>
+                        <select
+                            value={companyStoreId ?? ''}
+                            onChange={event => {
+                                setCompanyStoreId(event.target.value || null);
+                                markChanged();
+                            }}
+                            className={fieldClass}
+                        >
+                            <option value="">{t('settings.company.storeScopePlaceholder')}</option>
+                            {companyStores.map(store => (
+                                <option key={store.id} value={store.id}>
+                                    {store.city ? `${store.name} — ${store.city}` : store.name}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="mt-1.5 text-xs text-slate-500">{t('settings.company.storeScopeHelp')}</p>
+                    </div>
+                )}
+                {/* FIRMA and NIPC are the fiscal identity: tenants.nif carries a
+                    format CHECK and the fiscal provisioning is bound to it, so
+                    they are changed in the platform console, not on a till. */}
                 <div>
                     <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.companyNameLabel')}</label>
                     <input
                         type="text"
                         value={settings.company.name}
                         onChange={event => handleSettingsChange('company', 'name', event.target.value)}
-                        className={fieldClass}
+                        readOnly={companyIdentityLocked}
+                        className={companyIdentityLocked ? `${fieldClass} cursor-not-allowed bg-slate-50 text-slate-500` : fieldClass}
                     />
                 </div>
                 <div>
@@ -1497,9 +1582,13 @@ const Settings: React.FC = () => {
                         type="text"
                         value={settings.company.taxNumber}
                         onChange={event => handleSettingsChange('company', 'taxNumber', event.target.value)}
-                        className={fieldClass}
+                        readOnly={companyIdentityLocked}
+                        className={companyIdentityLocked ? `${fieldClass} cursor-not-allowed bg-slate-50 text-slate-500` : fieldClass}
                     />
                 </div>
+                {companyIdentityLocked && (
+                    <p className="-mt-2 text-xs text-slate-500 lg:col-span-2">{t('settings.company.identityManagedElsewhere')}</p>
+                )}
                 <div className="lg:col-span-2">
                     <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.company.address')}</label>
                     <input
@@ -1571,6 +1660,16 @@ const Settings: React.FC = () => {
                         className={fieldClass}
                     />
                 </div>
+                {companyPublishError && (
+                    <p className="lg:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        {t('settings.company.publishFailed', { message: companyPublishError })}
+                    </p>
+                )}
+                {isSupabaseConfigured() && canEditCompany && !companyStoreId && companyStores.length > 1 && (
+                    <p className="lg:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        {t('settings.company.storeScopeRequired')}
+                    </p>
+                )}
             </div>
         </SettingCard>
     );

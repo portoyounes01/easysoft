@@ -4,6 +4,7 @@ import { employeeService } from './employeeService';
 import { productSyncService } from './productService';
 import { customerSyncService } from './customerSyncService';
 import { pullTenantReceiptLogo } from './receiptBrandingSync';
+import { pullCompanyProfile } from './companyProfileSync';
 import { pullStoreScopedCatalogue } from './storeScopedSyncService';
 import { transactionSyncService } from './transactionSyncService';
 
@@ -197,6 +198,12 @@ export class SyncManager {
             // 2b. Receipt branding — a singleton, no dependencies. Pulled before
             // transactions so a till that syncs and then prints has the logo.
             await this.syncEntity('receipt_branding', () => pullTenantReceiptLogo());
+
+            // 2b-ii. The rest of the receipt header — company name, NIF, the
+            // address of THIS till's store, slogan. Same singleton, same reason
+            // for the ordering, and the same offline rule: a failed pull leaves
+            // the cached block alone rather than printing a blank header.
+            await this.syncEntity('company_profile', () => pullCompanyProfile());
 
             // 2c. Store-scoped catalogue and stock. AFTER products, because the
             // store rows fold price/stock onto product records that must already
