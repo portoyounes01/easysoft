@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, FileWarning, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, Check, FileWarning, RefreshCw, X } from 'lucide-react';
 import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
 import { useAppliedDialogStyle } from '../theme/dialogStyle';
 import { retryIsIdempotent, type FiscalIssueFailure } from '../fiscal/fiscalFailure';
@@ -110,30 +110,54 @@ export const NonFiscalFallbackDialog: React.FC<NonFiscalFallbackDialogProps> = (
                 </ul>
             </div>
 
-            {unresolved && (
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-slate-300 p-4 hover:bg-slate-50">
-                    <input
-                        type="checkbox"
-                        checked={attested}
-                        onChange={e => setAttested(e.target.checked)}
-                        className="mt-1 h-5 w-5 shrink-0"
-                    />
-                    <span className="text-sm leading-5 text-slate-800">
-                        {t('nonFiscalFallback.attestation', { provider: providerName })}
-                    </span>
-                </label>
-            )}
-
             <p className="break-words font-mono text-xs text-slate-500">{failure.message}</p>
         </div>
     );
 
+    // The attestation lives in the FOOTER, with the button it gates.
+    //
+    // It used to sit at the end of the body, which the dialog shell scrolls
+    // while pinning the footer — so on a till screen the gate could sit below
+    // the fold while the permanently-disabled button stayed in view, with
+    // nothing on screen explaining why. It is also a full-width button rather
+    // than a native checkbox: `min-h-touch` is the tap target this app is built
+    // around, and a 20px box is not hittable with a finger.
     const footer = (
-        <div className="flex flex-wrap gap-3">
+        <div className="space-y-3">
+            {unresolved && (
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={attested}
+                    onClick={() => setAttested(value => !value)}
+                    disabled={busy}
+                    data-testid="fallback-attestation"
+                    className={`min-h-touch flex w-full items-center gap-3 rounded-2xl border-2 p-4 text-left transition-colors disabled:opacity-50 ${attested
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-slate-300 bg-white hover:bg-slate-50'
+                        }`}
+                >
+                    <span
+                        aria-hidden="true"
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 ${attested
+                            ? 'border-emerald-600 bg-emerald-600 text-white'
+                            : 'border-slate-400 bg-white'
+                            }`}
+                    >
+                        {attested && <Check className="h-5 w-5" />}
+                    </span>
+                    <span className="text-sm leading-5 text-slate-800">
+                        {t('nonFiscalFallback.attestation', { provider: providerName })}
+                    </span>
+                </button>
+            )}
+
+            <div className="flex flex-wrap gap-3">
             <button
                 type="button"
                 onClick={onCancel}
                 disabled={busy}
+                data-testid="fallback-cancel"
                 className="min-h-touch flex-1 rounded-2xl bg-slate-100 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
             >
                 {t('nonFiscalFallback.cancelSale')}
@@ -143,6 +167,7 @@ export const NonFiscalFallbackDialog: React.FC<NonFiscalFallbackDialogProps> = (
                     type="button"
                     onClick={onRetry}
                     disabled={busy}
+                    data-testid="fallback-retry"
                     className="min-h-touch flex-1 rounded-2xl bg-slate-800 px-4 py-3 font-semibold text-white hover:bg-slate-900 disabled:opacity-50"
                 >
                     <span className="inline-flex items-center justify-center gap-2">
@@ -155,10 +180,19 @@ export const NonFiscalFallbackDialog: React.FC<NonFiscalFallbackDialogProps> = (
                 type="button"
                 onClick={() => onIssueSlip({ failure, operatorAttested: unresolved ? attested : undefined })}
                 disabled={!canIssue}
+                data-testid="fallback-issue-slip"
                 className="min-h-touch flex-1 rounded-2xl bg-amber-500 px-4 py-3 font-semibold text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
                 {t('nonFiscalFallback.issueSlip')}
             </button>
+            </div>
+
+            {/* A disabled button must always say what would enable it. */}
+            {unresolved && !attested && (
+                <p data-testid="fallback-attestation-hint" className="text-center text-sm text-slate-500">
+                    {t('nonFiscalFallback.attestationRequired')}
+                </p>
+            )}
         </div>
     );
 

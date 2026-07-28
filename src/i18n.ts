@@ -717,6 +717,7 @@ const resources = {
                 obligationSlipNotInvoice: 'The printed slip is not an invoice: no number, no ATCUD, no QR code.',
                 obligationRecordLater: 'Record the book’s series and number in the fiscal log afterwards.',
                 attestation: 'I checked {{provider}} and there is no document for this sale.',
+                attestationRequired: 'Confirm the check above to enable this.',
                 cancelSale: 'Cancel sale',
                 retry: 'Try again',
                 issueSlip: 'Issue non-fiscal slip',
@@ -4297,6 +4298,7 @@ const resources = {
                 obligationSlipNotInvoice: 'O talão impresso não é uma fatura: sem número, sem ATCUD, sem código QR.',
                 obligationRecordLater: 'Registe depois a série e o número do livro no registo fiscal.',
                 attestation: 'Confirmei no {{provider}} que não existe documento para esta venda.',
+                attestationRequired: 'Confirme a verificação acima para ativar esta opção.',
                 cancelSale: 'Cancelar venda',
                 retry: 'Tentar novamente',
                 issueSlip: 'Emitir talão não fiscal',
@@ -7877,6 +7879,7 @@ const resources = {
                 "obligationSlipNotInvoice": "El ticket impreso no es una factura: sin número, sin ATCUD, sin código QR.",
                 "obligationRecordLater": "Registre después la serie y el número del talonario en el registro fiscal.",
                 "attestation": "He comprobado en {{provider}} que no existe documento para esta venta.",
+                "attestationRequired": "Confirme la comprobación de arriba para activarlo.",
                 "cancelSale": "Cancelar venta",
                 "retry": "Reintentar",
                 "issueSlip": "Emitir ticket no fiscal"
