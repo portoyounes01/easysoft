@@ -11,6 +11,7 @@ import { calculateTaxAmount, calculatePriceWithoutTax } from '../types/supabase'
 import type { SystemSettings, DeepPartial } from './SettingsContext';
 import { runFiscalCheckout, type FiscalCheckoutResult, type FiscalCartLine } from '../fiscal/checkoutOrchestrator';
 import { runNonFiscalFallbackSale, type NonFiscalFallbackDecision } from '../fiscal/nonFiscalFallback';
+import { classifyFiscalIssueFailure } from '../fiscal/fiscalFailure';
 import { localTransactionToServerInsert, localTransactionItemsToServerInsert } from '../fiscal/pushServer';
 
 /** Options chosen in the POS item-options dialog for one cart line. */
@@ -694,6 +695,13 @@ export const POSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     } catch (error) {
       console.error('POS: Transaction processing failed:', error);
+      // A classified fiscal failure must reach the caller INTACT. Wrapping it in
+      // a plain Error erases the type, and the POS page then cannot tell an
+      // outage from a config fault — so the non-fiscal fallback is never
+      // offered and the operator just sees "Transaction failed: …".
+      if (classifyFiscalIssueFailure(error)) {
+        throw error;
+      }
       throw new Error(i18n.t('pos.transactionFailed', { error: error instanceof Error ? error.message : i18n.t('common.unknownError') }));
     }
   };
