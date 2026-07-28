@@ -7,6 +7,11 @@ export interface PostSalePrintAuditContext {
     documentNumber: string;
     transactionId?: string;
     fiscalDocumentId?: string;
+    /** Whether this reprint was a reproduction of the issued document ('v1') or
+     *  a reconstruction from live settings ('legacy'). Pre-D-IM1 documents can
+     *  never be made immutable, so an auditor gets told which they are looking
+     *  at rather than having to infer it from a timestamp. */
+    issuerSnapshot?: 'v1' | 'legacy';
 }
 
 const COMPANY_AUDIT_FIELDS = [

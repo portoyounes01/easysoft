@@ -51,6 +51,7 @@ import {
     type ReproducedDocumentEvent,
 } from '../fiscal/fiscalAuditLog';
 import type { FiscalTransactionMetadata } from '../fiscal/types';
+import { resolveIssuerLogo } from '../fiscal/resolveIssuerLogo';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { runFiscalCreditNoteForTransaction } from '../fiscal/creditNoteCheckout';
 import { syncManager } from '../services/syncManager';
@@ -357,10 +358,14 @@ const TransactionsInner: React.FC = () => {
         });
     };
 
+    // Takes a label TOKEN, not a translated string: the marking has to be
+    // rendered in the document's own language, which is only known once the
+    // issuer snapshot has been read here. Translating it at the call site would
+    // print "2.ª via" in today's language beside a frozen header.
     const buildReceiptPropsForTransaction = async (
         txId: string,
-        documentLabel?: string
-    ): Promise<ReceiptProps | null> => {
+        label?: 'original' | 'secondCopy'
+    ): Promise<{ receipt: ReceiptProps; issuerSnapshot: 'v1' | 'legacy' } | null> => {
         const trx = await transactionLocalService.getTransactionById(txId);
         const itemsSource = trx?.items;
         const remoteTrx = trx ? null : await transactionService.getTransactionById(txId);
@@ -392,10 +397,23 @@ const TransactionsInner: React.FC = () => {
         const headerDiscountPct = Number(header.discount_percentage || 0);
         const headerDiscountType = (header.discount_type || 'none') as 'none' | 'percentage' | 'fixed';
 
+        // Read the snapshot off `header`, not off `trx`. The delta sync omits
+        // fiscal_metadata_json, but this path does not go through the delta:
+        // transactionService.getTransactionById issues a plain select('*'), so a
+        // back-office reprint of a sale that is NOT in this device's IndexedDB
+        // still has the issuer. Taking it only from `trx` threw it away and
+        // rebuilt the header from live settings — on a document labelled
+        // "Original" — which is exactly the defect this change exists to close.
+        // The server column is JSONB, so supabase-js hands it back parsed; the
+        // local column is TEXT. Accept either rather than assuming one.
+        const metaSource = header.fiscal_metadata_json;
         let meta: FiscalTransactionMetadata | null = null;
-        if (trx?.fiscal_metadata_json) {
+        if (metaSource) {
             try {
-                meta = JSON.parse(trx.fiscal_metadata_json) as FiscalTransactionMetadata;
+                meta =
+                    typeof metaSource === 'string'
+                        ? (JSON.parse(metaSource) as FiscalTransactionMetadata)
+                        : (metaSource as FiscalTransactionMetadata);
             } catch {
                 meta = null;
             }
@@ -403,6 +421,18 @@ const TransactionsInner: React.FC = () => {
 
         const fiscal = trx?.fiscal_document_id
             ? await transactionLocalService.getFiscalDocumentById(trx.fiscal_document_id)
+            : undefined;
+
+        // ⚠️ ONE branch on `iss`, never per field. `iss?.phone ?? settings…`
+        // would mean a document issued when phone was blank reprints with
+        // today's phone — the very defect this exists to close, surviving
+        // inside the fix. A document either carries its issuer or it does not.
+        const iss = meta?.issuer;
+        const issLang = iss?.receiptLanguage;
+        const orUndef = (value: string) => value || undefined;
+        const logo = iss ? await resolveIssuerLogo(iss.logo, settings.company.logo) : settings.company.logo;
+        const documentLabel = label
+            ? getReceiptT(issLang ?? settings.receipt.receiptLanguage)(`thermalReceipt.${label}`)
             : undefined;
 
         // A sale completed on the non-fiscal fallback has no fiscal document to
@@ -442,7 +472,11 @@ const TransactionsInner: React.FC = () => {
             documentNumber,
             documentType,
             date,
-            counter: settings.receipt.counterLabel,
+            counter: iss ? iss.counterLabel : settings.receipt.counterLabel,
+            // Left undefined for legacy rows on purpose: ThermalReceipt and the
+            // ESC/POS builder are both prop-first, so an absent prop keeps their
+            // present behaviour byte for byte.
+            receiptLanguage: issLang,
             verificationCode,
             // Spain / Veri*factu: the reprint detects an ES document by its at_validation_code and
             // shows the VERI*FACTU legend (its QR is the persisted AEAT validation URL in qrPayload).
@@ -453,20 +487,38 @@ const TransactionsInner: React.FC = () => {
             hashFourChars: fiscal?.hash_four_chars ?? meta?.hashFourChars,
             qrCodeData: qrPayload ?? undefined,
             qrCodeImage,
-            trainingMode: meta ? meta.certificationMode === 'training' : settings.fiscal.trainingMode,
+            // One extra rung before the live read: the fiscal row already knows
+            // whether this was training, and a live read can stamp — or strip —
+            // a training banner on a historical document.
+            trainingMode: meta
+                ? meta.certificationMode === 'training'
+                : fiscal
+                    ? fiscal.certification_mode === 'training'
+                    : settings.fiscal.trainingMode,
             officialOutput: meta?.officialOutput,
             documentLabel,
             emitterName: header.employee_name,
-            company: {
-                name: settings.company.name,
-                address: settings.company.address,
-                postalCode: settings.company.postalCode,
-                city: settings.company.city,
-                taxNumber: settings.company.taxNumber,
-                logo: settings.company.logo,
-                phone: settings.company.phone || undefined,
-                email: settings.company.email || undefined,
-            },
+            company: iss
+                ? {
+                    name: iss.name,
+                    address: iss.address,
+                    postalCode: iss.postalCode,
+                    city: iss.city,
+                    taxNumber: iss.taxNumber,
+                    logo,
+                    phone: orUndef(iss.phone),
+                    email: orUndef(iss.email),
+                }
+                : {
+                    name: settings.company.name,
+                    address: settings.company.address,
+                    postalCode: settings.company.postalCode,
+                    city: settings.company.city,
+                    taxNumber: settings.company.taxNumber,
+                    logo,
+                    phone: settings.company.phone || undefined,
+                    email: settings.company.email || undefined,
+                },
             customer: buildReceiptCustomerProps(
                 customerRow ?? null,
                 header.customer_name,
@@ -502,9 +554,11 @@ const TransactionsInner: React.FC = () => {
                 amountGiven: header.amount_paid ?? header.total,
                 change: header.change_given || 0,
             },
-            slogan: settings.company.slogan || undefined,
-            softwareInfo: settings.company.softwareInfo || undefined,
-            certificationNumber: settings.company.certificationNumber || undefined,
+            slogan: iss ? orUndef(iss.slogan) : settings.company.slogan || undefined,
+            softwareInfo: iss ? orUndef(iss.softwareInfo) : settings.company.softwareInfo || undefined,
+            certificationNumber: iss
+                ? orUndef(iss.certificationNumber)
+                : settings.company.certificationNumber || undefined,
             ...(documentType === 'NOTA_CREDITO' && creditNoteDisplay
                 ? {
                     originalInvoice: creditNoteDisplay.originalRef,
@@ -513,7 +567,7 @@ const TransactionsInner: React.FC = () => {
                 : {}),
         };
 
-        return receipt;
+        return { receipt, issuerSnapshot: iss ? 'v1' : 'legacy' };
     };
 
     // "View receipt" reproduces the document marked Original, same as the slip
@@ -522,14 +576,12 @@ const TransactionsInner: React.FC = () => {
     // dialog only once paper is actually out.
     const handleViewReceipt = async (id: string) => {
         try {
-            const receipt = await buildReceiptPropsForTransaction(
-                id,
-                getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.original')
-            );
-            if (!receipt) return;
+            const built = await buildReceiptPropsForTransaction(id, 'original');
+            if (!built) return;
+            const { receipt, issuerSnapshot } = built;
             setReprintAudit({
                 event: 'ORIGINAL_REPRINTED',
-                context: { documentNumber: receipt.documentNumber, transactionId: id },
+                context: { documentNumber: receipt.documentNumber, transactionId: id, issuerSnapshot },
             });
             setReceiptPreviewData(receipt);
             setShowReceiptPreview(true);
@@ -547,12 +599,10 @@ const TransactionsInner: React.FC = () => {
             return;
         }
         try {
-            const receipt = await buildReceiptPropsForTransaction(
-                id,
-                getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.secondCopy')
-            );
-            if (!receipt) return;
-            const context = { documentNumber: receipt.documentNumber, transactionId: id };
+            const built = await buildReceiptPropsForTransaction(id, 'secondCopy');
+            if (!built) return;
+            const { receipt, issuerSnapshot } = built;
+            const context = { documentNumber: receipt.documentNumber, transactionId: id, issuerSnapshot };
             await logReproducedDocument('SECOND_COPY_VIEWED', context, employee.id);
             setReprintAudit({ event: 'REPRINT_REQUESTED', context });
             setReceiptPreviewData(receipt);
@@ -568,8 +618,9 @@ const TransactionsInner: React.FC = () => {
     const handleDownloadTransaction = async (tx: Transaction) => {
         if (pdfJob) return; // one at a time
         try {
-            const receipt = await buildReceiptPropsForTransaction(tx.id, undefined);
-            if (!receipt) return;
+            const built = await buildReceiptPropsForTransaction(tx.id, undefined);
+            if (!built) return;
+            const receipt = built.receipt;
             if (receipt.qrCodeData && !receipt.qrCodeImage) {
                 try {
                     receipt.qrCodeImage = await generateQRCodeImage(receipt.qrCodeData);

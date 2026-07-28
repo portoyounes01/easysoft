@@ -20,6 +20,7 @@ import type { SystemSettings } from '../contexts/SettingsContext';
 import type { LocalCustomer } from '../types/supabase';
 import { transactionLocalService } from '../lib/localDatabase';
 import { readDevicePairingScope } from '../utils/devicePairingStorage';
+import { buildIssuerSnapshot, logoArchiveEntryFor } from './issuerSnapshot';
 import type { CertificationMode, ExternalFiscalProvider, FiscalCheckoutResult, FiscalProvider } from './types';
 import type { FiscalIssueFailure } from './fiscalFailure';
 import {
@@ -130,6 +131,8 @@ export async function runNonFiscalFallbackSale(params: {
         slipPrefix: nonFiscalSlipPrefix(),
         slipNumericWidth: SLIP_NUMERIC_WIDTH,
         certificationMode,
+        issuer: buildIssuerSnapshot(settings),
+        logoArchiveEntry: logoArchiveEntryFor(settings),
         transactionDate: draft.transactionDate,
         transactionTime: draft.transactionTime,
         systemEntryDate: draft.systemEntryDate,

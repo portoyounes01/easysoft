@@ -7,6 +7,7 @@ import { generateUUID } from '../utils/uuid';
 import { mapIvaDecimalToSaftTaxCode } from './saft/exportSaft';
 import { asUnresolvedIssueFailure, FiscalBackendUnavailableError, ProviderRejectedError } from './fiscalFailure';
 import { identityKey, resolveIssueAttemptId } from './issueAttemptReuse';
+import { buildIssuerSnapshot, logoArchiveEntryFor } from './issuerSnapshot';
 import type {
     FiscalCheckoutResult,
     FiscalTransactionMetadata,
@@ -367,6 +368,8 @@ export async function issueVendusSale(params: {
         });
         const result = await transactionLocalService.createVendusFiscalCheckoutAtomic({
             certificationMode: certificationModeForVendus(settings),
+            issuer: buildIssuerSnapshot(settings),
+            logoArchiveEntry: logoArchiveEntryFor(settings),
             transactionDate: draft.transactionDate,
             transactionTime: draft.transactionTime,
             systemEntryDate: draft.systemEntryDate,
@@ -536,6 +539,8 @@ export async function issueVendusCreditNoteForTransaction(params: {
         });
         const result = await transactionLocalService.createVendusFiscalCheckoutAtomic({
             certificationMode: certificationModeForVendus(settings),
+            issuer: buildIssuerSnapshot(settings),
+            logoArchiveEntry: logoArchiveEntryFor(settings),
             transactionDate,
             transactionTime,
             systemEntryDate,

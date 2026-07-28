@@ -4,6 +4,7 @@ import { transactionLocalService } from '../lib/localDatabase';
 import { connectionStatus, supabase } from '../lib/supabase';
 import type { LocalCustomer } from '../types/supabase';
 import { generateUUID } from '../utils/uuid';
+import { buildIssuerSnapshot, logoArchiveEntryFor } from './issuerSnapshot';
 import type { ExternalFiscalSnapshot, FiscalCheckoutResult } from './types';
 import {
     buildSaleCheckoutDraft,
@@ -206,6 +207,8 @@ export async function issueSignEsSale(params: {
         });
         const result = await transactionLocalService.createExternalFiscalCheckoutAtomic({
             certificationMode: certificationMode(settings),
+            issuer: buildIssuerSnapshot(settings),
+            logoArchiveEntry: logoArchiveEntryFor(settings),
             transactionDate: draft.transactionDate,
             transactionTime: draft.transactionTime,
             systemEntryDate: draft.systemEntryDate,
@@ -305,6 +308,8 @@ export async function issueSignEsCreditNoteForTransaction(params: {
         });
         const result = await transactionLocalService.createExternalFiscalCheckoutAtomic({
             certificationMode: certificationMode(settings),
+            issuer: buildIssuerSnapshot(settings),
+            logoArchiveEntry: logoArchiveEntryFor(settings),
             transactionDate, transactionTime, systemEntryDate,
             grossTotal, netRounded, taxTotal,
             totalDiscountAmount: Math.abs(origTx.discount || 0),

@@ -5,6 +5,7 @@ import { connectionStatus, supabase } from '../lib/supabase';
 import type { LocalCustomer } from '../types/supabase';
 import { generateUUID } from '../utils/uuid';
 import { asUnresolvedIssueFailure, FiscalBackendUnavailableError } from './fiscalFailure';
+import { buildIssuerSnapshot, logoArchiveEntryFor } from './issuerSnapshot';
 import type {
     ExternalFiscalSnapshot,
     ExternalIssuedItemReference,
@@ -577,6 +578,8 @@ export async function issueFiskalySale(params: {
         });
         const result = await transactionLocalService.createExternalFiscalCheckoutAtomic({
             certificationMode: certificationMode(settings),
+            issuer: buildIssuerSnapshot(settings),
+            logoArchiveEntry: logoArchiveEntryFor(settings),
             transactionDate: draft.transactionDate,
             transactionTime: draft.transactionTime,
             systemEntryDate: draft.systemEntryDate,

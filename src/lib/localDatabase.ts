@@ -27,9 +27,11 @@ import type {
     FiscalCheckoutAtomicPayload,
     FiscalCheckoutResult,
     FiscalTransactionMetadata,
+    LocalReceiptLogoArchiveEntry,
     NonFiscalFallbackPersistencePayload,
     VendusFiscalCheckoutPersistencePayload,
 } from '../fiscal/types';
+import { buildIssuerSnapshot, logoArchiveEntryFor } from '../fiscal/issuerSnapshot';
 import type {
     LocalAttendanceEntry,
     LocalEmployeeHrProfile,
@@ -95,6 +97,7 @@ export class LocalPOSDatabase extends Dexie {
     transactions!: Table<LocalTransaction>;
     transactionItems!: Table<LocalTransactionItem>;
     fiscalDocuments!: Table<LocalFiscalDocument>;
+    receiptLogoArchive!: Table<LocalReceiptLogoArchiveEntry>;
     fiscalAuditEvents!: Table<LocalFiscalAuditEvent>;
     vendusIssueAttempts!: Table<LocalVendusIssueAttempt>;
     dailySalesSummaries!: Table<LocalDailySalesSummary>;
@@ -347,6 +350,18 @@ export class LocalPOSDatabase extends Dexie {
 
         this.version(17).stores(schemaV17).upgrade(async () => {
             console.log('Upgrading database to version 17 - local table orders');
+        });
+
+        // Version 18: content-addressed receipt-logo archive. The issuer snapshot
+        // on each transaction references a logo by digest instead of inlining
+        // ~1-23 KB of base64 per sale into a table that is never pruned.
+        const schemaV18 = {
+            ...schemaV17,
+            receiptLogoArchive: 'digest, created_at',
+        } as const;
+
+        this.version(18).stores(schemaV18).upgrade(async () => {
+            console.log('Upgrading database to version 18 - archived receipt logos for immutable reprints');
         });
 
         // Add hooks for auto-updating sync flags
@@ -1374,6 +1389,11 @@ export class TransactionLocalService {
     async createFiscalCheckoutAtomic(payload: FiscalCheckoutAtomicPayload): Promise<FiscalCheckoutResult> {
         const { settings, chainScope, atCode, seriesKey, payment, customerCountryForQr, receiptProfile } = payload;
         const company = settings.company;
+        // Captured ONCE, above the retry loop: the loop rebuilds the metadata
+        // literal on every attempt, and re-reading live settings per attempt
+        // would reintroduce the exact drift this fixes through a narrower window.
+        const issuer = buildIssuerSnapshot(settings);
+        const logoArchiveEntry = logoArchiveEntryFor(settings);
         const hashControl = settings.fiscal.hashControlVersion || '1';
         const qrCountry =
             (customerCountryForQr || 'PT').trim().slice(0, 2).toUpperCase() || 'PT';
@@ -1386,6 +1406,7 @@ export class TransactionLocalService {
             localDb.transactionItems,
             localDb.fiscalDocuments,
             localDb.fiscalAuditEvents,
+            localDb.receiptLogoArchive,
         ] as const;
 
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -1451,6 +1472,7 @@ export class TransactionLocalService {
                 chainScope,
                 sequentialNumber: nextSequential,
                 certificationMode: payload.certificationMode,
+                issuer,
                 fiscalProvider: 'local_at',
             };
 
@@ -1556,6 +1578,11 @@ export class TransactionLocalService {
                     await localDb.transactions.add(transaction);
                     await localDb.transactionItems.bulkAdd(transactionItems);
                     await localDb.fiscalAuditEvents.add(auditRow);
+                    // Same transaction as the document that references it — the
+                    // digest is load-bearing, not backstopped, so a dangling one
+                    // would render as a silently logo-less receipt. `put` on a
+                    // content key is idempotent across the retries.
+                    if (logoArchiveEntry) await localDb.receiptLogoArchive.put(logoArchiveEntry);
 
                     result = {
                         transactionId,
@@ -1665,6 +1692,7 @@ export class TransactionLocalService {
             chainScope,
             sequentialNumber,
             certificationMode: payload.certificationMode,
+            issuer: payload.issuer,
             fiscalProvider: 'vendus',
             externalDocumentId: vendus.documentId,
             externalReference: vendus.externalReference,
@@ -1769,12 +1797,16 @@ export class TransactionLocalService {
                 localDb.transactionItems,
                 localDb.fiscalDocuments,
                 localDb.fiscalAuditEvents,
+                localDb.receiptLogoArchive,
             ],
             async () => {
                 await localDb.fiscalDocuments.add(fiscalDoc);
                 await localDb.transactions.add(transaction);
                 await localDb.transactionItems.bulkAdd(transactionItems);
                 await localDb.fiscalAuditEvents.add(auditRow);
+                // Atomic with the document that references the digest; see the
+                // note on the local_at path.
+                if (payload.logoArchiveEntry) await localDb.receiptLogoArchive.put(payload.logoArchiveEntry);
             }
         );
         await this.queueOperation('CREATE', transactionId, { ...transaction, items: transactionItems });
@@ -1851,6 +1883,7 @@ export class TransactionLocalService {
             chainScope,
             sequentialNumber,
             certificationMode: payload.certificationMode,
+            issuer: payload.issuer,
             fiscalProvider: ext.provider,
             externalDocumentId: ext.documentId,
             externalReference: ext.externalReference,
@@ -1954,12 +1987,16 @@ export class TransactionLocalService {
                 localDb.transactionItems,
                 localDb.fiscalDocuments,
                 localDb.fiscalAuditEvents,
+                localDb.receiptLogoArchive,
             ],
             async () => {
                 await localDb.fiscalDocuments.add(fiscalDoc);
                 await localDb.transactions.add(transaction);
                 await localDb.transactionItems.bulkAdd(transactionItems);
                 await localDb.fiscalAuditEvents.add(auditRow);
+                // Atomic with the document that references the digest; see the
+                // note on the local_at path.
+                if (payload.logoArchiveEntry) await localDb.receiptLogoArchive.put(payload.logoArchiveEntry);
             }
         );
         await this.queueOperation('CREATE', transactionId, { ...transaction, items: transactionItems });
@@ -2019,7 +2056,12 @@ export class TransactionLocalService {
         let pendingQueue: { transaction: LocalTransaction; transactionItems: LocalTransactionItem[] } | undefined;
         await localDb.transaction(
             'rw',
-            [localDb.transactions, localDb.transactionItems, localDb.fiscalAuditEvents],
+            [
+                localDb.transactions,
+                localDb.transactionItems,
+                localDb.fiscalAuditEvents,
+                localDb.receiptLogoArchive,
+            ],
             async () => {
                 // Next slip number for THIS till, read inside the write transaction
                 // so two concurrent tabs cannot mint the same reference.
@@ -2046,6 +2088,7 @@ export class TransactionLocalService {
                     chainScope: '',
                     sequentialNumber: highest + 1,
                     certificationMode: payload.certificationMode,
+                    issuer: payload.issuer,
                     nonFiscal: true,
                     nonFiscalFallback: {
                         slipReference,
@@ -2082,6 +2125,9 @@ export class TransactionLocalService {
 
                 await localDb.transactions.add(transaction);
                 await localDb.transactionItems.bulkAdd(transactionItems);
+                // Atomic with the slip that references the digest; see the note
+                // on the local_at path.
+                if (payload.logoArchiveEntry) await localDb.receiptLogoArchive.put(payload.logoArchiveEntry);
                 await localDb.fiscalAuditEvents.add({
                     id: generateUUID(),
                     event_type: 'NON_FISCAL_FALLBACK_ISSUED',

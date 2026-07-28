@@ -45,7 +45,9 @@ export function buildReceiptEscPosBase64(receipt: ReceiptProps, options: BuildRe
 }
 
 function buildReceiptBuilder(receipt: ReceiptProps, options: BuildReceiptOptions): EscPosBuilder {
-    const language = normalizeReceiptLanguage(options.language ?? receipt.receiptLanguage);
+    // Prop first, matching printReceiptThermally: the document's own frozen
+    // language outranks whatever the device is set to today.
+    const language = normalizeReceiptLanguage(receipt.receiptLanguage ?? options.language);
     const t = getReceiptT(language);
     const dateLocale = language === 'pt' ? 'pt-PT' : language === 'es' ? 'es-ES' : 'en-GB';
     const money = formatReceiptCurrency;

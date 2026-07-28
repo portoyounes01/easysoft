@@ -373,22 +373,32 @@ const AppContent: React.FC = () => {
                         }
                       />
                       <Route path="/seed" element={<Navigate to="/settings?hw=seed" replace />} />
-                      <Route
-                        path="/receipt-demo"
-                        element={
-                          <PermissionRoute permission="sales">
-                            <ReceiptDemoPage />
-                          </PermissionRoute>
-                        }
-                      />
-                      <Route
-                        path="/receipt-demo/:id"
-                        element={
-                          <PermissionRoute permission="sales">
-                            <ReceiptDemoPage />
-                          </PermissionRoute>
-                        }
-                      />
+                      {/* Dev only. /receipt-demo/:id loads a REAL historical
+                          transaction but takes its document type from live
+                          settings and, with no fiscal metadata, synthesizes an
+                          ATCUD-shaped code from the live série — a manufactured
+                          fiscal identifier no issuer snapshot can fix. Gated
+                          until it is rebuilt on the shared receipt builder. */}
+                      {import.meta.env.DEV && (
+                        <Route
+                          path="/receipt-demo"
+                          element={
+                            <PermissionRoute permission="sales">
+                              <ReceiptDemoPage />
+                            </PermissionRoute>
+                          }
+                        />
+                      )}
+                      {import.meta.env.DEV && (
+                        <Route
+                          path="/receipt-demo/:id"
+                          element={
+                            <PermissionRoute permission="sales">
+                              <ReceiptDemoPage />
+                            </PermissionRoute>
+                          }
+                        />
+                      )}
                     </>
                   )}
                   {DEV_TOOLS && <Route path="/cashier-testing" element={<Navigate to="/settings?hw=cashier" replace />} />}

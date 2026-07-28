@@ -48,6 +48,7 @@ export const clearLocalDatabasePreservingRecovery = async (): Promise<LocalDatab
         transactions,
         transactionItems,
         fiscalDocuments,
+        receiptLogoArchive,
         fiscalAuditEvents,
         fiscalIssueAttempts,
         transactionSyncQueue,
@@ -58,6 +59,7 @@ export const clearLocalDatabasePreservingRecovery = async (): Promise<LocalDatab
         localDb.transactions.toArray(),
         localDb.transactionItems.toArray(),
         localDb.fiscalDocuments.toArray(),
+        localDb.receiptLogoArchive.toArray(),
         localDb.fiscalAuditEvents.toArray(),
         localDb.vendusIssueAttempts.toArray(),
         localDb.transactionSyncQueue.toArray(),
@@ -116,6 +118,7 @@ export const clearLocalDatabasePreservingRecovery = async (): Promise<LocalDatab
             localDb.transactions,
             localDb.transactionItems,
             localDb.fiscalDocuments,
+            localDb.receiptLogoArchive,
             localDb.fiscalAuditEvents,
             localDb.vendusIssueAttempts,
             localDb.transactionSyncQueue,
@@ -127,6 +130,10 @@ export const clearLocalDatabasePreservingRecovery = async (): Promise<LocalDatab
             await localDb.transactions.bulkPut(fiscalTransactions);
             await localDb.transactionItems.bulkPut(fiscalTransactionItems);
             await localDb.fiscalDocuments.bulkPut(fiscalDocuments);
+            // ALL entries, unfiltered. Without them a recovery keeps every
+            // transaction and every digest but drops every bitmap, and the
+            // reprints quietly lose their logo with no error anywhere.
+            await localDb.receiptLogoArchive.bulkPut(receiptLogoArchive);
             await localDb.fiscalAuditEvents.bulkPut(fiscalAuditEvents);
             await localDb.vendusIssueAttempts.bulkPut(fiscalIssueAttempts);
             await localDb.transactionSyncQueue.bulkPut(preservedTransactionQueue);

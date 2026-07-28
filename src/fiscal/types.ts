@@ -226,6 +226,10 @@ export interface NonFiscalFallbackPersistencePayload {
         employeeName: string;
         employeeNumber?: string;
     };
+    /** The slip carries the same company block, logo and slogan as a fatura, so
+     *  it is frozen the same way even though it writes no fiscal_documents row. */
+    issuer: FiscalIssuerSnapshot;
+    logoArchiveEntry: LocalReceiptLogoArchiveEntry | null;
     /** Why no fiscal document exists — recorded verbatim in the audit log. */
     failure: {
         provider: ExternalFiscalProvider;
@@ -318,6 +322,9 @@ export interface VendusFiscalCheckoutPersistencePayload {
     customerTaxId: string | null;
     payment: FiscalCheckoutAtomicPayload['payment'];
     vendus: VendusFiscalSnapshot;
+    /** Required, not optional: a missed call site must be a compile error. */
+    issuer: FiscalIssuerSnapshot;
+    logoArchiveEntry: LocalReceiptLogoArchiveEntry | null;
     settledInvoiceNo?: string;
     settledInvoiceDateYmd?: string;
 }
@@ -340,8 +347,62 @@ export interface ExternalFiscalCheckoutPersistencePayload {
     customerTaxId: string | null;
     payment: FiscalCheckoutAtomicPayload['payment'];
     external: ExternalFiscalSnapshot;
+    /** Required, not optional: a missed call site must be a compile error. */
+    issuer: FiscalIssuerSnapshot;
+    logoArchiveEntry: LocalReceiptLogoArchiveEntry | null;
     settledInvoiceNo?: string;
     settledInvoiceDateYmd?: string;
+}
+
+/**
+ * Issuer identity frozen at issuance (D-IM1).
+ *
+ * PRESENCE OF THIS OBJECT — never a per-field check — marks a document as
+ * immutable. Every key is required and every string is '' when unset rather
+ * than undefined, so no `??` can reach through a blank captured value to a
+ * live setting. Legacy documents have no `issuer` key at all and take the live
+ * branch wholesale. Do NOT weaken any field to `?:`.
+ *
+ * No server code reads this block; it rides inside the existing jsonb so the
+ * server archive is not strictly poorer than the till. Do not "clean it up"
+ * (cf. transactions.discount_type, server-side since 20250924, written by
+ * nothing since).
+ */
+export interface FiscalIssuerSnapshot {
+    v: 1;
+    name: string;
+    address: string;
+    postalCode: string;
+    city: string;
+    taxNumber: string;
+    phone: string;
+    email: string;
+    slogan: string;
+    softwareInfo: string;
+    certificationNumber: string;
+    /** Not rendered, but already frozen per-document inside `qr_payload` (the AT
+     *  QR `R:` field). Capturing it here is what stops a rebuild making the
+     *  printed certification line disagree with the QR on the same paper. */
+    softwareCertNumber: string;
+    counterLabel: string;
+    receiptLanguage: 'en' | 'pt' | 'es';
+    /** null = issued with no logo: print none on reprint, NEVER today's logo.
+     *  Bytes live in localDb.receiptLogoArchive keyed by `digest`. Referenced,
+     *  not inlined: fitLogoDots clamps to 576x240 dots => 72*240 = 17,280 raw
+     *  bytes, ~17,415 PackBits worst case, ~23 KB base64 (RECEIPT_LOGO_MAX_BYTES
+     *  = 64 KB is unreachable). Small enough to print, far too large to inline
+     *  per sale into a transaction table that is never pruned. */
+    logo: { widthDots: number; heightDots: number; digest: string } | null;
+}
+
+/** Content-addressed bitmap store. Immutable by construction: the key IS the content. */
+export interface LocalReceiptLogoArchiveEntry {
+    digest: string;
+    widthDots: number;
+    heightDots: number;
+    /** base64 PackBits, byte-identical to ReceiptLogo.bitmap. */
+    bitmap: string;
+    created_at: string;
 }
 
 /** Serialized into `transactions.fiscal_metadata_json` at issuance (immutable snapshot). */
@@ -355,6 +416,19 @@ export interface FiscalTransactionMetadata {
     chainScope: string;
     sequentialNumber: number;
     certificationMode: CertificationMode;
+    /**
+     * Optional HERE AND ONLY HERE: this type is also the runtime shape of the
+     * legacy JSON already sitting on historical rows, and a required field
+     * would be a type-level lie about every one of them.
+     *
+     * Never backfilled, not now and not later. Stamping today's values onto a
+     * 2025 document does not restore the truth — it MANUFACTURES a claim about
+     * what was handed to the customer and dresses it in the authority of a
+     * snapshot. `undefined` is the one honest signal that a document predates
+     * the fix, and a wrong header you can detect beats one that asserts it is
+     * right.
+     */
+    issuer?: FiscalIssuerSnapshot;
     fiscalProvider?: FiscalProvider;
     externalDocumentId?: string;
     externalReference?: string;
