@@ -146,6 +146,7 @@ describe('SAF-T export', () => {
             endDateYmd: '2026-04-30',
             fiscalDocuments: [fiscal],
             loadTransaction: async id => (id === 'tid-1' ? tx : undefined),
+            loadCustomer: async () => undefined,
             productVersion: '0.1.0',
         });
 
@@ -257,6 +258,7 @@ describe('SAF-T export', () => {
             endDateYmd: '2026-04-30',
             fiscalDocuments: [rgFiscal],
             loadTransaction: async id => (id === 'tid-rg' ? txRg : undefined),
+            loadCustomer: async () => undefined,
             productVersion: '0.1.0',
         });
 
@@ -365,6 +367,7 @@ describe('SAF-T export', () => {
             endDateYmd: '2026-04-30',
             fiscalDocuments: [fiscalNc],
             loadTransaction: async id => (id === 'tid-nc' ? txNc : undefined),
+            loadCustomer: async () => undefined,
             productVersion: '0.1.0',
         });
 

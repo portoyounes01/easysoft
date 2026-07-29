@@ -47,12 +47,23 @@ import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import type { LoyaltyVoucher, SystemSettings } from '../contexts/SettingsContext';
-import { cloneSettingsSnapshot, collectCompanyInfoChanges, logCommittedSettingsChanges } from '../fiscal/fiscalAuditLog';
+import {
+    appendFiscalAuditEventTyped,
+    cloneSettingsSnapshot,
+    collectCompanyInfoChanges,
+    logCommittedSettingsChanges,
+} from '../fiscal/fiscalAuditLog';
 import { buildSaftAuditFileXml } from '../fiscal/saft/exportSaft';
+import {
+    planSaftExport,
+    type SaftDivergentField,
+    type SaftExportPlan,
+} from '../fiscal/saft/saftHeaderProjection';
+import { APP_VERSION } from '../lib/appVersion';
 import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
 import { checkVendusFiscalHealth, fetchVendusSaftXml } from '../fiscal/vendusFiscalIssuer';
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
-import { initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
+import { customerLocalService, initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import { ivaRatesForCountry } from '../types/supabase';
 import { getCountryProfile, OPERATING_COUNTRIES, type OperatingCountry } from '../lib/countryProfile';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -251,6 +262,16 @@ const Settings: React.FC = () => {
     const [saftEnd, setSaftEnd] = useState(() => new Date().toISOString().slice(0, 10));
     const [saftBusy, setSaftBusy] = useState(false);
     const [saftMessage, setSaftMessage] = useState<string | null>(null);
+    // The period is frozen in here with the plan, never re-read from state on
+    // confirm: the whole point of this change is that a Header cannot disagree with
+    // the documents under it, and StartDate/EndDate/FiscalYear are Header fields.
+    const [saftPending, setSaftPending] = useState<{
+        plan: SaftExportPlan;
+        loadTx: (id: string) => Promise<Awaited<ReturnType<typeof transactionLocalService.getTransactionById>>>;
+        docs: Awaited<ReturnType<typeof transactionLocalService.getFiscalDocumentsByDateRange>>;
+        startDateYmd: string;
+        endDateYmd: string;
+    } | null>(null);
     const [vendusCheck, setVendusCheck] = useState<{ status: VendusCheckStatus; message: string }>({
         status: 'idle',
         message: '',
@@ -775,6 +796,179 @@ const Settings: React.FC = () => {
         }
     }, [resetToDefaults, t]);
 
+    /**
+     * Writes the file and the audit trail once the Header issuer is settled. Split
+     * out of `handleExportSaft` so the acknowledgement dialog can resume the very
+     * same export — plan and loaded transactions included — instead of re-planning
+     * and risking a different answer between the warning and the file.
+     */
+    const finishSaftExport = useCallback(
+        async (
+            plan: SaftExportPlan,
+            loadTx: (id: string) => Promise<Awaited<ReturnType<typeof transactionLocalService.getTransactionById>>>,
+            docs: Awaited<ReturnType<typeof transactionLocalService.getFiscalDocumentsByDateRange>>,
+            startDateYmd: string,
+            endDateYmd: string
+        ) => {
+            const xml = await buildSaftAuditFileXml({
+                settings,
+                startDateYmd,
+                endDateYmd,
+                fiscalDocuments: docs,
+                loadTransaction: loadTx,
+                loadCustomer: id => customerLocalService.getCustomerById(id),
+                productVersion: APP_VERSION,
+                headerIssuer: plan.headerIssuer,
+            });
+            const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `SAFT_PT_${startDateYmd}_${endDateYmd}.xml`;
+            a.click();
+            // Revoking synchronously can pull the object URL out from under a download
+            // the browser has not started reading yet.
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+            const batchId = generateUUID();
+            const exportedAt = new Date().toISOString();
+            // `includedFiscalIds`, not every row in range: a document dropped for want of
+            // a transaction is not in the file, so marking it exported would be a lie.
+            await transactionLocalService.markFiscalDocumentsSaftExported(
+                plan.includedFiscalIds,
+                batchId,
+                exportedAt
+            );
+            const ack = plan.acknowledgement;
+            await appendFiscalAuditEventTyped(
+                'SAFT_EXPORTED',
+                {
+                    startDateYmd,
+                    endDateYmd,
+                    documentCount: plan.documentCount,
+                    headerSource: plan.headerSource,
+                    snapshotCount: plan.snapshotCount,
+                    legacyCount: plan.legacyCount,
+                    fiscalYear: plan.fiscalYear,
+                    fiscalYears: plan.fiscalYears,
+                    productVersion: APP_VERSION,
+                    // The identity itself, not a count of them: "a decision happened"
+                    // cannot be reconciled against a filed file, "this NIF and this
+                    // address were declared, these were not" can.
+                    headerIdentity: plan.headerIssuer ?? null,
+                    acknowledged: ack !== null,
+                    acknowledgedReasons: ack ? ack.reasons : [],
+                    divergentFields: ack ? ack.fields : [],
+                    rejectedIdentities: ack ? ack.rejected.map(g => ({ ...g.projection, documentCount: g.count })) : [],
+                    vouchingDocumentCount: ack ? ack.vouchingCount : plan.documentCount,
+                    droppedDocumentCount: plan.droppedFiscalIds.length,
+                    droppedFiscalIds: plan.droppedFiscalIds,
+                    droppedInvoiceNos: plan.droppedInvoiceNos,
+                    batchId,
+                    exportedAt,
+                },
+                employee?.id
+            );
+
+            // Every snapshot can agree yet still disagree with today's settings, because
+            // the back office changed after the last sale. Nothing is acknowledged, and
+            // the XML legitimately differs from last week's — this line is what makes
+            // that diff explainable instead of alarming.
+            const provenance =
+                plan.headerSource === 'live-settings'
+                    ? t('settings.saft.provenanceLive', { total: plan.documentCount })
+                    : plan.legacyCount > 0
+                      ? t('settings.saft.provenanceMixed', {
+                            snapshot: plan.snapshotCount,
+                            total: plan.documentCount,
+                            legacy: plan.legacyCount,
+                        })
+                      : t('settings.saft.provenanceSnapshot', { snapshot: plan.snapshotCount, total: plan.documentCount });
+            // A document that is not in a filed file has to be readable on screen. The
+            // audit JSON is not where an operator discovers what they just submitted.
+            const dropped =
+                plan.droppedInvoiceNos.length > 0
+                    ? ` ${t('settings.saft.droppedNotice', {
+                          count: plan.droppedInvoiceNos.length,
+                          list: plan.droppedInvoiceNos.join(', '),
+                      })}`
+                    : '';
+            setSaftMessage(
+                `${t('settings.messages.saftExported', { count: plan.documentCount })} ${provenance}${dropped}`
+            );
+        },
+        [employee?.id, settings, t]
+    );
+
+    const confirmSaftExport = useCallback(async () => {
+        if (!saftPending) return;
+        setSaftBusy(true);
+        try {
+            await finishSaftExport(
+                saftPending.plan,
+                saftPending.loadTx,
+                saftPending.docs,
+                saftPending.startDateYmd,
+                saftPending.endDateYmd
+            );
+            setSaftPending(null);
+        } catch (error) {
+            setSaftMessage(error instanceof Error ? error.message : t('settings.messages.saftExportFail'));
+            setSaftPending(null);
+        } finally {
+            setSaftBusy(false);
+        }
+    }, [finishSaftExport, saftPending, t]);
+
+    /**
+     * Declining is the only path that produces no file, so it is the only one that
+     * still writes SAFT_EXPORT_BLOCKED_ISSUER_CONFLICT. Nothing was marked exported
+     * and no XML exists, but the refusal itself is a fiscal fact.
+     */
+    const cancelSaftExport = useCallback(async () => {
+        // Refuse once the confirmed export is already running. The dialog leaves
+        // its cancel button and backdrop live while `finishSaftExport` writes the
+        // file and marks documents exported, so a click here would log the
+        // operator as having DECLINED an export that produced a file — an audit
+        // row asserting the opposite of what happened.
+        if (!saftPending || saftBusy) return;
+        const { plan, startDateYmd, endDateYmd } = saftPending;
+        setSaftPending(null);
+        setSaftMessage(t('settings.saft.ackCancelled'));
+        await appendFiscalAuditEventTyped(
+            'SAFT_EXPORT_BLOCKED_ISSUER_CONFLICT',
+            {
+                startDateYmd,
+                endDateYmd,
+                documentCount: plan.documentCount,
+                reasons: plan.acknowledgement ? plan.acknowledgement.reasons : [],
+                divergentFields: plan.acknowledgement ? plan.acknowledgement.fields : [],
+                identities: plan.acknowledgement
+                    ? plan.acknowledgement.groups.map(g => ({ ...g.projection, documentCount: g.count }))
+                    : [],
+                declinedIdentity: plan.headerIssuer ?? null,
+            },
+            employee?.id
+        );
+    }, [employee?.id, saftBusy, saftPending, t]);
+
+    const ack = saftPending?.plan.acknowledgement ?? null;
+    // Two taxable persons is a different statement from a change of address, and
+    // reads as a different severity to the person signing it off.
+    const ackTaxNumberSplit = ack?.reasons.includes('tax-number') ?? false;
+
+    // Literal keys, one per field: `t(\`settings.saft.field.${f}\`)` would be
+    // invisible to check:i18n, which only sees statically written keys.
+    const saftDivergentFieldLabels: Record<SaftDivergentField, string> = {
+        taxNumber: t('settings.saft.field.taxNumber'),
+        name: t('settings.saft.field.name'),
+        address: t('settings.saft.field.address'),
+        city: t('settings.saft.field.city'),
+        postalCode: t('settings.saft.field.postalCode'),
+        productId: t('settings.saft.field.productId'),
+        softwareCertNumber: t('settings.saft.field.softwareCertNumber'),
+    };
+
     const handleExportSaft = useCallback(async () => {
         setSaftBusy(true);
         setSaftMessage(null);
@@ -858,46 +1052,42 @@ const Settings: React.FC = () => {
             }
 
             const fiscalDocs = await transactionLocalService.getFiscalDocumentsByDateRange(saftStart, saftEnd);
-            const xml = await buildSaftAuditFileXml({
+            const { plan, loadTransactionCached } = await planSaftExport({
                 settings,
                 startDateYmd: saftStart,
                 endDateYmd: saftEnd,
                 fiscalDocuments: fiscalDocs,
                 loadTransaction: id => transactionLocalService.getTransactionById(id),
-                productVersion: '0.1.0',
             });
-            const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `SAFT_PT_${saftStart}_${saftEnd}.xml`;
-            a.click();
-            URL.revokeObjectURL(url);
-            const batchId = generateUUID();
-            const exportedAt = new Date().toISOString();
-            await transactionLocalService.markFiscalDocumentsSaftExported(
-                fiscalDocs.map(d => d.id),
-                batchId,
-                exportedAt
-            );
-            await transactionLocalService.appendFiscalAuditEvent({
-                event_type: 'SAFT_EXPORTED',
-                payload_json: JSON.stringify({
+            // The file is never written on this pass when there is something to
+            // disclose: the acknowledgement has to precede the XML, or the operator is
+            // being told about a file they already have.
+            if (plan.acknowledgement) {
+                setSaftPending({
+                    plan,
+                    loadTx: loadTransactionCached,
+                    docs: fiscalDocs,
                     startDateYmd: saftStart,
                     endDateYmd: saftEnd,
-                    documentCount: fiscalDocs.length,
-                    batchId,
-                    exportedAt,
-                }),
-                employee_id: null,
-            });
-            setSaftMessage(t('settings.messages.saftExported', { count: fiscalDocs.length }));
+                });
+                return;
+            }
+            await finishSaftExport(plan, loadTransactionCached, fiscalDocs, saftStart, saftEnd);
         } catch (error) {
             setSaftMessage(error instanceof Error ? error.message : t('settings.messages.saftExportFail'));
         } finally {
             setSaftBusy(false);
         }
-    }, [fiscalIssuerLabel, isExternalIssuer, isSystemAdmin, saftEnd, saftStart, settings, t]);
+    }, [
+        finishSaftExport,
+        fiscalIssuerLabel,
+        isExternalIssuer,
+        isSystemAdmin,
+        saftEnd,
+        saftStart,
+        settings,
+        t,
+    ]);
 
     const renderSaveLabel = () => {
         if (saveStatus === 'saving') return t('settings.saveSaving');
@@ -2325,6 +2515,100 @@ const Settings: React.FC = () => {
                 </button>
             </div>
             {saftMessage && <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">{saftMessage}</p>}
+            {ack && saftPending && (
+                <ConfirmDialog
+                    tone={ackTaxNumberSplit ? 'danger' : 'warning'}
+                    title={
+                        ackTaxNumberSplit
+                            ? t('settings.saft.ackTitleTaxNumber')
+                            : ack.reasons.includes('identity')
+                              ? t('settings.saft.ackTitleIdentity')
+                              : t('settings.saft.ackTitleReview')
+                    }
+                    message={
+                        // Spans, not div/ul: ConfirmDialog renders `message` inside a <p>,
+                        // and a block element there is invalid nesting the browser silently
+                        // repairs by closing the paragraph early.
+                        <span className="block space-y-3 text-left">
+                            {ackTaxNumberSplit ? (
+                                <span className="block">
+                                    {t('settings.saft.ackBodyTaxNumber', {
+                                        from: saftPending.startDateYmd,
+                                        to: saftPending.endDateYmd,
+                                        count: ack.groups.length,
+                                    })}
+                                </span>
+                            ) : ack.reasons.includes('identity') ? (
+                                <span className="block">
+                                    {t('settings.saft.ackBodyIdentity', {
+                                        fields: ack.fields.map(field => saftDivergentFieldLabels[field]).join(', '),
+                                    })}
+                                </span>
+                            ) : null}
+                            {ack.groups.length > 1 &&
+                                ack.groups.map(group => (
+                                    <span className="block" key={`${group.firstInvoiceNo}-${group.projection.taxNumberDigits}`}>
+                                        {`• ${t('settings.saft.ackGroup', {
+                                            name: group.projection.name,
+                                            nif: group.projection.taxNumberDigits,
+                                            address: group.projection.address,
+                                            postalCode: group.projection.postalCode,
+                                            city: group.projection.city,
+                                            count: group.count,
+                                            firstNo: group.firstInvoiceNo,
+                                            firstDate: group.firstInvoiceDate,
+                                            lastNo: group.lastInvoiceNo,
+                                            lastDate: group.lastInvoiceDate,
+                                        })}`}
+                                    </span>
+                                ))}
+                            {ack.chosen && (
+                                <span className="block font-semibold">
+                                    {t('settings.saft.ackChosen', {
+                                        name: ack.chosen.name,
+                                        nif: ack.chosen.taxNumberDigits,
+                                        address: ack.chosen.address,
+                                        postalCode: ack.chosen.postalCode,
+                                        city: ack.chosen.city,
+                                        vouching: ack.vouchingCount,
+                                        total: ack.documentCount,
+                                    })}
+                                </span>
+                            )}
+                            {ack.reasons.includes('partial-snapshot') && (
+                                <span className="block">
+                                    {t('settings.saft.ackPartialSnapshot', {
+                                        legacy: ack.legacyCount,
+                                        snapshot: ack.snapshotCount,
+                                        total: ack.documentCount,
+                                    })}
+                                </span>
+                            )}
+                            {ack.reasons.includes('multiple-fiscal-years') && (
+                                <span className="block">
+                                    {t('settings.saft.ackFiscalYears', {
+                                        years: ack.fiscalYears.join(', '),
+                                        year: ack.fiscalYear,
+                                    })}
+                                </span>
+                            )}
+                            {ack.droppedInvoiceNos.length > 0 && (
+                                <span className="block">
+                                    {t('settings.saft.droppedNotice', {
+                                        count: ack.droppedInvoiceNos.length,
+                                        list: ack.droppedInvoiceNos.join(', '),
+                                    })}
+                                </span>
+                            )}
+                        </span>
+                    }
+                    busy={saftBusy}
+                    confirmLabel={t('settings.saft.ackConfirm')}
+                    cancelLabel={t('settings.saft.ackCancel')}
+                    onCancel={cancelSaftExport}
+                    onConfirm={confirmSaftExport}
+                />
+            )}
 
             <div className="mt-6 border-t border-slate-200/70 pt-4">
                 <SettingsRow

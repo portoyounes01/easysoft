@@ -14,7 +14,7 @@
     "check:i18n": "node scripts/check-i18n-keys.mjs",
     "preview": "vite preview",
     "test": "vitest",
-    "validate:saft": "npm test -- --run tests/fiscal/saftExport.test.ts",
+    "validate:saft": "npm test -- --run tests/fiscal/saftExport.test.ts tests/fiscal/saftHeaderImmutability.test.ts",
     "test:saft-xsd": "node scripts/validate-saft-xsd.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

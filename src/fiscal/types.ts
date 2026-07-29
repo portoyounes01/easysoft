@@ -495,6 +495,12 @@ export type FiscalAuditEventType =
     | 'SETTINGS_FISCAL_CHANGED'
     | 'SETTINGS_CHANGED'
     | 'SAFT_EXPORTED'
+    /** The operator was shown what the Header would declare — a second tax number,
+     *  a changed company block, a thin snapshot majority, two fiscal years — and
+     *  DECLINED, so no file was produced and nothing was marked exported. The name
+     *  predates the acknowledgement flow; the event is kept under it so existing
+     *  audit trails stay searchable. Never written when a file is produced. */
+    | 'SAFT_EXPORT_BLOCKED_ISSUER_CONFLICT'
     | 'LOGIN_SUCCESS'
     | 'LOGIN_FAILURE'
     | 'KEY_ROTATED';
