@@ -55,6 +55,7 @@ function resolveRendererConfig(options = {}) {
     url: source === 'network' ? `${runtime.uiOrigin}/` : PRODUCTION_RENDERER_URL,
     gateUrl: GATE_URL,
     gateRoot: path.join(dirname, 'gate'),
+    updaterRoot: path.join(dirname, 'updater-window'),
     root: path.join(dirname, '../dist'),
     file: path.join(dirname, '../dist/index.html'),
     runtime,

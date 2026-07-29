@@ -38,6 +38,8 @@ import {
     DESIGN_SYSTEM_2_NEUTRAL_OPTIONS,
     DS2_RADIUS_MIN_PX,
     DS2_RADIUS_MAX_PX,
+    DS2_BUTTON_HEIGHT_MIN_PX,
+    DS2_BUTTON_HEIGHT_MAX_PX,
     radiusBasePxForPreset,
 } from '../theme/designSystem2VisualTokens';
 import '../styles/design-system-2-scope.css';
@@ -416,6 +418,137 @@ const AppearancePreview: React.FC<AppearancePreviewProps> = ({ previewTab, onPre
     );
 };
 
+/**
+ * Buttons own their corner radius and height; the "Density and corners" card
+ * above drives every other surface. Split so a chunky touch target and a soft
+ * card are not the same decision.
+ */
+const ButtonShapeControls: React.FC = () => {
+    const { prefs, setPrefs } = useDesignSystem2Customization();
+    const { t } = useTranslation();
+    /** In-progress text of each numeric field (allows clearing while typing). */
+    const [radiusDraft, setRadiusDraft] = useState<string | null>(null);
+    const [heightDraft, setHeightDraft] = useState<string | null>(null);
+
+    const radiusBasePx = radiusBasePxForPreset(prefs.buttonRadiusPreset, prefs.buttonRadiusCustomPx);
+
+    const setCustomRadius = (px: number) => {
+        const clamped = Math.min(DS2_RADIUS_MAX_PX, Math.max(DS2_RADIUS_MIN_PX, Math.round(px)));
+        setPrefs({ buttonRadiusPreset: 'custom', buttonRadiusCustomPx: clamped });
+    };
+
+    const setHeight = (px: number) => {
+        setPrefs({ buttonHeightPx: Math.round(px) });
+    };
+
+    // Unlike the general radius control, 'custom' is listed: the slider selects
+    // it, so leaving it out would show nothing selected once the slider moves.
+    const radiusOptions = useMemo<SegmentOption<DesignSystem2RadiusPreset>[]>(
+        () => [
+            { value: 'none', label: t('appearances.optionNone') },
+            { value: 'sharp', label: t('appearances.optionSharp') },
+            { value: 'default', label: t('appearances.optionDefault') },
+            { value: 'soft', label: t('appearances.optionSoft') },
+            { value: 'custom', label: t('appearances.optionCustom') },
+        ],
+        [t]
+    );
+
+    return (
+        <div className="space-y-5">
+            <div>
+                <p className="mb-2 text-sm font-bold text-neutral-700">{t('appearances.buttonRadiusLabel')}</p>
+                <SegmentedControl
+                    options={radiusOptions}
+                    value={prefs.buttonRadiusPreset}
+                    onChange={(buttonRadiusPreset) => {
+                        setRadiusDraft(null);
+                        setPrefs({ buttonRadiusPreset });
+                    }}
+                />
+                <div className="mt-3 flex items-center gap-3">
+                    <input
+                        type="range"
+                        min={DS2_RADIUS_MIN_PX}
+                        max={DS2_RADIUS_MAX_PX}
+                        step={1}
+                        value={radiusBasePx}
+                        onChange={(e) => {
+                            setRadiusDraft(null);
+                            setCustomRadius(Number(e.target.value));
+                        }}
+                        className="h-2 min-w-0 flex-1 cursor-pointer accent-green-500"
+                        aria-label={t('appearances.customButtonRadiusLabel')}
+                    />
+                    <label className="flex shrink-0 items-center gap-2">
+                        <span className="sr-only">{t('appearances.customButtonRadiusLabel')}</span>
+                        <input
+                            type="number"
+                            min={DS2_RADIUS_MIN_PX}
+                            max={DS2_RADIUS_MAX_PX}
+                            step={1}
+                            inputMode="numeric"
+                            value={radiusDraft ?? String(radiusBasePx)}
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                setRadiusDraft(raw);
+                                const parsed = Number(raw);
+                                if (raw !== '' && Number.isFinite(parsed)) {
+                                    setCustomRadius(parsed);
+                                }
+                            }}
+                            onBlur={() => setRadiusDraft(null)}
+                            className="w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-center text-sm font-semibold text-neutral-900 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                        />
+                        <span className="text-sm font-semibold text-neutral-500">px</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <p className="mb-2 text-sm font-bold text-neutral-700">{t('appearances.buttonHeightLabel')}</p>
+                <p className="mb-2 text-sm leading-5 text-neutral-500">{t('appearances.buttonHeightHint')}</p>
+                <div className="flex items-center gap-3">
+                    <input
+                        type="range"
+                        min={DS2_BUTTON_HEIGHT_MIN_PX}
+                        max={DS2_BUTTON_HEIGHT_MAX_PX}
+                        step={1}
+                        value={prefs.buttonHeightPx}
+                        onChange={(e) => {
+                            setHeightDraft(null);
+                            setHeight(Number(e.target.value));
+                        }}
+                        className="h-2 min-w-0 flex-1 cursor-pointer accent-green-500"
+                        aria-label={t('appearances.buttonHeightLabel')}
+                    />
+                    <label className="flex shrink-0 items-center gap-2">
+                        <span className="sr-only">{t('appearances.buttonHeightLabel')}</span>
+                        <input
+                            type="number"
+                            min={DS2_BUTTON_HEIGHT_MIN_PX}
+                            max={DS2_BUTTON_HEIGHT_MAX_PX}
+                            step={1}
+                            inputMode="numeric"
+                            value={heightDraft ?? String(prefs.buttonHeightPx)}
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                setHeightDraft(raw);
+                                const parsed = Number(raw);
+                                if (raw !== '' && Number.isFinite(parsed)) {
+                                    setHeight(parsed);
+                                }
+                            }}
+                            onBlur={() => setHeightDraft(null)}
+                            className="w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-center text-sm font-semibold text-neutral-900 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                        />
+                        <span className="text-sm font-semibold text-neutral-500">px</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const Appearances: React.FC = () => {
     const { prefs, setPrefs, resetPrefs, layoutClasses, visualStyle } = useDesignSystem2Customization();
     const { t } = useTranslation();
@@ -663,6 +796,14 @@ const Appearances: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
+                        </SectionCard>
+
+                        <SectionCard
+                            icon={MousePointerClick}
+                            title={t('appearances.buttonShapeTitle')}
+                            description={t('appearances.buttonShapeDescription')}
+                        >
+                            <ButtonShapeControls />
                         </SectionCard>
 
                         <SectionCard
