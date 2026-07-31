@@ -18,6 +18,7 @@ import {
     logCommittedSettingsChanges,
     logPostSaleReceiptNotPrinted,
     logPostSaleReceiptPrinted,
+    logReproducedDocument,
 } from '../../src/fiscal/fiscalAuditLog';
 
 function minimalSettings(overrides?: Partial<SystemSettings>): SystemSettings {
@@ -152,5 +153,21 @@ describe('fiscalAuditLog', () => {
                 employee_id: null,
             })
         );
+    });
+
+    // Reproducing an issued document is three distinct facts, and the log has
+    // to be able to tell them apart: opening the 2.ª via preview, that preview
+    // reaching the printer, and the Original preview reaching the printer.
+    it.each([
+        ['SECOND_COPY_VIEWED'],
+        ['REPRINT_REQUESTED'],
+        ['ORIGINAL_REPRINTED'],
+    ] as const)('logs %s with the document it refers to', async event => {
+        await logReproducedDocument(event, { documentNumber: 'FS 1/7', transactionId: 'tx-7' }, 'emp-2');
+        expect(appendFiscalAuditEvent).toHaveBeenCalledWith(
+            expect.objectContaining({ event_type: event, employee_id: 'emp-2' })
+        );
+        const call = appendFiscalAuditEvent.mock.calls.at(-1)?.[0] as { payload_json: string };
+        expect(JSON.parse(call.payload_json)).toEqual({ documentNumber: 'FS 1/7', transactionId: 'tx-7' });
     });
 });

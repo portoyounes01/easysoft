@@ -52,7 +52,7 @@ describe('DataSetup Component', () => {
     expect(screen.getByText('Database Setup')).toBeInTheDocument();
     expect(screen.getByText('Set up your POS system with sample data for testing and reports')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /populate all data/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /clear all data/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /clear local data/i })).toBeInTheDocument();
   });
 
   it('shows what will be populated in the info section', () => {
@@ -111,7 +111,13 @@ describe('DataSetup Component', () => {
         .mockResolvedValueOnce(true)  // Initial check - data exists
         .mockResolvedValueOnce(true); // Verification check
       
-      mockClearTransactionData.mockResolvedValue({ success: true });
+      mockClearTransactionData.mockResolvedValue({
+        success: true,
+        preservedSystemAdmins: 1,
+        preservedFiscalIssueAttempts: 0,
+        preservedFiscalDocuments: 0,
+        preservedFiscalTransactions: 0,
+      });
       mockPopulateTransactionData.mockResolvedValue({
         success: true,
         employeesCount: 3,
@@ -192,24 +198,30 @@ describe('DataSetup Component', () => {
     });
   });
 
-  describe('Clear All Data functionality', () => {
+  describe('Clear Local Data functionality', () => {
     it('successfully clears all data', async () => {
-      mockClearTransactionData.mockResolvedValue({ success: true });
+      mockClearTransactionData.mockResolvedValue({
+        success: true,
+        preservedSystemAdmins: 1,
+        preservedFiscalIssueAttempts: 0,
+        preservedFiscalDocuments: 0,
+        preservedFiscalTransactions: 0,
+      });
 
       render(<DataSetup />);
       
-      const clearButton = screen.getByRole('button', { name: /clear all data/i });
+      const clearButton = screen.getByRole('button', { name: /clear local data/i });
       fireEvent.click(clearButton);
 
       // Check loading state
       expect(clearButton).toBeDisabled();
       
       await waitFor(() => {
-        expect(screen.getByText('Clearing all transaction data...')).toBeInTheDocument();
+        expect(screen.getByText('Clearing the local database...')).toBeInTheDocument();
       });
 
       await waitFor(() => {
-        expect(screen.getByText('All transaction data cleared successfully')).toBeInTheDocument();
+        expect(screen.getByText(/Local database cleared/)).toBeInTheDocument();
       });
 
       // Verify function calls
@@ -223,7 +235,7 @@ describe('DataSetup Component', () => {
 
       render(<DataSetup />);
       
-      const clearButton = screen.getByRole('button', { name: /clear all data/i });
+      const clearButton = screen.getByRole('button', { name: /clear local data/i });
       fireEvent.click(clearButton);
 
       await waitFor(() => {
@@ -244,7 +256,7 @@ describe('DataSetup Component', () => {
       render(<DataSetup />);
       
       const populateButton = screen.getByRole('button', { name: /populate all data/i });
-      const clearButton = screen.getByRole('button', { name: /clear all data/i });
+      const clearButton = screen.getByRole('button', { name: /clear local data/i });
       
       fireEvent.click(populateButton);
 
@@ -261,7 +273,7 @@ describe('DataSetup Component', () => {
       render(<DataSetup />);
       
       const populateButton = screen.getByRole('button', { name: /populate all data/i });
-      const clearButton = screen.getByRole('button', { name: /clear all data/i });
+      const clearButton = screen.getByRole('button', { name: /clear local data/i });
       
       fireEvent.click(clearButton);
 
@@ -399,8 +411,14 @@ describe('DataSetup Component', () => {
       });
 
       // Now clear data
-      mockClearTransactionData.mockResolvedValue({ success: true });
-      const clearButton = screen.getByRole('button', { name: /clear all data/i });
+      mockClearTransactionData.mockResolvedValue({
+        success: true,
+        preservedSystemAdmins: 1,
+        preservedFiscalIssueAttempts: 0,
+        preservedFiscalDocuments: 0,
+        preservedFiscalTransactions: 0,
+      });
+      const clearButton = screen.getByRole('button', { name: /clear local data/i });
       fireEvent.click(clearButton);
 
       // Previous results should be cleared
@@ -409,7 +427,7 @@ describe('DataSetup Component', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('All transaction data cleared successfully')).toBeInTheDocument();
+        expect(screen.getByText(/Local database cleared/)).toBeInTheDocument();
       });
     });
   });

@@ -1,3 +1,5 @@
+import i18n from '../i18n';
+
 /** SAFT sales families configured independently (FS, FT, NC each with own série, ATCUD and hash chain). */
 export type FiscalSeriesDocKey = 'FS' | 'FT' | 'NC';
 
@@ -93,10 +95,10 @@ export function assertIssueDateInSeriesWindow(
 ): void {
     const w = isIssueDateOutsideSeriesWindow(issueDateYmd, profile);
     if (w === 'before_start') {
-        throw new Error('A data do documento é anterior ao início de vigência da série configurada.');
+        throw new Error(i18n.t('checkout.issueDateBeforeSeriesStart'));
     }
     if (w === 'after_end') {
-        throw new Error('A data do documento é posterior ao fim de vigência da série configurada.');
+        throw new Error(i18n.t('checkout.issueDateAfterSeriesEnd'));
     }
 }
 

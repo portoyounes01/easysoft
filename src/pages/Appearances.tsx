@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react';
+import { INTERNAL_COLOR_DEFAULTS, type InternalColorKey } from '../theme/designSystem2VisualTokens';
 import { useTranslation } from 'react-i18next';
 import type { LucideIcon } from 'lucide-react';
 import {
     Check,
+    FlaskConical,
     Image as ImageIcon,
     Info,
     LayoutPanelLeft,
     Monitor,
+    MousePointerClick,
     Palette,
     RotateCcw,
     ShoppingBag,
@@ -15,6 +18,9 @@ import {
     Type,
 } from 'lucide-react';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TabToggle } from '../components/ui/TabToggle';
+import DialogLab from '../components/DialogLab';
+import ButtonLab from '../components/ButtonLab';
 import {
     useDesignSystem2Customization,
     type DesignSystem2BaseColorId,
@@ -30,6 +36,11 @@ import {
     DESIGN_SYSTEM_2_ACCENTS,
     DESIGN_SYSTEM_2_BASE_OPTIONS,
     DESIGN_SYSTEM_2_NEUTRAL_OPTIONS,
+    DS2_RADIUS_MIN_PX,
+    DS2_RADIUS_MAX_PX,
+    DS2_BUTTON_HEIGHT_MIN_PX,
+    DS2_BUTTON_HEIGHT_MAX_PX,
+    radiusBasePxForPreset,
 } from '../theme/designSystem2VisualTokens';
 import '../styles/design-system-2-scope.css';
 
@@ -45,7 +56,6 @@ interface SegmentedControlProps<T extends string> {
     options: SegmentOption<T>[];
     value: T;
     onChange: (value: T) => void;
-    columnsClassName?: string;
 }
 
 interface SectionCardProps {
@@ -78,15 +88,77 @@ interface AppearancePreviewProps {
     onPreviewTabChange: (tab: PreviewTab) => void;
 }
 
-const COLOR_SWATCH_CLASSES: Record<DesignSystem2ColorChoiceId, string> = {
-    green: 'bg-green-500',
-    blue: 'bg-blue-500',
-    indigo: 'bg-indigo-500',
-    violet: 'bg-violet-500',
-    orange: 'bg-orange-500',
-    rose: 'bg-rose-500',
-    teal: 'bg-teal-500',
-    slate: 'bg-slate-600',
+/** Fixed hex values (not Tailwind classes): inside .ds2-visual-scope, bg-green-500 /
+ *  bg-blue-500 utilities are remapped to the live theme vars, which would make those
+ *  swatches mirror the current selection instead of their own hue. */
+/** Internal-colour hex fields: the colour series + one colour per state. */
+const INTERNAL_COLOR_GROUPS: { titleKey: string; fields: [InternalColorKey, string][] }[] = [
+    {
+        titleKey: 'appearances.internalSeriesLabel',
+        fields: [
+            ['secondary', 'appearances.internal.secondary'],
+            ['tertiary', 'appearances.internal.tertiary'],
+            ['quaternary', 'appearances.internal.quaternary'],
+        ],
+    },
+    {
+        titleKey: 'appearances.internalStatesLabel',
+        fields: [
+            ['success', 'appearances.internal.success'],
+            ['warning', 'appearances.internal.warning'],
+            ['danger', 'appearances.internal.danger'],
+        ],
+    },
+];
+
+const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/** Hex input with a live colour chip; commits valid values, reverts on blur otherwise. */
+const InternalColorField: React.FC<{
+    label: string;
+    value: string;
+    fallback: string;
+    onChange: (hex: string) => void;
+}> = ({ label, value, fallback, onChange }) => {
+    const [draft, setDraft] = React.useState(value);
+    React.useEffect(() => setDraft(value), [value]);
+    const valid = HEX_RE.test(draft.trim());
+    return (
+        <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-neutral-500">{label}</span>
+            <span className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2 ${valid ? 'border-neutral-200' : 'border-red-400'}`}>
+                <span
+                    className="h-5 w-5 shrink-0 rounded-md border border-neutral-200"
+                    style={{ backgroundColor: valid ? draft.trim() : fallback }}
+                />
+                <input
+                    value={draft}
+                    onChange={(event) => {
+                        const next = event.target.value;
+                        setDraft(next);
+                        if (HEX_RE.test(next.trim())) onChange(next.trim());
+                    }}
+                    onBlur={() => { if (!valid) setDraft(value); }}
+                    spellCheck={false}
+                    className="w-full bg-transparent font-mono text-sm text-neutral-800 outline-none"
+                    placeholder={fallback}
+                />
+            </span>
+        </label>
+    );
+};
+
+const COLOR_SWATCH_HEX: Record<DesignSystem2ColorChoiceId, string> = {
+    green: '#22c55e',
+    emerald: '#10b981',
+    blue: '#3b82f6',
+    indigo: '#6366f1',
+    violet: '#a855f7',
+    orange: '#f97316',
+    rose: '#f43f5e',
+    teal: '#14b8a6',
+    slate: '#475569',
+    black: '#000000',
 };
 
 const BASE_CANVAS_CLASSES: Record<DesignSystem2BaseColorId, string> = {
@@ -101,33 +173,8 @@ function SegmentedControl<T extends string>({
     options,
     value,
     onChange,
-    columnsClassName = 'grid-cols-1 sm:grid-cols-3',
 }: SegmentedControlProps<T>) {
-    return (
-        <div className={`grid gap-3 ${columnsClassName}`}>
-            {options.map((option) => {
-                const Icon = option.icon;
-                const selected = option.value === value;
-
-                return (
-                    <button
-                        key={option.value}
-                        type="button"
-                        aria-pressed={selected}
-                        onClick={() => onChange(option.value)}
-                        className={`relative flex min-h-touch-sm items-center justify-center gap-2 border px-3 py-2 text-sm font-semibold transition-all duration-200 ds2-control-radius-lg ${selected
-                            ? 'border-green-500 bg-green-50 text-green-600 shadow-sm'
-                            : 'border-neutral-200 bg-white text-neutral-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700'
-                            }`}
-                    >
-                        {Icon && <Icon className="h-4 w-4" />}
-                        <span>{option.label}</span>
-                        {selected && <Check className="absolute right-3 h-4 w-4" />}
-                    </button>
-                );
-            })}
-        </div>
-    );
+    return <TabToggle options={options} value={value} onChange={onChange} />;
 }
 
 const SectionCard: React.FC<SectionCardProps> = ({ icon: Icon, title, description, children }) => (
@@ -158,7 +205,10 @@ const ColorSwatchButton: React.FC<ColorSwatchButtonProps> = ({ color, selected, 
             : 'border-neutral-200 hover:border-blue-200 hover:bg-blue-50'
             }`}
     >
-        <span className={`flex h-11 w-11 items-center justify-center rounded-full ${COLOR_SWATCH_CLASSES[color.id]}`}>
+        <span
+            className="flex h-11 w-11 items-center justify-center rounded-full"
+            style={{ backgroundColor: COLOR_SWATCH_HEX[color.id] }}
+        >
             {selected && <Check className="h-5 w-5 text-white" />}
         </span>
         <span className="hidden text-sm font-semibold text-neutral-700 sm:inline">{color.label}</span>
@@ -171,9 +221,9 @@ const BaseCanvasButton: React.FC<BaseCanvasButtonProps> = ({ option, selected, o
         type="button"
         aria-pressed={selected}
         onClick={onClick}
-        className={`rounded-2xl border bg-white p-3 text-left transition-all duration-200 ${selected
-            ? 'border-green-500 shadow-sm ring-2 ring-green-500/20'
-            : 'border-neutral-200 hover:border-blue-200 hover:bg-blue-50'
+        className={`rounded-[10px] border p-3 text-left transition-all duration-200 ${selected
+            ? 'bg-green-50 border-green-500'
+            : 'bg-white border-gray-200 hover:bg-gray-50'
             }`}
     >
         <div className={`mb-3 h-20 rounded-xl border border-neutral-200 ${BASE_CANVAS_CLASSES[option.id]} p-3`}>
@@ -352,7 +402,6 @@ const AppearancePreview: React.FC<AppearancePreviewProps> = ({ previewTab, onPre
                 options={previewTabOptions}
                 value={previewTab}
                 onChange={onPreviewTabChange}
-                columnsClassName="grid-cols-2"
             />
 
             <div className="mt-5">{previewTab === 'order' ? <OrderPreview /> : <MenuPreview />}</div>
@@ -369,10 +418,151 @@ const AppearancePreview: React.FC<AppearancePreviewProps> = ({ previewTab, onPre
     );
 };
 
+/**
+ * Buttons own their corner radius and height; the "Density and corners" card
+ * above drives every other surface. Split so a chunky touch target and a soft
+ * card are not the same decision.
+ */
+const ButtonShapeControls: React.FC = () => {
+    const { prefs, setPrefs } = useDesignSystem2Customization();
+    const { t } = useTranslation();
+    /** In-progress text of each numeric field (allows clearing while typing). */
+    const [radiusDraft, setRadiusDraft] = useState<string | null>(null);
+    const [heightDraft, setHeightDraft] = useState<string | null>(null);
+
+    const radiusBasePx = radiusBasePxForPreset(prefs.buttonRadiusPreset, prefs.buttonRadiusCustomPx);
+
+    const setCustomRadius = (px: number) => {
+        const clamped = Math.min(DS2_RADIUS_MAX_PX, Math.max(DS2_RADIUS_MIN_PX, Math.round(px)));
+        setPrefs({ buttonRadiusPreset: 'custom', buttonRadiusCustomPx: clamped });
+    };
+
+    const setHeight = (px: number) => {
+        setPrefs({ buttonHeightPx: Math.round(px) });
+    };
+
+    // Unlike the general radius control, 'custom' is listed: the slider selects
+    // it, so leaving it out would show nothing selected once the slider moves.
+    const radiusOptions = useMemo<SegmentOption<DesignSystem2RadiusPreset>[]>(
+        () => [
+            { value: 'none', label: t('appearances.optionNone') },
+            { value: 'sharp', label: t('appearances.optionSharp') },
+            { value: 'default', label: t('appearances.optionDefault') },
+            { value: 'soft', label: t('appearances.optionSoft') },
+            { value: 'custom', label: t('appearances.optionCustom') },
+        ],
+        [t]
+    );
+
+    return (
+        <div className="space-y-5">
+            <div>
+                <p className="mb-2 text-sm font-bold text-neutral-700">{t('appearances.buttonRadiusLabel')}</p>
+                <SegmentedControl
+                    options={radiusOptions}
+                    value={prefs.buttonRadiusPreset}
+                    onChange={(buttonRadiusPreset) => {
+                        setRadiusDraft(null);
+                        setPrefs({ buttonRadiusPreset });
+                    }}
+                />
+                <div className="mt-3 flex items-center gap-3">
+                    <input
+                        type="range"
+                        min={DS2_RADIUS_MIN_PX}
+                        max={DS2_RADIUS_MAX_PX}
+                        step={1}
+                        value={radiusBasePx}
+                        onChange={(e) => {
+                            setRadiusDraft(null);
+                            setCustomRadius(Number(e.target.value));
+                        }}
+                        className="h-2 min-w-0 flex-1 cursor-pointer accent-green-500"
+                        aria-label={t('appearances.customButtonRadiusLabel')}
+                    />
+                    <label className="flex shrink-0 items-center gap-2">
+                        <span className="sr-only">{t('appearances.customButtonRadiusLabel')}</span>
+                        <input
+                            type="number"
+                            min={DS2_RADIUS_MIN_PX}
+                            max={DS2_RADIUS_MAX_PX}
+                            step={1}
+                            inputMode="numeric"
+                            value={radiusDraft ?? String(radiusBasePx)}
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                setRadiusDraft(raw);
+                                const parsed = Number(raw);
+                                if (raw !== '' && Number.isFinite(parsed)) {
+                                    setCustomRadius(parsed);
+                                }
+                            }}
+                            onBlur={() => setRadiusDraft(null)}
+                            className="w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-center text-sm font-semibold text-neutral-900 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                        />
+                        <span className="text-sm font-semibold text-neutral-500">px</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <p className="mb-2 text-sm font-bold text-neutral-700">{t('appearances.buttonHeightLabel')}</p>
+                <p className="mb-2 text-sm leading-5 text-neutral-500">{t('appearances.buttonHeightHint')}</p>
+                <div className="flex items-center gap-3">
+                    <input
+                        type="range"
+                        min={DS2_BUTTON_HEIGHT_MIN_PX}
+                        max={DS2_BUTTON_HEIGHT_MAX_PX}
+                        step={1}
+                        value={prefs.buttonHeightPx}
+                        onChange={(e) => {
+                            setHeightDraft(null);
+                            setHeight(Number(e.target.value));
+                        }}
+                        className="h-2 min-w-0 flex-1 cursor-pointer accent-green-500"
+                        aria-label={t('appearances.buttonHeightLabel')}
+                    />
+                    <label className="flex shrink-0 items-center gap-2">
+                        <span className="sr-only">{t('appearances.buttonHeightLabel')}</span>
+                        <input
+                            type="number"
+                            min={DS2_BUTTON_HEIGHT_MIN_PX}
+                            max={DS2_BUTTON_HEIGHT_MAX_PX}
+                            step={1}
+                            inputMode="numeric"
+                            value={heightDraft ?? String(prefs.buttonHeightPx)}
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                setHeightDraft(raw);
+                                const parsed = Number(raw);
+                                if (raw !== '' && Number.isFinite(parsed)) {
+                                    setHeight(parsed);
+                                }
+                            }}
+                            onBlur={() => setHeightDraft(null)}
+                            className="w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-center text-sm font-semibold text-neutral-900 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                        />
+                        <span className="text-sm font-semibold text-neutral-500">px</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const Appearances: React.FC = () => {
     const { prefs, setPrefs, resetPrefs, layoutClasses, visualStyle } = useDesignSystem2Customization();
     const { t } = useTranslation();
     const [previewTab, setPreviewTab] = useState<PreviewTab>('order');
+    /** In-progress text of the custom radius field (allows clearing while typing). */
+    const [radiusDraft, setRadiusDraft] = useState<string | null>(null);
+
+    // Base radius the slider/field represent: preset-derived, or the custom px value.
+    const radiusBasePx = radiusBasePxForPreset(prefs.radiusPreset, prefs.radiusCustomPx);
+
+    const setCustomRadius = (px: number) => {
+        const clamped = Math.min(DS2_RADIUS_MAX_PX, Math.max(DS2_RADIUS_MIN_PX, Math.round(px)));
+        setPrefs({ radiusPreset: 'custom', radiusCustomPx: clamped });
+    };
 
     const densityOptions = useMemo<SegmentOption<DesignSystem2Density>[]>(
         () => [
@@ -431,11 +621,15 @@ const Appearances: React.FC = () => {
     );
 
     return (
-        <div
-            className={`ds2-visual-scope min-h-full ${layoutClasses.rootBg} px-4 py-6 sm:px-6 lg:px-8`}
-            style={visualStyle}
-            data-ds2-neutral={prefs.neutralFamilyId}
-        >
+        <div className={`min-h-full ${layoutClasses.rootBg} px-4 py-6 sm:px-6 lg:px-8`}>
+            {/* Page scope wraps everything EXCEPT the Button lab: its specimen
+                cards apply (or omit) the scope themselves to mirror each
+                button's real screen, so a scoped ancestor here would lie. */}
+            <div
+                className="ds2-visual-scope"
+                style={visualStyle}
+                data-ds2-neutral={prefs.neutralFamilyId}
+            >
             <div className={`${layoutClasses.contentColumnMaxW} mx-auto`}>
                 <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex min-w-0 items-start gap-4">
@@ -513,6 +707,33 @@ const Appearances: React.FC = () => {
                         </SectionCard>
 
                         <SectionCard
+                            icon={Palette}
+                            title={t('appearances.internalColorsTitle')}
+                            description={t('appearances.internalColorsDescription')}
+                        >
+                            <div className="space-y-6">
+                                {INTERNAL_COLOR_GROUPS.map((group) => (
+                                    <div key={group.titleKey}>
+                                        <p className="mb-2 text-sm font-bold text-neutral-700">{t(group.titleKey)}</p>
+                                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                            {group.fields.map(([key, labelKey]) => (
+                                                <InternalColorField
+                                                    key={key}
+                                                    label={t(labelKey)}
+                                                    value={prefs.internalColors[key]}
+                                                    fallback={INTERNAL_COLOR_DEFAULTS[key]}
+                                                    onChange={(hex) =>
+                                                        setPrefs({ internalColors: { ...prefs.internalColors, [key]: hex } })
+                                                    }
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </SectionCard>
+
+                        <SectionCard
                             icon={Type}
                             title={t('appearances.densityCornersTitle')}
                             description={t('appearances.densityCornersDescription')}
@@ -531,11 +752,58 @@ const Appearances: React.FC = () => {
                                     <SegmentedControl
                                         options={radiusOptions}
                                         value={prefs.radiusPreset}
-                                        onChange={(radiusPreset) => setPrefs({ radiusPreset })}
-                                        columnsClassName="grid-cols-2 lg:grid-cols-4"
+                                        onChange={(radiusPreset) => {
+                                            setRadiusDraft(null);
+                                            setPrefs({ radiusPreset });
+                                        }}
                                     />
+                                    <div className="mt-3 flex items-center gap-3">
+                                        <input
+                                            type="range"
+                                            min={DS2_RADIUS_MIN_PX}
+                                            max={DS2_RADIUS_MAX_PX}
+                                            step={1}
+                                            value={radiusBasePx}
+                                            onChange={(e) => {
+                                                setRadiusDraft(null);
+                                                setCustomRadius(Number(e.target.value));
+                                            }}
+                                            className="h-2 min-w-0 flex-1 cursor-pointer accent-green-500"
+                                            aria-label={t('appearances.customRadiusLabel')}
+                                        />
+                                        <label className="flex shrink-0 items-center gap-2">
+                                            <span className="sr-only">{t('appearances.customRadiusLabel')}</span>
+                                            <input
+                                                type="number"
+                                                min={DS2_RADIUS_MIN_PX}
+                                                max={DS2_RADIUS_MAX_PX}
+                                                step={1}
+                                                inputMode="numeric"
+                                                value={radiusDraft ?? String(radiusBasePx)}
+                                                onChange={(e) => {
+                                                    const raw = e.target.value;
+                                                    setRadiusDraft(raw);
+                                                    const parsed = Number(raw);
+                                                    if (raw !== '' && Number.isFinite(parsed)) {
+                                                        setCustomRadius(parsed);
+                                                    }
+                                                }}
+                                                onBlur={() => setRadiusDraft(null)}
+                                                className="w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-center text-sm font-semibold text-neutral-900 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                                            />
+                                            <span className="text-sm font-semibold text-neutral-500">px</span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
+                        </SectionCard>
+
+                        <SectionCard
+                            icon={MousePointerClick}
+                            title={t('appearances.buttonShapeTitle')}
+                            description={t('appearances.buttonShapeDescription')}
+                        >
+                            <ButtonShapeControls />
                         </SectionCard>
 
                         <SectionCard
@@ -558,7 +826,6 @@ const Appearances: React.FC = () => {
                                         options={maxWidthOptions}
                                         value={prefs.maxWidth}
                                         onChange={(maxWidth) => setPrefs({ maxWidth })}
-                                        columnsClassName="grid-cols-2 lg:grid-cols-4"
                                     />
                                 </div>
                                 <div>
@@ -575,7 +842,6 @@ const Appearances: React.FC = () => {
                                         options={neutralOptions}
                                         value={prefs.neutralFamilyId}
                                         onChange={(neutralFamilyId) => setPrefs({ neutralFamilyId })}
-                                        columnsClassName="grid-cols-2 lg:grid-cols-4"
                                     />
                                 </div>
                             </div>
@@ -586,6 +852,28 @@ const Appearances: React.FC = () => {
                         <AppearancePreview previewTab={previewTab} onPreviewTabChange={setPreviewTab} />
                     </div>
                 </div>
+
+                <div className="mt-6">
+                    <SectionCard
+                        icon={FlaskConical}
+                        title={t('appearances.dialogLabTitle')}
+                        description={t('appearances.dialogLabDescription')}
+                    >
+                        <DialogLab />
+                    </SectionCard>
+                </div>
+            </div>
+            </div>
+
+            {/* Outside the page scope — see comment on the wrapper above. */}
+            <div className={`${layoutClasses.contentColumnMaxW} mx-auto mt-6`}>
+                <SectionCard
+                    icon={MousePointerClick}
+                    title={t('appearances.buttonLabTitle')}
+                    description={t('appearances.buttonLabDescription')}
+                >
+                    <ButtonLab />
+                </SectionCard>
             </div>
         </div>
     );

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { WithDialogTokens } from './ui/dialogParts';
 import { useTranslation } from 'react-i18next';
 import {
     AlertTriangle,
@@ -27,6 +28,10 @@ import type {
     PurchaseLineResolution,
 } from '../types/purchaseReceipt';
 import { RAW_MATERIAL_UNITS, type LocalRawMaterial, type RawMaterialUnit } from '../types/rawMaterial';
+import { ConfiguredDialogShell } from './ui/ConfiguredDialogShell';
+import { POSActionButton } from './ui/POSActionButton';
+import { TableActionButton } from './ui/TableActionButton';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 
 interface PurchaseReceiptImportDialogProps {
     open: boolean;
@@ -43,6 +48,7 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
     onApplied,
 }) => {
     const { t } = useTranslation();
+    const applied = useAppliedDialogStyle();
     const { employee } = useSupabaseAuth();
     const { products, categories } = useProducts();
     const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -188,31 +194,13 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
 
     if (!open) return null;
 
-    return (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-3">
-            <div className="flex max-h-[96vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl">
-                <header className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-                    <div className="flex items-center gap-3">
-                        <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
-                            <ScanLine className="h-7 w-7" />
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-semibold text-slate-950">{t('purchaseReceiptImport.title')}</h2>
-                            <p className="text-sm text-slate-500">{t('purchaseReceiptImport.subtitle')}</p>
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex min-h-touch-xs min-w-[2.75rem] items-center justify-center rounded-2xl bg-slate-100"
-                        aria-label={t('purchaseReceiptImport.closeAria')}
-                    >
-                        <X className="h-5 w-5" />
-                    </button>
-                </header>
-
+    // Interior shared between the original panel and the applied-style shell.
+    const interior = (
+        <WithDialogTokens>{tk => {
+            const shellButtons = tk.cfg ? dialogButtonClasses(tk.cfg) : null;
+            return (<>
                 <div className="grid min-h-0 flex-1 lg:grid-cols-[22rem_minmax(0,1fr)]">
-                    <aside className="overflow-y-auto border-b border-slate-200 bg-slate-50 p-5 lg:border-b-0 lg:border-r">
+                    <aside className={`overflow-y-auto border-b ${tk.p.border} ${tk.p.tintBg} p-5 lg:border-b-0 lg:border-r`}>
                         <input
                             ref={uploadInputRef}
                             type="file"
@@ -229,23 +217,23 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                             onChange={event => handleFile(event.target.files?.[0])}
                         />
                         <div className="grid grid-cols-2 gap-3">
-                            <button
+                            <POSActionButton
                                 type="button"
                                 onClick={() => cameraInputRef.current?.click()}
-                                className="flex min-h-touch flex-col items-center justify-center gap-2 rounded-2xl bg-slate-950 px-3 text-sm font-semibold text-white"
-                            >
-                                <Camera className="h-5 w-5" /> {t('purchaseReceiptImport.scan')}
-                            </button>
+                                icon={Camera}
+                                label={t('purchaseReceiptImport.scan')}
+                                className="w-full"
+                            />
                             <button
                                 type="button"
                                 onClick={() => uploadInputRef.current?.click()}
-                                className="flex min-h-touch flex-col items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700"
+                                className={`flex min-h-touch flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-300 bg-white px-3 text-sm font-semibold ${tk.p.subText} transition-all hover:border-purple-400 hover:bg-purple-50`}
                             >
                                 <Upload className="h-5 w-5" /> {t('purchaseReceiptImport.upload')}
                             </button>
                         </div>
 
-                        <label className="mt-5 block text-sm font-semibold text-slate-700">
+                        <label className={`mt-5 block text-sm font-semibold ${tk.p.titleText}`}>
                             {t('purchaseReceiptImport.documentType')}
                             <select
                                 value={documentType}
@@ -258,9 +246,9 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                             </select>
                         </label>
 
-                        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                        <div className={`mt-5 overflow-hidden rounded-2xl border ${tk.p.border} bg-white`}>
                             {!file ? (
-                                <div className="flex min-h-64 flex-col items-center justify-center p-5 text-center text-slate-400">
+                                <div className={`flex min-h-64 flex-col items-center justify-center p-5 text-center ${tk.p.subText}`}>
                                     <FileText className="h-12 w-12" />
                                     <p className="mt-3 text-sm">{t('purchaseReceiptImport.uploadHint')}</p>
                                 </div>
@@ -272,9 +260,9 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                                 <img src={previewUrl} alt={t('purchaseReceiptImport.previewAlt')} className="max-h-72 w-full object-contain" />
                             )}
                             {file && (
-                                <div className="border-t border-slate-200 p-3">
-                                    <p className="truncate text-sm font-semibold text-slate-800">{file.name}</p>
-                                    <p className="text-xs text-slate-400">{t('purchaseReceiptImport.fileSizeKb', { size: (file.size / 1024).toFixed(0) })}</p>
+                                <div className={`border-t ${tk.p.border} p-3`}>
+                                    <p className={`truncate text-sm font-semibold ${tk.p.titleText}`}>{file.name}</p>
+                                    <p className={`text-xs ${tk.p.subText}`}>{t('purchaseReceiptImport.fileSizeKb', { size: (file.size / 1024).toFixed(0) })}</p>
                                 </div>
                             )}
                         </div>
@@ -283,7 +271,9 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                             type="button"
                             disabled={!file || processing}
                             onClick={() => void handleExtract()}
-                            className="mt-5 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300"
+                            className={shellButtons
+                                ? `mt-5 flex min-h-touch w-full items-center justify-center gap-2 ${shellButtons.primary} disabled:opacity-50 disabled:cursor-not-allowed`
+                                : 'mt-5 flex min-h-touch w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-300'}
                         >
                             {processing ? <Loader2 className="h-5 w-5 animate-spin" /> : <ScanLine className="h-5 w-5" />}
                             {processing ? t('purchaseReceiptImport.readingDocument') : t('purchaseReceiptImport.extractWithAzure')}
@@ -303,14 +293,16 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                     <main className="flex min-h-0 flex-col p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
-                                <h3 className="text-xl font-semibold text-slate-950">{t('purchaseReceiptImport.purchaseLines')}</h3>
-                                <p className="text-sm text-slate-500">{t('purchaseReceiptImport.purchaseLinesHint')}</p>
+                                <h3 className={`text-xl font-semibold ${tk.p.titleText}`}>{t('purchaseReceiptImport.purchaseLines')}</h3>
+                                <p className={`text-sm ${tk.p.subText}`}>{t('purchaseReceiptImport.purchaseLinesHint')}</p>
                             </div>
                             <button
                                 type="button"
                                 onClick={addManualLine}
                                 disabled={!extraction}
-                                className="min-h-touch-xs rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 disabled:opacity-40"
+                                className={shellButtons
+                                    ? `${shellButtons.secondary} flex-none text-sm disabled:opacity-40`
+                                    : `min-h-touch-xs rounded-xl ${tk.p.tintBg} px-4 text-sm font-semibold ${tk.p.subText} disabled:opacity-40`}
                             >
                                 {t('purchaseReceiptImport.addManualLine')}
                             </button>
@@ -342,7 +334,7 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                                     />
                                 ))}
                                 {!extraction && (
-                                    <div className="flex min-h-72 flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 text-center text-slate-400">
+                                    <div className={`flex min-h-72 flex-col items-center justify-center rounded-3xl border-2 border-dashed ${tk.p.border} text-center ${tk.p.subText}`}>
                                         <PackagePlus className="h-14 w-14" />
                                         <p className="mt-3 font-semibold">{t('purchaseReceiptImport.emptyState')}</p>
                                     </div>
@@ -350,7 +342,7 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                             </div>
                         </div>
 
-                        <footer className="mt-5 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                        <footer className={`mt-5 flex flex-col gap-4 border-t ${tk.p.border} pt-5 sm:flex-row sm:items-center sm:justify-between`}>
                             <div className="flex flex-wrap gap-5 text-sm">
                                 <Info label={t('purchaseReceiptImport.includedLines')} value={String(includedLines.length)} />
                                 <Info label={t('purchaseReceiptImport.unitsToAdd')} value={String(stockUnits)} />
@@ -360,7 +352,9 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                                 type="button"
                                 disabled={!extraction || includedLines.length === 0 || applying || Boolean(success)}
                                 onClick={() => void handleApply()}
-                                className="flex min-h-touch items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 font-semibold text-white disabled:bg-slate-300"
+                                className={shellButtons
+                                    ? `flex min-h-touch items-center justify-center gap-2 ${shellButtons.primary} flex-none px-6 disabled:opacity-50 disabled:cursor-not-allowed`
+                                    : 'flex min-h-touch items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 font-semibold text-white disabled:bg-slate-300'}
                             >
                                 {applying ? <Loader2 className="h-5 w-5 animate-spin" /> : <PackagePlus className="h-5 w-5" />}
                                 {applying ? t('purchaseReceiptImport.updatingStock') : t('purchaseReceiptImport.confirmAddToStock')}
@@ -368,6 +362,48 @@ const PurchaseReceiptImportDialog: React.FC<PurchaseReceiptImportDialogProps> = 
                         </footer>
                     </main>
                 </div>
+        </>);
+        }}</WithDialogTokens>
+    );
+
+    if (applied) {
+        return (
+            <ConfiguredDialogShell
+                config={applied}
+                title={t('purchaseReceiptImport.title')}
+                subtitle={t('purchaseReceiptImport.subtitle')}
+                icon={ScanLine}
+                onClose={onClose}
+                overlayClassName="z-[80]"
+            >
+                {interior}
+            </ConfiguredDialogShell>
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-3">
+            <div className="flex max-h-[96vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+                <header className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+                    <div className="flex items-center gap-3">
+                        <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
+                            <ScanLine className="h-7 w-7" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-semibold text-slate-950">{t('purchaseReceiptImport.title')}</h2>
+                            <p className="text-sm text-slate-500">{t('purchaseReceiptImport.subtitle')}</p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex min-h-touch-xs min-w-[2.75rem] items-center justify-center rounded-2xl bg-slate-100"
+                        aria-label={t('purchaseReceiptImport.closeAria')}
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                </header>
+                {interior}
             </div>
         </div>
     );
@@ -406,9 +442,7 @@ const PurchaseLineEditor: React.FC<PurchaseLineEditorProps> = ({
                         </p>
                     </div>
                 </div>
-                <button type="button" onClick={onDelete} className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600">
-                    <Trash2 className="h-4 w-4" />
-                </button>
+                <TableActionButton variant="delete" icon={Trash2} type="button" onClick={onDelete} />
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-4">

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>POS — local dev mode</title>
+</head>
+<body>
+    <!--
+        Local dev mode for the POS: run `npm run dev` and open
+        http://localhost:5173/pos-dev.html — no device pairing, no login.
+        Served by Vite in dev only; never part of the production build
+        (vite build only bundles index.html).
+    -->
+    <div id="root"></div>
+    <script>
+        // Till-host feature detection: the POS is till-only, so pretend the
+        // Electron preload ran. Services feature-detect real hardware and
+        // degrade gracefully in a plain browser.
+        window.electronAPI = {};
+    </script>
+    <script type="module" src="/src/dev/PosDevApp.tsx"></script>
+</body>
+</html>

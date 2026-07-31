@@ -1,8 +1,11 @@
+import i18n from '../i18n';
 import type { SystemSettings } from '../contexts/SettingsContext';
 import { transactionLocalService } from '../lib/localDatabase';
 import { connectionStatus, supabase } from '../lib/supabase';
 import type { LocalCustomer } from '../types/supabase';
-import { generateUUID } from '../utils/uuid';
+import { asUnresolvedIssueFailure, FiscalBackendUnavailableError, ProviderRejectedError } from './fiscalFailure';
+import { identityKey, resolveIssueAttemptId } from './issueAttemptReuse';
+import { buildIssuerSnapshot, logoArchiveEntryFor } from './issuerSnapshot';
 import type {
     ExternalFiscalSnapshot,
     ExternalIssuedItemReference,
@@ -88,21 +91,26 @@ interface InvoiceXpressFunctionResponse {
     account?: unknown;
     sequences?: unknown;
     error?: string;
+    /** Upstream HTTP status, present only when the PROVIDER refused (not us). */
+    providerStatus?: number;
+    dispatched?: boolean;
 }
 
 function assertInvoiceXpressEnabled(settings: SystemSettings): void {
     if (settings.fiscal.issuer !== 'invoicexpress' || !settings.fiscal.invoicexpress.enabled) {
-        throw new Error('InvoiceXpress não está ativo nas definições fiscais.');
+        throw new Error(i18n.t('checkout.invoiceXpressNotEnabled'));
     }
     if (!settings.fiscal.invoicexpress.accountName.trim()) {
-        throw new Error('Nome de conta InvoiceXpress em falta nas definições fiscais.');
+        throw new Error(i18n.t('checkout.invoiceXpressMissingAccountName'));
     }
 }
 
+// Runs before the issue-attempt row is created, so a throw here is the one
+// failure that provably left no trace at InvoiceXpress (see fiscalFailure.ts).
 function assertOnline(): void {
     const state = connectionStatus.getStatus();
     if (!state.isOnline || !state.isSupabaseOnline) {
-        throw new Error('InvoiceXpress está configurado como emissor fiscal. A venda fica bloqueada até existir ligação ao Supabase/InvoiceXpress.');
+        throw new FiscalBackendUnavailableError('invoicexpress', i18n.t('checkout.invoiceXpressOffline'));
     }
 }
 
@@ -194,6 +202,13 @@ async function invokeFunction(body: Record<string, unknown>): Promise<InvoiceXpr
         throw new Error('InvoiceXpress Edge Function não devolveu dados.');
     }
     if (data.error) {
+        // `providerStatus` present => InvoiceXpress itself answered, and this is
+        // its verdict. Absent => our own fault, or an edge function deployed
+        // before that contract existed; either way the till must assume the
+        // request may have landed.
+        if (typeof data.providerStatus === 'number') {
+            throw new ProviderRejectedError(data.providerStatus, data.error);
+        }
         throw new Error(data.error);
     }
     return data;
@@ -266,14 +281,12 @@ export async function issueInvoiceXpressSale(params: {
     const ix = settings.fiscal.invoicexpress;
     const draft = buildSaleCheckoutDraft({ cart, selectedCustomer, payment, globalDiscount });
     const type = DOCUMENT_TYPE_TO_SAFT[ix.documentType];
-    const attemptId = generateUUID();
-    const txId = `pos-sale-${attemptId}`;
-    const externalReference = `POS-${attemptId}`;
 
-    const document: InvoiceXpressDocumentPayload = {
+    // Everything that defines this sale, minus the id-derived fields, so the
+    // identity can be computed before the id is chosen.
+    const documentFields = {
         date: toInvoiceXpressDate(draft.transactionDate),
         due_date: toInvoiceXpressDate(draft.transactionDate),
-        reference: externalReference,
         ...(ix.sequenceId?.trim() ? { sequence_id: ix.sequenceId.trim() } : {}),
         ...(hasExemptLine(cart) && ix.exemptTax.code?.trim()
             ? {
@@ -284,6 +297,46 @@ export async function issueInvoiceXpressSale(params: {
         client: clientFor(selectedCustomer),
         items: itemsForSale(cart),
     };
+    const identityOfIxRequest = (r: Record<string, unknown>): string => {
+        const doc = (r.document ?? {}) as Record<string, unknown>;
+        return identityKey({
+            accountName: r.accountName,
+            documentType: r.documentType,
+            finalize: r.finalize,
+            date: doc.date,
+            due_date: doc.due_date,
+            sequence_id: doc.sequence_id,
+            tax_exemption: doc.tax_exemption,
+            tax_exemption_reason: doc.tax_exemption_reason,
+            client: doc.client,
+            items: doc.items,
+        });
+    };
+
+    // ⚠️ Unlike Vendus, InvoiceXpress documents NO server-side idempotency, so
+    // re-presenting the original id does not by itself stop a second document
+    // from being created. What it does buy is identity: the retry carries the
+    // same `reference` / `proprietary_uid`, so a duplicate is detectable and the
+    // operator can find the sale in the backoffice. The non-fiscal fallback
+    // therefore keeps its attestation gate for this provider (register D-FR2).
+    const { attemptId, reused } = await resolveIssueAttemptId({
+        provider: 'invoicexpress',
+        kind: 'sale',
+        identity: identityOfIxRequest({
+            accountName: ix.accountName.trim(),
+            documentType: ix.documentType,
+            finalize: ix.finalizeOnIssue,
+            document: documentFields,
+        }),
+        identityOfStored: identityOfIxRequest,
+    });
+    const txId = `pos-sale-${attemptId}`;
+    const externalReference = `POS-${attemptId}`;
+
+    const document: InvoiceXpressDocumentPayload = {
+        ...documentFields,
+        reference: externalReference,
+    } as InvoiceXpressDocumentPayload;
 
     const request = {
         action: 'issue_document' as const,
@@ -294,19 +347,26 @@ export async function issueInvoiceXpressSale(params: {
         document,
     };
 
-    await transactionLocalService.createVendusIssueAttempt({
-        id: attemptId,
-        provider: 'invoicexpress',
-        kind: 'sale',
-        tx_id: txId,
-        external_reference: externalReference,
-        status: 'pending',
-        vendus_document_id: null,
-        local_transaction_id: null,
-        request_json: JSON.stringify(request),
-        response_json: null,
-        error_message: null,
-    });
+    if (reused) {
+        await transactionLocalService.updateVendusIssueAttempt(attemptId, {
+            status: 'pending',
+            error_message: null,
+        });
+    } else {
+        await transactionLocalService.createVendusIssueAttempt({
+            id: attemptId,
+            provider: 'invoicexpress',
+            kind: 'sale',
+            tx_id: txId,
+            external_reference: externalReference,
+            status: 'pending',
+            vendus_document_id: null,
+            local_transaction_id: null,
+            request_json: JSON.stringify(request),
+            response_json: null,
+            error_message: null,
+        });
+    }
 
     try {
         const response = await invokeFunction(request);
@@ -333,6 +393,8 @@ export async function issueInvoiceXpressSale(params: {
         });
         const result = await transactionLocalService.createExternalFiscalCheckoutAtomic({
             certificationMode: certificationMode(settings),
+            issuer: buildIssuerSnapshot(settings),
+            logoArchiveEntry: logoArchiveEntryFor(settings),
             transactionDate: draft.transactionDate,
             transactionTime: draft.transactionTime,
             systemEntryDate: draft.systemEntryDate,
@@ -360,7 +422,14 @@ export async function issueInvoiceXpressSale(params: {
             status: 'failed',
             error_message: error instanceof Error ? error.message : String(error),
         });
-        throw error;
+        // Past the network call: InvoiceXpress may hold a document for this sale
+        // even though we never got a usable one back. Mark it unresolved so the
+        // sale cannot silently fall back onto a paper invoice as well.
+        throw asUnresolvedIssueFailure(error, {
+            provider: 'invoicexpress',
+            externalReference,
+            attemptId,
+        });
     }
 }
 
@@ -371,7 +440,7 @@ export async function issueInvoiceXpressCreditNoteForTransaction(params: {
     creditReason?: string;
 }): Promise<FiscalCheckoutResult> {
     throw new Error(
-        `Notas de crédito InvoiceXpress ainda não estão implementadas nesta fase de integração (transação ${params.originalTransactionId}).`
+        i18n.t('checkout.invoiceXpressCreditNotesUnavailable', { transactionId: params.originalTransactionId })
     );
 }
 
@@ -389,7 +458,7 @@ export async function fetchInvoiceXpressSaftXml(params: {
         month: params.month,
     });
     if (!response.xml) {
-        throw new Error('InvoiceXpress não devolveu SAF-T.');
+        throw new Error(i18n.t('checkout.invoiceXpressNoSaft'));
     }
     return atob(response.xml);
 }

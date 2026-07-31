@@ -2,12 +2,21 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { generateQRCodeImage } from '../utils/qrCode';
 import { useSettings } from '../contexts/SettingsContext';
 import { getReceiptT } from '../utils/receiptLanguage';
+import { computeReceiptTotals, formatReceiptCurrency, round2 } from '../utils/receiptTotals';
+import {
+  RECEIPT_CERTIFICATION_PLACEHOLDER,
+  certificationNumberForReceiptDisplay,
+} from '../utils/receiptCertification';
 import type { FiscalOfficialOutput } from '../fiscal/types';
+import { receiptLogoDataUrl, type ReceiptLogo } from '../utils/receiptLogo';
 
 interface ReceiptItem {
   id: string;
   description: string;
   quantity: number;
+  /** 'kg' = weighed line: quantity prints with 3 decimals and the unit column
+   *  shows kg (unit price is €/kg). Default 'un'. */
+  unit?: 'un' | 'kg';
   unitPrice: number;
   vatRate: number;
   total: number;
@@ -21,6 +30,8 @@ interface ReceiptCompany {
   taxNumber: string;
   phone?: string;
   email?: string;
+  /** Prepared once when chosen (utils/receiptLogo.ts); absent = print nothing. */
+  logo?: ReceiptLogo;
 }
 
 /** `address` = full morada (single line), not split by postal/city. */
@@ -47,11 +58,19 @@ interface ReceiptTotals {
 
 export interface ReceiptProps {
   documentNumber: string;
-  documentType: 'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO';
+  /** TALAO_NAO_FISCAL is the fallback slip printed when fiscal issuance is
+   *  impossible (offline / backend unreachable / no valid ATCUD+QR). It is NOT
+   *  a fiscal document: it carries no ATCUD, no QR, no fatura number and no
+   *  certification line — the legal invoice for that sale is the handwritten
+   *  one from the AT-authorised book. See docs/fiscal-fallback-legal-brief.md. */
+  documentType: 'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO' | 'TALAO_NAO_FISCAL';
   date: Date;
   counter: string;
   ticketNumber?: string;
-  verificationCode: string; // ATCUD body (e.g. CSDF7T5H-0001); printed as ATCUD: …
+  verificationCode: string; // ATCUD body (e.g. CSDF7T5H-0001); printed as ATCUD: …  (empty for ES)
+  /** Spain / Veri*factu legend (e.g. "VERI*FACTU"). When set, replaces the PT "…/AT" certified
+   *  line — the QR block already renders the AEAT validation QR from qrCodeData. */
+  verifactuLegend?: string;
   documentHash?: string; // Base64 RSA-SHA1 fiscal hash (optional / debug)
   /** Four signature chars (positions 1,11,21,31 of Base64 hash) */
   hashFourChars?: string;
@@ -69,26 +88,21 @@ export interface ReceiptProps {
   certificationNumber?: string;
   originalInvoice?: string; // For credit notes
   creditReason?: string; // For credit notes
-  documentLabel?: string; // e.g. Original (first issue) or 2.ª via (reprint) — use i18n keys thermalReceipt.original / secondCopy
+  /** Document marking. Only the sale slip and the Transactions "view receipt"
+   *  preview pass thermalReceipt.original; everything else leaves this unset
+   *  and renders as 2.ª via, so no path can accidentally claim to be original. */
+  documentLabel?: string;
   /** Cashier / operator name for AT evidence */
   emitterName?: string;
   /** Overrides settings receipt language when set (e.g. receipt demo). */
-  receiptLanguage?: 'en' | 'pt';
+  receiptLanguage?: 'en' | 'pt' | 'es';
   /** Official provider-rendered output; used for Vendus during transition. */
   officialOutput?: FiscalOfficialOutput;
 }
 
-/** Shown on receipt when `certificationNumber` is unset (AT placeholder until assigned). */
-export const RECEIPT_CERTIFICATION_PLACEHOLDER = 'xxxx';
-
-export function certificationNumberForReceiptDisplay(cert?: string): string {
-  const trimmed = cert?.trim();
-  if (!trimmed) {
-    return RECEIPT_CERTIFICATION_PLACEHOLDER;
-  }
-  const withoutSuffix = trimmed.replace(/\s*\/AT\s*$/i, '').trim();
-  return withoutSuffix || RECEIPT_CERTIFICATION_PLACEHOLDER;
-}
+// Moved to utils/receiptCertification so the ESC/POS renderer can reuse it
+// without importing this component; re-exported here for existing callers.
+export { RECEIPT_CERTIFICATION_PLACEHOLDER, certificationNumberForReceiptDisplay };
 
 const ThermalReceipt: React.FC<ReceiptProps> = ({
   documentNumber,
@@ -97,6 +111,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   counter,
   ticketNumber,
   verificationCode,
+  verifactuLegend,
   documentHash,
   hashFourChars,
   qrCodeData,
@@ -119,9 +134,9 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
   const { settings } = useSettings();
   const receiptLang = receiptLanguageProp ?? settings.receipt.receiptLanguage;
   const t = useMemo(() => getReceiptT(receiptLang), [receiptLang]);
-  const dateLocale = receiptLang === 'pt' ? 'pt-PT' : 'en-GB';
+  const dateLocale = receiptLang === 'pt' ? 'pt-PT' : receiptLang === 'es' ? 'es-ES' : 'en-GB';
   const [qrCodeImage, setQrCodeImage] = useState<string>('');
-  const isCashPayment = ['Numerário', 'Cash', 'Dinheiro'].includes(payment.method);
+  const isCashPayment = ['Numerário', 'Cash', 'Dinheiro', 'Efectivo'].includes(payment.method);
 
   useEffect(() => {
     if (qrCodeImageProp) {
@@ -143,62 +158,27 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
     );
   };
 
-  const formatCurrency = (amount: number): string => {
-    return amount.toFixed(2).replace('.', ',') + ' €';
-  };
+  const formatCurrency = formatReceiptCurrency;
 
-  // Helpers for precise totals based on discount policy (apply discount first, then split VAT)
-  const round2 = (n: number): number => Math.round(n * 100) / 100;
-  const discountPct = totals.discountPercentage || 0;
+  // Totals arithmetic is shared with the ESC/POS renderer (services/escpos):
+  // the printed receipt and this preview must never disagree on a cent.
+  const {
+    discountPct,
+    grossFactor,
+    totalGross,
+    totalBase,
+    totalVat,
+    subtotalBeforeDiscount,
+    vatGroups,
+  } = useMemo(() => computeReceiptTotals(items, totals), [items, totals]);
 
-  // 1) Determine discount factor to apply on item totals (tax-included)
-  const grossBefore = items.reduce((s, it) => s + (it.total || 0), 0);
-  let grossFactor = 1;
-  if (discountPct > 0) {
-    grossFactor = 1 - discountPct / 100;
-  } else if ((totals.discount || 0) > 0 && grossBefore > 0) {
-    // For fixed discount, scale item totals so that their sum matches provided totals.total
-    // Clamp to [0,1] to avoid accidental overflows
-    const desiredGross = typeof totals.total === 'number' ? totals.total : grossBefore;
-    const computed = desiredGross / grossBefore;
-    grossFactor = Math.max(0, Math.min(1, computed));
-  }
-
-  // 2) Aggregate recomputed totals from items AFTER discount (using grossFactor)
-  const recomputed = items.reduce(
-    (acc, item) => {
-      const rate = (item.vatRate || 0) / 100;
-      const grossAfterDiscount = (item.total || 0) * grossFactor; // tax-included
-      const base = grossAfterDiscount / (1 + rate);
-      const vat = grossAfterDiscount - base;
-      acc.gross += grossAfterDiscount;
-      acc.base += base;
-      acc.vat += vat;
-      return acc;
-    },
-    { gross: 0, base: 0, vat: 0 }
-  );
-
-  // 3) Also compute original (BEFORE discount) base and VAT for display of ILÍQUIDO
-  const original = items.reduce(
-    (acc, item) => {
-      const rate = (item.vatRate || 0) / 100;
-      const gross = item.total || 0;
-      const base = gross / (1 + rate);
-      const vat = gross - base;
-      acc.gross += gross;
-      acc.base += base;
-      acc.vat += vat;
-      return acc;
-    },
-    { gross: 0, base: 0, vat: 0 }
-  );
-
-  // Prefer provided totals for final amounts, fall back to recomputed when missing
-  const totalGross = typeof totals.total === 'number' ? round2(totals.total) : round2(recomputed.gross);
-  const totalBase = round2(recomputed.base);
-  const totalVat = typeof totals.vat === 'number' ? round2(totals.vat) : round2(recomputed.vat);
-  const subtotalBeforeDiscount = round2(original.base);
+  // Kept in lockstep with the ESC/POS builder (services/escpos/receiptEscPos.ts):
+  // the preview the operator approves and the paper the customer receives must
+  // suppress exactly the same fiscal elements.
+  const nonFiscal = documentType === 'TALAO_NAO_FISCAL';
+  // Painted from the same bits the thermal head gets, so preview and paper
+  // cannot drift. Synchronous — only decoding an ENCODED image needs onload.
+  const logoDataUrl = useMemo(() => receiptLogoDataUrl(company.logo), [company.logo]);
 
   const getDocumentTitle = (): string => {
     switch (documentType) {
@@ -208,6 +188,8 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         return t('thermalReceipt.docFaturaSimplificada');
       case 'NOTA_CREDITO':
         return t('thermalReceipt.docNotaCredito');
+      case 'TALAO_NAO_FISCAL':
+        return t('thermalReceipt.docTalaoNaoFiscal');
       default:
         return t('thermalReceipt.docGeneric');
     }
@@ -376,8 +358,18 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         </div>
       )}
 
-      {/* Logo/Header */}
-      <div className="center company-logo">{t('thermalReceipt.logoPlaceholder')}</div>
+      {/* Logo. The stored preview is the dithered bitmap, so this is exactly
+          what the thermal head prints. No logo configured => nothing here; a
+          placeholder string on a customer's receipt reads as broken software. */}
+      {logoDataUrl && (
+        <div className="center company-logo">
+          <img
+            src={logoDataUrl}
+            alt=""
+            style={{ maxWidth: '100%', height: 'auto', imageRendering: 'pixelated' }}
+          />
+        </div>
+      )}
 
       {/* Company Info */}
       <div className="center bold">{company.name}</div>
@@ -396,7 +388,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
       <div className="separator"></div>
 
       {/* Cliente: nome, NIF, morada (uma linha) */}
-      {customer && (customer.name || customer.taxNumber || customer.address) && (
+      {!nonFiscal && customer && (customer.name || customer.taxNumber || customer.address) && (
         <>
           {customer.name ? (
             <div className="left small-text">{t('thermalReceipt.clientLineName', { name: customer.name })}</div>
@@ -424,10 +416,19 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         </>
       )}
 
-      {/* Document Header */}
-      <div className="center bold">{getDocumentTitle()}</div>
+      {/* Document header. The slip carries no document-type title at all: it is
+          not a document type, and naming it invites the customer to read it as
+          one. It goes straight to the internal ID. */}
+      {!nonFiscal && <div className="center bold">{getDocumentTitle()}</div>}
       <div className="center">
-        {documentNumber} {documentLabel || t('thermalReceipt.original')}
+        {nonFiscal
+          // No fatura number: the slip must never consume one from the fiscal series.
+          ? `${t('thermalReceipt.internalIdLabel')} ${documentNumber}`
+          // Defaults to 2.ª via, NOT Original: only the two callers that really
+          // are showing the original say so. An unlabelled render is some
+          // reproduction of an already-issued document, and the safe reading of
+          // an unmarked reproduction is a copy, never a second original.
+          : `${documentNumber} ${documentLabel || t('thermalReceipt.secondCopy')}`}
       </div>
       <div className="center">
         {t('thermalReceipt.dateLabel')} {formatDate(date)} {counter}
@@ -459,13 +460,13 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
         {items.map((item, index) => (
           <React.Fragment key={item.id || index}>
-            <span>{item.quantity}</span>
-            <span>{t('thermalReceipt.unit')}</span>
+            <span>{item.unit === 'kg' ? item.quantity.toFixed(3) : item.quantity}</span>
+            <span>{item.unit === 'kg' ? t('thermalReceipt.unitKg') : t('thermalReceipt.unit')}</span>
             <span className="item-desc">{item.description}</span>
             <span>{item.vatRate}%</span>
             <span className="cell-end">{formatCurrency(round2(item.total * grossFactor))}</span>
             <span className="small-text grid-from-desc">
-              {t('thermalReceipt.unitPriceLine', {
+              {t(item.unit === 'kg' ? 'thermalReceipt.unitPriceLineKg' : 'thermalReceipt.unitPriceLine', {
                 price: item.unitPrice.toFixed(2).replace('.', ','),
               })}
             </span>
@@ -484,31 +485,15 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         <span className="bold">{t('thermalReceipt.vat')}</span>
         <span className="bold cell-end">{t('thermalReceipt.incidence')}</span>
 
-        {(() => {
-          const vatGroups = items.reduce((acc, item) => {
-            const key = item.vatRate;
-            if (!acc[key]) {
-              acc[key] = { incidence: 0, vat: 0 };
-            }
-            const rateFraction = (item.vatRate || 0) / 100;
-            const grossAfterDiscount = item.total * grossFactor;
-            const base = grossAfterDiscount / (1 + rateFraction);
-            const vat = grossAfterDiscount - base;
-            acc[key].incidence += base;
-            acc[key].vat += vat;
-            return acc;
-          }, {} as Record<number, { incidence: number; vat: number }>);
-
-          return Object.entries(vatGroups).map(([rate, amounts]) => (
-            <React.Fragment key={rate}>
-              <span>{rate}</span>
-              <span></span>
-              <span></span>
-              <span>{formatCurrency(amounts.vat)}</span>
-              <span className="cell-end">{formatCurrency(amounts.incidence)}</span>
-            </React.Fragment>
-          ));
-        })()}
+        {vatGroups.map(group => (
+          <React.Fragment key={group.rate}>
+            <span>{group.rate}</span>
+            <span></span>
+            <span></span>
+            <span>{formatCurrency(group.vat)}</span>
+            <span className="cell-end">{formatCurrency(group.incidence)}</span>
+          </React.Fragment>
+        ))}
       </div>
 
       {/* Totals */}
@@ -551,29 +536,38 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       <div className="separator"></div>
 
-      {/* ATCUD + QR + Q (below total, before slogan) */}
+      {/* ATCUD + QR + Q (below total, before slogan) — fiscal documents only.
+          The slip gets the "this is not an invoice" notice in their place; an
+          empty QR placeholder there would read as a printing fault rather than
+          as a deliberate absence. */}
       <div className="atcud-after-separator">
-        {verificationCode ? (
-          <div className="center small-text bold">
-            {t('thermalReceipt.atcudPrefix')} {verificationCode}
-          </div>
-        ) : null}
-        <div className="receipt-qr-block">
-          {qrCodeImage ? (
-            <img
-              className="receipt-qr-img"
-              src={qrCodeImage}
-              alt={t('thermalReceipt.qrAlt')}
-            />
-          ) : (
-            <div className="qr-placeholder">{t('thermalReceipt.qrPlaceholder')}</div>
-          )}
-        </div>
-        {documentHash && !hashFourChars ? (
-          <div className="center small-text" style={{ fontSize: '8px', wordBreak: 'break-all' }}>
-            {t('thermalReceipt.hashLabel')} {documentHash.substring(0, 24)}…
-          </div>
-        ) : null}
+        {nonFiscal ? (
+          <div className="center small-text bold">{t('thermalReceipt.nonFiscalNotice')}</div>
+        ) : (
+          <>
+            {verificationCode ? (
+              <div className="center small-text bold">
+                {t('thermalReceipt.atcudPrefix')} {verificationCode}
+              </div>
+            ) : null}
+            <div className="receipt-qr-block">
+              {qrCodeImage ? (
+                <img
+                  className="receipt-qr-img"
+                  src={qrCodeImage}
+                  alt={t('thermalReceipt.qrAlt')}
+                />
+              ) : (
+                <div className="qr-placeholder">{t('thermalReceipt.qrPlaceholder')}</div>
+              )}
+            </div>
+            {documentHash && !hashFourChars ? (
+              <div className="center small-text" style={{ fontSize: '8px', wordBreak: 'break-all' }}>
+                {t('thermalReceipt.hashLabel')} {documentHash.substring(0, 24)}…
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
 
       <div className="separator"></div>
@@ -591,30 +585,44 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
 
       <div className="separator"></div>
 
-      {/* Payment Info */}
-      <div className="left">{t('thermalReceipt.paidWith', { method: payment.method })}</div>
-      {isCashPayment && (
+      {/* Payment + legal line — fiscal documents only.
+
+          The slip is not a receipt. Stating a tender, an amount given and change
+          would present it as proof of payment, which is exactly the reading the
+          "não serve como fatura" line exists to prevent — the handwritten
+          invoice is what evidences this sale. Neither the AT certification
+          phrase nor the Veri*factu legend may appear either, and nothing takes
+          their place. */}
+      {!nonFiscal && (
         <>
-          <div className="item-row">
-            <span>{t('thermalReceipt.cashReceived')}</span>
-            <span>{formatCurrency(payment.amountGiven)}</span>
-          </div>
-          <div className="item-row">
-            <span>{t('thermalReceipt.change')}</span>
-            <span>{formatCurrency(payment.change)}</span>
-          </div>
+          <div className="left">{t('thermalReceipt.paidWith', { method: payment.method })}</div>
+          {isCashPayment && (
+            <>
+              <div className="item-row">
+                <span>{t('thermalReceipt.cashReceived')}</span>
+                <span>{formatCurrency(payment.amountGiven)}</span>
+              </div>
+              <div className="item-row">
+                <span>{t('thermalReceipt.change')}</span>
+                <span>{formatCurrency(payment.change)}</span>
+              </div>
+            </>
+          )}
+
+          <div className="separator"></div>
+
+          {verifactuLegend?.trim() ? (
+            <div className="center small-text bold">{verifactuLegend.trim()}</div>
+          ) : (
+            <div className="center small-text">
+              {t('thermalReceipt.certifiedLine', {
+                hashPrefix: hashFourChars?.trim() ? `${hashFourChars.trim()}-` : '',
+                num: certificationNumberForReceiptDisplay(certificationNumber),
+              })}
+            </div>
+          )}
         </>
       )}
-
-      <div className="separator"></div>
-
-      {/* Legal — 4 hash chars (pos. 1,11,21,31), dash, then certification phrase (LogicPOS layout) */}
-      <div className="center small-text">
-        {t('thermalReceipt.certifiedLine', {
-          hashPrefix: hashFourChars?.trim() ? `${hashFourChars.trim()}-` : '',
-          num: certificationNumberForReceiptDisplay(certificationNumber),
-        })}
-      </div>
 
       {/* Order queue number — printed last, below a dashed separator. Only present
           on the freshly issued receipt; the back-office reprint omits it. */}
@@ -622,7 +630,7 @@ const ThermalReceipt: React.FC<ReceiptProps> = ({
         <>
           <div className="separator"></div>
           <div className="ticket-number">
-            <div className="center bold">PEDIDO / ORDER</div>
+            <div className="center bold">{t('thermalReceipt.orderTicketLabel')}</div>
             <div className="center bold" style={{ fontSize: '28px', lineHeight: 1.2 }}>
               {ticketNumber}
             </div>

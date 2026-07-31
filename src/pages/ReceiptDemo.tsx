@@ -9,11 +9,15 @@ import { transactionLocalService } from '../lib/localDatabase';
 import { generateQRCodeImage } from '../utils/qrCode';
 import type { FiscalTransactionMetadata } from '../fiscal/types';
 import { receiptProfileForDefaultDocumentType } from '../fiscal/receiptSeriesProfile';
+import { getReceiptT } from '../utils/receiptLanguage';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import '../styles/design-system-2-scope.css';
 
 const ReceiptDemoPage: React.FC = () => {
   const location = useLocation();
   const params = useParams();
   const { settings } = useSettings();
+  const { visualStyle, prefs } = useDesignSystem2Customization();
   const state = location.state as { receiptData?: ReceiptProps } | null;
   const [initialData, setInitialData] = useState<ReceiptProps | undefined>(state?.receiptData);
 
@@ -72,7 +76,7 @@ const ReceiptDemoPage: React.FC = () => {
           qrCodeData: fm?.qrPayload,
           qrCodeImage,
           trainingMode: fm?.certificationMode === 'training',
-          documentLabel: 'Duplicado',
+          documentLabel: getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.secondCopy'),
           company: {
             name: settings.company.name,
             address: settings.company.address,
@@ -104,7 +108,9 @@ const ReceiptDemoPage: React.FC = () => {
             total: Number(trx.total),
           },
           payment: {
-            method: trx.payment_method === 'cash' ? 'Numerário' : 'Multibanco',
+            method: getReceiptT(settings.receipt.receiptLanguage)(
+              trx.payment_method === 'cash' ? 'transactions.receipt.paymentCash' : 'transactions.receipt.paymentCard'
+            ),
             amountGiven: (trx.amount_paid as number) || Number(trx.total),
             change: Number(trx.change_given) || 0,
           },
@@ -127,7 +133,7 @@ const ReceiptDemoPage: React.FC = () => {
   }, [params.id, state?.receiptData]);
 
   return (
-    <div>
+    <div className="ds2-visual-scope" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
       <ReceiptDemo {...(initialData ? { initialData } : {})} />
     </div>
   );

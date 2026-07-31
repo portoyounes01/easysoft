@@ -1,3 +1,6 @@
+import i18n from '../i18n';
+import { mirrorToShell } from '../lib/shellDeviceStore';
+
 export interface DevicePairingScope {
     tenantId: string;
     storeId: string;
@@ -35,9 +38,12 @@ export const saveDevicePairingScope = (scope: DevicePairingScope): void => {
     if (!UUID_PATTERN.test(scope.tenantId) ||
         !UUID_PATTERN.test(scope.storeId) ||
         !UUID_PATTERN.test(scope.deviceId)) {
-        throw new Error('Pairing response did not contain a valid tenant, store, and device scope.');
+        throw new Error(i18n.t('devicePairing.errors.invalidScope'));
     }
-    localStorage.setItem(DEVICE_PAIRING_SCOPE_KEY, JSON.stringify(scope));
+    const serialized = JSON.stringify(scope);
+    localStorage.setItem(DEVICE_PAIRING_SCOPE_KEY, serialized);
+    // Device store write-through: pairing survives renderer_source origin flips.
+    mirrorToShell(DEVICE_PAIRING_SCOPE_KEY, serialized);
 };
 
 export const hasDevicePairingScope = (): boolean => readDevicePairingScope() !== null;

@@ -3,9 +3,17 @@ import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Menu } from "lucide-react";
 import Sidebar from "./Sidebar";
+import InstallBanner from "../pwa/InstallBanner";
+import NotificationBell from "../notifications/NotificationBell";
+import { NotificationFeedProvider } from "../../contexts/NotificationFeedContext";
+import { isPwaHost } from "../../lib/host";
 import MyProfileDialog from "../HR/MyProfileDialog";
 import { useSettings } from "../../contexts/SettingsContext";
-import { DesignSystem2CustomizationProvider } from "../../contexts/DesignSystem2CustomizationContext";
+import {
+  DesignSystem2CustomizationProvider,
+  useDesignSystem2Customization,
+} from "../../contexts/DesignSystem2CustomizationContext";
+import "../../styles/design-system-2-scope.css";
 import { LayoutNavProvider } from "../../contexts/LayoutNavContext";
 import {
   receiptProfileForDefaultDocumentType,
@@ -15,6 +23,25 @@ import {
 interface LayoutProps {
   children: React.ReactNode;
 }
+
+/**
+ * DS2-scopes app chrome (header bar, banners, MyProfileDialog) without touching
+ * page layout: `contents` keeps the wrapper out of the flex flow. Must be a
+ * separate component — Layout itself mounts DesignSystem2CustomizationProvider,
+ * so the hook can only be called from a child rendered under it.
+ */
+const ChromeScope: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { visualStyle, prefs } = useDesignSystem2Customization();
+  return (
+    <div
+      className="ds2-visual-scope contents"
+      style={visualStyle}
+      data-ds2-neutral={prefs.neutralFamilyId}
+    >
+      {children}
+    </div>
+  );
+};
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
@@ -110,7 +137,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     [toggleNavSidebar, closeNavSidebar, isPosRoute],
   );
 
-  return (
+  const tree = (
     <DesignSystem2CustomizationProvider>
       <LayoutNavProvider value={layoutNavValue}>
         <div className="flex h-screen overflow-hidden bg-[#f7f7f7]">
@@ -140,21 +167,28 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden relative z-10 w-full">
             {!isPosRoute && (
-              <div className="h-[64px] md:h-[80px] flex-shrink-0 border-b border-[#dedede] bg-[#f7f7f7] flex items-center gap-2 px-4 md:px-6">
-                {/* Mobile nav trigger: the sidebar is a drawer < md, so this is the only way
+              <ChromeScope>
+                <div className="h-[64px] md:h-[80px] flex-shrink-0 border-b border-[#dedede] bg-[#f7f7f7] flex items-center gap-2 px-4 md:px-6">
+                  {/* Mobile nav trigger: the sidebar is a drawer < md, so this is the only way
                     to open the menu. Hidden on desktop where the sidebar is in-flow. */}
-                <button
-                  type="button"
-                  onClick={toggleNavSidebar}
-                  className="md:hidden -ml-1 p-2 rounded-lg text-gray-700 hover:bg-black/5 transition-colors"
-                  aria-label={t("sidebar.openMenu", { defaultValue: "Open menu" })}
-                >
-                  <Menu className="w-6 h-6" />
-                </button>
-                <div className="md:hidden flex items-center gap-2 min-w-0">
-                  <span className="text-lg font-bold text-gray-900 truncate">POS System</span>
+                  <button
+                    type="button"
+                    onClick={toggleNavSidebar}
+                    className="md:hidden -ml-1 p-2 rounded-2xl text-gray-700 hover:bg-gray-100 transition-colors"
+                    aria-label={t("sidebar.openMenu", { defaultValue: "Open menu" })}
+                  >
+                    <Menu className="w-6 h-6" />
+                  </button>
+                  <div className="md:hidden flex items-center gap-2 min-w-0">
+                    <span className="text-lg font-bold text-gray-900 truncate">{t("sidebar.brandTitle")}</span>
+                  </div>
+                  {isPwaHost && (
+                    <div className="ml-auto flex items-center">
+                      <NotificationBell />
+                    </div>
+                  )}
                 </div>
-              </div>
+              </ChromeScope>
             )}
             <main
               className={
@@ -163,28 +197,36 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   : "flex-1 overflow-y-auto bg-[#f7f7f7] p-5"
               }
             >
-              {settings.fiscal.trainingMode && (
-                <div
-                  className="mb-4 rounded-2xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-amber-950 text-center font-semibold text-lg"
-                  role="status"
-                >
-                  FORMAÇÃO — documentos sem valor fiscal. Base de dados local de
-                  treino.
-                </div>
-              )}
-              {seriesOutsideValidity && (
-                <div className="mb-4 rounded-2xl border-2 border-red-300 bg-red-50 px-4 py-3 text-red-900 text-center font-semibold text-lg">
-                  {t("settings.company.seriesOutsideValidityBanner")}
-                </div>
+              <ChromeScope>
+                {/* Training mode no longer shows a page banner here: the POS
+                    status bar turns orange and carries the notice instead, so
+                    the till (the only place documents are issued) signals it
+                    without stealing a band of content from every screen. */}
+                {seriesOutsideValidity && (
+                  <div className="mb-4 rounded-2xl border-2 border-red-300 bg-red-50 px-4 py-3 text-red-900 text-center font-semibold text-lg">
+                    {t("settings.company.seriesOutsideValidityBanner")}
+                  </div>
+                )}
+              </ChromeScope>
+              {isPwaHost && (
+                <ChromeScope>
+                  <InstallBanner />
+                </ChromeScope>
               )}
               {children}
             </main>
           </div>
-          <MyProfileDialog />
+          <ChromeScope>
+            <MyProfileDialog />
+          </ChromeScope>
         </div>
       </LayoutNavProvider>
     </DesignSystem2CustomizationProvider>
   );
+
+  // The notification feed is browser-only — the till never renders a consumer, so mount the
+  // provider (a live Realtime channel) only on the PWA host.
+  return isPwaHost ? <NotificationFeedProvider>{tree}</NotificationFeedProvider> : tree;
 };
 
 export default Layout;

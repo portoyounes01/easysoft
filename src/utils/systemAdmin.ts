@@ -2,9 +2,9 @@
  * "Administrador de sistema" — apenas estes números de funcionário veem certificação AT sensível
  * (Definições). Não confundir com `role === 'admin'` ou `access_levels: ['all']`.
  *
- * Lista configurável: `VITE_SYSTEM_ADMIN_EMPLOYEE_NUMBERS` (vírgulas, sem espaços). Por defeito: ADMIN001 (bootstrap).
+ * Lista configurável: `VITE_SYSTEM_ADMIN_EMPLOYEE_NUMBERS` (vírgulas, sem espaços). Por defeito: SYS001 (bootstrap).
  */
-const DEFAULT_SYSTEM_ADMIN_NUMBERS = ['ADMIN001'];
+const DEFAULT_SYSTEM_ADMIN_NUMBERS = ['SYS001'];
 
 function configuredSystemAdminNumbers(): string[] {
     const raw = import.meta.env.VITE_SYSTEM_ADMIN_EMPLOYEE_NUMBERS?.trim();

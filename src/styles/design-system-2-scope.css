@@ -34,6 +34,15 @@
     --ds2-radius-2xl: 16px;
     --ds2-radius-toggle: 10px;
     --ds2-radius-action: 12px;
+    --ds2-btn-radius-md: 10px;
+    --ds2-btn-radius-lg: 8px;
+    --ds2-btn-radius-xl: 12px;
+    --ds2-btn-radius-2xl: 16px;
+    --ds2-btn-radius-toggle: 10px;
+    --ds2-btn-radius-action: 12px;
+    --ds2-btn-h-touch: 3.75rem;
+    --ds2-btn-h-touch-sm: 3.25rem;
+    --ds2-btn-h-touch-xs: 2.75rem;
 }
 
 /* Gradients & brand */
@@ -68,6 +77,12 @@
 
 .ds2-visual-scope .bg-gradient-to-r.from-blue-600.to-blue-500 {
     background-image: linear-gradient(to right, var(--ds2-ui-to), var(--ds2-ui-from)) !important;
+}
+
+/* Active tab/nav pills (buttons only — not dialog headers): keep the pill visible on
+   dark rails when the secondary color is at/below the rail's own luminance (black). */
+.ds2-visual-scope button.bg-gradient-to-r.from-blue-600.to-blue-500 {
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
 }
 
 /* Pairing primary */
@@ -338,6 +353,78 @@
 }
 .ds2-visual-scope .ds2-control-radius-md {
     border-radius: var(--ds2-radius-md) !important;
+}
+
+/*
+ * Buttons follow their own corner axis. Adding `button` beats the shared
+ * `.rounded-*` rules above on specificity, so the general radius keeps cards,
+ * inputs, panels and chips and stops at buttons — no markup changes needed.
+ *
+ * These all tie with each other, so ORDER decides which one a button carrying
+ * several of these classes lands on. It repeats the order of the rules being
+ * shadowed (md, lg, xl, 2xl, modal action, 10px, 12px, control lg, control md)
+ * so each button resolves to the same token it does today: the toolbar buttons
+ * carry `rounded-2xl` from AdminActionButton plus `ds2-control-radius-lg` from
+ * the page, and must keep landing on lg.
+ */
+.ds2-visual-scope button.rounded-md {
+    border-radius: var(--ds2-btn-radius-md) !important;
+}
+
+.ds2-visual-scope button.rounded-lg {
+    border-radius: var(--ds2-btn-radius-lg) !important;
+}
+
+.ds2-visual-scope button.rounded-xl {
+    border-radius: var(--ds2-btn-radius-xl) !important;
+}
+
+.ds2-visual-scope button.rounded-2xl {
+    border-radius: var(--ds2-btn-radius-2xl) !important;
+}
+
+.ds2-visual-scope button.ds2-modal-primary-action {
+    border-radius: var(--ds2-btn-radius-xl) !important;
+}
+
+.ds2-visual-scope button.rounded-\[10px\] {
+    border-radius: var(--ds2-btn-radius-toggle) !important;
+}
+
+.ds2-visual-scope button.rounded-\[12px\] {
+    border-radius: var(--ds2-btn-radius-action) !important;
+}
+
+.ds2-visual-scope button.ds2-control-radius-lg {
+    border-radius: var(--ds2-btn-radius-lg) !important;
+}
+
+.ds2-visual-scope button.ds2-control-radius-md {
+    border-radius: var(--ds2-btn-radius-md) !important;
+}
+
+/*
+ * Button height axis. The touch tokens are MINIMUMS, so this moves the minimum
+ * instead of pinning a height — taller content and padding still win, exactly
+ * as they do now. Ordered like Tailwind emits them so a button carrying two
+ * tiers resolves the same way it does today.
+ *
+ * Deliberately NOT !important: the selector already outranks the utility, and
+ * staying normal keeps every existing escape hatch authoritative — Tailwind's
+ * `!min-h-*` overrides (Table2 pagination, DeliveryOrders fiscal actions) and
+ * .ds2-toolbar-control-h below, which pins toolbar buttons to the search field
+ * they sit beside and so must not drift with this axis.
+ */
+.ds2-visual-scope button.min-h-touch {
+    min-height: var(--ds2-btn-h-touch);
+}
+
+.ds2-visual-scope button.min-h-touch-sm {
+    min-height: var(--ds2-btn-h-touch-sm);
+}
+
+.ds2-visual-scope button.min-h-touch-xs {
+    min-height: var(--ds2-btn-h-touch-xs);
 }
 
 /* Toolbar row: fixed height so search, outline, and success buttons align */

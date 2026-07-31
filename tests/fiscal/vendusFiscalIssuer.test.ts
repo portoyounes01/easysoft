@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from '../../src/i18n';
 import { initializeLocalDatabase, localDb } from '../../src/lib/localDatabase';
 import { issueVendusCreditNoteForTransaction, issueVendusSale } from '../../src/fiscal/vendusFiscalIssuer';
 import { defaultSeriesProfiles } from '../../src/fiscal/receiptSeriesProfile';
@@ -172,7 +173,7 @@ describe('Vendus fiscal issuer', () => {
                 selectedCustomer: null,
                 payment: { paymentMethod: 'cash', amountPaid: 20, employeeId: 'e1', employeeName: 'Emp' },
             })
-        ).rejects.toThrow(/bloqueada/);
+        ).rejects.toThrow(i18n.t('checkout.vendusOffline'));
         expect(invokeMock).not.toHaveBeenCalled();
     });
 

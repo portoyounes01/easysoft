@@ -33,7 +33,10 @@ class ElectronHardwareService {
 
     try {
       const result = await window.electronAPI.hardware.init();
-      this.isInitialized = result.success;
+      // Never downgrade: this service is a module singleton shared by the POS
+      // and the Settings test card, so one failed probe used to flip the flag
+      // false and locally refuse every later command app-wide.
+      if (result.success) this.isInitialized = true;
       return result;
     } catch (error) {
       console.error('Hardware initialization failed:', error);
@@ -49,18 +52,14 @@ class ElectronHardwareService {
    */
   async printReceipt(receiptData: ReceiptData): Promise<{ success: boolean; message?: string; error?: string }> {
     if (!this.isElectron) {
-      return { 
-        success: false, 
-        error: 'Hardware control not available in web environment' 
+      return {
+        success: false,
+        error: 'Hardware control not available in web environment'
       };
     }
 
-    if (!this.isInitialized) {
-      return { 
-        success: false, 
-        error: 'Hardware not initialized. Call initialize() first.' 
-      };
-    }
+    // Main process owns readiness (see openCashDrawer) — a local gate here only
+    // blocked receipts that the configured queue would have printed fine.
 
     try {
       const result = await window.electronAPI.hardware.printReceipt(receiptData);
@@ -83,18 +82,17 @@ class ElectronHardwareService {
    */
   async openCashDrawer(options: CashDrawerOptions = {}): Promise<{ success: boolean; message?: string; error?: string }> {
     if (!this.isElectron) {
-      return { 
-        success: false, 
-        error: 'Hardware control not available in web environment' 
+      return {
+        success: false,
+        error: 'Hardware control not available in web environment'
       };
     }
 
-    if (!this.isInitialized) {
-      return { 
-        success: false, 
-        error: 'Hardware not initialized. Call initialize() first.' 
-      };
-    }
+    // No local readiness gate: the main process owns hardware state (it restores
+    // the configured printer at boot and self-heals in ensureReady). Refusing
+    // here meant a cold renderer never sent the IPC at all, so a till with a
+    // perfectly good configured queue could not open its drawer until someone
+    // visited the Settings hardware page.
 
     try {
       const result = await window.electronAPI.hardware.openCashDrawer(options);

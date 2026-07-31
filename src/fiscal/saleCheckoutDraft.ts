@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { LocalCustomer, LocalProduct } from '../types/supabase';
 import { calculatePriceWithoutTax, calculateTaxAmount } from '../types/supabase';
 import { buildFiscalCustomerFields, type FiscalCustomerFields } from './fiscalCustomer';
@@ -47,17 +48,17 @@ export interface SaleCheckoutDraft {
 function assertNoNegativeSaleLineTotals(cart: FiscalCartLine[]): void {
     for (const line of cart) {
         if (line.quantity <= 0) {
-            throw new Error('Quantidade inválida numa linha do carrinho.');
+            throw new Error(i18n.t('checkout.invalidLineQuantity'));
         }
         if (line.product.price < 0) {
-            throw new Error('Preço de produto inválido (negativo).');
+            throw new Error(i18n.t('checkout.invalidProductPrice'));
         }
         const itemTotal = line.product.price * line.quantity;
         const discountAmount = (itemTotal * line.discount) / 100;
         const discountedTotal = itemTotal - discountAmount;
         if (discountedTotal < 0) {
             throw new Error(
-                'Total de linha negativo não é permitido em venda — use nota de crédito para corrigir documentos.'
+                i18n.t('checkout.negativeLineTotal')
             );
         }
     }
@@ -66,12 +67,12 @@ function assertNoNegativeSaleLineTotals(cart: FiscalCartLine[]): void {
 function assertDiscountGuards(cart: FiscalCartLine[], globalDiscount?: FiscalGlobalDiscount): void {
     for (const line of cart) {
         if (line.discount < 0 || line.discount > 100) {
-            throw new Error('Desconto por linha deve estar entre 0% e 100%.');
+            throw new Error(i18n.t('checkout.lineDiscountRange'));
         }
     }
     if (globalDiscount && globalDiscount.type === 'percentage') {
         if (globalDiscount.value < 0 || globalDiscount.value > 100) {
-            throw new Error('Desconto global em percentagem deve estar entre 0% e 100%.');
+            throw new Error(i18n.t('checkout.globalPercentDiscountRange'));
         }
     }
     if (globalDiscount && globalDiscount.type === 'fixed' && globalDiscount.amount > 0) {
@@ -81,9 +82,22 @@ function assertDiscountGuards(cart: FiscalCartLine[], globalDiscount?: FiscalGlo
             return sum + (itemTotal - discountAmount);
         }, 0);
         if (globalDiscount.amount > subAfterLines + 1e-6) {
-            throw new Error('Desconto global fixo não pode exceder o subtotal após descontos por linha.');
+            throw new Error(i18n.t('checkout.globalFixedDiscountTooLarge'));
         }
     }
+}
+
+/** Money quantization: with 3-decimal weighed quantities, price×quantity has
+ *  sub-cent precision (0.625 × 12.90 = 8.0625). Every line is rounded to
+ *  cents ONCE here, and all aggregates are sums of those rounded lines — so
+ *  the charged, printed, synced and fiscally-registered totals are identical
+ *  by construction (SIGN ES full_amount is the sum of rounded lines). */
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+function lineMoney(item: FiscalCartLine): { gross: number; discount: number; net: number } {
+    const gross = round2(item.product.price * item.quantity);
+    const discount = round2((gross * item.discount) / 100);
+    return { gross, discount, net: round2(gross - discount) };
 }
 
 export function formatSystemEntryDate(d: Date): string {
@@ -112,30 +126,23 @@ export function buildSaleCheckoutDraft(params: {
     const transactionDate = now.toISOString().split('T')[0];
     const transactionTime = now.toTimeString().split(' ')[0];
 
-    const originalSubtotal = cart.reduce((sum, item) => {
-        const itemTotal = item.product.price * item.quantity;
-        return sum + itemTotal;
-    }, 0);
+    const originalSubtotal = round2(cart.reduce((sum, item) => sum + lineMoney(item).gross, 0));
 
-    const subtotalAfterItemDiscounts = cart.reduce((sum, item) => {
-        const itemTotal = item.product.price * item.quantity;
-        const discountAmount = (itemTotal * item.discount) / 100;
-        return sum + (itemTotal - discountAmount);
-    }, 0);
+    const subtotalAfterItemDiscounts = round2(
+        cart.reduce((sum, item) => sum + lineMoney(item).net, 0)
+    );
 
-    const totalTax = cart.reduce((sum, item) => {
-        const itemTotal = item.product.price * item.quantity;
-        const discountAmount = (itemTotal * item.discount) / 100;
-        const discountedTotal = itemTotal - discountAmount;
-        return sum + calculateTaxAmount(discountedTotal, item.product.iva_rate);
-    }, 0);
+    const totalTax = cart.reduce(
+        (sum, item) => sum + calculateTaxAmount(lineMoney(item).net, item.product.iva_rate),
+        0
+    );
 
     const globalDiscountAmount = globalDiscount?.amount || 0;
-    const finalSubtotal = subtotalAfterItemDiscounts - globalDiscountAmount;
+    const finalSubtotal = round2(subtotalAfterItemDiscounts - globalDiscountAmount);
     const total = finalSubtotal;
 
     if (total <= 0) {
-        throw new Error('O total do documento de venda deve ser superior a zero.');
+        throw new Error(i18n.t('checkout.totalMustBePositive'));
     }
 
     const changeGiven =
@@ -147,9 +154,7 @@ export function buildSaleCheckoutDraft(params: {
     const fiscalCustomer = buildFiscalCustomerFields(selectedCustomer);
 
     const transactionItems: FiscalCheckoutAtomicPayload['transactionItems'] = cart.map(item => {
-        const itemTotal = item.product.price * item.quantity;
-        const discountAmount = (itemTotal * item.discount) / 100;
-        const discountedTotal = itemTotal - discountAmount;
+        const { discount: discountAmount, net: discountedTotal } = lineMoney(item);
         const taxAmount = calculateTaxAmount(discountedTotal, item.product.iva_rate);
         const basePrice = calculatePriceWithoutTax(item.product.price, item.product.iva_rate);
         const profitAmount = (basePrice - item.product.cost) * item.quantity;
@@ -160,6 +165,7 @@ export function buildSaleCheckoutDraft(params: {
             category_id: item.product.category_id,
             category_name: item.product.category_name,
             quantity: item.quantity,
+            unit: item.product.sold_by_weight ? ('kg' as const) : ('un' as const),
             unit_price: item.product.price,
             unit_cost: item.product.cost,
             iva_rate: item.product.iva_rate,

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { User, Wifi, WifiOff, X, Store, Delete, UserPlus, Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useSupabaseAuth } from '../../contexts/SupabaseAuthContext';
+import { useNavigate } from 'react-router-dom';
+import { useSupabaseAuth, TILL_NOT_PAIRED_ERROR } from '../../contexts/SupabaseAuthContext';
 import { useEmployees } from '../../contexts/EmployeesContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import {
@@ -11,6 +12,7 @@ import {
 import LanguageSwitcher from '../LanguageSwitcher';
 import DesignSystem2Customizer from '../DesignSystem2/DesignSystem2Customizer';
 import { AdminActionButton } from '../ui/AdminActionButton';
+import { NumpadButton } from '../ui/NumpadButton';
 import { useLogin2BrowserZoomCompensate } from '../../hooks/useLogin2BrowserZoomCompensate';
 import { isSystemAdministrator } from '../../utils/systemAdmin';
 import '../../styles/design-system-2-scope.css';
@@ -81,30 +83,33 @@ interface LoginPinNumpadProps {
 }
 
 const LoginPinNumpad: React.FC<LoginPinNumpadProps> = ({ disabled, onDigit, onBackspace }) => {
+  const { t } = useTranslation();
   const digits = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-  const keyClass =
-    'login2-numpad-key flex aspect-square w-full items-center justify-center text-2xl font-semibold text-neutral-900 transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:pointer-events-none';
+  const keySizing =
+    'h-[clamp(5.875rem,5.9vw,6.125rem)] transition-all duration-150 active:scale-95 disabled:opacity-40 disabled:pointer-events-none';
 
   return (
     <div className="login2-numpad-grid grid w-full grid-cols-3 mx-auto">
       {digits.map((d) => (
-        <button key={d} type="button" disabled={disabled} className={keyClass} onClick={() => onDigit(d)}>
-          {d}
-        </button>
+        <NumpadButton key={d} type="button" disabled={disabled} label={d} className={keySizing} onClick={() => onDigit(d)} />
       ))}
-      <button type="button" disabled={disabled} className={`${keyClass} col-span-2`} onClick={() => onDigit('0')}>
-        0
-      </button>
-      <button
+      <NumpadButton
         type="button"
         disabled={disabled}
-        className={`${keyClass} login2-numpad-key-muted`}
+        label="0"
+        className={`${keySizing} col-span-2`}
+        onClick={() => onDigit('0')}
+      />
+      <NumpadButton
+        type="button"
+        variant="action"
+        disabled={disabled}
+        icon={Delete}
+        className={keySizing}
         onClick={onBackspace}
-        aria-label="Backspace"
-      >
-        <Delete className="w-7 h-7" />
-      </button>
+        aria-label={t('login2.backspace')}
+      />
     </div>
   );
 };
@@ -124,6 +129,7 @@ const LoginForm2Inner: React.FC = () => {
   const submittingRef = useRef(false);
 
   const { signInWithEmployeeCredentials, isLoading } = useSupabaseAuth();
+  const navigate = useNavigate();
   const employeesContext = useEmployees();
 
   const companyLogoUrl = (settings.company as { logoUrl?: string }).logoUrl?.trim() || '';
@@ -386,14 +392,14 @@ const LoginForm2Inner: React.FC = () => {
             <p className="text-base font-semibold text-neutral-900">{t('login.syncDegradedTitle')}</p>
             <p className="text-sm text-neutral-700 mt-0.5 line-clamp-2">{t('login.syncDegradedBody')}</p>
           </div>
-          <button
+          <AdminActionButton
             type="button"
+            variant="icon"
+            icon={X}
             onClick={() => employeesContext.clearSyncError()}
-            className="shrink-0 min-h-touch-sm min-w-touch-sm rounded-xl bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center transition-colors duration-200"
+            className="shrink-0 min-h-touch-sm min-w-touch-sm"
             aria-label={t('login.syncDegradedDismiss')}
-          >
-            <X className="w-5 h-5" />
-          </button>
+          />
         </div>
       )}
 
@@ -465,10 +471,10 @@ const LoginForm2Inner: React.FC = () => {
                           role="option"
                           aria-selected={isSelected}
                           onClick={() => handleEmployeeSelect(employee)}
-                          className={`login2-staff-card flex w-full min-w-0 flex-col items-center transition-all duration-200 ${
+                          className={`flex w-40 shrink-0 min-w-0 snap-start flex-col items-center h-[8.875rem] px-3.5 py-[1.125rem] rounded-[10px] border transition-all duration-200 ${
                             isSelected
-                              ? 'login2-staff-card-selected'
-                              : 'hover:border-neutral-300'
+                              ? 'bg-green-50 border-green-500'
+                              : 'bg-white border-gray-200 hover:bg-gray-50'
                           }`}
                         >
                           <RoundAvatar role={employee.role} sizeClass="h-14 w-14 mb-2" iconClass="w-7 h-7" />
@@ -485,10 +491,10 @@ const LoginForm2Inner: React.FC = () => {
                       role="option"
                       aria-selected={isOtherEmployee}
                       onClick={handleOtherEmployeeSelect}
-                      className={`login2-staff-card flex w-full min-w-0 flex-col items-center transition-all duration-200 ${
+                      className={`flex w-40 shrink-0 min-w-0 snap-start flex-col items-center h-[8.875rem] px-3.5 py-[1.125rem] rounded-[10px] border transition-all duration-200 ${
                         isOtherEmployee
-                          ? 'login2-staff-card-selected'
-                          : 'hover:border-neutral-300'
+                          ? 'bg-green-50 border-green-500'
+                          : 'bg-white border-gray-200 hover:bg-gray-50'
                       }`}
                     >
                       <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-slate-500 to-slate-600 mb-2">
@@ -521,13 +527,13 @@ const LoginForm2Inner: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <button
+                    <AdminActionButton
                       type="button"
-                      className="login2-change-button min-h-touch-xs shrink-0 text-sm font-semibold transition-colors duration-200"
+                      variant="ghost"
+                      label={t('login2.changeEmployee')}
+                      className="shrink-0 text-sm font-semibold"
                       onClick={handleClearSelection}
-                    >
-                      {t('login2.changeEmployee')}
-                    </button>
+                    />
                   </div>
 
                   <div className="login2-panel login2-credential-card flex flex-1 flex-col justify-center">
@@ -605,6 +611,15 @@ const LoginForm2Inner: React.FC = () => {
                     {error && (
                       <div className="mx-auto mt-4 w-full max-w-sm shrink-0 rounded-xl border-2 border-red-200 bg-red-50 px-4 py-2">
                         <p className="line-clamp-2 text-center text-sm font-medium text-red-700">{error}</p>
+                        {error === TILL_NOT_PAIRED_ERROR && (
+                          <button
+                            type="button"
+                            onClick={() => navigate('/pair-device')}
+                            className="mx-auto mt-2 block rounded-xl bg-[var(--ds2-danger-solid,#dc2626)] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[var(--ds2-danger-hover,#b91c1c)]"
+                          >
+                            {t('login2.rePairTill')}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -625,7 +640,7 @@ const LoginForm2Inner: React.FC = () => {
                 type="button"
                 onClick={handlePrimarySignIn}
                 disabled={isLoading || !canSubmitCredentials}
-                className={`login2-signin-button w-full min-h-touch-sm shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-green-500 to-green-600 py-3 text-lg font-semibold text-white transition-all duration-200 hover:from-green-600 hover:to-green-700 disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`w-full min-h-touch-sm shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-primary py-3 text-lg font-semibold text-white transition-all duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${
                   hasSelection ? 'flex' : 'hidden'
                 }`}
               >

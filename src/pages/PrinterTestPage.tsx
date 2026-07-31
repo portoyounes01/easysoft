@@ -7,6 +7,8 @@ import PrinterWorkflowManager from '../components/PrinterWorkflowManager';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TabToggle } from '../components/ui/TabToggle';
 import '../styles/design-system-2-scope.css';
 
 interface HardwareStatusPayload {
@@ -18,12 +20,7 @@ interface HardwareStatusPayload {
     };
 }
 
-const DS2_PRIMARY_ACTION =
-    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-5 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
-const DS2_SECONDARY_ACTION =
-    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-5 font-semibold text-white bg-gray-600 hover:bg-gray-700 shadow-sm transition-all duration-200';
-
-export type HardwareSettingsTool = 'printer' | 'seed' | 'cashier' | 'electron';
+export type HardwareSettingsTool = 'printer' | 'scale' | 'updates' | 'seed' | 'cashier' | 'electron';
 
 export interface PrinterSettingsPanelProps {
     /** When true, omit full-page chrome (used inside Settings). */
@@ -70,11 +67,6 @@ export const PrinterSettingsPanel: React.FC<PrinterSettingsPanelProps> = ({ embe
         void checkHardwareStatus();
     }, []);
 
-    const tabBtn = (tab: 'setup' | 'workflow') =>
-        `flex min-h-touch-sm flex-1 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium transition-colors ds2-control-radius-md ${
-            activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-        }`;
-
     const hs = hardwareStatus;
 
     const outerClass = embedded
@@ -92,16 +84,14 @@ export const PrinterSettingsPanel: React.FC<PrinterSettingsPanelProps> = ({ embe
                         </div>
                     )}
 
-                    <div className="ds2-control-radius-lg flex space-x-1 bg-gray-100 p-1">
-                        <button type="button" onClick={() => setActiveTab('setup')} className={tabBtn('setup')}>
-                            <Printer className="h-4 w-4" />
-                            {t('printerTest.tabSetup')}
-                        </button>
-                        <button type="button" onClick={() => setActiveTab('workflow')} className={tabBtn('workflow')}>
-                            <Settings className="h-4 w-4" />
-                            {t('printerTest.tabWorkflow')}
-                        </button>
-                    </div>
+                    <TabToggle
+                        options={[
+                            { value: 'setup', label: t('printerTest.tabSetup'), icon: Printer },
+                            { value: 'workflow', label: t('printerTest.tabWorkflow'), icon: Settings },
+                        ]}
+                        value={activeTab}
+                        onChange={setActiveTab}
+                    />
                 </div>
 
                 {activeTab === 'setup' && (
@@ -217,25 +207,31 @@ export const PrinterSettingsPanel: React.FC<PrinterSettingsPanelProps> = ({ embe
                             )}
 
                             <div className="flex flex-wrap gap-4">
-                                <button type="button" onClick={() => setShowPrinterSetup(true)} className={DS2_PRIMARY_ACTION}>
-                                    <Search className="h-5 w-5" />
-                                    <span>{t('printerTest.setupThermal')}</span>
-                                </button>
-
-                                <button type="button" onClick={() => void checkHardwareStatus()} className={DS2_SECONDARY_ACTION}>
-                                    <Wifi className="h-5 w-5" />
-                                    <span>{t('printerTest.refreshStatus')}</span>
-                                </button>
-
-                                <button
+                                <AdminActionButton
                                     type="button"
+                                    variant="primary"
+                                    icon={Search}
+                                    label={t('printerTest.setupThermal')}
+                                    onClick={() => setShowPrinterSetup(true)}
+                                />
+
+                                <AdminActionButton
+                                    type="button"
+                                    variant="outline"
+                                    icon={Wifi}
+                                    label={t('printerTest.refreshStatus')}
+                                    onClick={() => void checkHardwareStatus()}
+                                />
+
+                                <AdminActionButton
+                                    type="button"
+                                    variant="primary"
+                                    icon={Printer}
+                                    label={t('printerTest.testPrint')}
                                     onClick={() => void testPrint()}
                                     disabled={!hs?.status?.printer?.connected}
-                                    className={DS2_PRIMARY_ACTION}
-                                >
-                                    <Printer className="h-5 w-5" />
-                                    <span>{t('printerTest.testPrint')}</span>
-                                </button>
+                                    className="disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
                             </div>
 
                             <div className="mt-8 rounded-lg bg-blue-50 p-4">

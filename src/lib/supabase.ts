@@ -1,14 +1,41 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '../types/supabase';
+import { mirrorToShell } from './shellDeviceStore';
 
-// Environment variables (you'll need to add these to your .env file)
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON || '';
+// Stage-0 runtime config (update-policy §10 / multi-tenant-plan §9.2): on a
+// till, the Electron shell reads userData/config.json and exposes the renderer
+// subset as window.__RUNTIME_CONFIG__ (via preload). It wins over Vite-baked
+// env so a till can be repointed (staging↔prod, key rotation) by editing one
+// file — no rebuild. Browser hosts (PWA) have no shell and use the baked env.
+const runtimeConfig: { supabaseUrl?: string; supabaseAnonKey?: string; environment?: string } =
+    (typeof window !== 'undefined' && window.__RUNTIME_CONFIG__) || {};
+
+// Environment variables (you'll need to add these to your .env file).
+// Exported so raw edge-function fetches use the SAME resolution — anything
+// reading import.meta.env directly would split-brain a repointed till.
+export const supabaseUrl = runtimeConfig.supabaseUrl || import.meta.env.VITE_SUPABASE_URL || '';
+export const supabaseAnonKey = runtimeConfig.supabaseAnonKey || import.meta.env.VITE_SUPABASE_ANON || '';
 
 // Validate environment variables
 if (!supabaseUrl || !supabaseAnonKey) {
     console.warn('Supabase environment variables not configured. Running in offline-only mode.');
 }
+
+// Auth storage: localStorage as always, but session writes mirror into the
+// shell's device store on tills (no-op in browsers / old shells) so the
+// session follows the DEVICE across renderer_source origin flips (§6.2/D-U4).
+// shellDeviceStore hydrated localStorage from the shell before this module ran.
+const tillAuthStorage = {
+    getItem: (key: string) => localStorage.getItem(key),
+    setItem: (key: string, value: string) => {
+        localStorage.setItem(key, value);
+        mirrorToShell(key, value);
+    },
+    removeItem: (key: string) => {
+        localStorage.removeItem(key);
+        mirrorToShell(key, null);
+    },
+};
 
 // Create Supabase client with TypeScript support
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
@@ -16,6 +43,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false, // We're not using OAuth flows in POS
+        ...(typeof window !== 'undefined' ? { storage: tillAuthStorage } : {}),
     },
     global: {
         headers: {

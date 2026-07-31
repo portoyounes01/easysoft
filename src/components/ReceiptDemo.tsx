@@ -2,7 +2,14 @@ import React, { useState } from 'react';
 import ThermalReceipt, { ReceiptProps } from './ThermalReceipt';
 
 const ReceiptDemo: React.FC<{ initialData?: ReceiptProps }> = ({ initialData }) => {
-  const [documentType, setDocumentType] = useState<'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO'>(initialData?.documentType || 'FATURA_SIMPLIFICADA');
+  // The demo previews FISCAL documents only — the non-fiscal fallback slip is
+  // not one of its options, so an incoming TALAO_NAO_FISCAL falls back to FS.
+  type DemoDocumentType = 'FATURA' | 'FATURA_SIMPLIFICADA' | 'NOTA_CREDITO';
+  const seedDocumentType =
+    initialData?.documentType && initialData.documentType !== 'TALAO_NAO_FISCAL'
+      ? initialData.documentType
+      : 'FATURA_SIMPLIFICADA';
+  const [documentType, setDocumentType] = useState<DemoDocumentType>(seedDocumentType);
 
   // Mock data for invoice
   const mockInvoiceData = {

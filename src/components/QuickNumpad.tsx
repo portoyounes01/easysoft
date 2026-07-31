@@ -1,4 +1,6 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useContext } from 'react';
+import { useTranslation } from 'react-i18next';
+import { DialogShellStyleContext, DIALOG_PALETTES } from '../theme/dialogStyle';
 import { Delete, X } from 'lucide-react';
 
 export interface QuickNumpadProps {
@@ -18,7 +20,11 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
     className = '',
     disabled = false
 }) => {
-    // 1. Hooks - none
+    const { t } = useTranslation();
+    // Inside an applied dialog shell the numpad follows the style's numpad
+    // axis; 'keys' renders the simple bordered grid, 'legacy' (and page
+    // surfaces / unstyled dialogs) keep the original framed grid below.
+    const shellStyle = useContext(DialogShellStyleContext);
 
     // 2. Event handlers
     const appendToken = useCallback((token: string) => {
@@ -45,6 +51,32 @@ const QuickNumpad: React.FC<QuickNumpadProps> = ({
     // 4. Effects - none
 
     // 5. Render
+    if (shellStyle && shellStyle.numpad === 'keys') {
+        const p = DIALOG_PALETTES[shellStyle.palette];
+        const key = `flex min-h-touch-sm items-center justify-center rounded-xl border ${p.border} bg-white font-semibold ${p.titleText} ${disabled ? 'cursor-not-allowed opacity-50' : `hover:${p.tintBg}`}`;
+        const quickKey = `flex min-h-touch-sm items-center justify-center rounded-xl border ${p.border} ${p.tintBg} font-semibold ${p.titleText} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`;
+        return (
+            <div className={`grid grid-cols-4 gap-2 ${className}`}>
+                {['1', '2', '3'].map(d => (
+                    <button key={d} type="button" disabled={disabled} onClick={() => appendToken(d)} className={key}>{d}</button>
+                ))}
+                <button type="button" disabled={disabled} onClick={() => handleQuickSet(quickValues[0])} className={quickKey}>{quickValues[0]}</button>
+                {['4', '5', '6'].map(d => (
+                    <button key={d} type="button" disabled={disabled} onClick={() => appendToken(d)} className={key}>{d}</button>
+                ))}
+                <button type="button" disabled={disabled} onClick={() => handleQuickSet(quickValues[1])} className={quickKey}>{quickValues[1]}</button>
+                {['7', '8', '9'].map(d => (
+                    <button key={d} type="button" disabled={disabled} onClick={() => appendToken(d)} className={key}>{d}</button>
+                ))}
+                <button type="button" disabled={disabled} onClick={() => handleQuickSet(quickValues[2])} className={quickKey}>{quickValues[2]}</button>
+                <button type="button" disabled={disabled} onClick={handleClear} className={key} aria-label={t('common.clear')}>×</button>
+                <button type="button" disabled={disabled} onClick={() => appendToken('0')} className={key}>0</button>
+                <button type="button" disabled={disabled} onClick={handleDelete} className={key} aria-label={t('common.delete')}>⌫</button>
+                <button type="button" disabled={disabled} onClick={() => handleQuickSet(quickValues[3])} className={quickKey}>{quickValues[3]}</button>
+            </div>
+        );
+    }
+
     return (
         <div className={`rounded-2xl ring-2 ring-gray-300 overflow-hidden ${className}`}>
             <div className="grid grid-cols-4 h-full">

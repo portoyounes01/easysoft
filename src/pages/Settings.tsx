@@ -1,4 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import ReceiptLogoPicker from '../components/ReceiptLogoPicker';
+import { readDevicePairingScope } from '../utils/devicePairingStorage';
+import { DialogSwitch } from '../components/ui/dialogParts';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
+import { TabToggle } from '../components/ui/TabToggle';
 import { useSearchParams } from 'react-router-dom';
 import {
     AlertTriangle,
@@ -19,6 +26,7 @@ import {
     KeyRound,
     Languages,
     CalendarDays,
+    DownloadCloud,
     Monitor,
     PackageCheck,
     Plus,
@@ -31,6 +39,7 @@ import {
     Store,
     Ticket,
     Trash2,
+    Weight,
     Wifi,
     type LucideIcon,
 } from 'lucide-react';
@@ -38,24 +47,48 @@ import { useTranslation } from 'react-i18next';
 import { useSettings } from '../contexts/SettingsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import type { LoyaltyVoucher, SystemSettings } from '../contexts/SettingsContext';
-import { cloneSettingsSnapshot, logCommittedSettingsChanges } from '../fiscal/fiscalAuditLog';
+import {
+    appendFiscalAuditEventTyped,
+    cloneSettingsSnapshot,
+    collectCompanyInfoChanges,
+    logCommittedSettingsChanges,
+} from '../fiscal/fiscalAuditLog';
 import { buildSaftAuditFileXml } from '../fiscal/saft/exportSaft';
+import {
+    planSaftExport,
+    type SaftDivergentField,
+    type SaftExportPlan,
+} from '../fiscal/saft/saftHeaderProjection';
+import { APP_VERSION } from '../lib/appVersion';
 import { buildChainScope, computeSeriesKey } from '../fiscal/seriesUtils';
 import { checkVendusFiscalHealth, fetchVendusSaftXml } from '../fiscal/vendusFiscalIssuer';
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
-import { initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
-import { IVA_RATES } from '../types/supabase';
+import { customerLocalService, initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
+import { ivaRatesForCountry } from '../types/supabase';
+import { getCountryProfile, OPERATING_COUNTRIES, type OperatingCountry } from '../lib/countryProfile';
+import { useLanguage } from '../contexts/LanguageContext';
 import { isSystemAdministrator } from '../utils/systemAdmin';
+import { isSupabaseConfigured } from '../lib/supabase';
+import {
+    listCompanyStores,
+    saveCompanySlogan,
+    saveStoreCompany,
+    type CompanyStoreOption,
+} from '../services/companyProfileService';
 import { generateUUID } from '../utils/uuid';
 import type { ReceiptLanguage } from '../utils/receiptLanguage';
 import { PrinterSettingsPanel, type HardwareSettingsTool } from './PrinterTestPage';
+import ScaleSettingsPanel from '../components/ScaleSettingsPanel';
+import UpdateSettingsPanel from '../components/UpdateSettingsPanel';
+import NotificationSettings from '../components/notifications/NotificationSettings';
+import { isPwaHost } from '../lib/host';
 import { SeedManagementPanel } from './SeedManagement';
 import { CashierTestingPanel } from './CashierTesting';
 import { ElectronTestingPanel } from './ElectronCashierTesting';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import '../styles/design-system-2-scope.css';
 
-type SettingsTabId = 'security' | 'pos' | 'loyalty' | 'hr' | 'display' | 'hardware' | 'company';
+type SettingsTabId = 'security' | 'pos' | 'loyalty' | 'hr' | 'display' | 'hardware' | 'company' | 'alerts';
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 type VendusCheckStatus = 'idle' | 'checking' | 'ok' | 'error';
 
@@ -141,22 +174,7 @@ interface ToggleSwitchProps {
 }
 
 const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ checked, onChange, label }) => (
-    <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors duration-200 ${
-            checked ? 'bg-slate-950' : 'bg-slate-300'
-        }`}
-    >
-        <span
-            className={`inline-block h-6 w-6 rounded-full bg-white shadow-lg transition-transform duration-200 ${
-                checked ? 'translate-x-7' : 'translate-x-1'
-            }`}
-        />
-    </button>
+    <DialogSwitch checked={checked} onChange={() => onChange(!checked)} label={label} />
 );
 
 interface SegmentOption<T extends string> {
@@ -174,28 +192,7 @@ function SegmentedControl<T extends string>({
     options: SegmentOption<T>[];
     onChange: (value: T) => void;
 }) {
-    return (
-        <div className="grid gap-2 rounded-[1.5rem] bg-slate-100 p-2 sm:grid-cols-2">
-            {options.map(option => {
-                const active = option.value === value;
-                return (
-                    <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => onChange(option.value)}
-                        className={`min-h-touch rounded-2xl px-4 py-3 text-left transition-all duration-200 ${
-                            active
-                                ? 'bg-white text-slate-950 shadow-sm ring-1 ring-slate-200'
-                                : 'text-slate-500 hover:bg-white/60 hover:text-slate-900'
-                        }`}
-                    >
-                        <span className="block text-base font-semibold">{option.label}</span>
-                        {option.description && <span className="mt-1 block text-xs leading-5 opacity-80">{option.description}</span>}
-                    </button>
-                );
-            })}
-        </div>
-    );
+    return <TabToggle options={options} value={value} onChange={onChange} />;
 }
 
 interface StatusPillProps {
@@ -248,9 +245,11 @@ const Settings: React.FC = () => {
     const { settings, updateSettings, resetToDefaults, isLoading } = useSettings();
     const { employee, principal } = useSupabaseAuth();
     // Owner (a membership human with no employee row) is the tenant's top authority and
-    // gets the system-admin surface; till ADMIN001 keeps it via isSystemAdministrator.
+    // gets the system-admin surface; till SYS001 keeps it via isSystemAdministrator.
     const isSystemAdmin = isSystemAdministrator(employee) || principal?.role === 'owner';
     const { t } = useTranslation();
+    const { setLanguage } = useLanguage();
+    const countryProfile = getCountryProfile(settings.operatingCountry);
     const [searchParams] = useSearchParams();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
     const [activeTab, setActiveTab] = useState<SettingsTabId>('security');
@@ -263,6 +262,16 @@ const Settings: React.FC = () => {
     const [saftEnd, setSaftEnd] = useState(() => new Date().toISOString().slice(0, 10));
     const [saftBusy, setSaftBusy] = useState(false);
     const [saftMessage, setSaftMessage] = useState<string | null>(null);
+    // The period is frozen in here with the plan, never re-read from state on
+    // confirm: the whole point of this change is that a Header cannot disagree with
+    // the documents under it, and StartDate/EndDate/FiscalYear are Header fields.
+    const [saftPending, setSaftPending] = useState<{
+        plan: SaftExportPlan;
+        loadTx: (id: string) => Promise<Awaited<ReturnType<typeof transactionLocalService.getTransactionById>>>;
+        docs: Awaited<ReturnType<typeof transactionLocalService.getFiscalDocumentsByDateRange>>;
+        startDateYmd: string;
+        endDateYmd: string;
+    } | null>(null);
     const [vendusCheck, setVendusCheck] = useState<{ status: VendusCheckStatus; message: string }>({
         status: 'idle',
         message: '',
@@ -328,6 +337,15 @@ const Settings: React.FC = () => {
                 icon: SettingsIcon,
                 description: t('settings.tabCompanyDesc'),
             },
+            // Alert thresholds drive the server-side notification triggers — PWA-admin concern only.
+            ...(isPwaHost
+                ? [{
+                    id: 'alerts' as const,
+                    label: t('settings.tabAlertsLabel'),
+                    icon: Bell,
+                    description: t('settings.tabAlertsDesc'),
+                }]
+                : []),
         ],
         [t]
     );
@@ -375,7 +393,9 @@ const Settings: React.FC = () => {
                 ? 'InvoiceXpress'
                 : settings.fiscal.issuer === 'fiskaly'
                     ? 'Fiskaly'
-                    : 'Local AT';
+                    : settings.fiscal.issuer === 'sign_es'
+                        ? 'SIGN ES'
+                        : 'Local AT';
     const isExternalIssuer =
         settings.fiscal.issuer === 'invoicexpress' || settings.fiscal.issuer === 'fiskaly';
     const activeTabMeta = tabs.find(tab => tab.id === activeTab) ?? tabs[0];
@@ -415,12 +435,46 @@ const Settings: React.FC = () => {
 
     useEffect(() => {
         const hw = searchParams.get('hw');
-        const allowed: HardwareSettingsTool[] = devToolsEnabled ? ['printer', 'seed', 'cashier', 'electron'] : ['printer'];
+        const allowed: HardwareSettingsTool[] = devToolsEnabled
+            ? ['printer', 'scale', 'updates', 'seed', 'cashier', 'electron']
+            : ['printer', 'scale', 'updates'];
         if (hw && (allowed as string[]).includes(hw)) {
             setActiveTab('hardware');
             setHardwareTool(hw as HardwareSettingsTool);
         }
     }, [searchParams, devToolsEnabled]);
+
+    // Company block: the server owns it (migration 20260810000000), so the
+    // fields below are edited locally and published on Save. Identity (FIRMA,
+    // NIPC) is NOT published from here — it belongs to the platform console.
+    const canEditCompany = isSystemAdmin || principal?.role === 'owner' || principal?.role === 'admin';
+    /** Identity comes from the tenant record once there IS a tenant record.
+     *  A local install with no Supabase keeps typing it here. */
+    const companyIdentityLocked = isSupabaseConfigured() && !isSystemAdministrator(employee);
+    const [companyStores, setCompanyStores] = useState<CompanyStoreOption[]>([]);
+    const [companyStoreId, setCompanyStoreId] = useState<string | null>(
+        readDevicePairingScope()?.storeId ?? null
+    );
+    const [companyPublishError, setCompanyPublishError] = useState('');
+    /** Whether the slogan being edited is this store's or the tenant default. */
+    const [sloganScope, setSloganScope] = useState<'store' | 'tenant'>('tenant');
+
+    useEffect(() => {
+        if (!isSupabaseConfigured() || !canEditCompany) return;
+        let cancelled = false;
+        void (async () => {
+            const stores = await listCompanyStores();
+            if (cancelled || !stores) return;
+            setCompanyStores(stores);
+            // A till already knows its store. A back office with exactly one
+            // store has no real choice to make, so it is picked for them; with
+            // several, the picker starts empty rather than guessing one.
+            setCompanyStoreId(prev => prev ?? (stores.length === 1 ? stores[0].id : null));
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [canEditCompany]);
 
     const markChanged = useCallback(() => {
         setPendingChanges(true);
@@ -482,10 +536,20 @@ const Settings: React.FC = () => {
         [settings.loyalty.vouchers, updateVouchers]
     );
 
+    const [pendingTrainingMode, setPendingTrainingMode] = useState<boolean | null>(null);
+
     const handleTrainingModeChange = useCallback(
         (next: boolean) => {
-            const msg = next ? t('settings.confirm.trainingOn') : t('settings.confirm.trainingOff');
-            if (!window.confirm(msg)) return;
+            setPendingTrainingMode(next);
+        },
+        []
+    );
+
+    const confirmTrainingModeChange = useCallback(
+        () => {
+            if (pendingTrainingMode === null) return;
+            const next = pendingTrainingMode;
+            setPendingTrainingMode(null);
             try {
                 if (next) {
                     localStorage.setItem('pos_dexie_slot', 'training');
@@ -499,7 +563,7 @@ const Settings: React.FC = () => {
             setPendingChanges(false);
             window.setTimeout(() => window.location.reload(), 200);
         },
-        [t, updateSettings]
+        [pendingTrainingMode, updateSettings]
     );
 
     const handleFiscalIssuerChange = useCallback(
@@ -515,6 +579,29 @@ const Settings: React.FC = () => {
             markChanged();
         },
         [markChanged, updateSettings]
+    );
+
+    const handleOperatingCountryChange = useCallback(
+        (country: OperatingCountry) => {
+            const profile = getCountryProfile(country);
+            // Switching country resets the fiscal issuer to the country's only/default valid
+            // issuer (ES ⇒ sign_es; PT ⇒ local_at), the standard IVA rate, and the default
+            // UI + receipt language. The user can still re-pick language afterwards.
+            updateSettings({
+                operatingCountry: country,
+                pos: { taxRate: profile.defaultVatRate },
+                receipt: { receiptLanguage: profile.defaultLanguage },
+                fiscal: {
+                    issuer: profile.defaultFiscalIssuer,
+                    vendus: { enabled: profile.defaultFiscalIssuer === 'vendus' },
+                    invoicexpress: { enabled: profile.defaultFiscalIssuer === 'invoicexpress' },
+                    fiskaly: { enabled: profile.defaultFiscalIssuer === 'fiskaly' },
+                },
+            } as Parameters<typeof updateSettings>[0]);
+            setLanguage(profile.defaultLanguage);
+            markChanged();
+        },
+        [markChanged, updateSettings, setLanguage]
     );
 
     const handleInvoiceXpressSettingChange = useCallback(
@@ -646,21 +733,59 @@ const Settings: React.FC = () => {
 
     const handleSave = useCallback(async () => {
         setSaveStatus('saving');
+        setCompanyPublishError('');
         try {
             const baseline = savedSettingsBaselineRef.current ?? cloneSettingsSnapshot(settings);
             await logCommittedSettingsChanges(baseline, settings, employee?.id);
+
+            // Publish the company block the server owns — but ONLY the fields
+            // touched since the last save. Publishing the whole block would send
+            // the shipped placeholders ("Morada", "Lisboa") for every field the
+            // operator never edited, and since a non-empty server value wins on
+            // sync, those placeholders would then spread to every till in the
+            // store. Identity is absent on purpose — see the card.
+            if (isSupabaseConfigured() && canEditCompany && companyStoreId) {
+                const touched = new Set(
+                    collectCompanyInfoChanges(baseline.company, settings.company).map(change => change.field)
+                );
+                const pick = (field: 'address' | 'postalCode' | 'city' | 'phone' | 'email') =>
+                    touched.has(field) ? (settings.company[field] ?? '') : null;
+
+                if (['address', 'postalCode', 'city', 'phone', 'email'].some(field => touched.has(field as never))) {
+                    await saveStoreCompany(companyStoreId, {
+                        address: pick('address'),
+                        postalCode: pick('postalCode'),
+                        city: pick('city'),
+                        phone: pick('phone'),
+                        email: pick('email'),
+                    });
+                }
+                if (touched.has('slogan')) {
+                    // null scope = the tenant default, so a single-brand chain
+                    // sets it once instead of once per store.
+                    await saveCompanySlogan(
+                        settings.company.slogan ?? '',
+                        sloganScope === 'tenant' ? null : companyStoreId
+                    );
+                }
+            }
+
             savedSettingsBaselineRef.current = cloneSettingsSnapshot(settings);
             setSaveStatus('saved');
             setPendingChanges(false);
         } catch (error) {
-            console.error('Failed to save settings audit log:', error);
+            // Local settings already hold the edit; only the publish failed, and
+            // saying so is better than a green tick over a value the next sync
+            // will overwrite.
+            console.error('Failed to save settings:', error);
+            setCompanyPublishError(error instanceof Error ? error.message : String(error));
             setSaveStatus('error');
         }
 
         setTimeout(() => {
             setSaveStatus('idle');
         }, 2000);
-    }, [employee?.id, settings]);
+    }, [employee?.id, settings, canEditCompany, companyStoreId, sloganScope]);
 
     const handleReset = useCallback(() => {
         if (confirm(t('settings.confirm.resetAll'))) {
@@ -670,6 +795,179 @@ const Settings: React.FC = () => {
             setSaveStatus('idle');
         }
     }, [resetToDefaults, t]);
+
+    /**
+     * Writes the file and the audit trail once the Header issuer is settled. Split
+     * out of `handleExportSaft` so the acknowledgement dialog can resume the very
+     * same export — plan and loaded transactions included — instead of re-planning
+     * and risking a different answer between the warning and the file.
+     */
+    const finishSaftExport = useCallback(
+        async (
+            plan: SaftExportPlan,
+            loadTx: (id: string) => Promise<Awaited<ReturnType<typeof transactionLocalService.getTransactionById>>>,
+            docs: Awaited<ReturnType<typeof transactionLocalService.getFiscalDocumentsByDateRange>>,
+            startDateYmd: string,
+            endDateYmd: string
+        ) => {
+            const xml = await buildSaftAuditFileXml({
+                settings,
+                startDateYmd,
+                endDateYmd,
+                fiscalDocuments: docs,
+                loadTransaction: loadTx,
+                loadCustomer: id => customerLocalService.getCustomerById(id),
+                productVersion: APP_VERSION,
+                headerIssuer: plan.headerIssuer,
+            });
+            const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `SAFT_PT_${startDateYmd}_${endDateYmd}.xml`;
+            a.click();
+            // Revoking synchronously can pull the object URL out from under a download
+            // the browser has not started reading yet.
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+            const batchId = generateUUID();
+            const exportedAt = new Date().toISOString();
+            // `includedFiscalIds`, not every row in range: a document dropped for want of
+            // a transaction is not in the file, so marking it exported would be a lie.
+            await transactionLocalService.markFiscalDocumentsSaftExported(
+                plan.includedFiscalIds,
+                batchId,
+                exportedAt
+            );
+            const ack = plan.acknowledgement;
+            await appendFiscalAuditEventTyped(
+                'SAFT_EXPORTED',
+                {
+                    startDateYmd,
+                    endDateYmd,
+                    documentCount: plan.documentCount,
+                    headerSource: plan.headerSource,
+                    snapshotCount: plan.snapshotCount,
+                    legacyCount: plan.legacyCount,
+                    fiscalYear: plan.fiscalYear,
+                    fiscalYears: plan.fiscalYears,
+                    productVersion: APP_VERSION,
+                    // The identity itself, not a count of them: "a decision happened"
+                    // cannot be reconciled against a filed file, "this NIF and this
+                    // address were declared, these were not" can.
+                    headerIdentity: plan.headerIssuer ?? null,
+                    acknowledged: ack !== null,
+                    acknowledgedReasons: ack ? ack.reasons : [],
+                    divergentFields: ack ? ack.fields : [],
+                    rejectedIdentities: ack ? ack.rejected.map(g => ({ ...g.projection, documentCount: g.count })) : [],
+                    vouchingDocumentCount: ack ? ack.vouchingCount : plan.documentCount,
+                    droppedDocumentCount: plan.droppedFiscalIds.length,
+                    droppedFiscalIds: plan.droppedFiscalIds,
+                    droppedInvoiceNos: plan.droppedInvoiceNos,
+                    batchId,
+                    exportedAt,
+                },
+                employee?.id
+            );
+
+            // Every snapshot can agree yet still disagree with today's settings, because
+            // the back office changed after the last sale. Nothing is acknowledged, and
+            // the XML legitimately differs from last week's — this line is what makes
+            // that diff explainable instead of alarming.
+            const provenance =
+                plan.headerSource === 'live-settings'
+                    ? t('settings.saft.provenanceLive', { total: plan.documentCount })
+                    : plan.legacyCount > 0
+                      ? t('settings.saft.provenanceMixed', {
+                            snapshot: plan.snapshotCount,
+                            total: plan.documentCount,
+                            legacy: plan.legacyCount,
+                        })
+                      : t('settings.saft.provenanceSnapshot', { snapshot: plan.snapshotCount, total: plan.documentCount });
+            // A document that is not in a filed file has to be readable on screen. The
+            // audit JSON is not where an operator discovers what they just submitted.
+            const dropped =
+                plan.droppedInvoiceNos.length > 0
+                    ? ` ${t('settings.saft.droppedNotice', {
+                          count: plan.droppedInvoiceNos.length,
+                          list: plan.droppedInvoiceNos.join(', '),
+                      })}`
+                    : '';
+            setSaftMessage(
+                `${t('settings.messages.saftExported', { count: plan.documentCount })} ${provenance}${dropped}`
+            );
+        },
+        [employee?.id, settings, t]
+    );
+
+    const confirmSaftExport = useCallback(async () => {
+        if (!saftPending) return;
+        setSaftBusy(true);
+        try {
+            await finishSaftExport(
+                saftPending.plan,
+                saftPending.loadTx,
+                saftPending.docs,
+                saftPending.startDateYmd,
+                saftPending.endDateYmd
+            );
+            setSaftPending(null);
+        } catch (error) {
+            setSaftMessage(error instanceof Error ? error.message : t('settings.messages.saftExportFail'));
+            setSaftPending(null);
+        } finally {
+            setSaftBusy(false);
+        }
+    }, [finishSaftExport, saftPending, t]);
+
+    /**
+     * Declining is the only path that produces no file, so it is the only one that
+     * still writes SAFT_EXPORT_BLOCKED_ISSUER_CONFLICT. Nothing was marked exported
+     * and no XML exists, but the refusal itself is a fiscal fact.
+     */
+    const cancelSaftExport = useCallback(async () => {
+        // Refuse once the confirmed export is already running. The dialog leaves
+        // its cancel button and backdrop live while `finishSaftExport` writes the
+        // file and marks documents exported, so a click here would log the
+        // operator as having DECLINED an export that produced a file — an audit
+        // row asserting the opposite of what happened.
+        if (!saftPending || saftBusy) return;
+        const { plan, startDateYmd, endDateYmd } = saftPending;
+        setSaftPending(null);
+        setSaftMessage(t('settings.saft.ackCancelled'));
+        await appendFiscalAuditEventTyped(
+            'SAFT_EXPORT_BLOCKED_ISSUER_CONFLICT',
+            {
+                startDateYmd,
+                endDateYmd,
+                documentCount: plan.documentCount,
+                reasons: plan.acknowledgement ? plan.acknowledgement.reasons : [],
+                divergentFields: plan.acknowledgement ? plan.acknowledgement.fields : [],
+                identities: plan.acknowledgement
+                    ? plan.acknowledgement.groups.map(g => ({ ...g.projection, documentCount: g.count }))
+                    : [],
+                declinedIdentity: plan.headerIssuer ?? null,
+            },
+            employee?.id
+        );
+    }, [employee?.id, saftBusy, saftPending, t]);
+
+    const ack = saftPending?.plan.acknowledgement ?? null;
+    // Two taxable persons is a different statement from a change of address, and
+    // reads as a different severity to the person signing it off.
+    const ackTaxNumberSplit = ack?.reasons.includes('tax-number') ?? false;
+
+    // Literal keys, one per field: `t(\`settings.saft.field.${f}\`)` would be
+    // invisible to check:i18n, which only sees statically written keys.
+    const saftDivergentFieldLabels: Record<SaftDivergentField, string> = {
+        taxNumber: t('settings.saft.field.taxNumber'),
+        name: t('settings.saft.field.name'),
+        address: t('settings.saft.field.address'),
+        city: t('settings.saft.field.city'),
+        postalCode: t('settings.saft.field.postalCode'),
+        productId: t('settings.saft.field.productId'),
+        softwareCertNumber: t('settings.saft.field.softwareCertNumber'),
+    };
 
     const handleExportSaft = useCallback(async () => {
         setSaftBusy(true);
@@ -717,25 +1015,32 @@ const Settings: React.FC = () => {
                             : t('settings.saftMonthly')
                     );
                 }
-                const xml =
-                    settings.fiscal.issuer === 'invoicexpress'
-                        ? await (await import('../fiscal/invoicexpressFiscalIssuer')).fetchInvoiceXpressSaftXml({
-                              settings,
-                              year: startYear,
-                              month: startMonth,
-                          })
-                        : await (await import('../fiscal/fiskalyFiscalIssuer')).fetchFiskalySaftXml({
-                              settings,
-                              year: startYear,
-                              month: startMonth,
-                          });
-                const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+                // fiskaly (unified API) delivers SAF-T as a zip artifact; InvoiceXpress as bare XML.
+                let blob: Blob;
+                let extension: 'xml' | 'zip';
+                if (settings.fiscal.issuer === 'invoicexpress') {
+                    const xml = await (await import('../fiscal/invoicexpressFiscalIssuer')).fetchInvoiceXpressSaftXml({
+                        settings,
+                        year: startYear,
+                        month: startMonth,
+                    });
+                    blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+                    extension = 'xml';
+                } else {
+                    const archive = await (await import('../fiscal/fiskalyFiscalIssuer')).fetchFiskalySaftArchive({
+                        settings,
+                        year: startYear,
+                        month: startMonth,
+                    });
+                    blob = new Blob([archive.bytes], { type: archive.mimeType });
+                    extension = archive.mimeType.includes('zip') ? 'zip' : 'xml';
+                }
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = isSystemAdmin
-                    ? `SAFT_${settings.fiscal.issuer.toUpperCase()}_${startYear}_${String(startMonth).padStart(2, '0')}.xml`
-                    : `SAFT_${startYear}_${String(startMonth).padStart(2, '0')}.xml`;
+                    ? `SAFT_${settings.fiscal.issuer.toUpperCase()}_${startYear}_${String(startMonth).padStart(2, '0')}.${extension}`
+                    : `SAFT_${startYear}_${String(startMonth).padStart(2, '0')}.${extension}`;
                 a.click();
                 URL.revokeObjectURL(url);
                 setSaftMessage(
@@ -747,46 +1052,42 @@ const Settings: React.FC = () => {
             }
 
             const fiscalDocs = await transactionLocalService.getFiscalDocumentsByDateRange(saftStart, saftEnd);
-            const xml = await buildSaftAuditFileXml({
+            const { plan, loadTransactionCached } = await planSaftExport({
                 settings,
                 startDateYmd: saftStart,
                 endDateYmd: saftEnd,
                 fiscalDocuments: fiscalDocs,
                 loadTransaction: id => transactionLocalService.getTransactionById(id),
-                productVersion: '0.1.0',
             });
-            const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `SAFT_PT_${saftStart}_${saftEnd}.xml`;
-            a.click();
-            URL.revokeObjectURL(url);
-            const batchId = generateUUID();
-            const exportedAt = new Date().toISOString();
-            await transactionLocalService.markFiscalDocumentsSaftExported(
-                fiscalDocs.map(d => d.id),
-                batchId,
-                exportedAt
-            );
-            await transactionLocalService.appendFiscalAuditEvent({
-                event_type: 'SAFT_EXPORTED',
-                payload_json: JSON.stringify({
+            // The file is never written on this pass when there is something to
+            // disclose: the acknowledgement has to precede the XML, or the operator is
+            // being told about a file they already have.
+            if (plan.acknowledgement) {
+                setSaftPending({
+                    plan,
+                    loadTx: loadTransactionCached,
+                    docs: fiscalDocs,
                     startDateYmd: saftStart,
                     endDateYmd: saftEnd,
-                    documentCount: fiscalDocs.length,
-                    batchId,
-                    exportedAt,
-                }),
-                employee_id: null,
-            });
-            setSaftMessage(t('settings.messages.saftExported', { count: fiscalDocs.length }));
+                });
+                return;
+            }
+            await finishSaftExport(plan, loadTransactionCached, fiscalDocs, saftStart, saftEnd);
         } catch (error) {
             setSaftMessage(error instanceof Error ? error.message : t('settings.messages.saftExportFail'));
         } finally {
             setSaftBusy(false);
         }
-    }, [fiscalIssuerLabel, isExternalIssuer, isSystemAdmin, saftEnd, saftStart, settings, t]);
+    }, [
+        finishSaftExport,
+        fiscalIssuerLabel,
+        isExternalIssuer,
+        isSystemAdmin,
+        saftEnd,
+        saftStart,
+        settings,
+        t,
+    ]);
 
     const renderSaveLabel = () => {
         if (saveStatus === 'saving') return t('settings.saveSaving');
@@ -895,11 +1196,17 @@ const Settings: React.FC = () => {
                             onChange={event => handleSettingsChange('pos', 'taxRate', parseFloat(event.target.value))}
                             className={fieldClass}
                         >
-                            {IVA_RATES.map(rate => (
-                                <option key={rate.value} value={rate.value}>
-                                    {rate.label}
-                                </option>
-                            ))}
+                            {(() => {
+                                const rates = ivaRatesForCountry(settings.operatingCountry).map((r) => ({ value: r.value as number, label: r.label as string }));
+                                if (!rates.some((r) => r.value === settings.pos.taxRate)) {
+                                    rates.unshift({ value: settings.pos.taxRate, label: `${Math.round(settings.pos.taxRate * 100)}%` });
+                                }
+                                return rates.map((rate) => (
+                                    <option key={rate.value} value={rate.value}>
+                                        {rate.label}
+                                    </option>
+                                ));
+                            })()}
                         </select>
                     </SettingsRow>
                 </SettingCard>
@@ -1211,18 +1518,17 @@ const Settings: React.FC = () => {
                                 onChange={enabled => handleVoucherChange(voucher.id, { enabled })}
                                 label={t('settings.voucherEnableAria', { name: voucher.code || voucher.id })}
                             />
-                            <button
+                            <TableActionButton
+                                variant="delete"
+                                icon={Trash2}
                                 type="button"
                                 onClick={() =>
                                     updateVouchers(
                                         settings.loyalty.vouchers.filter(item => item.id !== voucher.id)
                                     )
                                 }
-                                className="flex min-h-touch-sm min-w-touch-sm items-center justify-center rounded-2xl bg-rose-50 text-rose-700 hover:bg-rose-100"
                                 aria-label={t('settings.voucherDeleteAria')}
-                            >
-                                <Trash2 className="h-5 w-5" />
-                            </button>
+                            />
                         </div>
                     ))}
                     {settings.loyalty.vouchers.length === 0 && (
@@ -1230,14 +1536,13 @@ const Settings: React.FC = () => {
                             {t('settings.noVouchers')}
                         </p>
                     )}
-                    <button
+                    <AdminActionButton
+                        variant="primary"
                         type="button"
                         onClick={handleAddVoucher}
-                        className="inline-flex min-h-touch-sm items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 font-semibold text-white hover:bg-slate-800"
-                    >
-                        <Plus className="h-4 w-4" />
-                        {t('settings.addVoucher')}
-                    </button>
+                        icon={Plus}
+                        label={t('settings.addVoucher')}
+                    />
                 </div>
             </SettingCard>
         </div>
@@ -1386,10 +1691,12 @@ const Settings: React.FC = () => {
     const renderHardware = () => {
         const tools: Array<{ id: HardwareSettingsTool; label: string; description: string; icon: LucideIcon }> = [
             { id: 'printer', label: t('settings.hwPrintersLabel'), description: t('settings.hwPrintersDesc'), icon: Printer },
+            { id: 'scale', label: t('settings.hwScaleLabel'), description: t('settings.hwScaleDesc'), icon: Weight },
+            { id: 'updates', label: t('settings.hwUpdatesLabel', { defaultValue: 'Updates' }), description: t('settings.hwUpdatesDesc', { defaultValue: 'Till software updates' }), icon: DownloadCloud },
             { id: 'seed', label: t('settings.hwSeedLabel'), description: t('settings.hwSeedDesc'), icon: Database },
             { id: 'cashier', label: t('settings.hwCashierLabel'), description: t('settings.hwCashierDesc'), icon: BadgeCheck },
             { id: 'electron', label: 'Electron', description: t('settings.hwElectronDesc'), icon: Monitor },
-        ].filter(tool => tool.id === 'printer' || devToolsEnabled);
+        ].filter(tool => tool.id === 'printer' || tool.id === 'scale' || tool.id === 'updates' || devToolsEnabled);
         return (
             <div className="space-y-6">
                 <SettingCard
@@ -1407,10 +1714,10 @@ const Settings: React.FC = () => {
                                     key={tool.id}
                                     type="button"
                                     onClick={() => setHardwareTool(tool.id)}
-                                    className={`min-h-touch rounded-3xl border p-4 text-left transition-all duration-200 ${
+                                    className={`min-h-touch rounded-[10px] border p-4 text-left transition-all duration-200 ${
                                         active
-                                            ? 'border-blue-400 bg-gradient-primary text-white shadow-xl'
-                                            : 'border-slate-200 bg-white/80 text-slate-600 hover:bg-white hover:text-slate-950'
+                                            ? 'border-green-500 bg-green-50 text-green-900'
+                                            : 'border-gray-200 bg-white text-slate-600 hover:bg-gray-50 hover:text-slate-950'
                                     }`}
                                 >
                                     <Icon className="h-5 w-5" />
@@ -1424,6 +1731,8 @@ const Settings: React.FC = () => {
 
                 <div className={`${glassCard} p-3 sm:p-5`}>
                     {hardwareTool === 'printer' && <PrinterSettingsPanel embedded />}
+                    {hardwareTool === 'scale' && <ScaleSettingsPanel embedded />}
+                    {hardwareTool === 'updates' && <UpdateSettingsPanel embedded />}
                     {devToolsEnabled && hardwareTool === 'seed' && <SeedManagementPanel embedded />}
                     {devToolsEnabled && hardwareTool === 'cashier' && <CashierTestingPanel embedded />}
                     {devToolsEnabled && hardwareTool === 'electron' && <ElectronTestingPanel embedded />}
@@ -1440,13 +1749,41 @@ const Settings: React.FC = () => {
             accent="from-slate-900 to-slate-600"
         >
             <div className="grid gap-4 lg:grid-cols-2">
+                {/* Which store's address is being edited. A till is bound to one
+                    store and never sees this; a back office with several has to
+                    say which one, because the address is per store. */}
+                {companyStores.length > 1 && (
+                    <div className="lg:col-span-2">
+                        <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.company.storeScope')}</label>
+                        <select
+                            value={companyStoreId ?? ''}
+                            onChange={event => {
+                                setCompanyStoreId(event.target.value || null);
+                                markChanged();
+                            }}
+                            className={fieldClass}
+                        >
+                            <option value="">{t('settings.company.storeScopePlaceholder')}</option>
+                            {companyStores.map(store => (
+                                <option key={store.id} value={store.id}>
+                                    {store.city ? `${store.name} — ${store.city}` : store.name}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="mt-1.5 text-xs text-slate-500">{t('settings.company.storeScopeHelp')}</p>
+                    </div>
+                )}
+                {/* FIRMA and NIPC are the fiscal identity: tenants.nif carries a
+                    format CHECK and the fiscal provisioning is bound to it, so
+                    they are changed in the platform console, not on a till. */}
                 <div>
                     <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.companyNameLabel')}</label>
                     <input
                         type="text"
                         value={settings.company.name}
                         onChange={event => handleSettingsChange('company', 'name', event.target.value)}
-                        className={fieldClass}
+                        readOnly={companyIdentityLocked}
+                        className={companyIdentityLocked ? `${fieldClass} cursor-not-allowed bg-slate-50 text-slate-500` : fieldClass}
                     />
                 </div>
                 <div>
@@ -1455,9 +1792,13 @@ const Settings: React.FC = () => {
                         type="text"
                         value={settings.company.taxNumber}
                         onChange={event => handleSettingsChange('company', 'taxNumber', event.target.value)}
-                        className={fieldClass}
+                        readOnly={companyIdentityLocked}
+                        className={companyIdentityLocked ? `${fieldClass} cursor-not-allowed bg-slate-50 text-slate-500` : fieldClass}
                     />
                 </div>
+                {companyIdentityLocked && (
+                    <p className="-mt-2 text-xs text-slate-500 lg:col-span-2">{t('settings.company.identityManagedElsewhere')}</p>
+                )}
                 <div className="lg:col-span-2">
                     <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.company.address')}</label>
                     <input
@@ -1503,6 +1844,14 @@ const Settings: React.FC = () => {
                         className={fieldClass}
                     />
                 </div>
+                <div className="md:col-span-2">
+                    <ReceiptLogoPicker
+                        value={settings.company.logo}
+                        onChange={logo => handleSettingsChange('company', 'logo', logo)}
+                        canPublish={isSystemAdmin || principal?.role === 'owner' || principal?.role === 'admin'}
+                        storeId={readDevicePairingScope()?.storeId ?? (principal?.storeIds?.length === 1 ? principal.storeIds[0] : null)}
+                    />
+                </div>
                 <div>
                     <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.receiptSloganLabel')}</label>
                     <input
@@ -1511,6 +1860,25 @@ const Settings: React.FC = () => {
                         onChange={event => handleSettingsChange('company', 'slogan', event.target.value)}
                         className={fieldClass}
                     />
+                    {/* Scoped like the logo: a chain with one brand sets the
+                        slogan once as the tenant default rather than repeating
+                        it per store. */}
+                    {isSupabaseConfigured() && canEditCompany && (
+                        <select
+                            value={sloganScope}
+                            onChange={event => {
+                                setSloganScope(event.target.value as 'store' | 'tenant');
+                                markChanged();
+                            }}
+                            className={`${fieldClass} mt-2`}
+                            aria-label={t('settings.company.sloganScope')}
+                        >
+                            <option value="tenant">{t('settings.company.sloganScopeTenant')}</option>
+                            <option value="store" disabled={!companyStoreId}>
+                                {t('settings.company.sloganScopeStore')}
+                            </option>
+                        </select>
+                    )}
                 </div>
                 <div>
                     <label className="mb-2 block text-sm font-semibold text-slate-700">{t('settings.softwareLineLabel')}</label>
@@ -1521,6 +1889,16 @@ const Settings: React.FC = () => {
                         className={fieldClass}
                     />
                 </div>
+                {companyPublishError && (
+                    <p className="lg:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        {t('settings.company.publishFailed', { message: companyPublishError })}
+                    </p>
+                )}
+                {isSupabaseConfigured() && canEditCompany && !companyStoreId && companyStores.length > 1 && (
+                    <p className="lg:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        {t('settings.company.storeScopeRequired')}
+                    </p>
+                )}
             </div>
         </SettingCard>
     );
@@ -1540,6 +1918,7 @@ const Settings: React.FC = () => {
                 >
                     <option value="pt">{t('settings.company.receiptLanguagePt')}</option>
                     <option value="en">{t('settings.company.receiptLanguageEn')}</option>
+                    <option value="es">{t('settings.company.receiptLanguageEs')}</option>
                 </select>
             </SettingsRow>
             <SettingsRow title={t('settings.counterLabelTitle')} description={t('settings.counterLabelDesc')} icon={Store}>
@@ -1670,6 +2049,22 @@ const Settings: React.FC = () => {
             accent="from-slate-950 to-blue-700"
         >
             {isSystemAdmin && (
+                <SettingsRow title={t('settings.operatingCountryTitle')} description={t('settings.operatingCountryDesc')}>
+                    <SegmentedControl
+                        value={settings.operatingCountry}
+                        onChange={handleOperatingCountryChange}
+                        options={OPERATING_COUNTRIES.map((c) => ({
+                            value: c,
+                            label: getCountryProfile(c).name,
+                            description: c === 'PT'
+                                ? t('settings.operatingCountryPtDesc')
+                                : t('settings.operatingCountryEsDesc'),
+                        }))}
+                    />
+                </SettingsRow>
+            )}
+
+            {isSystemAdmin && (
                 <SettingsRow title={t('settings.activeIssuerTitle')} description={t('settings.activeIssuerDesc')}>
                     <SegmentedControl
                         value={settings.fiscal.issuer}
@@ -1679,7 +2074,8 @@ const Settings: React.FC = () => {
                             { value: 'vendus', label: 'Vendus', description: t('settings.issuerVendusDesc') },
                             { value: 'invoicexpress', label: 'InvoiceXpress', description: t('settings.issuerIxDesc') },
                             { value: 'fiskaly', label: 'Fiskaly', description: t('settings.issuerFiskalyDesc') },
-                        ]}
+                            { value: 'sign_es', label: t('settings.issuerSignEsLabel'), description: t('settings.issuerSignEsDesc') },
+                        ].filter((o) => countryProfile.fiscalIssuers.includes(o.value as SystemSettings['fiscal']['issuer']))}
                     />
                 </SettingsRow>
             )}
@@ -1747,7 +2143,7 @@ const Settings: React.FC = () => {
                                     type="text"
                                     value={ix.accountName}
                                     onChange={e => handleInvoiceXpressSettingChange('accountName', e.target.value)}
-                                    placeholder="minha-empresa"
+                                    placeholder={t('settings.ixAccountNamePlaceholder')}
                                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                 />
                             </SettingsRow>
@@ -1852,14 +2248,14 @@ const Settings: React.FC = () => {
                     )}
 
                     <div className="flex flex-wrap items-center gap-3">
-                        <button
+                        <AdminActionButton
+                            variant="primary"
                             type="button"
                             onClick={handleExternalHealthCheck}
                             disabled={externalCheck.status === 'checking'}
-                            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                        >
-                            {externalCheck.status === 'checking' ? t('settings.checking') : t('settings.checkConnection')}
-                        </button>
+                            label={externalCheck.status === 'checking' ? t('settings.checking') : t('settings.checkConnection')}
+                            className="text-sm disabled:opacity-50"
+                        />
                         {externalCheck.message && (
                             <StatusPill
                                 label={externalCheck.message}
@@ -1871,6 +2267,19 @@ const Settings: React.FC = () => {
             </SettingCard>
         );
     };
+
+    const renderSignEsSetup = () => (
+        <SettingCard
+            title={t('settings.signEsSetupTitle')}
+            description={t('settings.signEsSetupDesc')}
+            icon={Cloud}
+            accent="from-rose-600 to-orange-500"
+        >
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
+                {t('settings.signEsSetupNote')}
+            </div>
+        </SettingCard>
+    );
 
     const renderVendusSetup = () => (
         <SettingCard
@@ -2043,7 +2452,7 @@ const Settings: React.FC = () => {
                             type="button"
                             onClick={handleVendusHealthCheck}
                             disabled={vendusCheck.status === 'checking'}
-                            className="mt-4 min-h-touch-sm w-full rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition-all hover:bg-slate-100 disabled:opacity-60"
+                            className="mt-4 min-h-touch-sm w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-60"
                         >
                             {vendusCheck.status === 'checking' ? t('settings.checking') : t('settings.checkVendus')}
                         </button>
@@ -2094,7 +2503,7 @@ const Settings: React.FC = () => {
                     type="button"
                     onClick={handleExportSaft}
                     disabled={saftBusy}
-                    className="min-h-touch rounded-2xl bg-slate-950 px-6 py-3 font-semibold text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:translate-y-0 disabled:opacity-60"
+                    className="min-h-touch rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-3 font-medium text-neutral-50 transition-all hover:from-blue-600 hover:to-blue-700 disabled:opacity-50"
                 >
                     {saftBusy
                         ? t('settings.saftExportingBtn')
@@ -2106,6 +2515,100 @@ const Settings: React.FC = () => {
                 </button>
             </div>
             {saftMessage && <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">{saftMessage}</p>}
+            {ack && saftPending && (
+                <ConfirmDialog
+                    tone={ackTaxNumberSplit ? 'danger' : 'warning'}
+                    title={
+                        ackTaxNumberSplit
+                            ? t('settings.saft.ackTitleTaxNumber')
+                            : ack.reasons.includes('identity')
+                              ? t('settings.saft.ackTitleIdentity')
+                              : t('settings.saft.ackTitleReview')
+                    }
+                    message={
+                        // Spans, not div/ul: ConfirmDialog renders `message` inside a <p>,
+                        // and a block element there is invalid nesting the browser silently
+                        // repairs by closing the paragraph early.
+                        <span className="block space-y-3 text-left">
+                            {ackTaxNumberSplit ? (
+                                <span className="block">
+                                    {t('settings.saft.ackBodyTaxNumber', {
+                                        from: saftPending.startDateYmd,
+                                        to: saftPending.endDateYmd,
+                                        count: ack.groups.length,
+                                    })}
+                                </span>
+                            ) : ack.reasons.includes('identity') ? (
+                                <span className="block">
+                                    {t('settings.saft.ackBodyIdentity', {
+                                        fields: ack.fields.map(field => saftDivergentFieldLabels[field]).join(', '),
+                                    })}
+                                </span>
+                            ) : null}
+                            {ack.groups.length > 1 &&
+                                ack.groups.map(group => (
+                                    <span className="block" key={`${group.firstInvoiceNo}-${group.projection.taxNumberDigits}`}>
+                                        {`• ${t('settings.saft.ackGroup', {
+                                            name: group.projection.name,
+                                            nif: group.projection.taxNumberDigits,
+                                            address: group.projection.address,
+                                            postalCode: group.projection.postalCode,
+                                            city: group.projection.city,
+                                            count: group.count,
+                                            firstNo: group.firstInvoiceNo,
+                                            firstDate: group.firstInvoiceDate,
+                                            lastNo: group.lastInvoiceNo,
+                                            lastDate: group.lastInvoiceDate,
+                                        })}`}
+                                    </span>
+                                ))}
+                            {ack.chosen && (
+                                <span className="block font-semibold">
+                                    {t('settings.saft.ackChosen', {
+                                        name: ack.chosen.name,
+                                        nif: ack.chosen.taxNumberDigits,
+                                        address: ack.chosen.address,
+                                        postalCode: ack.chosen.postalCode,
+                                        city: ack.chosen.city,
+                                        vouching: ack.vouchingCount,
+                                        total: ack.documentCount,
+                                    })}
+                                </span>
+                            )}
+                            {ack.reasons.includes('partial-snapshot') && (
+                                <span className="block">
+                                    {t('settings.saft.ackPartialSnapshot', {
+                                        legacy: ack.legacyCount,
+                                        snapshot: ack.snapshotCount,
+                                        total: ack.documentCount,
+                                    })}
+                                </span>
+                            )}
+                            {ack.reasons.includes('multiple-fiscal-years') && (
+                                <span className="block">
+                                    {t('settings.saft.ackFiscalYears', {
+                                        years: ack.fiscalYears.join(', '),
+                                        year: ack.fiscalYear,
+                                    })}
+                                </span>
+                            )}
+                            {ack.droppedInvoiceNos.length > 0 && (
+                                <span className="block">
+                                    {t('settings.saft.droppedNotice', {
+                                        count: ack.droppedInvoiceNos.length,
+                                        list: ack.droppedInvoiceNos.join(', '),
+                                    })}
+                                </span>
+                            )}
+                        </span>
+                    }
+                    busy={saftBusy}
+                    confirmLabel={t('settings.saft.ackConfirm')}
+                    cancelLabel={t('settings.saft.ackCancel')}
+                    onCancel={cancelSaftExport}
+                    onConfirm={confirmSaftExport}
+                />
+            )}
 
             <div className="mt-6 border-t border-slate-200/70 pt-4">
                 <SettingsRow
@@ -2131,7 +2634,7 @@ const Settings: React.FC = () => {
                                 onChange={event =>
                                     updateSettings({ fiscal: { accounting: { accountantEmail: event.target.value } } })
                                 }
-                                placeholder="contabilista@exemplo.pt"
+                                placeholder={t('settings.saft.accountantEmailPlaceholder')}
                                 className={fieldClass}
                             />
                         </div>
@@ -2175,9 +2678,12 @@ const Settings: React.FC = () => {
                 : isSystemAdmin
                     ? settings.fiscal.issuer === 'vendus'
                         ? renderVendusSetup()
-                        : renderExternalIssuerSetup()
+                        : settings.fiscal.issuer === 'sign_es'
+                            ? renderSignEsSetup()
+                            : renderExternalIssuerSetup()
                     : null}
-            {renderSaftExport()}
+            {/* SAF-T is a Portugal-only fiscal export; Spain (Veri*factu) has no SAF-T obligation. */}
+            {settings.operatingCountry === 'PT' && renderSaftExport()}
         </div>
     );
 
@@ -2188,6 +2694,7 @@ const Settings: React.FC = () => {
         if (activeTab === 'hr') return renderHr();
         if (activeTab === 'display') return renderDisplay();
         if (activeTab === 'hardware') return renderHardware();
+        if (activeTab === 'alerts') return <NotificationSettings />;
         return renderCompany();
     };
 
@@ -2215,21 +2722,22 @@ const Settings: React.FC = () => {
             <div className={`relative z-10 mx-auto max-w-[1500px] space-y-6 pt-6 ${layoutClasses.contentInsetX}`}>
                 {isSystemAdmin && (
                     <header className={`${glassCard} overflow-hidden`}>
-                        <div className="p-6 lg:p-8">
-                            <div className="grid gap-3 sm:grid-cols-3">
-                                <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('settings.statFiscalIssuer')}</p>
-                                    <p className="mt-2 text-lg font-semibold text-slate-950">{fiscalIssuerLabel}</p>
+                        <div className="p-4 sm:p-6 lg:p-8">
+                            {/* One glanceable status strip: 3-across even on mobile (was a vertical stack). */}
+                            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                                <div className="rounded-2xl bg-white/75 p-2.5 ring-1 ring-slate-200 sm:rounded-3xl sm:p-4">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">{t('settings.statFiscalIssuer')}</p>
+                                    <p className="mt-1 text-sm font-semibold text-slate-950 sm:mt-2 sm:text-lg">{fiscalIssuerLabel}</p>
                                 </div>
-                                <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('settings.statDatabase')}</p>
-                                    <p className="mt-2 text-lg font-semibold text-slate-950">
+                                <div className="rounded-2xl bg-white/75 p-2.5 ring-1 ring-slate-200 sm:rounded-3xl sm:p-4">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">{t('settings.statDatabase')}</p>
+                                    <p className="mt-1 text-sm font-semibold text-slate-950 sm:mt-2 sm:text-lg">
                                         {settings.fiscal.trainingMode ? t('settings.statTraining') : t('settings.statProduction')}
                                     </p>
                                 </div>
-                                <div className="rounded-3xl bg-white/75 p-4 ring-1 ring-slate-200">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('settings.statSaveState')}</p>
-                                    <p className="mt-2 text-lg font-semibold text-slate-950">
+                                <div className="rounded-2xl bg-white/75 p-2.5 ring-1 ring-slate-200 sm:rounded-3xl sm:p-4">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">{t('settings.statSaveState')}</p>
+                                    <p className="mt-1 text-sm font-semibold text-slate-950 sm:mt-2 sm:text-lg">
                                         {pendingChanges ? t('settings.statUnsaved') : saveStatus === 'saved' ? t('settings.statSaved') : t('settings.statClean')}
                                     </p>
                                 </div>
@@ -2309,7 +2817,7 @@ const Settings: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={handleReset}
-                                className="min-h-touch-sm rounded-2xl bg-slate-100 px-4 py-3 font-semibold text-slate-700 transition-all hover:bg-slate-200"
+                                className="min-h-touch-sm rounded-xl border border-[var(--ds2-danger-border,#fca5a5)] px-4 py-3 font-semibold text-[var(--ds2-danger-solid,#dc2626)] transition-all hover:bg-[var(--ds2-danger-tint-bg,#fef2f2)]"
                             >
                                 <span className="inline-flex items-center gap-2">
                                     <RotateCcw className="h-4 w-4" />
@@ -2320,7 +2828,7 @@ const Settings: React.FC = () => {
                                 type="button"
                                 onClick={handleSave}
                                 disabled={!pendingChanges || saveStatus === 'saving'}
-                                className="min-h-touch-sm rounded-2xl bg-slate-950 px-5 py-3 font-semibold text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-slate-800 disabled:translate-y-0 disabled:bg-slate-300 disabled:shadow-none"
+                                className="min-h-touch-sm rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-3 font-medium text-neutral-50 transition-all hover:from-blue-600 hover:to-blue-700 disabled:opacity-50"
                             >
                                 <span className="inline-flex items-center gap-2">
                                     {saveStatus === 'saved' ? <CheckCircle className="h-4 w-4" /> : <Save className="h-4 w-4" />}
@@ -2331,6 +2839,17 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
             </div>
+            {pendingTrainingMode !== null && (
+                <ConfirmDialog
+                    tone="warning"
+                    title={t('settings.fiscalAT.trainingTitle')}
+                    message={pendingTrainingMode ? t('settings.confirm.trainingOn') : t('settings.confirm.trainingOff')}
+                    cancelLabel={t('common.cancel')}
+                    confirmLabel={t('common.confirm')}
+                    onCancel={() => setPendingTrainingMode(null)}
+                    onConfirm={confirmTrainingModeChange}
+                />
+            )}
         </div>
     );
 };

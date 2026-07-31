@@ -19,6 +19,7 @@ import {
     FileMinus,
     FilePlus,
     Printer,
+    X,
 } from 'lucide-react';
 import { transactionService } from '../services/transactionService';
 import { useTranslation } from 'react-i18next';
@@ -26,13 +27,17 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import ReceiptDialog from '../components/ReceiptDialog';
+import ReceiptPdfRenderer from '../components/ReceiptPdfRenderer';
 import CustomInvoiceDialog, { type CustomInvoicePayload } from '../components/CustomInvoiceDialog';
 import type { ReceiptProps } from '../components/ThermalReceipt';
 import { usePOS } from '../contexts/POSContext';
 import type { FiscalCartLine } from '../fiscal/checkoutOrchestrator';
 import type { LocalCustomer, LocalProduct } from '../types/supabase';
+import { activeProfile } from '../lib/countryProfile';
 import { generateUUID } from '../utils/uuid';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -40,9 +45,16 @@ import '../styles/design-system-2-scope.css';
 import { customerLocalService, initializeLocalDatabase, transactionLocalService } from '../lib/localDatabase';
 import { generateQRCodeImage } from '../utils/qrCode';
 import { getReceiptT } from '../utils/receiptLanguage';
+import {
+    logReproducedDocument,
+    type PostSalePrintAuditContext,
+    type ReproducedDocumentEvent,
+} from '../fiscal/fiscalAuditLog';
 import type { FiscalTransactionMetadata } from '../fiscal/types';
+import { resolveIssuerLogo } from '../fiscal/resolveIssuerLogo';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { runFiscalCreditNoteForTransaction } from '../fiscal/creditNoteCheckout';
+import { syncManager } from '../services/syncManager';
 import { parseCreditNoteNotesFields } from '../fiscal/creditNoteNotes';
 import { buildReceiptCustomerProps } from '../fiscal/fiscalCustomer';
 import { saftTypeToReceiptDocumentType } from '../fiscal/saleDocumentType';
@@ -149,6 +161,8 @@ const TransactionsInner: React.FC = () => {
     const { employee } = useSupabaseAuth();
     const { processTransaction } = usePOS();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+    const applied = useAppliedDialogStyle();
+    const shellButtons = applied ? dialogButtonClasses(applied) : null;
 
     const toolbarBtn =
         'ds2-control-radius-lg ds2-toolbar-control-h !px-3 text-sm font-medium gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
@@ -161,6 +175,11 @@ const TransactionsInner: React.FC = () => {
 
     const [showReceiptPreview, setShowReceiptPreview] = useState(false);
     const [receiptPreviewData, setReceiptPreviewData] = useState<ReceiptProps | null>(null);
+    /** Which reproduction event the open preview should log if it prints. */
+    const [reprintAudit, setReprintAudit] = useState<
+        { event: ReproducedDocumentEvent; context: PostSalePrintAuditContext } | null
+    >(null);
+    const [pdfJob, setPdfJob] = useState<{ receipt: ReceiptProps; filename: string } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedStatus, setSelectedStatus] = useState('all');
@@ -171,6 +190,9 @@ const TransactionsInner: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [creditNoteBusyId, setCreditNoteBusyId] = useState<string | null>(null);
+    const [creditNoteTx, setCreditNoteTx] = useState<Transaction | null>(null);
+    const [creditNoteReason, setCreditNoteReason] = useState('');
+    const [creditNoteResult, setCreditNoteResult] = useState<{ ok: boolean; msg: string } | null>(null);
     const [showCustomInvoice, setShowCustomInvoice] = useState(false);
 
     const loadTransactions = async () => {
@@ -224,24 +246,24 @@ const TransactionsInner: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only
     }, []);
 
-    const handleIssueCreditNote = async (tx: Transaction) => {
+    // Open the in-app credit-note modal (web dialog — window.confirm/prompt/alert don't work in
+    // Electron; prompt() throws outright). The modal collects the optional reason.
+    const openCreditNoteModal = (tx: Transaction) => {
         if (!employee) {
-            window.alert(t('transactions.creditNote.needEmployee'));
+            setCreditNoteResult({ ok: false, msg: t('transactions.creditNote.needEmployee') });
             return;
         }
-        if (
-            !window.confirm(
-                t('transactions.creditNote.confirm', { number: tx.transactionNumber })
-            )
-        ) {
-            return;
-        }
-        const reason = window.prompt(t('transactions.creditNote.reasonPrompt'), '');
-        if (reason === null) {
-            return;
-        }
+        setCreditNoteReason('');
+        setCreditNoteResult(null);
+        setCreditNoteTx(tx);
+    };
+
+    const confirmCreditNote = async () => {
+        const tx = creditNoteTx;
+        if (!tx || !employee) return;
         try {
             setCreditNoteBusyId(tx.id);
+            setCreditNoteResult(null);
             const pm =
                 tx.paymentMethod === 'card' || tx.paymentMethod === 'mixed'
                     ? tx.paymentMethod
@@ -249,7 +271,7 @@ const TransactionsInner: React.FC = () => {
             const result = await runFiscalCreditNoteForTransaction({
                 settings,
                 originalTransactionId: tx.id,
-                creditReason: reason.trim() || undefined,
+                creditReason: creditNoteReason.trim() || undefined,
                 payment: {
                     paymentMethod: pm,
                     employeeId: employee.id,
@@ -257,12 +279,16 @@ const TransactionsInner: React.FC = () => {
                     employeeNumber: employee.employee_number,
                 },
             });
-            window.alert(t('transactions.creditNote.success', { invoiceNo: result.invoiceNo }));
+            // Push the NC to the server NOW so its CREDIT_NOTE_ISSUED alert fires immediately rather
+            // than on the next 5-min background cycle (checkout does the same after a sale).
+            try { void syncManager.forceSync(); } catch { /* best-effort */ }
             await loadTransactions();
+            setCreditNoteTx(null);
+            setCreditNoteResult({ ok: true, msg: t('transactions.creditNote.success', { invoiceNo: result.invoiceNo }) });
         } catch (e) {
             console.error(e);
             const msg = e instanceof Error ? e.message : '';
-            window.alert(msg ? `${t('transactions.creditNote.error')} ${msg}` : t('transactions.creditNote.error'));
+            setCreditNoteResult({ ok: false, msg: msg ? `${t('transactions.creditNote.error')} ${msg}` : t('transactions.creditNote.error') });
         } finally {
             setCreditNoteBusyId(null);
         }
@@ -317,14 +343,14 @@ const TransactionsInner: React.FC = () => {
     };
 
     const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('pt-PT', {
+        return new Intl.NumberFormat(activeProfile().locale, {
             style: 'currency',
             currency: 'EUR'
         }).format(amount);
     };
 
     const formatDate = (date: string) => {
-        return new Date(date).toLocaleDateString('pt-PT', {
+        return new Date(date).toLocaleDateString(activeProfile().locale, {
             weekday: 'short',
             year: 'numeric',
             month: 'short',
@@ -332,10 +358,14 @@ const TransactionsInner: React.FC = () => {
         });
     };
 
+    // Takes a label TOKEN, not a translated string: the marking has to be
+    // rendered in the document's own language, which is only known once the
+    // issuer snapshot has been read here. Translating it at the call site would
+    // print "2.ª via" in today's language beside a frozen header.
     const buildReceiptPropsForTransaction = async (
         txId: string,
-        documentLabel?: string
-    ): Promise<ReceiptProps | null> => {
+        label?: 'original' | 'secondCopy'
+    ): Promise<{ receipt: ReceiptProps; issuerSnapshot: 'v1' | 'legacy' } | null> => {
         const trx = await transactionLocalService.getTransactionById(txId);
         const itemsSource = trx?.items;
         const remoteTrx = trx ? null : await transactionService.getTransactionById(txId);
@@ -367,10 +397,23 @@ const TransactionsInner: React.FC = () => {
         const headerDiscountPct = Number(header.discount_percentage || 0);
         const headerDiscountType = (header.discount_type || 'none') as 'none' | 'percentage' | 'fixed';
 
+        // Read the snapshot off `header`, not off `trx`. The delta sync omits
+        // fiscal_metadata_json, but this path does not go through the delta:
+        // transactionService.getTransactionById issues a plain select('*'), so a
+        // back-office reprint of a sale that is NOT in this device's IndexedDB
+        // still has the issuer. Taking it only from `trx` threw it away and
+        // rebuilt the header from live settings — on a document labelled
+        // "Original" — which is exactly the defect this change exists to close.
+        // The server column is JSONB, so supabase-js hands it back parsed; the
+        // local column is TEXT. Accept either rather than assuming one.
+        const metaSource = header.fiscal_metadata_json;
         let meta: FiscalTransactionMetadata | null = null;
-        if (trx?.fiscal_metadata_json) {
+        if (metaSource) {
             try {
-                meta = JSON.parse(trx.fiscal_metadata_json) as FiscalTransactionMetadata;
+                meta =
+                    typeof metaSource === 'string'
+                        ? (JSON.parse(metaSource) as FiscalTransactionMetadata)
+                        : (metaSource as FiscalTransactionMetadata);
             } catch {
                 meta = null;
             }
@@ -380,16 +423,38 @@ const TransactionsInner: React.FC = () => {
             ? await transactionLocalService.getFiscalDocumentById(trx.fiscal_document_id)
             : undefined;
 
-        const verificationCode = fiscal?.atcud_body ?? meta?.atcudBody ?? header.receipt_number ?? header.transaction_number;
-        const qrPayload = fiscal?.qr_payload ?? meta?.qrPayload;
+        // ⚠️ ONE branch on `iss`, never per field. `iss?.phone ?? settings…`
+        // would mean a document issued when phone was blank reprints with
+        // today's phone — the very defect this exists to close, surviving
+        // inside the fix. A document either carries its issuer or it does not.
+        const iss = meta?.issuer;
+        const issLang = iss?.receiptLanguage;
+        const orUndef = (value: string) => value || undefined;
+        const logo = iss ? await resolveIssuerLogo(iss.logo, settings.company.logo) : settings.company.logo;
+        const documentLabel = label
+            ? getReceiptT(issLang ?? settings.receipt.receiptLanguage)(`thermalReceipt.${label}`)
+            : undefined;
+
+        // A sale completed on the non-fiscal fallback has no fiscal document to
+        // infer its nature from — only this marker on the transaction row. Miss
+        // it and the reprint hands out a "FATURA" whose ATCUD is really the slip
+        // reference (the `?? receipt_number` fallback below).
+        const nonFiscalSlip = meta?.nonFiscal === true;
+
+        const verificationCode = nonFiscalSlip
+            ? ''
+            : fiscal?.atcud_body ?? meta?.atcudBody ?? header.receipt_number ?? header.transaction_number;
+        const qrPayload = nonFiscalSlip ? undefined : fiscal?.qr_payload ?? meta?.qrPayload;
         const qrCodeImage = qrPayload ? await generateQRCodeImage(qrPayload) : undefined;
 
         const customerRow = header.customer_id
             ? await customerLocalService.getCustomerById(header.customer_id)
             : undefined;
-        const documentType: ReceiptProps['documentType'] = fiscal?.invoice_type
-            ? saftTypeToReceiptDocumentType(fiscal.invoice_type)
-            : 'FATURA';
+        const documentType: ReceiptProps['documentType'] = nonFiscalSlip
+            ? 'TALAO_NAO_FISCAL'
+            : fiscal?.invoice_type
+                ? saftTypeToReceiptDocumentType(fiscal.invoice_type)
+                : 'FATURA';
 
         const creditNoteDisplay =
             documentType === 'NOTA_CREDITO'
@@ -407,34 +472,63 @@ const TransactionsInner: React.FC = () => {
             documentNumber,
             documentType,
             date,
-            counter: settings.receipt.counterLabel,
+            counter: iss ? iss.counterLabel : settings.receipt.counterLabel,
+            // Left undefined for legacy rows on purpose: ThermalReceipt and the
+            // ESC/POS builder are both prop-first, so an absent prop keeps their
+            // present behaviour byte for byte.
+            receiptLanguage: issLang,
             verificationCode,
+            // Spain / Veri*factu: the reprint detects an ES document by its at_validation_code and
+            // shows the VERI*FACTU legend (its QR is the persisted AEAT validation URL in qrPayload).
+            verifactuLegend: (fiscal?.at_validation_code ?? '').toUpperCase() === 'VERIFACTU'
+                ? (typeof meta?.external?.meta?.legend === 'string' && meta.external.meta.legend.trim() ? meta.external.meta.legend : 'VERI*FACTU')
+                : undefined,
             documentHash: fiscal?.hash_base64 ?? undefined,
             hashFourChars: fiscal?.hash_four_chars ?? meta?.hashFourChars,
             qrCodeData: qrPayload ?? undefined,
             qrCodeImage,
-            trainingMode: meta ? meta.certificationMode === 'training' : settings.fiscal.trainingMode,
+            // One extra rung before the live read: the fiscal row already knows
+            // whether this was training, and a live read can stamp — or strip —
+            // a training banner on a historical document.
+            trainingMode: meta
+                ? meta.certificationMode === 'training'
+                : fiscal
+                    ? fiscal.certification_mode === 'training'
+                    : settings.fiscal.trainingMode,
             officialOutput: meta?.officialOutput,
             documentLabel,
             emitterName: header.employee_name,
-            company: {
-                name: settings.company.name,
-                address: settings.company.address,
-                postalCode: settings.company.postalCode,
-                city: settings.company.city,
-                taxNumber: settings.company.taxNumber,
-                phone: settings.company.phone || undefined,
-                email: settings.company.email || undefined,
-            },
+            company: iss
+                ? {
+                    name: iss.name,
+                    address: iss.address,
+                    postalCode: iss.postalCode,
+                    city: iss.city,
+                    taxNumber: iss.taxNumber,
+                    logo,
+                    phone: orUndef(iss.phone),
+                    email: orUndef(iss.email),
+                }
+                : {
+                    name: settings.company.name,
+                    address: settings.company.address,
+                    postalCode: settings.company.postalCode,
+                    city: settings.company.city,
+                    taxNumber: settings.company.taxNumber,
+                    logo,
+                    phone: settings.company.phone || undefined,
+                    email: settings.company.email || undefined,
+                },
             customer: buildReceiptCustomerProps(
                 customerRow ?? null,
                 header.customer_name,
                 fiscal?.customer_tax_id
             ),
-            items: rawItems.map((it: { id: string; product_name: string; quantity: number; unit_price: number; iva_rate?: number; line_total: number }) => ({
+            items: rawItems.map((it: { id: string; product_name: string; quantity: number; unit?: 'un' | 'kg'; unit_price: number; iva_rate?: number; line_total: number }) => ({
                 id: it.id,
                 description: it.product_name,
                 quantity: it.quantity,
+                unit: it.unit ?? 'un',
                 unitPrice: it.unit_price,
                 vatRate: Math.round(((it.iva_rate || 0) as number) * 100),
                 total: it.line_total,
@@ -460,9 +554,11 @@ const TransactionsInner: React.FC = () => {
                 amountGiven: header.amount_paid ?? header.total,
                 change: header.change_given || 0,
             },
-            slogan: settings.company.slogan || undefined,
-            softwareInfo: settings.company.softwareInfo || undefined,
-            certificationNumber: settings.company.certificationNumber || undefined,
+            slogan: iss ? orUndef(iss.slogan) : settings.company.slogan || undefined,
+            softwareInfo: iss ? orUndef(iss.softwareInfo) : settings.company.softwareInfo || undefined,
+            certificationNumber: iss
+                ? orUndef(iss.certificationNumber)
+                : settings.company.certificationNumber || undefined,
             ...(documentType === 'NOTA_CREDITO' && creditNoteDisplay
                 ? {
                     originalInvoice: creditNoteDisplay.originalRef,
@@ -471,37 +567,44 @@ const TransactionsInner: React.FC = () => {
                 : {}),
         };
 
-        return receipt;
+        return { receipt, issuerSnapshot: iss ? 'v1' : 'legacy' };
     };
 
+    // "View receipt" reproduces the document marked Original, same as the slip
+    // handed over at the sale. Opening it logs nothing — looking at a document
+    // is not an act. Printing it does: ORIGINAL_REPRINTED, fired from the
+    // dialog only once paper is actually out.
     const handleViewReceipt = async (id: string) => {
         try {
-            const receipt = await buildReceiptPropsForTransaction(id, undefined);
-            if (receipt) {
-                setReceiptPreviewData(receipt);
-                setShowReceiptPreview(true);
-            }
+            const built = await buildReceiptPropsForTransaction(id, 'original');
+            if (!built) return;
+            const { receipt, issuerSnapshot } = built;
+            setReprintAudit({
+                event: 'ORIGINAL_REPRINTED',
+                context: { documentNumber: receipt.documentNumber, transactionId: id, issuerSnapshot },
+            });
+            setReceiptPreviewData(receipt);
+            setShowReceiptPreview(true);
         } catch (e) {
             console.error('Failed to build receipt preview:', e);
         }
     };
 
+    // The 2.ª via preview. Opening it IS an act worth recording, so it logs
+    // SECOND_COPY_VIEWED here; REPRINT_REQUESTED is left to the dialog and
+    // means what its name says — the copy reached the printer.
     const handleSegundaVia = async (id: string) => {
         if (!employee) {
             window.alert(t('transactions.creditNote.needEmployee'));
             return;
         }
         try {
-            const receipt = await buildReceiptPropsForTransaction(
-                id,
-                getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.secondCopy')
-            );
-            if (!receipt) return;
-            await transactionLocalService.appendFiscalAuditEvent({
-                event_type: 'REPRINT_REQUESTED',
-                payload_json: JSON.stringify({ transactionId: id, documentNumber: receipt.documentNumber }),
-                employee_id: employee.id,
-            });
+            const built = await buildReceiptPropsForTransaction(id, 'secondCopy');
+            if (!built) return;
+            const { receipt, issuerSnapshot } = built;
+            const context = { documentNumber: receipt.documentNumber, transactionId: id, issuerSnapshot };
+            await logReproducedDocument('SECOND_COPY_VIEWED', context, employee.id);
+            setReprintAudit({ event: 'REPRINT_REQUESTED', context });
             setReceiptPreviewData(receipt);
             setShowReceiptPreview(true);
         } catch (e) {
@@ -509,34 +612,27 @@ const TransactionsInner: React.FC = () => {
         }
     };
 
-    const handleDownloadTransaction = (tx: Transaction) => {
-        const payload = {
-            transactionNumber: tx.transactionNumber,
-            date: tx.date,
-            time: tx.time,
-            customerName: tx.customerName,
-            customerNif: tx.customerNif,
-            employeeName: tx.employeeName,
-            status: tx.status,
-            paymentMethod: tx.paymentMethod,
-            items: tx.items,
-            subtotal: tx.subtotal,
-            discount: tx.discount,
-            tax: tx.tax,
-            total: tx.total,
-            cashReceived: tx.cashReceived,
-            changeGiven: tx.changeGiven,
-        };
-        const blob = new Blob([JSON.stringify(payload, null, 2)], {
-            type: 'application/json;charset=utf-8',
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const safe = tx.transactionNumber.replace(/[^\w-]+/g, '_').slice(0, 80);
-        a.download = `transaction-${safe || tx.id}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+    // Download = the actual receipt as a PDF (was a raw JSON dump). Builds the same
+    // ReceiptProps as the on-screen preview, pre-generates the QR, and hands off to the
+    // off-screen ReceiptPdfRenderer (html2canvas + jsPDF, lazily loaded).
+    const handleDownloadTransaction = async (tx: Transaction) => {
+        if (pdfJob) return; // one at a time
+        try {
+            const built = await buildReceiptPropsForTransaction(tx.id, undefined);
+            if (!built) return;
+            const receipt = built.receipt;
+            if (receipt.qrCodeData && !receipt.qrCodeImage) {
+                try {
+                    receipt.qrCodeImage = await generateQRCodeImage(receipt.qrCodeData);
+                } catch {
+                    /* renderer's img-decode wait covers the async fallback */
+                }
+            }
+            const safe = (receipt.documentNumber || tx.transactionNumber).replace(/[^\w-]+/g, '_').slice(0, 80);
+            setPdfJob({ receipt, filename: `${safe || tx.id}.pdf` });
+        } catch (e) {
+            console.error('Failed to prepare receipt PDF:', e);
+        }
     };
 
     // Issue a fatura (FT) for free-text line items not tied to catalogue products.
@@ -630,19 +726,19 @@ const TransactionsInner: React.FC = () => {
                         <h1 className="text-3xl font-bold text-gray-900">{t('transactions.header.title')}</h1>
                         <p className="text-gray-600 mt-1">{t('transactions.header.subtitle')}</p>
                     </div>
-                    <div className="mt-4 flex items-center space-x-3 sm:mt-0">
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-0 sm:flex sm:items-center sm:gap-3">
                         <AdminActionButton
                             variant="outline"
                             label={t('transactions.customInvoice.button')}
                             icon={FilePlus}
                             onClick={() => setShowCustomInvoice(true)}
-                            className={toolbarBtn}
+                            className={`${toolbarBtn} w-full sm:w-auto`}
                         />
                         <AdminActionButton
                             variant="primary"
                             label={t('transactions.header.export')}
                             icon={Download}
-                            className={headerPrimaryBtn}
+                            className={`${headerPrimaryBtn} w-full sm:w-auto`}
                         />
                     </div>
                 </div>
@@ -674,8 +770,8 @@ const TransactionsInner: React.FC = () => {
 
                 {/* Summary Stats */}
                 {!loading && !error && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-600">{t('transactions.summary.totalTransactions')}</p>
@@ -687,7 +783,7 @@ const TransactionsInner: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-600">{t('transactions.summary.totalRevenue')}</p>
@@ -699,7 +795,7 @@ const TransactionsInner: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-600">{t('transactions.summary.averageTransaction')}</p>
@@ -711,7 +807,7 @@ const TransactionsInner: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium text-gray-600">{t('transactions.summary.completed')}</p>
@@ -726,10 +822,11 @@ const TransactionsInner: React.FC = () => {
                 )}
 
                 {/* Filters */}
-                <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+                <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div className="flex flex-1 items-center space-x-4">
-                            <div className="relative flex-1 max-w-md">
+                        {/* Mobile: full-width search on its own row, then Filters/Refresh 2-up; sm: restores the desktop row. */}
+                        <div className="flex flex-col gap-3 sm:flex-1 sm:flex-row sm:items-center sm:gap-4">
+                            <div className="relative w-full sm:flex-1 sm:max-w-md">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
@@ -739,23 +836,25 @@ const TransactionsInner: React.FC = () => {
                                     className="ds2-control-radius-lg ds2-toolbar-control-h box-border w-full max-w-md border border-gray-300 pl-10 pr-4 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
-                            <AdminActionButton
-                                variant="outline"
-                                label={t('transactions.filters.filters')}
-                                icon={Filter}
-                                showChevron={true}
-                                onClick={() => setShowFilters(!showFilters)}
-                                className={toolbarBtn}
-                            />
-                            <AdminActionButton
-                                variant="outline"
-                                label={t('transactions.refresh')}
-                                icon={Receipt}
-                                onClick={() => void loadTransactions()}
-                                disabled={loading}
-                                title={t('transactions.refreshTooltip')}
-                                className={toolbarBtn}
-                            />
+                            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
+                                <AdminActionButton
+                                    variant="outline"
+                                    label={t('transactions.filters.filters')}
+                                    icon={Filter}
+                                    showChevron={true}
+                                    onClick={() => setShowFilters(!showFilters)}
+                                    className={`${toolbarBtn} w-full sm:w-auto`}
+                                />
+                                <AdminActionButton
+                                    variant="outline"
+                                    label={t('transactions.refresh')}
+                                    icon={Receipt}
+                                    onClick={() => void loadTransactions()}
+                                    disabled={loading}
+                                    title={t('transactions.refreshTooltip')}
+                                    className={`${toolbarBtn} w-full sm:w-auto`}
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -817,56 +916,58 @@ const TransactionsInner: React.FC = () => {
                         ) : (
                             <div className="divide-y divide-gray-200">
                                 {filteredTransactions.map((transaction) => (
-                                    <div key={transaction.id} className="px-6 py-4">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center space-x-4">
-                                                <div className="bg-gray-100 p-2 rounded-lg">
+                                    <div key={transaction.id} className="px-4 py-4 sm:px-6">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex min-w-0 items-start gap-3 sm:items-center sm:space-x-1">
+                                                <div className="bg-gray-100 p-2 rounded-lg shrink-0">
                                                     {getPaymentMethodIcon(transaction.paymentMethod)}
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <div className="flex items-center space-x-2 flex-wrap gap-1">
                                                         <h3 className="font-semibold text-gray-900">{transaction.transactionNumber}</h3>
                                                         <span className={getStatusBadge(transaction.status)}>
-                                                            {transaction.status.replace('_', ' ')}
+                                                            {transaction.status === 'refunded'
+                                                                ? t('transactions.filters.refunded')
+                                                                : transaction.status === 'completed'
+                                                                    ? t('transactions.filters.completed')
+                                                                    // DB CHECK also allows partial_refund / pending / cancelled (see the
+                                                                    // notif producers). Keep the old raw rendering for those rather than
+                                                                    // mislabelling them "Completed".
+                                                                    : String(transaction.status).replace('_', ' ')}
                                                         </span>
                                                     </div>
-                                                    <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
+                                                    <div className="flex flex-col gap-1 text-sm text-gray-600 mt-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
                                                         <span className="flex items-center space-x-1">
-                                                            <Calendar className="w-3 h-3" />
+                                                            <Calendar className="w-3 h-3 shrink-0" />
                                                             <span>{formatDate(transaction.date)} {t('transactions.list.dateAt')} {transaction.time}</span>
                                                         </span>
                                                         {transaction.customerName && (
-                                                            <span className="flex items-center space-x-1">
-                                                                <User className="w-3 h-3" />
-                                                                <span>{transaction.customerName}</span>
+                                                            <span className="flex items-center space-x-1 min-w-0">
+                                                                <User className="w-3 h-3 shrink-0" />
+                                                                <span className="truncate">{transaction.customerName}</span>
                                                             </span>
                                                         )}
-                                                        <span className="flex items-center space-x-1">
-                                                            <Users className="w-3 h-3" />
-                                                            <span>{transaction.employeeName}</span>
+                                                        <span className="flex items-center space-x-1 min-w-0">
+                                                            <Users className="w-3 h-3 shrink-0" />
+                                                            <span className="truncate">{transaction.employeeName}</span>
                                                         </span>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center space-x-4">
+                                            <div className="flex items-center gap-2 shrink-0 sm:space-x-4">
                                                 <div className="text-right">
                                                     <p className="text-lg font-bold text-gray-900">{formatCurrency(transaction.total)}</p>
                                                     <p className="text-sm text-gray-500">{transaction.items.length} {transaction.items.length !== 1 ? t('transactions.list.itemPlural') : t('transactions.list.itemSingular')}</p>
                                                 </div>
-                                                <button
+                                                <TableActionButton
+                                                    variant="icon"
+                                                    icon={expandedTransaction === transaction.id ? ChevronUp : ChevronDown}
                                                     onClick={() => setExpandedTransaction(
                                                         expandedTransaction === transaction.id ? null : transaction.id
                                                     )}
-                                                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                                                    aria-label={expandedTransaction === transaction.id ? 'Collapse transaction details' : 'Expand transaction details'}
-                                                >
-                                                    {expandedTransaction === transaction.id ? (
-                                                        <ChevronUp className="w-5 h-5" />
-                                                    ) : (
-                                                        <ChevronDown className="w-5 h-5" />
-                                                    )}
-                                                </button>
+                                                    aria-label={expandedTransaction === transaction.id ? t('transactions.list.collapseDetails') : t('transactions.list.expandDetails')}
+                                                />
                                             </div>
                                         </div>
 
@@ -960,7 +1061,7 @@ const TransactionsInner: React.FC = () => {
                                                                     : t('transactions.list.issueCreditNote')
                                                             }
                                                             icon={FileMinus}
-                                                            onClick={() => void handleIssueCreditNote(transaction)}
+                                                            onClick={() => openCreditNoteModal(transaction)}
                                                             disabled={creditNoteBusyId !== null}
                                                             isLoading={creditNoteBusyId === transaction.id}
                                                             className={`${rowActionBtn} !bg-gradient-to-r !from-orange-500 !to-amber-600 hover:!from-orange-600 hover:!to-amber-600`}
@@ -970,7 +1071,7 @@ const TransactionsInner: React.FC = () => {
                                                         variant="outline"
                                                         label={t('transactions.list.download')}
                                                         icon={Download}
-                                                        onClick={() => handleDownloadTransaction(transaction)}
+                                                        onClick={() => void handleDownloadTransaction(transaction)}
                                                         className={rowActionBtn}
                                                     />
                                                 </div>
@@ -985,8 +1086,21 @@ const TransactionsInner: React.FC = () => {
                 {showReceiptPreview && receiptPreviewData && (
                     <ReceiptDialog
                         open={showReceiptPreview}
-                        onClose={() => setShowReceiptPreview(false)}
+                        onClose={() => {
+                            setShowReceiptPreview(false);
+                            // Cleared with the preview so the next one cannot
+                            // inherit the previous document's audit context.
+                            setReprintAudit(null);
+                        }}
                         receipt={receiptPreviewData}
+                        reprintAudit={reprintAudit}
+                    />
+                )}
+                {pdfJob && (
+                    <ReceiptPdfRenderer
+                        receipt={pdfJob.receipt}
+                        filename={pdfJob.filename}
+                        onDone={() => setPdfJob(null)}
                     />
                 )}
                 <CustomInvoiceDialog
@@ -994,6 +1108,61 @@ const TransactionsInner: React.FC = () => {
                     onClose={() => setShowCustomInvoice(false)}
                     onSubmit={handleCreateCustomInvoice}
                 />
+                {creditNoteTx && (
+                    <div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                        onClick={() => creditNoteBusyId === null && setCreditNoteTx(null)}
+                    >
+                        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                            <h3 className="text-lg font-bold text-gray-900">
+                                {t('transactions.creditNote.confirm', { number: creditNoteTx.transactionNumber })}
+                            </h3>
+                            <label className="mt-4 block">
+                                <span className="mb-1 block text-sm font-medium text-gray-600">
+                                    {t('transactions.creditNote.reasonPrompt')}
+                                </span>
+                                <textarea
+                                    value={creditNoteReason}
+                                    onChange={(e) => setCreditNoteReason(e.target.value)}
+                                    rows={3}
+                                    className="w-full rounded-xl border border-gray-300 p-3 text-sm focus:border-orange-500 focus:outline-none"
+                                    autoFocus
+                                />
+                            </label>
+                            {creditNoteResult && !creditNoteResult.ok && (
+                                <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{creditNoteResult.msg}</p>
+                            )}
+                            <div className={shellButtons ? `mt-5 ${shellButtons.container}` : 'mt-5 flex gap-3'}>
+                                <button
+                                    type="button"
+                                    onClick={() => setCreditNoteTx(null)}
+                                    disabled={creditNoteBusyId !== null}
+                                    className={shellButtons
+                                        ? `${shellButtons.secondary} disabled:opacity-50`
+                                        : 'flex-1 rounded-xl bg-gray-100 px-4 py-2.5 font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50'}
+                                >
+                                    {t('common.cancel', { defaultValue: 'Cancel' })}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void confirmCreditNote()}
+                                    disabled={creditNoteBusyId !== null}
+                                    className={shellButtons
+                                        ? `${shellButtons.danger} disabled:opacity-50`
+                                        : 'flex-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 px-4 py-2.5 font-semibold text-white hover:from-orange-600 disabled:opacity-50'}
+                                >
+                                    {creditNoteBusyId ? t('transactions.creditNote.issuing') : t('transactions.list.issueCreditNote')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {creditNoteResult && creditNoteResult.ok && (
+                    <div className="fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-3 rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white shadow-2xl">
+                        <span>{creditNoteResult.msg}</span>
+                        <TableActionButton variant="icon" dark icon={X} className="-my-1" onClick={() => setCreditNoteResult(null)} aria-label={t('common.close')} />
+                    </div>
+                )}
             </div>
         </div>
     );

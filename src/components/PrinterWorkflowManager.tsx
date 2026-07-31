@@ -18,12 +18,14 @@ import {
 } from '../types/printerWorkflow';
 import { printerWorkflowService } from '../services/printerWorkflowService';
 import ProductAssignmentManager from './ProductAssignmentManager';
-
-const DS2_WF_PRIMARY =
-    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50';
+import { AdminActionButton } from './ui/AdminActionButton';
+import { TableActionButton } from './ui/TableActionButton';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 
 const PrinterWorkflowManager: React.FC = () => {
   const { t } = useTranslation();
+  const applied = useAppliedDialogStyle();
+  const shellButtons = applied ? dialogButtonClasses(applied) : null;
   const [stations, setStations] = useState<PrinterStation[]>([]);
   const [availablePrinters, setAvailablePrinters] = useState<ConfiguredPrinter[]>([]);
   const [categories] = useState<PrinterCategory[]>(printerWorkflowService.getAvailableCategories());
@@ -114,14 +116,13 @@ const PrinterWorkflowManager: React.FC = () => {
           <Settings className="h-6 w-6 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-900">{t('printerWorkflow.workflowTitle')}</h2>
         </div>
-        <button
+        <AdminActionButton
+          variant="primary"
           type="button"
           onClick={handleCreateStation}
-          className={DS2_WF_PRIMARY}
-        >
-          <Plus className="h-4 w-4" />
-          {t('printerWorkflow.addStation')}
-        </button>
+          icon={Plus}
+          label={t('printerWorkflow.addStation')}
+        />
       </div>
 
       {/* Environment Info */}
@@ -145,13 +146,13 @@ const PrinterWorkflowManager: React.FC = () => {
           <div className="text-center py-12 bg-gray-50 rounded-lg">
             <Settings className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">{t('printerWorkflow.noStations')}</p>
-            <button
+            <AdminActionButton
+              variant="primary"
               type="button"
               onClick={handleCreateStation}
-              className={`${DS2_WF_PRIMARY} mt-4`}
-            >
-              {t('printerWorkflow.createFirstStation')}
-            </button>
+              label={t('printerWorkflow.createFirstStation')}
+              className="mt-4 mx-auto"
+            />
           </div>
         ) : (
           stations.map((station) => {
@@ -195,20 +196,20 @@ const PrinterWorkflowManager: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
+                    <AdminActionButton
+                      variant="icon"
+                      icon={Edit}
                       onClick={() => handleEditStation(station)}
-                      className="p-2 text-gray-400 hover:text-blue-600 rounded"
                       title={t('printerWorkflow.editStationTooltip')}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
+                      aria-label={t('printerWorkflow.editStationTooltip')}
+                    />
+                    <TableActionButton
+                      variant="delete"
+                      icon={Trash2}
                       onClick={() => handleDeleteStation(station.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 rounded"
                       title={t('printerWorkflow.deleteStationTooltip')}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                      aria-label={t('printerWorkflow.deleteStationTooltip')}
+                    />
                   </div>
                 </div>
 
@@ -411,18 +412,22 @@ const PrinterWorkflowManager: React.FC = () => {
                   setShowModal(false);
                   setSelectedStation(null);
                 }}
-                className="ds2-control-radius-lg min-h-touch-sm flex-1 border border-gray-300 px-4 font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                className={
+                  shellButtons
+                    ? `${shellButtons.secondary} flex-1`
+                    : 'ds2-control-radius-lg min-h-touch-sm flex-1 border border-gray-300 px-4 font-semibold text-gray-700 transition-colors hover:bg-gray-50'
+                }
               >
                 {t('common.cancel')}
               </button>
-              <button
+              <AdminActionButton
+                variant="primary"
                 type="button"
                 onClick={handleSaveStation}
                 disabled={!selectedStation.name.trim()}
-                className={`${DS2_WF_PRIMARY} flex-1`}
-              >
-                {isEditing ? t('printerWorkflow.updateStation') : t('printerWorkflow.createStationBtn')}
-              </button>
+                label={isEditing ? t('printerWorkflow.updateStation') : t('printerWorkflow.createStationBtn')}
+                className="flex-1 disabled:cursor-not-allowed disabled:opacity-50"
+              />
             </div>
           </div>
         </div>

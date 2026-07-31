@@ -18,8 +18,11 @@ import {
   X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { activeProfile } from '../lib/countryProfile';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import '../styles/design-system-2-scope.css';
 
 type OrderSource = 'pos' | 'uber_eats' | 'glovo';
@@ -128,20 +131,20 @@ const orderTableColumnClass: Record<OrderTableColumn, string> = {
 };
 
 const formatCurrency = (value: number): string =>
-  new Intl.NumberFormat('pt-PT', {
+  new Intl.NumberFormat(activeProfile().locale, {
     style: 'currency',
     currency: 'EUR',
   }).format(value);
 
 const formatOrderDate = (value: string): string =>
-  new Intl.DateTimeFormat('en-US', {
+  new Intl.DateTimeFormat(activeProfile().locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(value));
 
 const formatOrderTime = (value: string): string =>
-  new Intl.DateTimeFormat('en-US', {
+  new Intl.DateTimeFormat(activeProfile().locale, {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
@@ -157,6 +160,7 @@ const minutesSince = (value: string): number => {
 const DeliveryOrders: React.FC = () => {
   const { t } = useTranslation();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+  const appliedDialogStyle = useAppliedDialogStyle();
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -566,10 +570,12 @@ const DeliveryOrders: React.FC = () => {
                         {formatCurrency(order.total)}
                       </td>
                       <td className="relative px-4 py-4 text-right">
-                        <button
+                        <TableActionButton
+                          variant="icon"
+                          icon={MoreVertical}
                           type="button"
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
                           title={t('deliveryOrders.table.actions')}
+                          aria-label={t('deliveryOrders.table.actions')}
                           aria-haspopup="menu"
                           aria-expanded={actionMenuOrderId === order.id}
                           onClick={(event) => {
@@ -578,9 +584,7 @@ const DeliveryOrders: React.FC = () => {
                             setShowSortMenu(false);
                             setShowFilterMenu(false);
                           }}
-                        >
-                          <MoreVertical className="h-5 w-5" />
-                        </button>
+                        />
                         {actionMenuOrderId === order.id && (
                           <div
                             role="menu"
@@ -591,7 +595,7 @@ const DeliveryOrders: React.FC = () => {
                               type="button"
                               role="menuitem"
                               onClick={() => openOrderDetails(order.id)}
-                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                              className="flex min-h-10 w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
                             >
                               <ReceiptText className="h-4 w-4" />
                               {t('deliveryOrders.actions.viewDetails')}
@@ -600,7 +604,7 @@ const DeliveryOrders: React.FC = () => {
                               type="button"
                               role="menuitem"
                               onClick={() => handleStatusChange(order.id, 'in_progress')}
-                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                              className="flex min-h-10 w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
                             >
                               <Clock className="h-4 w-4" />
                               {t('deliveryOrders.actions.markInProgress')}
@@ -609,7 +613,7 @@ const DeliveryOrders: React.FC = () => {
                               type="button"
                               role="menuitem"
                               onClick={() => handleStatusChange(order.id, 'completed')}
-                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                              className="flex min-h-10 w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
                             >
                               <Check className="h-4 w-4" />
                               {t('deliveryOrders.actions.markCompleted')}
@@ -618,7 +622,7 @@ const DeliveryOrders: React.FC = () => {
                               type="button"
                               role="menuitem"
                               onClick={() => handleStatusChange(order.id, 'cancelled')}
-                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                              className="flex min-h-10 w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
                             >
                               <X className="h-4 w-4" />
                               {t('deliveryOrders.actions.cancelOrder')}
@@ -658,7 +662,7 @@ const DeliveryOrders: React.FC = () => {
                   type="button"
                   disabled={currentPage <= 1}
                   onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                  className="ds2-control-radius-lg flex h-9 w-9 items-center justify-center text-gray-500 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-2xl flex h-9 w-9 items-center justify-center text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label={t('deliveryOrders.table.prevPage')}
                 >
                   <ChevronLeft className="h-5 w-5" />
@@ -668,10 +672,10 @@ const DeliveryOrders: React.FC = () => {
                     key={num}
                     type="button"
                     onClick={() => setCurrentPage(num)}
-                    className={`ds2-control-radius-md flex min-h-9 min-w-9 items-center justify-center px-2 text-sm font-medium transition-colors ${
+                    className={`flex min-h-9 min-w-9 items-center justify-center rounded-lg border px-2 text-sm transition-colors ${
                       num === currentPage
-                        ? 'bg-green-600 text-white shadow-sm'
-                        : 'text-gray-500 hover:bg-gray-100'
+                        ? 'border-green-500 bg-green-50 font-semibold text-green-700'
+                        : 'border-gray-200 bg-white font-medium text-gray-700 hover:bg-gray-50'
                     }`}
                   >
                     {num}
@@ -681,7 +685,7 @@ const DeliveryOrders: React.FC = () => {
                   type="button"
                   disabled={currentPage >= totalPages}
                   onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                  className="ds2-control-radius-lg flex h-9 w-9 items-center justify-center text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-2xl flex h-9 w-9 items-center justify-center text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
                   aria-label={t('deliveryOrders.table.nextPage')}
                 >
                   <ChevronRight className="h-5 w-5" />
@@ -715,7 +719,7 @@ const DeliveryOrders: React.FC = () => {
               <button
                 type="button"
                 onClick={closeOrderDetails}
-                className="absolute right-5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-gray-500 hover:bg-white"
+                className="absolute right-5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-2xl text-gray-700 transition-colors hover:bg-white"
                 aria-label={t('common.close')}
               >
                 <X className="h-5 w-5" />
@@ -905,7 +909,11 @@ const DeliveryOrders: React.FC = () => {
               <button
                 type="button"
                 onClick={closeOrderDetails}
-                className="ds2-control-radius-lg min-h-touch-xs w-full max-w-xs border border-gray-300 bg-white px-6 text-base font-semibold text-gray-900 hover:bg-gray-50"
+                className={
+                  appliedDialogStyle
+                    ? `${dialogButtonClasses(appliedDialogStyle).secondary} w-full max-w-xs`
+                    : 'ds2-control-radius-lg min-h-touch-xs w-full max-w-xs border border-gray-300 bg-white px-6 text-base font-semibold text-gray-900 hover:bg-gray-50'
+                }
               >
                 {t('common.close')}
               </button>

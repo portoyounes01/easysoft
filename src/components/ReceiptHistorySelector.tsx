@@ -4,6 +4,7 @@ import { FileText, Search } from 'lucide-react';
 import type { ReceiptProps } from './ThermalReceipt';
 import { BaseDialog } from './ui/BaseDialog';
 import { InputField } from './ui/InputField';
+import { ListRow } from './ui/ListRow';
 import SimpleNumpad from './SimpleNumpad';
 
 interface ReceiptHistorySelectorProps {
@@ -97,17 +98,8 @@ const ReceiptHistorySelector: React.FC<ReceiptHistorySelectorProps> = ({ open, r
                                     <ul className="divide-y divide-gray-200">
                                         {filteredReceipts.map((r, index) => (
                                             <li key={`${r.documentNumber}-${r.date.toISOString()}-${index}`}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onSelect(r)}
-                                                    className="w-full text-left transition-colors hover:bg-blue-50 rounded-xl"
-                                                    style={{
-                                                        paddingTop: index === 0 ? '2vh' : '1.5vh',
-                                                        paddingBottom: '1vh',
-                                                        paddingLeft: '0.5rem',
-                                                        paddingRight: '0.5rem',
-                                                    }}
-                                                >
+                                                <ListRow onClick={() => onSelect(r)}>
+                                                    <div className="min-w-0 flex-1">
                                                     <div className="flex items-center justify-between px-2">
                                                         <p
                                                             className="font-semibold text-gray-900 truncate"
@@ -139,7 +131,8 @@ const ReceiptHistorySelector: React.FC<ReceiptHistorySelectorProps> = ({ open, r
                                                             </>
                                                         )}
                                                     </div>
-                                                </button>
+                                                    </div>
+                                                </ListRow>
                                             </li>
                                         ))}
                                     </ul>

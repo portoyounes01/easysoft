@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { assistantService } from '../services/assistantService';
 
 export interface AssistantMessage {
@@ -17,6 +18,7 @@ interface AssistantContextType {
 const AssistantContext = createContext<AssistantContextType | undefined>(undefined);
 
 export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,11 +35,11 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (res.conversation_id) setConversationId(res.conversation_id);
       setMessages(prev => [...prev, { role: 'assistant', content: res.answer }]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong.');
+      setError(e instanceof Error ? e.message : t('assistant.errorGeneric'));
     } finally {
       setLoading(false);
     }
-  }, [conversationId, loading]);
+  }, [conversationId, loading, t]);
 
   const reset = useCallback(() => {
     setMessages([]);

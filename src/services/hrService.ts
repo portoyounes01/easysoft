@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import { employeeLocalService, initializeLocalDatabase, localDb } from '../lib/localDatabase';
 import { supabase } from '../lib/supabase';
 import type { EmployeeLoginResult } from '../types/supabase';
@@ -38,6 +39,53 @@ export const countWorkingDays = (
         if (workingDays.includes(cursor.getDay())) count += 1;
     }
     return count;
+};
+
+/** Fixed-term contract lengths offered as one-tap presets, in whole months. */
+export const CONTRACT_DURATION_PRESETS = [3, 6, 9] as const;
+
+export type ContractDuration = '3' | '6' | '9' | 'custom' | 'endless';
+
+/**
+ * Last day of a contract that runs `months` whole months from `startDate`.
+ *
+ * A contract starting on the 17th runs to the 16th of the closing month, so the
+ * end is "same day, N months on" minus one day. The months are added first and
+ * the day clamped to the length of the target month — 31 Jan plus one month
+ * lands on 28 Feb — so the day is only taken off a date that really exists.
+ */
+export const contractEndForDuration = (startDate: string, months: number): string | null => {
+    const start = new Date(`${startDate}T12:00:00`);
+    if (Number.isNaN(start.getTime())) return null;
+
+    const targetMonth = start.getMonth() + months;
+    const daysInTargetMonth = new Date(start.getFullYear(), targetMonth + 1, 0).getDate();
+    const end = new Date(
+        start.getFullYear(),
+        targetMonth,
+        Math.min(start.getDate(), daysInTargetMonth),
+        12
+    );
+    end.setDate(end.getDate() - 1);
+    return dateKey(end);
+};
+
+/**
+ * Which preset the stored dates describe. Nothing about the duration is
+ * persisted — the two dates stay the source of truth, so a contract edited
+ * anywhere else still reads back as the right preset instead of drifting.
+ */
+export const contractDurationFromDates = (
+    startDate: string,
+    endDate: string | null
+): ContractDuration => {
+    if (!endDate) return 'endless';
+    for (const months of CONTRACT_DURATION_PRESETS) {
+        if (contractEndForDuration(startDate, months) === endDate) {
+            return String(months) as ContractDuration;
+        }
+    }
+    return 'custom';
 };
 
 const contractDaysRemaining = (endDate: string | null, now = new Date()): number | null => {
@@ -146,7 +194,7 @@ class HrService {
             p_employee_number: employee.employee_number,
             p_secret: pin,
         });
-        if (error) throw new Error('Could not verify employee credentials. Check the connection and try again.');
+        if (error) throw new Error(i18n.t('hr.credentialCheckFailed'));
         return Boolean((data as EmployeeLoginResult[] | null)?.[0]?.success);
     }
 
@@ -160,10 +208,10 @@ class HrService {
 
     async clockIn(employeeId: string, pin: string): Promise<LocalAttendanceEntry> {
         const pinValid = await this.verifyEmployeePin(employeeId, pin);
-        if (!pinValid) throw new Error('Incorrect PIN.');
+        if (!pinValid) throw new Error(i18n.t('hr.incorrectPin'));
 
         const existing = await this.getOpenShift(employeeId);
-        if (existing) throw new Error('You are already clocked in.');
+        if (existing) throw new Error(i18n.t('hr.alreadyClockedIn'));
 
         const now = new Date();
         const entry: LocalAttendanceEntry = {
@@ -185,10 +233,10 @@ class HrService {
 
     async clockOut(employeeId: string, pin: string): Promise<LocalAttendanceEntry> {
         const pinValid = await this.verifyEmployeePin(employeeId, pin);
-        if (!pinValid) throw new Error('Incorrect PIN.');
+        if (!pinValid) throw new Error(i18n.t('hr.incorrectPin'));
 
         const entry = await this.getOpenShift(employeeId);
-        if (!entry) throw new Error('There is no open shift to clock out.');
+        if (!entry) throw new Error(i18n.t('hr.noOpenShift'));
 
         const clockOut = new Date();
         const updated: LocalAttendanceEntry = {
@@ -292,7 +340,7 @@ class HrService {
             created_at: now,
             updated_at: now,
         };
-        if (leaveRequest.working_days <= 0) throw new Error('The selected period has no scheduled working days.');
+        if (leaveRequest.working_days <= 0) throw new Error(i18n.t('hr.noScheduledWorkingDays'));
         await localDb.leaveRequests.add(leaveRequest);
         return leaveRequest;
     }

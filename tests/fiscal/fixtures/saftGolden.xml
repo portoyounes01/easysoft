@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AuditFile xmlns="urn:OECD:StandardAuditFile-Tax:PT_1.04_01">
+
+  <Header>
+    <AuditFileVersion>1.04_01</AuditFileVersion>
+    <CompanyID>509999999</CompanyID>
+    <TaxRegistrationNumber>509999999</TaxRegistrationNumber>
+    <TaxAccountingBasis>F</TaxAccountingBasis>
+    <CompanyName>Test Lda</CompanyName>
+    <CompanyAddress>
+      <AddressDetail>Rua 1</AddressDetail>
+      <City>Lisboa</City>
+      <PostalCode>1000-001</PostalCode>
+      <Country>PT</Country>
+    </CompanyAddress>
+    <FiscalYear>2026</FiscalYear>
+    <StartDate>2026-04-01</StartDate>
+    <EndDate>2026-04-30</EndDate>
+    <CurrencyCode>EUR</CurrencyCode>
+    <DateCreated>MASKED</DateCreated>
+    <TaxEntity>Global</TaxEntity>
+    <ProductCompanyTaxID>509999999</ProductCompanyTaxID>
+    <SoftwareCertificateNumber>999</SoftwareCertificateNumber>
+    <ProductID>TestPOS</ProductID>
+    <ProductVersion>0.1.0</ProductVersion>
+  </Header>
+
+  <MasterFiles>
+    <Customer>
+      <CustomerID>C999999990</CustomerID>
+      <AccountID>Desconhecido</AccountID>
+      <CustomerTaxID>999999990</CustomerTaxID>
+      <CompanyName>Consumidor Final</CompanyName>
+      <BillingAddress>
+        <AddressDetail>Portugal</AddressDetail>
+        <City>Portugal</City>
+        <PostalCode>0000-000</PostalCode>
+        <Country>PT</Country>
+      </BillingAddress>
+      <SelfBillingIndicator>0</SelfBillingIndicator>
+    </Customer>
+
+    <Product>
+      <ProductType>P</ProductType>
+      <ProductCode>SKU1</ProductCode>
+      <ProductDescription>Item</ProductDescription>
+      <ProductNumberCode>SKU1</ProductNumberCode>
+    </Product>
+    <TaxTable>
+    <TaxTableEntry>
+      <TaxType>IVA</TaxType>
+      <TaxCountryRegion>PT</TaxCountryRegion>
+      <TaxCode>NOR</TaxCode>
+      <Description>IVA 23%</Description>
+      <TaxPercentage>23.00</TaxPercentage>
+    </TaxTableEntry>
+    </TaxTable>
+  </MasterFiles>
+
+  <GeneralLedgerEntries>
+    <NumberOfEntries>0</NumberOfEntries>
+    <TotalDebit>0.00</TotalDebit>
+    <TotalCredit>0.00</TotalCredit>
+  </GeneralLedgerEntries>
+
+  <SourceDocuments>
+    <SalesInvoices>
+      <NumberOfEntries>1</NumberOfEntries>
+      <TotalDebit>12.30</TotalDebit>
+      <TotalCredit>0.00</TotalCredit>
+
+      <Invoice>
+        <InvoiceNo>FS A/0001</InvoiceNo>
+        <ATCUD>ATCODE1-0001</ATCUD>
+        <DocumentStatus>
+          <InvoiceStatus>N</InvoiceStatus>
+          <InvoiceStatusDate>2026-04-10T12:00:00</InvoiceStatusDate>
+          <SourceID>u1</SourceID>
+          <SourceBilling>P</SourceBilling>
+        </DocumentStatus>
+        <Hash>QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ==</Hash>
+        <HashControl>1</HashControl>
+        <InvoiceDate>2026-04-10</InvoiceDate>
+        <InvoiceType>FS</InvoiceType>
+        <SpecialRegimes>
+          <SelfBillingIndicator>0</SelfBillingIndicator>
+          <CashVATSchemeIndicator>0</CashVATSchemeIndicator>
+          <ThirdPartiesBillingIndicator>0</ThirdPartiesBillingIndicator>
+        </SpecialRegimes>
+        <SourceID>u1</SourceID>
+        <SystemEntryDate>2026-04-10T12:00:00</SystemEntryDate>
+        <CustomerID>C999999990</CustomerID>
+        
+        <Line>
+          <LineNumber>1</LineNumber>
+          <ProductCode>SKU1</ProductCode>
+          <ProductDescription>Item</ProductDescription>
+          <Quantity>1.00</Quantity>
+          <UnitOfMeasure>UN</UnitOfMeasure>
+          <UnitPrice>12.30</UnitPrice>
+          <TaxPointDate>2026-04-10</TaxPointDate>
+          <Description>Item</Description>
+          <CreditAmount>12.30</CreditAmount>
+          <Tax>
+            <TaxType>IVA</TaxType>
+            <TaxCountryRegion>PT</TaxCountryRegion>
+            <TaxCode>NOR</TaxCode>
+            <TaxPercentage>23.00</TaxPercentage>
+          </Tax>
+        </Line>
+        <DocumentTotals>
+          <TaxPayable>2.30</TaxPayable>
+          <NetTotal>10.00</NetTotal>
+          <GrossTotal>12.30</GrossTotal>
+        </DocumentTotals>
+      </Invoice>
+    </SalesInvoices>
+  </SourceDocuments>
+</AuditFile>

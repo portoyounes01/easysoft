@@ -186,11 +186,18 @@ export interface ProductRow {
     stock: number;
     min_stock: number;
     track_stock: boolean;
+    /** Sold by weight: price is €/kg, cart quantity is kg (3 decimals), stock is kg.
+     *  Optional because rows synced before the weight-products migration lack it. */
+    sold_by_weight?: boolean;
     image_url: string | null;
     supplier: string | null;
     location: string | null;
     is_active: boolean;
     display_order: number;
+    /** Optional: rows synced before migration 20260731000000 lack these. */
+    takeaway_price?: number | null;
+    variants?: ProductVariantAttribute[] | null;
+    modifiers?: ProductModifier[] | null;
     created_at: string; // ISO timestamp
     updated_at: string; // ISO timestamp
     last_synced_at: string | null; // ISO timestamp
@@ -212,6 +219,7 @@ export interface ProductInsert {
     stock?: number;
     min_stock?: number;
     track_stock?: boolean;
+    sold_by_weight?: boolean;
     image_url?: string | null;
     supplier?: string | null;
     location?: string | null;
@@ -238,6 +246,7 @@ export interface ProductUpdate {
     stock?: number;
     min_stock?: number;
     track_stock?: boolean;
+    sold_by_weight?: boolean;
     image_url?: string | null;
     supplier?: string | null;
     location?: string | null;
@@ -477,12 +486,44 @@ export interface LocalCategory extends Omit<CategoryRow, 'created_at' | 'updated
     is_conflicted: boolean;
 }
 
+/** One selectable option of a variant attribute (e.g. Size -> Large, +2.00). */
+export interface ProductVariantOption {
+    id: string;
+    name: string;
+    price_delta: number;
+    enabled: boolean;
+}
+
+/** A variant attribute group (e.g. Size, Spicy) configured on a product. */
+export interface ProductVariantAttribute {
+    id: string;
+    name: string;
+    enabled: boolean;
+    options: ProductVariantOption[];
+}
+
+/** A toggleable, priced add-on (e.g. Extra Cheese +3.00) configured on a product. */
+export interface ProductModifier {
+    id: string;
+    name: string;
+    price_delta: number;
+    enabled: boolean;
+}
+
 export interface LocalProduct extends Omit<ProductRow, 'created_at' | 'updated_at' | 'last_synced_at' | 'deleted_at'> {
     // Local specific fields
     created_at: Date;
     updated_at: Date;
     last_synced_at: Date | null;
     deleted_at: Date | null;
+    /**
+     * A sale changed this store's stock and it has not reached `store_products`
+     * yet. Separate from `needs_push` on purpose: stock belongs to the store
+     * row, catalogue fields belong to the tenant row, and pushing the two to the
+     * same place is what let one store's sale draw down another's inventory.
+     * Not indexed — Dexie needs no schema bump for a plain field.
+     */
+    store_stock_dirty?: boolean;
 
     // Sync flags
     needs_push: boolean;
@@ -550,6 +591,7 @@ export interface ProductFormData {
     stock: number;
     min_stock: number;
     track_stock: boolean;
+    sold_by_weight: boolean;
     image_url: string;
     supplier: string;
     location: string;
@@ -590,6 +632,21 @@ export const IVA_RATES = [
 ] as const;
 
 export type IVARate = typeof IVA_RATES[number]['value'];
+
+// Spanish IVA rates (ES-1, Veri*factu track — docs/fiskaly-strategy-brief.md). The server
+// column is a generic NUMERIC(5,4), so rate sets are a per-country UI concern. NOTE: recargo
+// de equivalencia (per-line surcharge for equivalence-regime retailers) is deliberately NOT
+// modeled on products — loudly deferred, REGISTER D-ES1.
+export const ES_IVA_RATES = [
+    { value: 0.00, label: '0% (Exento/0%)', description: 'Exempt or 0%-rated essentials' },
+    { value: 0.04, label: '4% (Superreducido)', description: 'Basic necessities: bread, milk, books, medicines' },
+    { value: 0.10, label: '10% (Reducido)', description: 'Food, hospitality, passenger transport' },
+    { value: 0.21, label: '21% (General)', description: 'Most goods and services' }
+] as const;
+
+// Country-aware rate list for product/tax UIs (falls back to PT, the current default market).
+export const ivaRatesForCountry = (country: string | null | undefined) =>
+    (country || 'PT').toUpperCase() === 'ES' ? ES_IVA_RATES : IVA_RATES;
 
 // Stock status calculation helper
 export const calculateStockStatus = (product: Pick<ProductRow, 'stock' | 'min_stock' | 'track_stock'>): 'in_stock' | 'low_stock' | 'out_of_stock' => {
@@ -820,6 +877,9 @@ export interface TransactionItemRow {
     category_id: string | null;
     category_name: string | null;
     quantity: number;
+    /** 'kg' when the line was sold by weight (quantity is kg, unit_price €/kg).
+     *  Optional: rows written before the weight-products migration lack it ('un'). */
+    unit?: 'un' | 'kg';
     unit_price: number;
     unit_cost: number;
     iva_rate: number;
@@ -844,6 +904,7 @@ export interface TransactionItemInsert {
     category_id?: string | null;
     category_name?: string | null;
     quantity: number;
+    unit?: 'un' | 'kg';
     unit_price: number;
     unit_cost?: number;
     iva_rate: number;
@@ -1140,6 +1201,47 @@ export interface LocalQueueTicket {
     updated_at: Date;
     ready_at: Date | null;
     collected_at: Date | null;
+}
+
+/** Mutable, till-local restaurant order. This is deliberately separate from
+ * `LocalTransaction`: a table order is not a fiscal document and must not
+ * enter the transaction sync/reporting path until checkout is completed. */
+export type TableOrderStatus = 'open' | 'settling' | 'settled';
+
+export interface TableOrderLine {
+    /** Preserves the cart-line identity, including distinct weighed lines. */
+    lineId: string;
+    /** Product snapshot: price, VAT and weight rules stay stable while parked. */
+    product: LocalProduct;
+    quantity: number;
+    discount: number;
+}
+
+export interface TableOrderGlobalDiscount {
+    type: 'none' | 'percentage' | 'fixed';
+    value: number;
+}
+
+export interface TableOrderPointsRedemption {
+    customerId: string;
+    points: number;
+}
+
+export interface LocalTableOrder {
+    id: string;
+    table_id: string;
+    table_name: string;
+    status: TableOrderStatus;
+    /** Cart snapshot. It is mutable until settlement and never fiscal on its own. */
+    lines: TableOrderLine[];
+    customer: LocalCustomer | null;
+    global_discount: TableOrderGlobalDiscount;
+    points_redemption: TableOrderPointsRedemption | null;
+    created_at: Date;
+    updated_at: Date;
+    settled_at: Date | null;
+    /** Link retained after settlement; the fiscal transaction itself remains immutable. */
+    fiscal_transaction_id: string | null;
 }
 
 // Local database interfaces for transactions

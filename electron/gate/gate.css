@@ -1,0 +1,92 @@
+/* Boot readiness gate — deliberately framework-free and legible from across a
+   counter: big status dots, high contrast, dark background so a red item is
+   unmissable (update-policy §7.1/§7.5). */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif;
+  background: #0f1420;
+  color: #e8ecf4;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gate {
+  width: min(720px, 92vw);
+  padding: 40px 0;
+}
+
+.gate-header h1 { font-size: 26px; margin: 14px 0 6px; }
+.subtitle { color: #93a0b8; font-size: 14px; }
+
+.badge {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  padding: 6px 14px;
+  border-radius: 999px;
+}
+.badge-checking { background: #2a3348; color: #b9c4da; }
+.badge-blocked  { background: #58151c; color: #ffb4bb; }
+.badge-ready    { background: #10391f; color: #7fe3a4; }
+
+.handoff-reason {
+  margin-top: 18px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #402a12;
+  color: #ffce8a;
+  font-size: 14px;
+}
+
+.checks { list-style: none; margin-top: 26px; }
+
+.check {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 4px 14px;
+  padding: 14px 12px;
+  border-bottom: 1px solid #1d2536;
+}
+.check-dot {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  margin-top: 3px;
+  justify-self: center;
+}
+.check-dot.green  { background: #2ecc71; }
+.check-dot.red    { background: #ff4d5e; box-shadow: 0 0 12px #ff4d5e88; }
+.check-dot.yellow { background: #f5b83d; }
+
+.check-label { font-size: 16px; font-weight: 600; }
+.check-class { font-size: 11px; color: #7181a0; text-transform: uppercase; letter-spacing: 0.06em; margin-left: 8px; font-weight: 500; }
+.check-detail { grid-column: 2; color: #93a0b8; font-size: 13px; word-break: break-word; }
+.check-fix    { grid-column: 2; color: #ffce8a; font-size: 13px; }
+
+.actions { margin-top: 26px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+button {
+  font: inherit;
+  font-weight: 600;
+  padding: 12px 22px;
+  border-radius: 8px;
+  border: 1px solid #33405c;
+  background: #1b2334;
+  color: #e8ecf4;
+  cursor: pointer;
+}
+button:hover { background: #232e45; }
+#gate-continue:not(:disabled) { background: #1d7a41; border-color: #1d7a41; }
+#gate-continue:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.auto-note { color: #7181a0; font-size: 12px; }
+
+.gate-footer {
+  margin-top: 34px;
+  color: #56637e;
+  font-size: 12px;
+  line-height: 1.7;
+}

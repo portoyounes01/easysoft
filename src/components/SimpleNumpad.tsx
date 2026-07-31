@@ -1,4 +1,6 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useContext } from 'react';
+import { useTranslation } from 'react-i18next';
+import { DialogShellStyleContext, DIALOG_PALETTES } from '../theme/dialogStyle';
 import { Delete, X } from 'lucide-react';
 
 export interface SimpleNumpadProps {
@@ -14,6 +16,7 @@ const SimpleNumpad: React.FC<SimpleNumpadProps> = ({
     onButtonClick,
     className = ''
 }) => {
+    const { t } = useTranslation();
     const appendToken = useCallback((token: string) => {
         onButtonClick?.();
         const next = (value + token).replace(/[^0-9]/g, '');
@@ -29,6 +32,25 @@ const SimpleNumpad: React.FC<SimpleNumpadProps> = ({
         onButtonClick?.();
         onChange('');
     }, [onChange, onButtonClick]);
+
+    // Inside an applied dialog shell the numpad follows the style's numpad
+    // axis; 'keys' renders the simple bordered grid, 'legacy' (and unstyled
+    // dialogs / page surfaces) keep the original framed grid below.
+    const shellStyle = useContext(DialogShellStyleContext);
+    if (shellStyle && shellStyle.numpad === 'keys') {
+        const p = DIALOG_PALETTES[shellStyle.palette];
+        const key = `flex min-h-touch-sm items-center justify-center rounded-xl border ${p.border} bg-white font-semibold ${p.titleText} hover:bg-gray-50`;
+        return (
+            <div className={`grid grid-cols-3 gap-2 ${className}`}>
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(digit => (
+                    <button key={digit} type="button" onClick={() => appendToken(digit)} className={key}>{digit}</button>
+                ))}
+                <button type="button" onClick={handleClear} className={key} aria-label={t('common.clear')}>×</button>
+                <button type="button" onClick={() => appendToken('0')} className={key}>0</button>
+                <button type="button" onClick={handleDelete} className={key} aria-label={t('common.delete')}>⌫</button>
+            </div>
+        );
+    }
 
     return (
         <div className={`rounded-2xl ring-2 ring-gray-300 overflow-hidden ${className}`}>

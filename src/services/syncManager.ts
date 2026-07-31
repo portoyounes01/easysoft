@@ -3,6 +3,9 @@ import { isPwaHost } from '../lib/host';
 import { employeeService } from './employeeService';
 import { productSyncService } from './productService';
 import { customerSyncService } from './customerSyncService';
+import { pullTenantReceiptLogo } from './receiptBrandingSync';
+import { pullCompanyProfile } from './companyProfileSync';
+import { pullStoreScopedCatalogue } from './storeScopedSyncService';
 import { transactionSyncService } from './transactionSyncService';
 
 // Types for sync status
@@ -192,6 +195,25 @@ export class SyncManager {
             // 2. Then customers (needed for transactions)
             await this.syncEntity('customers', () => customerSyncService.fullSync());
 
+            // 2b. Receipt branding — a singleton, no dependencies. Pulled before
+            // transactions so a till that syncs and then prints has the logo.
+            await this.syncEntity('receipt_branding', () => pullTenantReceiptLogo());
+
+            // 2b-ii. The rest of the receipt header — company name, NIF, the
+            // address of THIS till's store, slogan. Same singleton, same reason
+            // for the ordering, and the same offline rule: a failed pull leaves
+            // the cached block alone rather than printing a blank header.
+            await this.syncEntity('company_profile', () => pullCompanyProfile());
+
+            // 2c. Store-scoped catalogue and stock. AFTER products, because the
+            // store rows fold price/stock onto product records that must already
+            // exist locally. This is what makes `product.price` and
+            // `rawMaterial.stock` mean THIS store's figures rather than a pool
+            // shared with every other store in the tenant.
+            await this.syncEntity('store_catalogue', async () => {
+                await pullStoreScopedCatalogue();
+            });
+
             // 3. Finally transactions (depends on employees, products, customers)
             await this.syncEntity('transactions', () => 
                 transactionSyncService.fullSync(this.config.transactionWindowDays)
@@ -333,6 +355,11 @@ export class SyncManager {
             await this.syncEntity('employees', () => employeeService.performSync());
             await this.syncEntity('categories', () => productSyncService.pullCategories());
             await this.syncEntity('products', () => productSyncService.pullProducts());
+            // A fresh install must land the store's own price/stock too, or the
+            // first shift runs against the tenant defaults.
+            await this.syncEntity('store_catalogue', async () => {
+                await pullStoreScopedCatalogue();
+            });
             await this.syncEntity('customers', () => customerSyncService.fullSync());
             await this.syncEntity('transactions', () => 
                 transactionSyncService.bootstrapTransactions(30) // Bootstrap last 30 days

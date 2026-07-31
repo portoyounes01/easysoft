@@ -1,4 +1,5 @@
 const escpos = require('escpos');
+const os = require('os');
 const usbModule = require('usb');
 
 if (typeof usbModule.on !== 'function' && usbModule.usb && typeof usbModule.usb.on === 'function') {
@@ -13,6 +14,8 @@ const { promisify } = require('util');
 const net = require('net');
 const dns = require('dns');
 const { parseCashDrawerStatus } = require('./cashDrawerStatus.js');
+const { sendRawToWindowsPrinter, runPowerShell, warmWindowsRawPrintWorker, shutdownWindowsRawPrint } = require('./windowsRawPrint.js');
+const { listUsbPrintDevices, setupUsbPrinterQueue } = require('./windowsPrinterSetup.js');
 
 // Import our discovery classes
 const NetworkPrinterDiscovery = require('../../discover-network-printers.js');
@@ -22,21 +25,67 @@ const AutoPrinterSetup = require('../../auto-printer-setup.js');
 
 const execAsync = promisify(exec);
 
+// printRaw payload guard. The renderer owns the receipt layout, so the bytes
+// arrive from outside the shell: reject anything that is not plausibly a
+// base64 ESC/POS job rather than handing junk to the spooler.
+const MAX_RAW_PAYLOAD_BYTES = 512 * 1024;
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+function normalizeRawPayload(payload) {
+  let buffer;
+  if (typeof payload === 'string') {
+    const compact = payload.replace(/\s/g, '');
+    // Buffer.from(…, 'base64') silently drops invalid characters, so a typo
+    // would print garbage instead of failing — check the alphabet first.
+    if (!compact || !BASE64_RE.test(compact)) {
+      throw new Error('printRaw expects base64-encoded bytes');
+    }
+    buffer = Buffer.from(compact, 'base64');
+  } else if (Buffer.isBuffer(payload)) {
+    buffer = payload;
+  } else if (payload instanceof Uint8Array || Array.isArray(payload)) {
+    buffer = Buffer.from(payload);
+  } else {
+    throw new Error('printRaw expects base64-encoded bytes');
+  }
+  if (buffer.length === 0) throw new Error('printRaw got an empty payload');
+  if (buffer.length > MAX_RAW_PAYLOAD_BYTES) {
+    throw new Error(`printRaw payload too large (${buffer.length} bytes, max ${MAX_RAW_PAYLOAD_BYTES})`);
+  }
+  return buffer;
+}
+
 class HardwareController {
-  constructor() {
+  constructor(options = {}) {
     this.printer = null;
     this.device = null;
     this.isInitialized = false;
     this.printerName = 'HPRT_TP80K';
     this.printerVendorId = 0x2aaf;
     this.printerProductId = 0x6004;
-    
+
     // Network printer info
     this.networkPrinter = null;
     this.discoveryMode = 'auto'; // 'auto', 'usb', 'network'
-    
+
     // Multiple printer management
     this.configuredPrinters = new Map(); // Map of printer name -> printer config
+
+    // App-wide printer-config SSOT: which transport carries receipts (and the
+    // drawer kick, which rides the receipt printer). Set when the operator
+    // picks a queue ("Use This" → setPrinterRole) or a direct-USB connect
+    // succeeds; persisted to userData so a rebooted till remembers its printer.
+    // Dispatch (printReceipt/openCashDrawer) and initialize() key on THIS —
+    // never on bare object truthiness of a possibly-unopened USB handle.
+    this.printerTransport = null; // 'windows-queue' | 'cups-queue' | 'direct-usb' | null (network rides discoveryMode)
+    this.getUserDataDir = options.getUserDataDir || null;
+    // In-flight guard: every caller of quickListPrinters shares one scan
+    // instead of stacking a powershell.exe per remount/refresh click.
+    this.quickListInFlight = null;
+    // TTL for the configured-queue existence check: cashDrawerAuditService runs
+    // initialize() before EVERY drawer command — one Get-Printer per 30s, not
+    // one per cash sale.
+    this.lastQueueCheckOkAt = null;
     
     // Cached printer list for instant display
     this.cachedPrinterList = [];
@@ -76,6 +125,12 @@ class HardwareController {
         normal: [0x1b, 0x21, 0x00]
       }
     };
+
+    // MUST be the constructor's last statement: it assigns activePrinter/
+    // printerName/printerTransport, and any field default below it would
+    // silently clobber the restored values (three review agents independently
+    // caught exactly that when this call sat mid-constructor).
+    this.restorePersistedPrinterConfig();
   }
 
   /**
@@ -207,11 +262,19 @@ class HardwareController {
     try {
       // First get the quick list
       const quickPrinters = await this.quickListPrinters();
-      
+
       if (!checkConnectivity) {
         return quickPrinters;
       }
-      
+
+      // Windows: the quick list ALREADY carries honest per-queue status
+      // (Get-Printer WorkOffline → connected/isStale). The universal probes
+      // below are CUPS/macOS-shaped (usb:// URIs, system_profiler) and would
+      // overwrite that honesty with connected:false for every queue.
+      if (process.platform === 'win32') {
+        return quickPrinters;
+      }
+
       // Then check connectivity for each printer
       const printersWithStatus = await Promise.all(
         quickPrinters.map(async (printer) => {
@@ -256,8 +319,129 @@ class HardwareController {
     this.lastCacheUpdate = new Date();
   }
 
+  // ---- Printer-config persistence (userData/printer-config.json, same pattern
+  // as the scale's scale-config.json). Only the receipt role is persisted: the
+  // drawer and status paths all hang off the receipt printer.
+  printerConfigPath() {
+    return this.getUserDataDir ? path.join(this.getUserDataDir(), 'printer-config.json') : null;
+  }
+
+  restorePersistedPrinterConfig() {
+    try {
+      const configPath = this.printerConfigPath();
+      if (!configPath || !fs.existsSync(configPath)) return;
+      const saved = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const receipt = saved?.roles?.receipt;
+      if (!receipt?.name) return;
+      this.configuredPrinters.set(receipt.name, {
+        ...(this.configuredPrinters.get(receipt.name) || {}),
+        role: 'receipt',
+        lastUpdated: saved.savedAt || null,
+      });
+      this.activePrinter = receipt.name;
+      this.printerName = receipt.name;
+      if (receipt.transport) this.printerTransport = receipt.transport;
+      // isInitialized stays false here on purpose: initialize() validates the
+      // queue still exists (fail-closed) before printing is declared ready.
+      // Boot-time warm-up: compile the raw-print worker in the background so
+      // even the first drawer kick of the day is instant.
+      if (this.printerTransport === 'windows-queue') warmWindowsRawPrintWorker();
+      console.log(`💾 Restored receipt printer from config: ${receipt.name} (${receipt.transport || 'unknown transport'})`);
+    } catch (error) {
+      console.error('Failed to restore printer config:', error.message);
+    }
+  }
+
+  persistPrinterConfig() {
+    try {
+      const configPath = this.printerConfigPath();
+      if (!configPath) return;
+      const roles = {};
+      if (this.activePrinter) {
+        roles.receipt = { name: this.activePrinter, transport: this.printerTransport };
+      }
+      // Atomic write: tills lose power routinely; a half-written JSON must not
+      // eat the configuration (restore treats parse failure as unconfigured).
+      const tempPath = `${configPath}.tmp`;
+      fs.writeFileSync(tempPath, JSON.stringify({ roles, savedAt: new Date().toISOString() }, null, 2));
+      fs.renameSync(tempPath, configPath);
+    } catch (error) {
+      console.error('Failed to persist printer config:', error.message);
+    }
+  }
+
+  // Snapshot served over hardware:get-printer-config and pushed on
+  // hardware:printer-config-changed — the renderer's app-wide printer SSOT.
+  getPrinterConfigSnapshot() {
+    let mode = null;
+    if (this.discoveryMode === 'network' && this.networkPrinter) mode = 'network';
+    else if (this.printerTransport) mode = this.printerTransport;
+    else if (this.isInitialized) mode = process.platform === 'win32' ? 'windows-queue' : 'cups-queue';
+    return {
+      // Network mode: the discovered device's name, not the ctor default that
+      // this.printerName may still carry.
+      receiptPrinter: (mode === 'network' ? this.networkPrinter?.name : null)
+        || this.activePrinter
+        || (this.isInitialized ? this.printerName : null),
+      mode,
+      initialized: this.isInitialized,
+      platform: process.platform,
+    };
+  }
+
+  // Windows print-queue list, shared by listPrinters and quickListPrinters.
+  // WorkOffline is the honest presence signal: Windows flips it when a USB
+  // printer is unplugged, and ghost queues (printers installed years ago) sit
+  // permanently offline — the old branches hardcoded connected:true, painting
+  // every ghost green. StatusText via "$()" stringifies the enum so the value
+  // is version-stable text ("Normal", "Offline", ...). The [Console] line
+  // forces UTF-8 stdout: PowerShell 5.1 otherwise writes the OEM codepage and
+  // accented queue names (Impressora Térmica) arrive as U+FFFD mojibake that
+  // can never be targeted by OpenPrinter. runPowerShell (execFile-based)
+  // sidesteps cmd.exe and its 8,191-char command-line cap entirely.
+  async winListPrinterQueues() {
+    const ps = '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; '
+      + 'Get-Printer | Select-Object -Property Name, DriverName, PortName, WorkOffline, '
+      + '@{n=\'StatusText\';e={"$($_.PrinterStatus)"}} | ConvertTo-Json';
+    const { stdout: winOut } = await runPowerShell(ps, { timeout: 15000 });
+    if (!winOut.trim()) return [];
+    const list = JSON.parse(winOut);
+    const arr = Array.isArray(list) ? list : [list];
+    return arr.map(p => {
+      const statusText = String(p.StatusText || 'unknown');
+      const offline = p.WorkOffline === true || /offline/i.test(statusText);
+      return {
+        name: p.Name,
+        status: offline ? 'not_accepting' : (/^normal$/i.test(statusText) ? 'ready' : 'unknown'),
+        device: p.PortName || p.DriverName || 'unknown',
+        type: (p.PortName || '').toLowerCase().includes('usb') ? 'usb' : ((p.PortName || '').match(/\d+\.\d+\.\d+\.\d+/) ? 'network' : 'system'),
+        role: this.configuredPrinters.get(p.Name)?.role || 'unassigned',
+        isActive: this.activePrinter === p.Name,
+        lastConnected: this.configuredPrinters.get(p.Name)?.lastConnected || null,
+        connected: !offline,
+        connectionStatus: offline ? 'offline' : statusText.toLowerCase(),
+        lastSeen: null,
+        hasQueuedJobs: false,
+        queueCount: 0,
+        // ghost/unplugged queues surface as stale instead of green "Connected"
+        isStale: offline,
+        source: 'system'
+      };
+    });
+  }
+
   // Quick list without connectivity checks - for instant UI display
   async quickListPrinters() {
+    // Shared in-flight scan: page mounts, Refresh clicks, and main.js's
+    // cache-warm fire-and-forget all coalesce onto one child-process sweep
+    // instead of stacking a fresh powershell/lpstat per trigger.
+    if (this.quickListInFlight) return this.quickListInFlight;
+    this.quickListInFlight = this.quickListPrintersUncoalesced()
+      .finally(() => { this.quickListInFlight = null; });
+    return this.quickListInFlight;
+  }
+
+  async quickListPrintersUncoalesced() {
     try {
       let stdout = '';
       try {
@@ -265,26 +449,9 @@ class HardwareController {
       } catch (e) {
         // Non-CUPS environment (likely Windows). Fallback to PowerShell.
         if (process.platform === 'win32') {
-          const ps = 'Get-Printer | Select-Object -Property Name, DriverName, PortName | ConvertTo-Json';
-          const { stdout: winOut } = await execAsync(`powershell -NoProfile -Command "${ps}"`);
-          const list = JSON.parse(winOut);
-          const arr = Array.isArray(list) ? list : [list];
-          return arr.map(p => ({
-            name: p.Name,
-            status: 'unknown',
-            device: p.PortName || p.DriverName || 'unknown',
-            type: (p.PortName || '').toLowerCase().includes('usb') ? 'usb' : ((p.PortName || '').match(/\d+\.\d+\.\d+\.\d+/) ? 'network' : 'system'),
-            role: this.configuredPrinters.get(p.Name)?.role || 'unassigned',
-            isActive: this.activePrinter === p.Name,
-            lastConnected: this.configuredPrinters.get(p.Name)?.lastConnected || null,
-            connected: true, // Assume connected for quick list
-            connectionStatus: 'unknown',
-            lastSeen: null,
-            hasQueuedJobs: false,
-            queueCount: 0,
-            isStale: false,
-            source: 'system'
-          }));
+          const quickList = await this.winListPrinterQueues();
+          this.updatePrinterCache(quickList);
+          return quickList;
         }
         throw e;
       }
@@ -358,28 +525,10 @@ class HardwareController {
       try {
         ({ stdout } = await execAsync('lpstat -p'));
       } catch (e) {
-        // Non-CUPS environment (likely Windows). Fallback to PowerShell.
+        // Non-CUPS environment (likely Windows). Fallback to PowerShell —
+        // shared honest branch (WorkOffline-based; see winListPrinterQueues).
         if (process.platform === 'win32') {
-          const ps = 'Get-Printer | Select-Object -Property Name, DriverName, PortName | ConvertTo-Json';
-          const { stdout: winOut } = await execAsync(`powershell -NoProfile -Command "${ps}"`);
-          const list = JSON.parse(winOut);
-          const arr = Array.isArray(list) ? list : [list];
-          return arr.map(p => ({
-            name: p.Name,
-            status: 'unknown',
-            device: p.PortName || p.DriverName || 'unknown',
-            type: (p.PortName || '').toLowerCase().includes('usb') ? 'usb' : ((p.PortName || '').match(/\d+\.\d+\.\d+\.\d+/) ? 'network' : 'system'),
-            role: this.configuredPrinters.get(p.Name)?.role || 'unassigned',
-            isActive: this.activePrinter === p.Name,
-            lastConnected: this.configuredPrinters.get(p.Name)?.lastConnected || null,
-            connected: true,
-            connectionStatus: 'unknown',
-            lastSeen: null,
-            hasQueuedJobs: false,
-            queueCount: 0,
-            isStale: false,
-            source: 'system'
-          }));
+          return await this.winListPrinterQueues();
         }
         throw e;
       }
@@ -464,10 +613,77 @@ class HardwareController {
     }
   }
 
+  // Readiness for the PRINT/DRAWER entry points. A persisted queue selection is
+  // a real configuration that simply has not been validated yet this boot
+  // (restore leaves isInitialized false on purpose), so refusing outright would
+  // strand the first drawer kick or receipt after every restart. Validates the
+  // configured queue once (TTL-cached) and NEVER runs auto-discovery — an
+  // unconfigured till still gets the old refusal.
+  async ensureReady() {
+    if (this.isInitialized) return { success: true };
+    if (this.printerTransport === 'windows-queue' || this.printerTransport === 'cups-queue') {
+      // Deliberately NO Get-Printer probe here. The spooler write is itself the
+      // existence test and fails with a staged Win32 error ("OpenPrinter failed
+      // (Win32 error 1801)") if the queue is gone, whereas probing first put a
+      // cold PowerShell spawn (15s ceiling, wildcard-sensitive -Name matching)
+      // in front of a physical action the operator is standing there waiting
+      // for — and any hiccup in it swallowed the drawer kick entirely.
+      // Fail-closed still holds where it matters: this cannot reroute anywhere,
+      // the bytes go to the operator's configured queue by exact name.
+      this.isInitialized = true;
+      if (this.printerTransport === 'windows-queue') warmWindowsRawPrintWorker();
+      return { success: true };
+    }
+    return { success: false, error: 'Hardware not initialized' };
+  }
+
   async initialize() {
     try {
       console.log('🔧 Initializing hardware controller...');
-      
+
+      // A configured receipt QUEUE is the source of truth: validate it exists
+      // and go. Re-running discovery here would (a) clobber the operator's
+      // explicit "Use This" selection, (b) kick off a full network scan on
+      // every drawer open (cashDrawerAuditService calls initialize() before
+      // each drawer command), and (c) leave a half-open direct-USB handle that
+      // crashed drawer kicks with "reading 'transfer'".
+      if (this.printerTransport === 'windows-queue' || this.printerTransport === 'cups-queue') {
+        const cacheFresh = this.lastQueueCheckOkAt && (Date.now() - this.lastQueueCheckOkAt < 30000);
+        const queueCheck = cacheFresh ? { success: true } : await this.checkSystemPrinter();
+        if (queueCheck.success) {
+          // Stamp only on a REAL check — a sliding window would let sustained
+          // sales keep an actually-deleted queue "fresh" forever.
+          if (!cacheFresh) this.lastQueueCheckOkAt = Date.now();
+          // Drop any stale auto-discovery network claim: dispatch checks the
+          // network branch FIRST, so leaving it set would silently reroute
+          // receipts away from the operator's configured queue.
+          if (this.networkPrinter && this.networkPrinter.name !== this.printerName) {
+            this.networkPrinter = null;
+            if (this.discoveryMode === 'network') this.discoveryMode = 'auto';
+          }
+          this.isInitialized = true;
+          // Pre-compile the raw-print worker so the first receipt/drawer job
+          // of the shift doesn't pay the PowerShell+Add-Type cold start.
+          if (this.printerTransport === 'windows-queue') warmWindowsRawPrintWorker();
+          return {
+            success: true,
+            mode: 'configured-queue',
+            message: `Using configured receipt printer: ${this.printerName}`,
+            printer: this.printerName,
+          };
+        }
+        // Fail CLOSED — never fall through to discovery here: auto-discovery
+        // could claim whatever LAN device answers port 9100 and fiscal receipts
+        // would silently reroute to it. If the queue is really gone the
+        // operator re-picks it in Settings; isInitialized is left untouched so
+        // a transient Get-Printer blip doesn't brick printing mid-shift.
+        console.log(`⚠️ Configured queue "${this.printerName}" not found — staying on it (fail-closed)`);
+        return {
+          success: false,
+          error: `Configured receipt printer "${this.printerName}" was not found (${queueCheck.error || 'queue check failed'}). Reselect it in Settings → Hardware → Printers if it was renamed or removed.`,
+        };
+      }
+
       // Try automatic discovery first
       if (this.discoveryMode === 'auto') {
         console.log('🚀 Starting automatic thermal printer discovery...');
@@ -682,24 +898,38 @@ class HardwareController {
         };
       }
 
-      this.device = new USB(targetDevice);
-      this.printer = new escpos.Printer(this.device);
+      // Assign to this.device/this.printer ONLY after open() succeeds:
+      // dispatch in printReceipt/openCashDrawer keys on their truthiness, and
+      // an unopened escpos-usb adapter has no endpoint — any write() crashes
+      // with "Cannot read properties of undefined (reading 'transfer')".
+      // (On Windows the driver-bound HPRT ALWAYS refuses open, so the old
+      // assign-first code poisoned the state on every initialize().)
+      const device = new USB(targetDevice);
+      const printer = new escpos.Printer(device);
 
-      // Test connection
-      await new Promise((resolve, reject) => {
-        this.device.open((error) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve();
-          }
+      try {
+        await new Promise((resolve, reject) => {
+          device.open((error) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve();
+            }
+          });
         });
-      });
+      } catch (openError) {
+        try { device.close(); } catch { /* releases the detach listener best-effort */ }
+        throw openError;
+      }
+
+      this.device = device;
+      this.printer = printer;
+      this.printerTransport = 'direct-usb';
 
       console.log('✅ USB printer connected successfully');
-      return { 
-        success: true, 
-        printer: 'HPRT_TP80K_USB' 
+      return {
+        success: true,
+        printer: 'HPRT_TP80K_USB'
       };
 
     } catch (error) {
@@ -712,6 +942,30 @@ class HardwareController {
   }
 
   async checkSystemPrinter() {
+    // Windows: verify the configured queue exists via Get-Printer (lpstat is
+    // CUPS-only). This is load-bearing for printing on Windows: initialize()'s
+    // fallback chain reaches here, and its success is what sets isInitialized —
+    // without this branch printReceipt/openCashDrawer refused with 'Hardware
+    // not initialized' even though the winspool raw path was ready.
+    if (process.platform === 'win32') {
+      try {
+        const psName = String(this.printerName ?? '').replace(/'/g, "''");
+        // Exact-match against the queue list, NOT `Get-Printer -Name` — -Name
+        // does WILDCARD matching, so a queue whose name contains [ ] * or ?
+        // (which winspool's OpenPrinterW matches literally, and which therefore
+        // prints perfectly) would report "not found" here.
+        await runPowerShell(
+          // Both strings single-quoted: in a double-quoted PS string a queue
+          // name containing $ or a backtick would be evaluated, not compared.
+          `if (-not (@(Get-Printer).Name -contains '${psName}')) { throw 'configured print queue not found' }`,
+          { timeout: 15000 },
+        );
+        console.log(`✅ Windows print queue found: ${this.printerName}`);
+        return { success: true, printer: this.printerName };
+      } catch {
+        return { success: false, error: `System printer "${this.printerName}" not found` };
+      }
+    }
     try {
       console.log(`🔍 Checking system printer: ${this.printerName}`);
       const { stdout } = await execAsync(`lpstat -p "${this.printerName}"`);
@@ -742,8 +996,9 @@ class HardwareController {
 
   async printReceipt(receiptData) {
     try {
-      if (!this.isInitialized) {
-        return { success: false, error: 'Hardware not initialized' };
+      const ready = await this.ensureReady();
+      if (!ready.success) {
+        return { success: false, error: ready.error };
       }
 
       console.log('🖨️ Printing receipt...');
@@ -751,17 +1006,88 @@ class HardwareController {
       if (this.discoveryMode === 'network' && this.networkPrinter) {
         // Network printer - use raw socket
         return await this.printViaNetwork(receiptData);
-      } else if (this.printer && this.device) {
-        // Direct USB printing
+      } else if (this.printerTransport === 'direct-usb' && this.printer && this.device) {
+        // Direct USB printing — only when direct USB is the CONFIGURED
+        // transport, never on bare handle truthiness (a configured queue
+        // must win even if a USB handle exists).
         return await this.printViaUSB(receiptData);
       } else {
-        // System printer fallback
+        // System printer (queue) path
         return await this.printViaSystem(receiptData);
       }
 
     } catch (error) {
       console.error('Print receipt error:', error);
       return { success: false, error: error.message };
+    }
+  }
+
+  /** Print caller-supplied ESC/POS bytes on the configured receipt printer.
+   *
+   *  The receipt LAYOUT lives in the renderer (one source of truth with the
+   *  on-screen ThermalReceipt, and fiscal fields the shell knows nothing
+   *  about); the shell owns only the transport. That split is deliberate —
+   *  a receipt change then ships as a UI deploy instead of a fleet update.
+   *
+   *  `payload` is base64 (arrays/typed arrays tolerated for main-process
+   *  callers). Never auto-retries: on Windows a delivered-but-unacknowledged
+   *  job comes back as { outcomeUnknown: true } so a human decides, because a
+   *  blind resend double-prints a fiscal document. */
+  async printRaw(payload) {
+    try {
+      const buffer = normalizeRawPayload(payload);
+
+      const ready = await this.ensureReady();
+      if (!ready.success) {
+        return { success: false, error: ready.error };
+      }
+
+      console.log(`🖨️ Printing raw ESC/POS job (${buffer.length} bytes)...`);
+      return await this.sendRawBytes(buffer);
+    } catch (error) {
+      console.error('Raw print error:', error);
+      return {
+        success: false,
+        error: error.message,
+        outcomeUnknown: error.outcomeUnknown === true,
+      };
+    }
+  }
+
+  /** Transport dispatch shared by printRaw — same branch order as printReceipt
+   *  and openCashDrawer (network → configured direct USB → system queue), with
+   *  the caller's bytes in place of generateReceiptCommands(). */
+  async sendRawBytes(buffer) {
+    if (this.discoveryMode === 'network' && this.networkPrinter) {
+      await this.sendToNetworkPrinter(buffer);
+      console.log(`✅ Raw job printed via network (${this.networkPrinter.ip})`);
+      return { success: true, method: 'network' };
+    }
+
+    if (this.printerTransport === 'direct-usb' && this.printer && this.device) {
+      await new Promise((resolve, reject) => {
+        this.device.write(buffer, (error) => (error ? reject(error) : resolve()));
+      });
+      console.log('✅ Raw job printed via USB');
+      return { success: true, method: 'usb' };
+    }
+
+    if (process.platform === 'win32') {
+      await sendRawToWindowsPrinter(this.printerName, buffer);
+      console.log(`✅ Raw job printed via Windows spooler (${this.printerName})`);
+      return { success: true, method: 'system-windows' };
+    }
+
+    // CUPS. Temp file goes to the OS temp dir, not next to __dirname: in a
+    // packaged app that path is inside the read-only asar.
+    const tempFile = path.join(os.tmpdir(), `pos-escpos-${process.pid}-${Date.now()}.bin`);
+    fs.writeFileSync(tempFile, buffer);
+    try {
+      const { stdout } = await execAsync(`lp -d "${this.printerName}" -o raw "${tempFile}"`);
+      console.log(`✅ Raw job printed via CUPS. Job ID: ${stdout.trim()}`);
+      return { success: true, method: 'system', jobId: stdout.trim() };
+    } finally {
+      try { fs.unlinkSync(tempFile); } catch { /* best effort */ }
     }
   }
 
@@ -872,7 +1198,16 @@ class HardwareController {
     try {
       // Generate ESC/POS commands for the receipt
       const commands = this.generateReceiptCommands(receiptData);
-      
+
+      // Windows: raw bytes go through winspool (the CUPS `lp -o raw` equivalent) —
+      // `lp` does not exist there, so before this branch the system fallback could
+      // never print on a Windows till.
+      if (process.platform === 'win32') {
+        await sendRawToWindowsPrinter(this.printerName, Buffer.from(commands));
+        console.log(`✅ Receipt printed via Windows spooler (${this.printerName})`);
+        return { success: true, method: 'system-windows' };
+      }
+
       // Write to temporary file
       const tempFile = path.join(__dirname, '..', 'temp_receipt.bin');
       fs.writeFileSync(tempFile, Buffer.from(commands));
@@ -885,8 +1220,8 @@ class HardwareController {
       fs.unlinkSync(tempFile);
 
       console.log(`✅ Receipt printed via system printer. Job ID: ${stdout.trim()}`);
-      return { 
-        success: true, 
+      return {
+        success: true,
         method: 'system',
         jobId: stdout.trim()
       };
@@ -958,8 +1293,9 @@ class HardwareController {
 
   async openCashDrawer(options = {}) {
     try {
-      if (!this.isInitialized) {
-        return { success: false, error: 'Hardware not initialized' };
+      const ready = await this.ensureReady();
+      if (!ready.success) {
+        return { success: false, error: ready.error };
       }
 
       console.log('💰 Opening cash drawer...');
@@ -970,11 +1306,12 @@ class HardwareController {
       if (this.discoveryMode === 'network' && this.networkPrinter) {
         // Network printer - send raw commands
         return await this.openDrawerViaNetwork(commands);
-      } else if (this.printer && this.device) {
-        // Direct USB control
+      } else if (this.printerTransport === 'direct-usb' && this.printer && this.device) {
+        // Direct USB control — same transport-first rule as printReceipt.
         return await this.openDrawerViaUSB(commands);
       } else {
-        // System printer fallback
+        // System printer (queue) path — on win32 this is the same winspool
+        // transport the receipts use.
         return await this.openDrawerViaSystem(commands);
       }
 
@@ -1023,6 +1360,14 @@ class HardwareController {
 
   async openDrawerViaSystem(commands) {
     try {
+      // Windows: same winspool raw path as receipts (drawer kick = ESC/POS pulse
+      // through the receipt printer).
+      if (process.platform === 'win32') {
+        await sendRawToWindowsPrinter(this.printerName, Buffer.from(commands));
+        console.log(`✅ Cash drawer opened via Windows spooler (${this.printerName})`);
+        return { success: true, method: 'system-windows' };
+      }
+
       // Write commands to temporary file
       const tempFile = path.join(__dirname, '..', 'temp_drawer.bin');
       fs.writeFileSync(tempFile, Buffer.from(commands));
@@ -1058,6 +1403,16 @@ class HardwareController {
 
       if (this.discoveryMode === 'network' && this.networkPrinter) {
         result = await this.getDrawerStatusViaNetwork();
+      } else if (this.printerTransport === 'windows-queue' || this.printerTransport === 'cups-queue') {
+        // Spooler transport is write-only: the DLE EOT status byte needs a
+        // readable USB endpoint the print queue does not expose. Be honest
+        // instead of re-running USB init (which used to poison the dispatch
+        // state for the NEXT drawer open on driver-bound printers).
+        return {
+          success: false,
+          status: 'unknown',
+          error: `Drawer status readback is not available through the "${this.printerName}" print queue (write-only). Opening the drawer still works.`,
+        };
       } else {
         if (!this.device || !this.device.device) {
           const initialization = await this.initializeUSBPrinter();
@@ -1192,8 +1547,9 @@ class HardwareController {
 
   async testPrinter() {
     try {
-      if (!this.isInitialized) {
-        return { success: false, error: 'Hardware not initialized' };
+      const ready = await this.ensureReady();
+      if (!ready.success) {
+        return { success: false, error: ready.error };
       }
 
       console.log('🧪 Testing printer...');
@@ -1301,12 +1657,16 @@ class HardwareController {
       const detector = new USBPrinterDetector();
       
       const usbPrinters = await detector.detectUSBPrinters();
-      
+      const diagnostics = detector.lastScanDiagnostics || [];
+
       if (usbPrinters.length === 0) {
         return {
           success: true,
           printers: [],
-          message: 'No USB printers found'
+          diagnostics,
+          message: diagnostics.length
+            ? `No USB printers found — ${diagnostics.join(' · ')}`
+            : 'No USB printers found'
         };
       }
 
@@ -1319,7 +1679,9 @@ class HardwareController {
         uri: printer.uri,
         isThermal: printer.isThermal,
         recommended: printer.recommended,
-        confidence: printer.isThermal ? 90 : 50
+        confidence: printer.isThermal ? 90 : 50,
+        // Windows only: 'winusb' (direct mode possible) | 'windows-driver' (use its queue)
+        ...(printer.driverState ? { driverState: printer.driverState } : {})
       }));
 
       console.log(`✅ Found ${formattedPrinters.length} USB printer(s)`);
@@ -1327,6 +1689,7 @@ class HardwareController {
       return {
         success: true,
         printers: formattedPrinters,
+        diagnostics,
         message: `Found ${formattedPrinters.length} USB printer(s)`
       };
 
@@ -1343,7 +1706,12 @@ class HardwareController {
   async connectToUSBPrinter(uri, printerName) {
     try {
       console.log(`🔌 Connecting to USB printer: ${printerName}`);
-      
+
+      // Windows scan results carry usbwin:// URIs — no CUPS on that platform.
+      if (typeof uri === 'string' && uri.startsWith('usbwin://')) {
+        return await this.connectToWindowsUSBPrinter(uri, printerName);
+      }
+
       // Use our existing USB detection script for setup
       const USBPrinterDetector = require('../../detect-usb-printers.js');
       const detector = new USBPrinterDetector();
@@ -1418,11 +1786,72 @@ class HardwareController {
     }
   }
 
+  // Windows direct-USB connect: only possible when libusb can OPEN the device, i.e.
+  // it carries a WinUSB-class driver. A printer installed normally (usbprint.sys)
+  // refuses the open — that is not a dead end: its Windows print QUEUE is the
+  // supported transport (System tab + raw spooler), so the error says exactly that.
+  async connectToWindowsUSBPrinter(uri, printerName) {
+    try {
+      const m = uri.match(/vid=0x([0-9a-f]{1,4})&pid=0x([0-9a-f]{1,4})/i);
+      if (!m) return { success: false, error: 'Invalid Windows USB printer URI' };
+      const vid = parseInt(m[1], 16);
+      const pid = parseInt(m[2], 16);
+
+      const devices = USB.findPrinter() || [];
+      const target = devices.find(d =>
+        d.deviceDescriptor && d.deviceDescriptor.idVendor === vid && d.deviceDescriptor.idProduct === pid);
+      if (!target) return { success: false, error: 'That USB printer is no longer attached' };
+
+      const device = new USB(target);
+      await new Promise((resolve, reject) => device.open((err) => (err ? reject(err) : resolve())));
+
+      this.device = device;
+      this.printer = new escpos.Printer(device);
+      this.discoveryMode = 'usb';
+      this.printerTransport = 'direct-usb';
+      this.isInitialized = true;
+
+      const name = printerName || `USB_${m[1]}_${m[2]}`;
+      this.configuredPrinters.set(name, {
+        type: 'usb',
+        uri,
+        role: 'unassigned',
+        lastConnected: new Date().toISOString(),
+        connectionMethod: 'usb_direct',
+      });
+      if (!this.activePrinter) this.activePrinter = name;
+
+      console.log(`✅ Direct USB (WinUSB) printer connected: ${name}`);
+      return { success: true, printerName: name, message: `Direct USB connection to ${name} established` };
+    } catch (error) {
+      console.error('Windows direct-USB connect failed:', error.message);
+      return {
+        success: false,
+        error: `Windows holds this printer through its print driver (${error.message}). `
+          + 'Use its Windows print queue instead: System tab → select the printer → Use This. '
+          + '(Direct mode would require replacing the driver with WinUSB via Zadig — not needed for normal printing.)',
+      };
+    }
+  }
+
   // Multiple Printer Management Methods
   async getConfiguredPrinters() {
     try {
       console.log('📋 Getting configured printers...');
-      
+
+      // Windows: derive from the honest queue list (Get-Printer + WorkOffline)
+      // — the CUPS lpstat path below throws on win32 and used to make this
+      // handler useless on exactly the platform where roles are assigned.
+      if (process.platform === 'win32') {
+        const queues = await this.winListPrinterQueues();
+        return {
+          success: true,
+          printers: queues,
+          count: queues.length,
+          connectedCount: queues.filter(p => p.connected).length
+        };
+      }
+
       // Get all configured printers from CUPS
       const { stdout } = await execAsync('lpstat -p');
       const printerLines = stdout.split('\n').filter(line => line.trim() && line.startsWith('printer '));
@@ -1619,6 +2048,33 @@ class HardwareController {
     }
   }
 
+  /** USB print devices with their real driver binding, the port each occupies,
+   *  and which queues share that port. See windowsPrinterSetup for why this
+   *  replaces the interface-claim guess the USB scan uses. */
+  async listUsbPrintDevices() {
+    return listUsbPrintDevices();
+  }
+
+  /** Create a working queue for a USB printer using the in-box driver, then
+   *  make it the receipt printer. Removes the vendor-driver hunt entirely: the
+   *  RAW datatype bypasses driver rendering, so any queue on the right port
+   *  prints ESC/POS correctly. */
+  async setupUsbPrinter({ port, queueName, assignReceiptRole = true }) {
+    const result = await setupUsbPrinterQueue({ port, queueName });
+    if (!result.success) return result;
+
+    if (assignReceiptRole) {
+      const role = await this.setPrinterRole(result.queue, 'receipt');
+      if (role && role.success === false) {
+        // The queue exists and is usable; only the role assignment failed, so
+        // say exactly that rather than implying nothing was created.
+        return { ...result, roleAssigned: false, error: role.error };
+      }
+      return { ...result, roleAssigned: true };
+    }
+    return { ...result, roleAssigned: false };
+  }
+
   async setPrinterRole(printerName, role) {
     try {
       console.log(`🏷️ Setting printer ${printerName} role to: ${role}`);
@@ -1641,8 +2097,38 @@ class HardwareController {
       if (role === 'receipt') {
         this.activePrinter = printerName;
         this.printerName = printerName;
+        // A held direct-USB device would otherwise keep winning in printReceipt/
+        // openCashDrawer and silently ignore this selection.
+        if (this.printer && this.device) {
+          try { this.device.close(); } catch { /* already released */ }
+          this.printer = null;
+          this.device = null;
+        }
+        // "Use This" targets a system print queue on every platform — record
+        // the transport so dispatch and initialize() honor the selection.
+        this.printerTransport = process.platform === 'win32' ? 'windows-queue' : 'cups-queue';
+        // Drop a prior auto-discovery network claim (dispatch checks it first)
+        // unless the operator selected the network printer itself.
+        if (this.networkPrinter && this.networkPrinter.name !== printerName) {
+          this.networkPrinter = null;
+          if (this.discoveryMode === 'network') this.discoveryMode = 'auto';
+        }
+        // New selection → next initialize() re-validates the queue for real.
+        this.lastQueueCheckOkAt = null;
+        // Windows: the queue IS the transport — selecting it makes printing
+        // ready immediately (initialize()'s checkSystemPrinter branch confirms
+        // it on the next boot).
+        if (process.platform === 'win32') {
+          this.isInitialized = true;
+          // Warm the raw-print worker: the operator will test-print next, and
+          // the first sale shouldn't pay the compile either.
+          warmWindowsRawPrintWorker();
+        }
+        // Survive app restarts: the till remembers its printer without anyone
+        // reopening the setup dialog.
+        this.persistPrinterConfig();
       }
-      
+
       return {
         success: true,
         message: `Printer ${printerName} assigned role: ${role}`
@@ -1660,9 +2146,12 @@ class HardwareController {
   async removePrinter(printerName) {
     try {
       console.log(`🗑️ Removing printer: ${printerName}`);
-      
-      // Remove from CUPS
-      await execAsync(`lpadmin -x "${printerName}"`);
+
+      // Remove from CUPS (macOS/Linux). On Windows we only manage OUR config —
+      // deleting the OS print queue is the operator's call, not the POS's.
+      if (process.platform !== 'win32') {
+        await execAsync(`lpadmin -x "${printerName}"`);
+      }
       
       // Remove from internal configuration
       this.configuredPrinters.delete(printerName);
@@ -1675,11 +2164,18 @@ class HardwareController {
           if (config.role === 'receipt') {
             this.activePrinter = name;
             this.printerName = name;
+            // The promoted printer's own transport, not the removed one's.
+            this.printerTransport = config.connectionMethod === 'usb_direct'
+              ? 'direct-usb'
+              : (process.platform === 'win32' ? 'windows-queue' : 'cups-queue');
             break;
           }
         }
+        if (!this.activePrinter) this.printerTransport = null;
+        this.lastQueueCheckOkAt = null;
+        this.persistPrinterConfig();
       }
-      
+
       return {
         success: true,
         message: `Printer ${printerName} removed successfully`
@@ -1712,9 +2208,20 @@ class HardwareController {
           break;
       }
       
+      // Windows: raw text + feed/cut through winspool (`lp` is CUPS-only).
+      if (process.platform === 'win32') {
+        const cut = Buffer.from([0x0a, 0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]); // feeds + GS V full cut
+        await sendRawToWindowsPrinter(printerName, Buffer.concat([Buffer.from(testContent, 'utf8'), cut]));
+        return {
+          success: true,
+          message: `Test print sent to ${printerName}`,
+          jobInfo: 'windows-spooler'
+        };
+      }
+
       const command = `echo "${testContent}" | lp -d "${printerName}"`;
       const { stdout } = await execAsync(command);
-      
+
       return {
         success: true,
         message: `Test print sent to ${printerName}`,
@@ -2068,7 +2575,9 @@ class HardwareController {
     try {
       // Stop monitoring
       this.stopConnectionMonitoring();
-      
+
+      shutdownWindowsRawPrint(); // no-op when no worker was ever started
+
       if (this.device) {
         this.device.close();
       }

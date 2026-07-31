@@ -11,9 +11,13 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
 
+    # Windows-only: the old macos/ubuntu jobs never shipped anything and the ubuntu job
+    # failed at `npm ci` (usb native module needs libudev.h, absent on the runner), which
+    # fail-fast-cancelled the Windows build before it ran. Windows compiles usb against
+    # the WinUSB backend (no udev), so it builds standalone.
     strategy:
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        os: [windows-2022]
 
     steps:
       - uses: actions/checkout@v4
@@ -21,50 +25,118 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          # >=22.12 required by @electron/rebuild@4 (and >=20 by @serialport/*@13); under Node 18
+          # the bundled node-gyp misreports "Could not find any Visual Studio installation" on the
+          # windows-latest runner (which has VS 2022). Do NOT install VS / set --msvs-version.
+          node-version: "22"
           cache: "npm"
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache electron + electron-builder binaries
+        # The 2026-07-24 run died on a GitHub CDN 504 fetching nsis-resources —
+        # cache the downloaded tool binaries so later runs don't re-fetch them.
+        uses: actions/cache@v4
+        with:
+          path: |
+            electron-cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-builder-bins-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-builder-bins-${{ runner.os }}-
+
+      - name: Check Supabase build config
+        # Fail loudly instead of shipping an exe with no backend config: src/lib/supabase.ts
+        # throws at startup (blank page) when these are absent from the Vite build.
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON: ${{ secrets.VITE_SUPABASE_ANON }}
+        shell: bash
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON" ]; then
+            echo "::error::VITE_SUPABASE_URL / VITE_SUPABASE_ANON repo secrets are not set. Add them under Settings > Secrets and variables > Actions (values from local .env)."
+            exit 1
+          fi
+
       - name: Build web app
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON: ${{ secrets.VITE_SUPABASE_ANON }}
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
         run: npm run build
 
-      - name: Build Electron app (macOS)
-        if: matrix.os == 'macos-latest'
-        run: npm run electron:dist
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-
       - name: Build Electron app (Windows)
-        if: matrix.os == 'windows-latest'
-        run: npm run electron:dist:win
+        # x64 only — the ia32 leg forced a 32-bit native-module compile (the
+        # CLI --x64 does NOT override package.json's arch list, so that list is
+        # x64-only too). Retry once: the tool-binary downloads (nsis-resources
+        # etc.) come from a GitHub CDN that intermittently 504s.
+        shell: bash
+        run: |
+          npx electron-builder --win --x64 --publish=never || {
+            echo "electron-builder failed — retrying once (transient tool-download errors)"
+            npx electron-builder --win --x64 --publish=never
+          }
 
-      - name: Build Electron app (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: npx electron-builder --linux
-
-      - name: Upload artifacts (macOS)
-        if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-build
-          path: dist-electron/*.dmg
+      - name: Check update-feed manifest was produced
+        # latest.yml is the auto-update feed manifest (D-U5). The upload step's
+        # if-no-files-found only fires when ALL globs are empty, so assert it
+        # explicitly — a feed without latest.yml silently updates nobody.
+        shell: bash
+        run: test -f dist-electron/latest.yml || { echo "::error::dist-electron/latest.yml missing — electron-builder did not emit the update manifest"; exit 1; }
 
       - name: Upload artifacts (Windows)
-        if: matrix.os == 'windows-latest'
+        # latest.yml + .blockmap are the electron-updater feed files: publish
+        # the whole set to the static HTTPS host configured as update_feed_url
+        # on the tills (docs/till-update-runbook.md §G).
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
           path: |
             dist-electron/*.exe
-            dist-electron/*.msi
+            dist-electron/*.blockmap
+            dist-electron/latest.yml
+          if-no-files-found: error
 
-      - name: Upload artifacts (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-build
-          path: |
-            dist-electron/*.AppImage
-            dist-electron/*.deb
+      - name: Publish update feed to Cloudflare R2
+        # Auto-publish the electron-updater feed set so shipping a shell release is just
+        # "bump version + push to main" (docs/till-update-runbook.md §G). Never publishes
+        # PR builds. Upload ORDER is load-bearing: installers + blockmaps first,
+        # latest.yml LAST — a till polling mid-publish must never see a manifest that
+        # points at a not-yet-uploaded installer. latest.yml is no-cache so tills see a
+        # new release within one poll, not a CDN TTL later.
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          # Optional: full S3 endpoint override. REQUIRED for jurisdiction-pinned buckets
+          # (e.g. EU: https://<account-id>.eu.r2.cloudflarestorage.com) — those are NOT
+          # reachable on the default per-account endpoint.
+          R2_S3_ENDPOINT: ${{ secrets.R2_S3_ENDPOINT }}
+          AWS_DEFAULT_REGION: auto
+          # R2 rejects the newer AWS-CLI default integrity checksums — documented workaround:
+          AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+          AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+        run: |
+          # Secrets pasted from rendered tables/terminals can carry stray whitespace or
+          # box-drawing characters (a trailing U+2502 cost a real run: "Invalid endpoint").
+          # Scrub to the characters each value can legitimately contain BEFORE validating.
+          R2_BUCKET=$(printf '%s' "$R2_BUCKET" | tr -cd 'A-Za-z0-9._-')
+          R2_ACCOUNT_ID=$(printf '%s' "$R2_ACCOUNT_ID" | tr -cd 'a-fA-F0-9')
+          R2_S3_ENDPOINT=$(printf '%s' "$R2_S3_ENDPOINT" | tr -cd 'A-Za-z0-9.:/_-')
+          export AWS_ACCESS_KEY_ID=$(printf '%s' "$AWS_ACCESS_KEY_ID" | tr -d '[:space:]')
+          export AWS_SECRET_ACCESS_KEY=$(printf '%s' "$AWS_SECRET_ACCESS_KEY" | tr -d '[:space:]')
+          if [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || { [ -z "$R2_ACCOUNT_ID" ] && [ -z "$R2_S3_ENDPOINT" ]; }; then
+            echo "::warning::R2 secrets not configured (need R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET + R2_ACCOUNT_ID or R2_S3_ENDPOINT) — update feed NOT published; tills will not see this version."
+            exit 0
+          fi
+          ENDPOINT="${R2_S3_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
+          shopt -s nullglob
+          for f in dist-electron/*.exe dist-electron/*.blockmap; do
+            echo "uploading: $(basename "$f")"
+            aws s3 cp "$f" "s3://${R2_BUCKET}/pos/$(basename "$f")" --endpoint-url "$ENDPOINT" --only-show-errors
+          done
+          aws s3 cp dist-electron/latest.yml "s3://${R2_BUCKET}/pos/latest.yml" --endpoint-url "$ENDPOINT" --cache-control "no-cache" --only-show-errors
+          echo "Feed published under /pos/ — tills poll it via config.json update_feed_url."

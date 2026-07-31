@@ -1,9 +1,13 @@
+import i18n from '../i18n';
 import type { SystemSettings } from '../contexts/SettingsContext';
 import { transactionLocalService } from '../lib/localDatabase';
 import { connectionStatus, supabase } from '../lib/supabase';
 import type { LocalCustomer, LocalTransactionItem } from '../types/supabase';
 import { generateUUID } from '../utils/uuid';
 import { mapIvaDecimalToSaftTaxCode } from './saft/exportSaft';
+import { asUnresolvedIssueFailure, FiscalBackendUnavailableError, ProviderRejectedError } from './fiscalFailure';
+import { identityKey, resolveIssueAttemptId } from './issueAttemptReuse';
+import { buildIssuerSnapshot, logoArchiveEntryFor } from './issuerSnapshot';
 import type {
     FiscalCheckoutResult,
     FiscalTransactionMetadata,
@@ -95,21 +99,26 @@ interface VendusFunctionResponse {
     taxes?: unknown;
     paymentMethods?: unknown;
     error?: string;
+    /** Upstream HTTP status, present only when the PROVIDER refused (not us). */
+    providerStatus?: number;
+    dispatched?: boolean;
 }
 
 function assertVendusEnabled(settings: SystemSettings): void {
     if (settings.fiscal.issuer !== 'vendus' || !settings.fiscal.vendus.enabled) {
-        throw new Error('Vendus não está ativo nas definições fiscais.');
+        throw new Error(i18n.t('checkout.vendusNotEnabled'));
     }
     if (!settings.fiscal.vendus.registerId.trim()) {
-        throw new Error('Register ID Vendus em falta nas definições fiscais.');
+        throw new Error(i18n.t('checkout.vendusMissingRegisterId'));
     }
 }
 
+// Runs before the issue-attempt row is created, so a throw here is the one
+// failure that provably left no trace at Vendus (see fiscalFailure.ts).
 function assertOnlineForVendus(): void {
     const state = connectionStatus.getStatus();
     if (!state.isOnline || !state.isSupabaseOnline) {
-        throw new Error('Vendus está configurado como emissor fiscal. A venda fica bloqueada até existir ligação ao Supabase/Vendus.');
+        throw new FiscalBackendUnavailableError('vendus', i18n.t('checkout.vendusOffline'));
     }
 }
 
@@ -118,7 +127,7 @@ function parseOptionalInt(raw: string | undefined): number | undefined {
     if (!trimmed) return undefined;
     const n = Number(trimmed);
     if (!Number.isInteger(n) || n <= 0) {
-        throw new Error(`Identificador Vendus inválido: ${raw}`);
+        throw new Error(i18n.t('checkout.vendusInvalidIdentifier', { value: raw }));
     }
     return n;
 }
@@ -126,7 +135,7 @@ function parseOptionalInt(raw: string | undefined): number | undefined {
 function paymentMethodIdFor(settings: SystemSettings, method: FiscalPaymentInput['paymentMethod']): string {
     const id = settings.fiscal.vendus.paymentMethodIds[method]?.trim();
     if (!id) {
-        throw new Error(`Método de pagamento Vendus em falta para ${method}.`);
+        throw new Error(i18n.t('checkout.vendusMissingPaymentMethod', { method }));
     }
     return id;
 }
@@ -253,6 +262,13 @@ async function invokeVendusFunction(body: Record<string, unknown>): Promise<Vend
         throw new Error('Vendus Edge Function não devolveu dados.');
     }
     if (data.error) {
+        // `providerStatus` present => Vendus itself answered, and this is its
+        // verdict. Absent => our own fault, or an edge function deployed before
+        // that contract existed; either way the till must assume the request
+        // may have landed.
+        if (typeof data.providerStatus === 'number') {
+            throw new ProviderRejectedError(data.providerStatus, data.error);
+        }
         throw new Error(data.error);
     }
     return data;
@@ -270,37 +286,74 @@ export async function issueVendusSale(params: {
     assertOnlineForVendus();
 
     const draft = buildSaleCheckoutDraft({ cart, selectedCustomer, payment, globalDiscount });
-    const attemptId = generateUUID();
-    const txId = `pos-sale-${attemptId}`;
-    const externalReference = `POS-${attemptId}`;
-    const request: VendusIssueDocumentPayload = {
+
+    // Everything that defines this sale to Vendus, minus the id-derived fields.
+    // Built before the id is chosen, because it is what chooses the id.
+    const saleFields = {
         register_id: parseOptionalInt(settings.fiscal.vendus.registerId) ?? 0,
         store_id: parseOptionalInt(settings.fiscal.vendus.storeId),
         type: settings.fiscal.vendus.documentType,
         mode: vendusMode(settings),
         output: settings.fiscal.vendus.output,
-        tx_id: txId,
-        external_reference: externalReference,
-        return_qrcode: 1,
-        errors_full: 'yes',
         ...(draft.globalDiscountAmount > 0 ? { discount_amount: normalizeMoney(draft.globalDiscountAmount) } : {}),
         client: clientForVendus(selectedCustomer),
         payments: [{ id: paymentMethodIdFor(settings, payment.paymentMethod), amount: normalizeMoney(draft.total) }],
         items: vendusItemsForSale(settings, cart),
     };
+    const identityOfVendusRequest = (r: Record<string, unknown>): string =>
+        identityKey({
+            register_id: r.register_id,
+            store_id: r.store_id,
+            type: r.type,
+            mode: r.mode,
+            output: r.output,
+            discount_amount: r.discount_amount,
+            client: r.client,
+            payments: r.payments,
+            items: r.items,
+        });
 
-    await transactionLocalService.createVendusIssueAttempt({
-        id: attemptId,
+    // Re-running an unresolved sale re-presents its ORIGINAL tx_id. Vendus
+    // documents that as a hard guarantee — "this will ensure that only a
+    // document may be created using the same tx_id, even if multiple requests
+    // are made by mistake" — so the retry returns the first document instead of
+    // signing a second one for the same sale.
+    const { attemptId, reused } = await resolveIssueAttemptId({
+        provider: 'vendus',
         kind: 'sale',
+        identity: identityOfVendusRequest(saleFields as unknown as Record<string, unknown>),
+        identityOfStored: identityOfVendusRequest,
+    });
+    const txId = `pos-sale-${attemptId}`;
+    const externalReference = `POS-${attemptId}`;
+    const request: VendusIssueDocumentPayload = {
+        ...saleFields,
         tx_id: txId,
         external_reference: externalReference,
-        status: 'pending',
-        vendus_document_id: null,
-        local_transaction_id: null,
-        request_json: JSON.stringify(request),
-        response_json: null,
-        error_message: null,
-    });
+        return_qrcode: 1,
+        errors_full: 'yes',
+    } as VendusIssueDocumentPayload;
+
+    if (reused) {
+        await transactionLocalService.updateVendusIssueAttempt(attemptId, {
+            status: 'pending',
+            error_message: null,
+        });
+    } else {
+        await transactionLocalService.createVendusIssueAttempt({
+            id: attemptId,
+            provider: 'vendus',
+            kind: 'sale',
+            tx_id: txId,
+            external_reference: externalReference,
+            status: 'pending',
+            vendus_document_id: null,
+            local_transaction_id: null,
+            request_json: JSON.stringify(request),
+            response_json: null,
+            error_message: null,
+        });
+    }
 
     try {
         const response = await invokeVendusFunction({ action: 'issue_document', document: request });
@@ -315,6 +368,8 @@ export async function issueVendusSale(params: {
         });
         const result = await transactionLocalService.createVendusFiscalCheckoutAtomic({
             certificationMode: certificationModeForVendus(settings),
+            issuer: buildIssuerSnapshot(settings),
+            logoArchiveEntry: logoArchiveEntryFor(settings),
             transactionDate: draft.transactionDate,
             transactionTime: draft.transactionTime,
             systemEntryDate: draft.systemEntryDate,
@@ -342,7 +397,14 @@ export async function issueVendusSale(params: {
             status: 'failed',
             error_message: error instanceof Error ? error.message : String(error),
         });
-        throw error;
+        // Past the network call: Vendus may hold a document for this sale even
+        // though we never got a usable one back. Mark it unresolved so the sale
+        // cannot silently fall back onto a paper invoice as well.
+        throw asUnresolvedIssueFailure(error, {
+            provider: 'vendus',
+            externalReference,
+            attemptId,
+        });
     }
 }
 
@@ -367,19 +429,19 @@ export async function issueVendusCreditNoteForTransaction(params: {
 
     const origTx = await transactionLocalService.getTransactionById(originalTransactionId);
     if (!origTx?.fiscal_document_id) {
-        throw new Error('Transação sem documento fiscal — não é possível emitir nota de crédito.');
+        throw new Error(i18n.t('checkout.creditNoteNoFiscalDocument'));
     }
     const origFiscal = await transactionLocalService.getFiscalDocumentById(origTx.fiscal_document_id);
     if (!origFiscal) {
-        throw new Error('Documento fiscal original em falta.');
+        throw new Error(i18n.t('checkout.creditNoteOriginalFiscalMissing'));
     }
     if (origFiscal.fiscal_provider !== 'vendus') {
-        throw new Error('O documento original não foi emitido pela Vendus.');
+        throw new Error(i18n.t('checkout.vendusOriginalNotVendus'));
     }
     const meta = parseMetadata(origTx.fiscal_metadata_json);
     const refs = meta?.vendus?.items || [];
     if (refs.length === 0) {
-        throw new Error('Referências de linhas Vendus em falta para emitir nota de crédito.');
+        throw new Error(i18n.t('checkout.vendusMissingLineReferences'));
     }
 
     const now = new Date();
@@ -398,6 +460,7 @@ export async function issueVendusCreditNoteForTransaction(params: {
         category_id: item.category_id,
         category_name: item.category_name,
         quantity: item.quantity,
+        unit: item.unit ?? 'un',
         unit_price: item.unit_price,
         unit_cost: item.unit_cost,
         iva_rate: item.iva_rate,
@@ -412,7 +475,7 @@ export async function issueVendusCreditNoteForTransaction(params: {
     const requestItems: VendusDocumentItem[] = origTx.items.map((item: LocalTransactionItem, index) => {
         const ref = refs[index];
         if (!ref) {
-            throw new Error(`Referência Vendus em falta para a linha ${index + 1}.`);
+            throw new Error(i18n.t('checkout.vendusMissingLineReference', { line: index + 1 }));
         }
         return {
             id: ref.vendusItemId || undefined,
@@ -476,6 +539,8 @@ export async function issueVendusCreditNoteForTransaction(params: {
         });
         const result = await transactionLocalService.createVendusFiscalCheckoutAtomic({
             certificationMode: certificationModeForVendus(settings),
+            issuer: buildIssuerSnapshot(settings),
+            logoArchiveEntry: logoArchiveEntryFor(settings),
             transactionDate,
             transactionTime,
             systemEntryDate,
@@ -542,7 +607,7 @@ export async function fetchVendusSaftXml(params: {
         mode: vendusMode(params.settings),
     });
     if (!response.xml) {
-        throw new Error('Vendus não devolveu SAF-T.');
+        throw new Error(i18n.t('checkout.vendusNoSaft'));
     }
     return atob(response.xml);
 }

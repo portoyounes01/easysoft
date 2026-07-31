@@ -5,10 +5,14 @@ import { useSettings } from '../contexts/SettingsContext';
 import { initializeLocalDatabase } from '../lib/localDatabase';
 import { queueTicketService } from '../services/queueTicketService';
 import type { LocalQueueTicket } from '../types/supabase';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import '../styles/design-system-2-scope.css';
 
 const OrderQueue: React.FC = () => {
   const { t } = useTranslation();
   const { settings } = useSettings();
+  const { visualStyle, prefs } = useDesignSystem2Customization();
   const [tickets, setTickets] = useState<LocalQueueTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -50,21 +54,20 @@ const OrderQueue: React.FC = () => {
   const ready = tickets.filter(ticket => ticket.status === 'ready');
 
   return (
-    <div className="space-y-6">
+    <div className="ds2-visual-scope space-y-6" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
       <div className="flex flex-col gap-4 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">{t('orderQueue.serviceQueueEyebrow')}</p>
           <h1 className="mt-1 text-3xl font-bold text-gray-950">{t('orderQueue.title')}</h1>
           <p className="mt-2 text-gray-500">{t('orderQueue.subtitle')}</p>
         </div>
-        <button
+        <AdminActionButton
           type="button"
+          variant="primary"
+          icon={ExternalLink}
+          label={t('orderQueue.openCustomerDisplay')}
           onClick={handleOpenDisplay}
-          className="inline-flex min-h-touch items-center justify-center gap-2 rounded-2xl bg-gray-950 px-6 py-3 font-semibold text-white hover:bg-gray-800"
-        >
-          <ExternalLink className="h-5 w-5" />
-          {t('orderQueue.openCustomerDisplay')}
-        </button>
+        />
       </div>
 
       {isLoading ? (
@@ -86,14 +89,14 @@ const OrderQueue: React.FC = () => {
                   <p className="mt-2 text-sm text-gray-500">
                     {ticket.created_at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
-                  <button
+                  <AdminActionButton
                     type="button"
+                    variant="success"
+                    icon={PackageCheck}
+                    label={t('orderQueue.markReady')}
                     onClick={() => void handleStatus(ticket, 'ready')}
-                    className="mt-5 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-xl bg-green-500 px-4 font-bold text-white hover:bg-green-600"
-                  >
-                    <PackageCheck className="h-5 w-5" />
-                    {t('orderQueue.markReady')}
-                  </button>
+                    className="mt-5 w-full"
+                  />
                 </article>
               ))}
               {preparing.length === 0 && <p className="col-span-full py-12 text-center text-gray-400">{t('orderQueue.noOrdersPreparing')}</p>}
@@ -111,14 +114,15 @@ const OrderQueue: React.FC = () => {
                 <article key={ticket.id} className="rounded-2xl border border-green-200 bg-green-50 p-5">
                   <p className="text-4xl font-black tracking-tight text-green-950">{ticket.display_number}</p>
                   <p className="mt-2 text-sm text-green-700">{t('orderQueue.waitingForCollection')}</p>
-                  <button
+                  <AdminActionButton
                     type="button"
+                    variant="success"
+                    icon={Check}
+                    label={t('orderQueue.collected')}
                     onClick={() => void handleStatus(ticket, 'collected')}
-                    className="mt-5 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 font-bold text-white hover:bg-gray-800"
-                  >
-                    <Check className="h-5 w-5" />
-                    {t('orderQueue.collected')}
-                  </button>
+                    className="mt-5 w-full"
+                    style={{ minHeight: '3.75rem' }}
+                  />
                 </article>
               ))}
               {ready.length === 0 && <p className="col-span-full py-12 text-center text-gray-400">{t('orderQueue.noOrdersReady')}</p>}

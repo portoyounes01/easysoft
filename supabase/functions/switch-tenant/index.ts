@@ -17,7 +17,12 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
   const url = Deno.env.get('SUPABASE_URL') ?? '';
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  // ADMIN_SERVICE_KEY (explicit secret) preferred over the injected env: functions
+  // created after Supabase's new-API-keys rollout get injected a credential GoTrue's
+  // ADMIN endpoints cannot verify ("unrecognized JWT kid <nil> for algorithm ES256"
+  // — PostgREST accepts it, auth.admin.* fails). Set via:
+  //   supabase secrets set ADMIN_SERVICE_KEY=<legacy service_role JWT>
+  const serviceKey = Deno.env.get('ADMIN_SERVICE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   if (!url || !serviceKey) return json({ error: 'server_misconfigured' }, 500);
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
@@ -38,7 +43,15 @@ Deno.serve(async (req) => {
     .select('tenant_id, role, store_ids').eq('user_id', user.id).eq('tenant_id', tenantId).maybeSingle();
   if (!m) return json({ error: 'not_a_member' }, 403);
 
-  const app_metadata = { tenant_id: m.tenant_id, app_role: m.role, ...(m.store_ids ? { store_ids: m.store_ids } : {}) };
+  // GoTrue MERGES app_metadata: store_ids must be EXPLICITLY nulled when the target
+  // membership has none, or the previous tenant's store scope survives the switch
+  // (and empty arrays normalize to null — [] reads as scoped-to-zero-stores).
+  const app_metadata = {
+    tenant_id: m.tenant_id,
+    app_role: m.role,
+    store_ids: m.store_ids?.length ? m.store_ids : null,
+    store_id: null,
+  };
   const { error } = await admin.auth.admin.updateUserById(user.id, { app_metadata });
   if (error) return json({ error: 'claim_stamp_failed' }, 500);
 

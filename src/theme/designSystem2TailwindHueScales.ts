@@ -7,6 +7,11 @@ import type { DesignSystem2ColorChoiceId, DesignSystem2NeutralFamilyId } from '.
 export function tailwindChromaScaleForColorChoice(
     id: DesignSystem2ColorChoiceId
 ): Record<string, string> {
+    // Pure black has no Tailwind chroma scale (colors.black is a single hex);
+    // the neutral ramp is the closest visual ladder toward #000.
+    if (id === 'black') {
+        return colors.neutral as unknown as Record<string, string>;
+    }
     const scale = colors[id as keyof typeof colors];
     if (scale && typeof scale === 'object' && '500' in (scale as object)) {
         return scale as Record<string, string>;

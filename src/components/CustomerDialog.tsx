@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { WithDialogTokens } from './ui/dialogParts';
 import { useTranslation } from 'react-i18next';
 import { Search, Plus, Users, Check, AlertCircle, CreditCard as TaxIcon } from 'lucide-react';
 import { BaseDialog } from './ui/BaseDialog';
@@ -8,6 +9,8 @@ import { InputField } from './ui/InputField';
 import VirtualKeyboard from './VirtualKeyboard';
 import SimpleNumpad from './SimpleNumpad';
 import { LocalCustomer } from '../types/supabase';
+import { useSettings } from '../contexts/SettingsContext';
+import { getCountryProfile } from '../lib/countryProfile';
 
 interface CustomerDialogProps {
     open: boolean;
@@ -50,11 +53,21 @@ function normalizeStoredTaxNumber(tax: string | null | undefined): string {
     return (tax ?? '').replace(/\s/g, '').toUpperCase();
 }
 
-/** Portugal postal: digits only in UI, formatted as 1234-567 */
-function formatPtPostalInput(raw: string): string {
-    const digits = raw.replace(/\D/g, '').slice(0, 7);
-    if (digits.length <= 4) return digits;
-    return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+/** Country-aware ISO2 from a free-text country field. */
+function deriveCountryIso(raw: string): string {
+    const v = (raw || '').trim();
+    if (v.length === 0 || v.toLowerCase() === 'portugal') return 'PT';
+    if (v.toLowerCase() === 'españa' || v.toLowerCase() === 'espana' || v.toLowerCase() === 'spain') return 'ES';
+    return v.slice(0, 2).toUpperCase();
+}
+
+/** Postal-code input mask by country: PT = NNNN-NNN, ES = NNNNN (5 digits, no dash). */
+function formatPostalInput(raw: string, countryIso: string): string {
+    const digits = raw.replace(/\D/g, '');
+    if (countryIso === 'ES') return digits.slice(0, 5);
+    const d = digits.slice(0, 7);
+    if (d.length <= 4) return d;
+    return `${d.slice(0, 4)}-${d.slice(4)}`;
 }
 
 export const CustomerDialog: React.FC<CustomerDialogProps> = ({
@@ -65,6 +78,9 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     onRegisterCustomer
 }) => {
     const { t } = useTranslation();
+    const { settings } = useSettings();
+    const opCountry = settings.operatingCountry;
+    const countryProfile = getCountryProfile(opCountry);
     const [view, setView] = useState<ViewMode>('list');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCustomer, setSelectedCustomer] = useState<LocalCustomer | null>(null);
@@ -99,7 +115,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         if (open) {
             setView('list');
             setSearchTerm('');
-            setNewCustomerForm(initialFormState);
+            setNewCustomerForm({ ...initialFormState, country: opCountry });
             setFormError(null);
             setActiveField(''); // Reset active field to hide keyboard
         }
@@ -133,7 +149,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
     const handleFormChange = (field: string, value: string) => {
         setFormError(null);
         const next =
-            field === 'postalCode' ? formatPtPostalInput(value) : value;
+            field === 'postalCode' ? formatPostalInput(value, deriveCountryIso(newCustomerForm.country)) : value;
         setNewCustomerForm(prev => ({ ...prev, [field]: next }));
     };
 
@@ -148,7 +164,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 if (field === 'taxId') {
                     finalValue = value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase();
                 } else if (field === 'postalCode') {
-                    finalValue = formatPtPostalInput(value);
+                    finalValue = formatPostalInput(value, deriveCountryIso(newCustomerForm.country));
                 }
                 handleFormChange(field, finalValue);
             },
@@ -183,14 +199,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
         const addr = newCustomerForm.address.trim();
         const city = newCustomerForm.city.trim();
         const postal = newCustomerForm.postalCode.trim();
-        const rawCountry = newCustomerForm.country.trim();
-        const countryIso =
-            rawCountry.length === 0 || rawCountry.toLowerCase() === 'portugal'
-                ? 'PT'
-                : rawCountry.slice(0, 2).toUpperCase();
+        const countryIso = deriveCountryIso(newCustomerForm.country);
 
         if (countryIso === 'PT' && postal.length > 0 && !/^\d{4}-\d{3}$/.test(postal)) {
             setFormError(t('pos.customerForm.invalidPostalPt'));
+            return;
+        }
+        if (countryIso === 'ES' && postal.length > 0 && !/^\d{5}$/.test(postal)) {
+            setFormError(t('pos.customerForm.invalidPostalEs'));
             return;
         }
 
@@ -232,6 +248,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
             open={open}
             onClose={onClose}
             title={t('pos.selectCustomerTitle')}
+            icon={Users}
             width="55vw"
             height="80vh"
             footer={
@@ -276,6 +293,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                 ) : undefined
             }
         >
+            <WithDialogTokens>{tk => (
             <div className="flex flex-col h-full">
                 {/* View Toggle */}
                 <div className="px-6 pt-6 pb-4">
@@ -320,27 +338,27 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                         <div className="flex-1 flex flex-col overflow-hidden">
                             {searchTerm.trim().length > 0 && filteredCustomers.length > 0 ? (
                                 <div className="flex-1 overflow-y-auto">
-                                    <ul className="divide-y divide-gray-200">
+                                    <ul className="space-y-2">
                                         {filteredCustomers.map((customer, index) => (
                                             <li
                                                 key={customer.id}
                                                 onClick={() => setSelectedCustomer(customer)}
-                                                className={`cursor-pointer transition-colors ${selectedCustomer?.id === customer.id ? 'bg-green-50' : 'hover:bg-blue-50'
+                                                className={`cursor-pointer rounded-[10px] border transition-all ${selectedCustomer?.id === customer.id ? 'bg-green-50 border-green-500' : 'bg-white border-gray-200 hover:bg-gray-50'
                                                     }`}
                                                 style={{ paddingTop: index === 0 ? '2vh' : '1.5vh', paddingBottom: '1vh' }}
                                             >
                                                 <div className="flex items-center justify-between px-2">
-                                                    <p className="font-semibold text-gray-900 truncate" style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>
-                                                        {customer.tax_number || 'N/A'}
+                                                    <p className={`font-semibold ${tk.p.titleText} truncate`} style={{ fontSize: '1.7vh', paddingRight: '1vh' }}>
+                                                        {customer.tax_number || t('common.notApplicable')}
                                                     </p>
-                                                    <p className="font-semibold text-gray-900" style={{ fontSize: '1.5vh' }}>
+                                                    <p className={`font-semibold ${tk.p.titleText}`} style={{ fontSize: '1.5vh' }}>
                                                         €{(customer.total_spent || 0).toFixed(2)}
                                                     </p>
                                                 </div>
-                                                <div className="flex items-center space-x-3 text-gray-500 px-2" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
+                                                <div className={`flex items-center space-x-3 ${tk.p.subText} px-2`} style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '1vh' }}>
                                                     <span className="font-medium truncate" style={{ fontSize: '1.3vh' }}>{customer.name}</span>
                                                     <span style={{ fontSize: '1.3vh' }}>•</span>
-                                                    <span style={{ fontSize: '1.3vh' }}>{customer.transaction_count || 0} orders</span>
+                                                    <span style={{ fontSize: '1.3vh' }}>{t('pos.customerOrdersCount', { count: customer.transaction_count || 0 })}</span>
                                                 </div>
                                             </li>
                                         ))}
@@ -349,12 +367,12 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             ) : (
                                 <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
                                     <Users className="w-16 h-16 text-gray-300 mb-4" />
-                                    <p className="text-xl font-semibold text-gray-700 mb-2">
+                                    <p className={`text-xl font-semibold ${tk.p.titleText} mb-2`}>
                                         {searchTerm.trim().length === 0
                                             ? t('pos.startSearchTitle')
                                             : t('pos.noCustomersFoundTitle')}
                                     </p>
-                                    <p className="text-gray-500 mb-6">
+                                    <p className={`${tk.p.subText} mb-6`}>
                                         {searchTerm.trim().length === 0
                                             ? t('pos.startSearchMessage')
                                             : t('pos.noCustomersFoundMessage')}
@@ -391,7 +409,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                             {/* Personal Info */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <InputField
-                                    label="Name"
+                                    label={t('customers.form.nameLabel')}
                                     value={newCustomerForm.name}
                                     onChange={(e) => handleFormChange('name', e.target.value)}
                                     onClick={() => handleTextFieldClick('name', true, true, 50)}
@@ -400,14 +418,14 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                                 />
                                 <div className="relative">
                                     <InputField
-                                        label="NIF *"
+                                        label={`${countryProfile.taxId.label} *`}
                                         icon={TaxIcon}
                                         value={newCustomerForm.taxId}
                                         onChange={(e) => handleFormChange('taxId', e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 9).toUpperCase())}
                                         onClick={() => handleTextFieldClick('taxId', true, true, 9)}
                                         className={activeField === 'taxId' ? 'bg-blue-50' : ''}
-                                        placeholder={t('forms.taxNumberExample')}
-                                        error={newCustomerForm.taxId && getNifValidationState(newCustomerForm.taxId) !== 'valid' ? 'Invalid NIF' : undefined}
+                                        placeholder={countryProfile.taxId.placeholder}
+                                        error={newCustomerForm.taxId && getNifValidationState(newCustomerForm.taxId) !== 'valid' ? t('customers.form.errors.taxInvalid', { defaultValue: `Invalid ${countryProfile.taxId.label}` }) : undefined}
                                         rightIcon={newCustomerForm.taxId && getNifValidationState(newCustomerForm.taxId) === 'valid' ? Check : undefined}
                                     />
                                 </div>
@@ -471,6 +489,7 @@ export const CustomerDialog: React.FC<CustomerDialogProps> = ({
                     </div>
                 )}
             </div>
+            )}</WithDialogTokens>
         </BaseDialog>
     );
 };

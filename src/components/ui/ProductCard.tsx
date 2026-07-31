@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Package } from 'lucide-react';
 
 // Card width as percentage of viewport width (height is calculated based on aspect ratio)
@@ -16,6 +17,8 @@ export interface ProductCardProps {
     canAdd?: boolean;
     onClick?: () => void;
     outOfStockLabel?: string;
+    /** Sold by weight: price renders as €/kg. */
+    soldByWeight?: boolean;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
@@ -27,9 +30,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     remainingStock,
     isOutOfStock = false,
     canAdd = true,
+    soldByWeight = false,
     onClick,
     outOfStockLabel = 'Out of Stock'
 }) => {
+    const { t } = useTranslation();
     const displayStock = remainingStock !== undefined ? remainingStock : stock;
 
     return (
@@ -59,7 +64,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                         fontSize: `${CARD_WIDTH_VW * 0.1}vw`
                     }}
                 >
-                    {cartQuantity}
+                    {soldByWeight ? cartQuantity.toFixed(3) : cartQuantity}
                 </div>
             )}
 
@@ -135,13 +140,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                         className="font-bold text-gray-900"
                         style={{ fontSize: `${CARD_WIDTH_VW * 0.07}vw` }}
                     >
-                        €{price.toFixed(2)}
+                        €{price.toFixed(2)}{soldByWeight ? '/kg' : ''}
                     </span>
                     <span
                         className="text-gray-500"
                         style={{ fontSize: `${CARD_WIDTH_VW * 0.07}vw` }}
                     >
-                        Stock: {displayStock}
+                        {t('products.table.stock')}: {soldByWeight ? `${Number(displayStock.toFixed(3))} kg` : displayStock}
                     </span>
                 </div>
             </div>

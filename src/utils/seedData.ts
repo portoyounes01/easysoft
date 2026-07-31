@@ -44,7 +44,7 @@ function seedErrorMessage(error: unknown): string {
 function isStartupSystemAdmin(emp: { employee_number?: unknown; name?: unknown }): boolean {
   const employeeNumber = String(emp.employee_number ?? '').toUpperCase();
   const name = String(emp.name ?? '').toLowerCase();
-  return employeeNumber === 'ADMIN001' || name === 'system administrator';
+  return employeeNumber === 'SYS001' || name === 'system administrator';
 }
 
 function startupCredentialDefaults(emp: { employee_number?: unknown; name?: unknown; role?: unknown }): {

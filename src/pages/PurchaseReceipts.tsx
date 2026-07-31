@@ -7,9 +7,14 @@ import type {
     LocalPurchaseReceipt,
     LocalPurchaseReceiptLine,
 } from '../types/purchaseReceipt';
+import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import { DIALOG_PALETTES, DIALOG_SECONDARY_RADIUS, useAppliedDialogStyle } from '../theme/dialogStyle';
+import '../styles/design-system-2-scope.css';
 
 const PurchaseReceipts: React.FC = () => {
     const { t } = useTranslation();
+    const { visualStyle, prefs } = useDesignSystem2Customization();
+    const applied = useAppliedDialogStyle();
     const [receipts, setReceipts] = useState<LocalPurchaseReceipt[]>([]);
     const [selectedReceipt, setSelectedReceipt] = useState<LocalPurchaseReceipt>();
     const [selectedLines, setSelectedLines] = useState<LocalPurchaseReceiptLine[]>([]);
@@ -48,7 +53,7 @@ const PurchaseReceipts: React.FC = () => {
     );
 
     return (
-        <div className="mx-auto max-w-[1500px] space-y-6 pt-6">
+        <div className="ds2-visual-scope mx-auto max-w-[1500px] space-y-6 pt-6" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
             <header className="flex flex-col gap-4 rounded-[2rem] border border-white bg-white/85 p-6 shadow-xl sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">{t('purchaseReceipts.eyebrow')}</p>
@@ -132,7 +137,9 @@ const PurchaseReceipts: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={() => setSelectedReceipt(undefined)}
-                                className="min-h-touch-xs rounded-xl bg-slate-100 px-4 font-semibold text-slate-700"
+                                className={applied
+                                    ? `min-h-touch-xs px-4 font-semibold ${DIALOG_PALETTES[applied.palette].secondaryBtn} ${DIALOG_SECONDARY_RADIUS[applied.primaryCta]}`
+                                    : 'min-h-touch-xs rounded-xl bg-slate-100 px-4 font-semibold text-slate-700'}
                             >
                                 {t('common.close')}
                             </button>

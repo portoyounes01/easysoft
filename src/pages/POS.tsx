@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { generateQRCodeImage } from '../utils/qrCode';
 import {
   Grid,
@@ -15,14 +16,19 @@ import {
   RefreshCw,
   Menu,
 } from 'lucide-react';
-import { usePOS } from '../contexts/POSContext';
+import { usePOS, cartLineUnitPrice, cartLineOptionsSummary, type CartLineOptions } from '../contexts/POSContext';
 import { syncManager } from '../services/syncManager';
 import { queueTicketService } from '../services/queueTicketService';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useProducts } from '../contexts/ProductsContext';
-import OrderSummaryPanel from '../components/OrderSummaryPanel';
+import OrderSummaryPanel, { type ServiceType } from '../components/OrderSummaryPanel';
 import DiscountDialog from '../components/DiscountDialog';
+import WeighDialog from '../components/WeighDialog';
+import ProductOptionsDialog from '../components/ProductOptionsDialog';
+import ScaleStatusIndicator from '../components/ScaleStatusIndicator';
+import UpdateStatusIndicator from '../components/UpdateStatusIndicator';
+import scaleService from '../services/scaleService';
 import { LocalProduct, LocalCustomer } from '../types/supabase';
 import { useTranslation } from 'react-i18next';
 // import { transactionService } from '../services/transactionService';
@@ -34,19 +40,33 @@ import { saftTypeToReceiptDocumentType } from '../fiscal/saleDocumentType';
 import { buildReceiptCustomerProps } from '../fiscal/fiscalCustomer';
 import { ReceiptProps } from '../components/ThermalReceipt';
 import { getReceiptT } from '../utils/receiptLanguage';
-import type { PostSalePrintAuditContext } from '../fiscal/fiscalAuditLog';
+import { uiLocale } from '../utils/locale';
+import { logPostSaleReceiptPrinted, type PostSalePrintAuditContext } from '../fiscal/fiscalAuditLog';
+import { usePrinterConfig } from '../hooks/usePrinterConfig';
+import {
+  isFiscalResultPrintable,
+  printReceiptThermally,
+  resolveReceiptPrinterName,
+  type ThermalPrintResult,
+} from '../services/receiptPrinting';
+import type { PaymentConfirmation } from '../components/PaymentDialog';
 // import ReceiptHistorySelector from '../components/ReceiptHistorySelector'; // AGENTS: do not delete — 2.ª via picker (commented until implemented)
 import { CustomerDialog } from '../components/CustomerDialog';
 import PaymentDialog from '../components/PaymentDialog';
 import CashDrawerDialog from '../components/CashDrawerDialog';
 import ReceiptDialog from '../components/ReceiptDialog';
+import NonFiscalFallbackDialog from '../components/NonFiscalFallbackDialog';
+import { classifyFiscalIssueFailure, type FiscalIssueFailure } from '../fiscal/fiscalFailure';
+import { isNonFiscalFallbackProvider, type NonFiscalFallbackDecision } from '../fiscal/nonFiscalFallback';
 import { CategoryFilterButton } from '../components/ui/CategoryFilterButton';
 import { ProductCard } from '../components/ui/ProductCard';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
 import { useLayoutNav } from '../contexts/LayoutNavContext';
 import { OPEN_MY_PROFILE_EVENT } from '../components/HR/MyProfileDialog';
 import { cashDrawerAuditService } from '../services/cashDrawerAuditService';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { recipeService } from '../services/recipeService';
+import { tableOrderService } from '../services/tableOrderService';
 import '../styles/design-system-2-scope.css';
 
 // Icon mapping for categories
@@ -60,12 +80,30 @@ const iconMap = {
 
 
 const POSInner: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const appliedDialogStyle = useAppliedDialogStyle();
+  const shellButtons = appliedDialogStyle ? dialogButtonClasses(appliedDialogStyle) : null;
   const { toggleNavSidebar } = useLayoutNav();
   const { visualStyle, prefs } = useDesignSystem2Customization();
-  const { cart, addToCart, clearCart, updateQuantity, selectedCustomer, selectCustomer, processTransaction } = usePOS();
+  const {
+    cart,
+    addToCart,
+    addOptionedToCart,
+    addWeighedToCart,
+    clearCart,
+    updateQuantity,
+    selectedCustomer,
+    selectCustomer,
+    processTransaction,
+    activeTableOrder,
+    restoreCart,
+    clearActiveTableOrder,
+  } = usePOS();
   const { employee, signOut } = useSupabaseAuth();
   const { settings, updateSettings } = useSettings();
+  /** Same signal the page-wide banner used before it moved into the status bar. */
+  const trainingMode = settings.fiscal.trainingMode;
   const {
     categories: allCategories,
     getProductsByCategory,
@@ -91,6 +129,9 @@ const POSInner: React.FC = () => {
   const [showReceiptHistory, setShowReceiptHistory] = useState(false);
   */
   const [nextReceiptAfterClose, setNextReceiptAfterClose] = useState<ReceiptProps | null>(null);
+  /** Outcome of a post-sale auto-print that did not cleanly succeed, handed to
+   *  the receipt dialog so it opens explaining itself. */
+  const [printNotice, setPrintNotice] = useState<{ state: 'unknown' | 'failed'; error?: string } | null>(null);
   const [postSalePrintAudit, setPostSalePrintAudit] = useState<PostSalePrintAuditContext | null>(null);
   const [lastFiscalInvoiceNo, setLastFiscalInvoiceNo] = useState<string | null>(null);
 
@@ -101,6 +142,30 @@ const POSInner: React.FC = () => {
   useEffect(() => {
     void recipeService.getProductIdsWithRecipe().then(setRecipeProductIds).catch(() => { });
   }, []);
+
+  // Weigh-item dialog (sold-by-weight products)
+  const [weighProduct, setWeighProduct] = useState<LocalProduct | null>(null);
+  const [optionsProduct, setOptionsProduct] = useState<LocalProduct | null>(null);
+
+  // Till-scoped scale session: the scale is per-till hardware (like the
+  // printer), so detection/polling runs from POS mount onward — NOT per
+  // weigh-dialog open, which made every tap pay for a port scan and made the
+  // dialog flap between "waiting" and "unavailable". Deliberately no stop on
+  // unmount: navigating to Settings and back must not churn the serial port.
+  useEffect(() => {
+    if (!scaleService.isAvailable()) return;
+    void scaleService.getConfig().then((r) => {
+      if (r.success && r.config?.enabled) void scaleService.start();
+    });
+  }, []);
+
+  // Total quantity of a product across cart lines (weighed products can span
+  // several lines — one per weighing).
+  const cartQuantityForProduct = useCallback(
+    (productId: string) =>
+      cart.reduce((sum, item) => (item.product.id === productId ? sum + item.quantity : sum), 0),
+    [cart]
+  );
 
   // Stock validation helper function
   const canAddToCart = (product: LocalProduct, requestedQuantity = 1): boolean => {
@@ -115,17 +180,54 @@ const POSInner: React.FC = () => {
       return true;
     }
 
-    // Find current quantity in cart
-    const cartItem = cart.find(item => item.product.id === product.id);
-    const currentCartQuantity = cartItem ? cartItem.quantity : 0;
+    const currentCartQuantity = cartQuantityForProduct(product.id);
+    if (product.sold_by_weight) {
+      // Weight is unknown until the item is on the scale; the grid gate only
+      // requires some remaining capacity (3dp-rounded: weighings are exact
+      // 0.001 multiples, so raw float sums would leave phantom ~1e-16 capacity).
+      // The exact weight is re-checked at weigh-confirm via maxWeightKg.
+      return Number((product.stock - currentCartQuantity).toFixed(3)) > 0;
+    }
     const totalRequestedQuantity = currentCartQuantity + requestedQuantity;
 
     // Check if total would exceed available stock
     return totalRequestedQuantity <= product.stock;
   };
 
+  // Remaining sellable kg for the weigh dialog (undefined = unlimited).
+  const maxWeightForProduct = (product: LocalProduct): number | undefined => {
+    if (
+      recipeProductIds.has(product.id) ||
+      !settings.pos.trackInventory ||
+      !product.track_stock ||
+      settings.pos.allowNegativeStock
+    ) {
+      return undefined;
+    }
+    return Math.max(0, Number((product.stock - cartQuantityForProduct(product.id)).toFixed(3)));
+  };
+
+  /** Variants with at least one enabled option, or enabled add-ons, route
+   *  the tap through the item-options dialog instead of a direct add. */
+  const productHasOptions = (product: LocalProduct): boolean =>
+    (product.variants ?? []).some(attr => attr.enabled && attr.options.some(o => o.enabled)) ||
+    (product.modifiers ?? []).some(m => m.enabled);
+
   // Enhanced addToCart with stock validation
   const handleAddToCart = (product: LocalProduct, quantity = 1) => {
+    // Weighed products go through the scale dialog instead of quantity 1.
+    if (product.sold_by_weight) {
+      if (canAddToCart(product)) {
+        setWeighProduct(product);
+      }
+      return;
+    }
+    if (productHasOptions(product)) {
+      if (canAddToCart(product, quantity)) {
+        setOptionsProduct(product);
+      }
+      return;
+    }
     // Only allow adding if stock validation passes
     // UI prevents clicks on out-of-stock items, but this is a safety check
     if (canAddToCart(product, quantity)) {
@@ -133,10 +235,20 @@ const POSInner: React.FC = () => {
     }
   };
 
+  const handleWeighConfirm = (weightKg: number) => {
+    if (!weighProduct) return;
+    const max = maxWeightForProduct(weighProduct);
+    if (max !== undefined && weightKg > max + 1e-9) {
+      return; // dialog disables Add beyond max; safety check
+    }
+    addWeighedToCart(weighProduct, weightKg);
+    setWeighProduct(null);
+  };
+
   const handleIncrementCartLine = useCallback(
-    (productId: string) => {
-      const line = cart.find(item => item.product.id === productId);
-      if (!line) return;
+    (lineId: string) => {
+      const line = cart.find(item => item.lineId === lineId);
+      if (!line || line.product.sold_by_weight) return; // weighed lines have a fixed weight
       if (recipeProductIds.has(line.product.id) || !settings.pos.trackInventory || !line.product.track_stock) {
         addToCart(line.product, 1);
         return;
@@ -150,26 +262,162 @@ const POSInner: React.FC = () => {
   );
 
   const handleDecrementCartLine = useCallback(
-    (productId: string) => {
-      const line = cart.find(item => item.product.id === productId);
+    (lineId: string) => {
+      const line = cart.find(item => item.lineId === lineId);
       if (!line) return;
-      updateQuantity(productId, line.quantity - 1);
+      // Tapping − on a weighed line removes the whole weighing.
+      updateQuantity(lineId, line.product.sold_by_weight ? 0 : line.quantity - 1);
     },
     [cart, updateQuantity]
   );
 
   // Quantity increases from product grid; order panel line tap removes one unit
   const [showPayment, setShowPayment] = useState(false);
+  // Set when a fiscal issuance failed and the sale may be completed on a
+  // non-fiscal slip instead. Holds the confirmation so the identical sale can be
+  // re-entered once the operator decides.
+  const [fallbackPrompt, setFallbackPrompt] = useState<{
+    confirmation: PaymentConfirmation;
+    failure: FiscalIssueFailure;
+  } | null>(null);
+  const [fallbackBusy, setFallbackBusy] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  const [serviceType, setServiceType] = useState<ServiceType>('dine-in');
   const [discount, setDiscount] = useState({ type: 'none' as 'none' | 'percentage' | 'fixed', value: 0 });
   const [pointsRedemption, setPointsRedemption] = useState<{
     customerId: string;
     points: number;
   } | null>(null);
   const [showDiscountDialog, setShowDiscountDialog] = useState(false);
+  const [tableOrderReady, setTableOrderReady] = useState(false);
+  const settlingTableOrderId = useRef<string | null>(null);
+  const activeTableOrderRef = useRef(activeTableOrder);
+  const tableOrderReadyRef = useRef(tableOrderReady);
+  const tableOrderSnapshotRef = useRef({
+    lines: cart,
+    customer: selectedCustomer,
+    globalDiscount: discount,
+    pointsRedemption,
+  });
 
   const [cashReceived, setCashReceived] = useState(0);
+  const printerConfig = usePrinterConfig();
   const [showCashDrawer, setShowCashDrawer] = useState(false);
+
+  // Rehydrate a table order whenever this POS screen is entered with an
+  // active table session. The stored product snapshots retain the exact
+  // price/VAT/weight data that was present when the order was parked.
+  useEffect(() => {
+    let cancelled = false;
+    const tableOrderId = activeTableOrder?.id;
+
+    if (!tableOrderId) {
+      setTableOrderReady(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setTableOrderReady(false);
+    void tableOrderService.getById(tableOrderId)
+      .then(order => {
+        if (cancelled) return;
+        if (!order || order.status !== 'open') {
+          clearActiveTableOrder();
+          return;
+        }
+
+        restoreCart(order.lines, order.customer);
+        setDiscount(order.global_discount);
+        setPointsRedemption(order.points_redemption);
+        setServiceType('dine-in');
+        setTableOrderReady(true);
+      })
+      .catch(error => {
+        console.error('Could not restore the active table order', error);
+        if (!cancelled) clearActiveTableOrder();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTableOrder?.id, clearActiveTableOrder, restoreCart]);
+
+  // Persist a parked order after cart, customer or sale modifiers change.
+  // A short debounce keeps product-grid taps responsive while still making
+  // navigation away from the POS safe (the navigation handler flushes too).
+  useEffect(() => {
+    const tableOrderId = activeTableOrder?.id;
+    if (!tableOrderId || !tableOrderReady || settlingTableOrderId.current === tableOrderId) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void tableOrderService.updateOpenOrder(tableOrderId, {
+        lines: cart,
+        customer: selectedCustomer,
+        globalDiscount: discount,
+        pointsRedemption,
+      }).catch(error => {
+        // Do not clear the live cart if persistence fails; the operator can
+        // retry from Tables and no fiscal transaction has been touched.
+        console.error('Could not save the table order', error);
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [activeTableOrder?.id, cart, discount, pointsRedemption, selectedCustomer, tableOrderReady]);
+
+  // The table action flushes explicitly, but sidebar navigation and logout can
+  // unmount this page directly. Preserve the latest parked snapshot in those
+  // cases as well; a failed write leaves the existing saved order untouched.
+  useEffect(() => {
+    activeTableOrderRef.current = activeTableOrder;
+    tableOrderReadyRef.current = tableOrderReady;
+    tableOrderSnapshotRef.current = {
+      lines: cart,
+      customer: selectedCustomer,
+      globalDiscount: discount,
+      pointsRedemption,
+    };
+  }, [activeTableOrder, cart, discount, pointsRedemption, selectedCustomer, tableOrderReady]);
+
+  useEffect(() => () => {
+    const tableOrder = activeTableOrderRef.current;
+    if (!tableOrder || !tableOrderReadyRef.current || settlingTableOrderId.current === tableOrder.id) {
+      return;
+    }
+    void tableOrderService.updateOpenOrder(tableOrder.id, tableOrderSnapshotRef.current).catch(error => {
+      console.error('Could not save the table order while leaving the POS', error);
+    });
+  }, []);
+
+  const handleOpenTables = async () => {
+    setServiceType('dine-in');
+    const tableOrderId = activeTableOrder?.id;
+    if (tableOrderId && tableOrderReady && settlingTableOrderId.current !== tableOrderId) {
+      try {
+        await tableOrderService.updateOpenOrder(tableOrderId, {
+          lines: cart,
+          customer: selectedCustomer,
+          globalDiscount: discount,
+          pointsRedemption,
+        });
+      } catch (error) {
+        console.error('Could not save the table order before opening Tables', error);
+        alert(t('pos.tableOrder.saveFailed'));
+        return;
+      }
+    }
+    navigate('/tables', {
+      state: {
+        tableOrderSnapshot: {
+          globalDiscount: discount,
+          pointsRedemption,
+        },
+      },
+    });
+  };
 
   // Auto-logout states
   const [showAutoLogoutWarning, setShowAutoLogoutWarning] = useState(false);
@@ -308,7 +556,7 @@ const POSInner: React.FC = () => {
 
 
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const subtotal = cart.reduce((sum, item) => sum + (cartLineUnitPrice(item) * item.quantity), 0);
   const requestedDiscountAmount = discount.type === 'percentage'
     ? (subtotal * discount.value / 100)
     : discount.type === 'fixed'
@@ -320,7 +568,7 @@ const POSInner: React.FC = () => {
 
   // Calculate tax extracted from tax-inclusive prices (European style)
   const tax = cart.reduce((sum, item) => {
-    const itemTotal = item.product.price * item.quantity;
+    const itemTotal = cartLineUnitPrice(item) * item.quantity;
     const taxAmount = itemTotal - (itemTotal / (1 + item.product.iva_rate));
     return sum + taxAmount;
   }, 0);
@@ -345,7 +593,6 @@ const POSInner: React.FC = () => {
         Math.floor(discountAmount * settings.loyalty.pointsPerEuroRedeemed)
       )
     : 0;
-  const changeAmount = cashReceived > finalTotal ? cashReceived - finalTotal : 0;
 
   // (category selection handled inline where used)
 
@@ -367,7 +614,14 @@ const POSInner: React.FC = () => {
   // Auto-clear cart timer management
   useEffect(() => {
     // Skip auto-clear if disabled or timeout is 0 (NEVER)
-    if (!settings.pos.autoClearCart.enabled || settings.pos.autoClearCart.timeoutMinutes === 0 || cart.length === 0) {
+    // An active table has its own persisted order and must never be silently
+    // emptied by the temporary walk-in-cart timer.
+    if (
+      activeTableOrder ||
+      !settings.pos.autoClearCart.enabled ||
+      settings.pos.autoClearCart.timeoutMinutes === 0 ||
+      cart.length === 0
+    ) {
       setCartClearCountdown(0);
       return;
     }
@@ -390,7 +644,7 @@ const POSInner: React.FC = () => {
     const interval = setInterval(checkAutoClearCart, 1000); // Check every second
 
     return () => clearInterval(interval);
-  }, [lastCartActivity, cart.length, settings.pos.autoClearCart, clearCart]);
+  }, [activeTableOrder, lastCartActivity, cart.length, settings.pos.autoClearCart, clearCart]);
 
   // Track cart activity when cart is modified
   useEffect(() => {
@@ -452,6 +706,291 @@ const POSInner: React.FC = () => {
     };
   }, [refreshData]);
 
+  /**
+   * Complete a sale. Extracted from the PaymentDialog callback so the same
+   * path can be re-entered with `nonFiscalFallback` after the operator
+   * confirms the fallback — the post-sale work (queue ticket, drawer,
+   * receipt, printing) is identical whether a fatura or a slip was issued.
+   */
+  const handlePaymentConfirmed = async (
+    confirmation: PaymentConfirmation,
+    nonFiscalFallback?: NonFiscalFallbackDecision
+  ): Promise<boolean> => {
+    const cartSnapshot = cart.map((ci) => ({ ...ci }));
+    // The operator's actual choice, not an inference from the amount:
+    // a cash sale tendered exactly leaves the field empty, and
+    // `cashReceived > 0` used to record those as card (wrong payment
+    // method on the fiscal record, and no drawer kick).
+    const paymentMethod = confirmation.method;
+    const tenderedCash = confirmation.cashReceived;
+    const changeGiven = confirmation.change;
+    const employeeId = employee?.id || 'unknown-employee';
+    const employeeName = employee?.name || 'Employee';
+    const tableOrderId = activeTableOrder?.id;
+    let fiscalSaleWasIssued = false;
+    let tableSettlementNeedsReview = false;
+
+    try {
+      if (tableOrderId && !tableOrderReady) {
+        throw new Error(t('pos.tableOrder.stillLoading'));
+      }
+
+      if (tableOrderId) {
+        // Persist the safety state before fiscal issuance. A crash in
+        // the narrow window after issuance cannot make the table
+        // payable again; it stays blocked for reconciliation instead.
+        settlingTableOrderId.current = tableOrderId;
+        await tableOrderService.beginSettlement(tableOrderId);
+      }
+
+      const { fiscal, receiptNumber, transactionId } = await processTransaction(
+        {
+          paymentMethod,
+          amountPaid: paymentMethod === 'cash' ? tenderedCash : undefined,
+          employeeId,
+          employeeName,
+          employeeNumber: employee?.employee_number,
+        },
+        () => {
+          setDiscount({ type: 'none', value: 0 });
+          setPointsRedemption(null);
+        },
+        {
+          type: discount.type,
+          value: discount.value,
+          amount: discountAmount + customerDiscountAmount,
+        },
+        { settings, updateSettings },
+        {
+          enabled: settings.loyalty.enabled,
+          pointsPerEuroEarned: settings.loyalty.pointsPerEuroEarned,
+          pointsRedeemed: actualPointsRedeemed,
+          customerId: pointsRedemption?.customerId,
+        },
+        undefined,
+        tableOrderId
+          ? {
+            onFiscalDocumentPersisted: async issuedFiscal => {
+              fiscalSaleWasIssued = true;
+              try {
+                await tableOrderService.markSettled(tableOrderId, issuedFiscal.transactionId);
+                clearActiveTableOrder();
+              } catch (settlementError) {
+                // Never reopen a table after fiscal issuance. The order
+                // remains "payment in progress" until it is reconciled.
+                tableSettlementNeedsReview = true;
+                clearActiveTableOrder();
+                console.error('Fiscal sale completed, but table settlement could not be recorded', settlementError);
+              } finally {
+                settlingTableOrderId.current = null;
+              }
+            },
+          }
+          : undefined,
+        nonFiscalFallback
+      );
+
+      if (paymentMethod === 'cash' && employee) {
+        try {
+          const drawerEvent = await cashDrawerAuditService.openForSale({
+            operator: {
+              id: employee.id,
+              name: employee.name,
+              employeeNumber: employee.employee_number,
+            },
+            terminal: { label: settings.receipt.counterLabel },
+            transactionId: fiscal?.transactionId || transactionId,
+            transactionReference: fiscal?.invoiceNo || receiptNumber,
+            saleAmount: finalTotal,
+          });
+          if (!drawerEvent.success) {
+            console.warn('Cash sale completed, but the drawer open command failed:', drawerEvent.error_message);
+          }
+        } catch (drawerError) {
+          console.error('Cash sale completed, but the drawer action could not be logged:', drawerError);
+        }
+      }
+
+      let queueTicketNumber: string | undefined;
+      if (settings.orderQueue.enabled) {
+        try {
+          const queueTicket = await queueTicketService.issueTicket(
+            fiscal?.invoiceNo || receiptNumber,
+            {
+              prefix: settings.orderQueue.prefix,
+              startNumber: settings.orderQueue.startNumber,
+              padding: settings.orderQueue.padding,
+            }
+          );
+          queueTicketNumber = queueTicket.display_number;
+        } catch (queueError) {
+          console.error('Sale completed, but the order ticket could not be created', queueError);
+        }
+      }
+
+      if (isSupabaseConfigured() && await checkSupabaseConnection()) {
+        try {
+          syncManager.forceSync().catch(() => { });
+        } catch {
+          /* ignore */
+        }
+      }
+
+      // A non-fiscal slip carries no QR by construction; generating one from an
+      // empty payload would put a scannable-looking square on a document the AT
+      // cannot validate.
+      const qrCodeImage = fiscal && !fiscal.nonFiscal
+        ? await generateQRCodeImage(fiscal.qrPayload)
+        : undefined;
+
+      const receiptData: ReceiptProps = {
+        documentType: fiscal?.nonFiscal
+          ? 'TALAO_NAO_FISCAL'
+          : fiscal
+            ? saftTypeToReceiptDocumentType(fiscal.invoiceTypeSaft)
+            : 'FATURA',
+        date: new Date(),
+        counter: settings.receipt.counterLabel,
+        ticketNumber: queueTicketNumber,
+        verificationCode: fiscal?.atcudBody || '',
+        verifactuLegend: fiscal?.verifactuLegend,
+        documentNumber: fiscal?.invoiceNo || '',
+        documentHash: fiscal?.hashBase64,
+        hashFourChars: fiscal?.hashFourChars,
+        qrCodeData: fiscal?.qrPayload,
+        qrCodeImage,
+        trainingMode: fiscal ? fiscal.certificationMode === 'training' : settings.fiscal.trainingMode,
+        officialOutput: fiscal?.officialOutput,
+        // The sale slip IS the original, so it says so explicitly rather than
+        // falling through to the 2.ª via default.
+        documentLabel: getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.original'),
+        emitterName: employeeName,
+        company: {
+          name: settings.company.name,
+          address: settings.company.address,
+          postalCode: settings.company.postalCode,
+          city: settings.company.city,
+          taxNumber: settings.company.taxNumber,
+          logo: settings.company.logo,
+          phone: settings.company.phone || undefined,
+          email: settings.company.email || undefined,
+        },
+        customer: buildReceiptCustomerProps(selectedCustomer),
+        items: cartSnapshot.map((ci) => ({
+          id: ci.lineId,
+          description: ci.options ? `${ci.product.name} (${cartLineOptionsSummary(ci.options)})` : ci.product.name,
+          quantity: ci.quantity,
+          unit: ci.product.sold_by_weight ? ('kg' as const) : ('un' as const),
+          unitPrice: cartLineUnitPrice(ci),
+          vatRate: Math.round((ci.product.iva_rate || 0) * 100),
+          total: Number((cartLineUnitPrice(ci) * ci.quantity).toFixed(2)),
+        })),
+        totals: {
+          subtotal: Number(subtotal.toFixed(2)),
+          discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
+          discountPercentage: discount.type === 'percentage' ? discount.value : 0,
+          net: Number(finalSubtotal.toFixed(2)),
+          vat: Number(adjustedFinalTax.toFixed(2)),
+          total: Number(finalTotal.toFixed(2)),
+        },
+        payment: {
+          method: paymentMethod === 'cash'
+            ? getReceiptT(settings.receipt.receiptLanguage)('transactions.receipt.paymentCash')
+            : getReceiptT(settings.receipt.receiptLanguage)('transactions.receipt.paymentCard'),
+          amountGiven: Number(tenderedCash.toFixed(2)),
+          change: Number(changeGiven.toFixed(2)),
+        },
+        slogan: settings.company.slogan || undefined,
+        softwareInfo: settings.company.softwareInfo || undefined,
+        certificationNumber: settings.company.certificationNumber || undefined,
+      };
+
+      // Hand the receipt straight to the thermal head and skip the
+      // preview — but only when the fiscal issuance is complete enough
+      // to give a customer unseen (ATCUD + QR for PT, Veri*factu legend
+      // + QR for ES). Anything less, or any outcome other than a clean
+      // success, falls back to the dialog so the operator sees it.
+      const auditContext: PostSalePrintAuditContext = {
+        documentNumber: fiscal?.invoiceNo || receiptData.documentNumber || '',
+        transactionId: fiscal?.transactionId,
+        fiscalDocumentId: fiscal?.fiscalId,
+      };
+      // Own try/catch: the sale is already committed here, so a
+      // printing problem must never surface as "checkout failed" via
+      // the enclosing handler.
+      let autoPrint: ThermalPrintResult = { status: 'unavailable' };
+      try {
+        if (isFiscalResultPrintable(fiscal, {
+          spain: Boolean(fiscal?.verifactuLegend?.trim()) || settings.fiscal.issuer === 'sign_es',
+        })) {
+          autoPrint = await printReceiptThermally(receiptData, {
+            printerName: await resolveReceiptPrinterName(printerConfig?.receiptPrinter),
+            language: settings.receipt.receiptLanguage,
+          });
+        }
+      } catch (printError) {
+        console.error('Sale completed, but the receipt could not be auto-printed', printError);
+        autoPrint = {
+          status: 'failed',
+          error: printError instanceof Error ? printError.message : String(printError),
+        };
+      }
+
+      setShowPayment(false);
+      setReceiptPreviewData(receiptData);
+      // setLastCompletedReceipt(receiptData);
+      // setRecentReceipts((prev) => [receiptData, ...prev].slice(0, 20));
+      setNextReceiptAfterClose(null);
+      if (fiscal?.invoiceNo) {
+        setLastFiscalInvoiceNo(fiscal.invoiceNo);
+      }
+
+      if (autoPrint.status === 'printed') {
+        // No dialog will mount, so the fiscal audit event is logged
+        // here and the context left null — nothing to resolve later.
+        setPostSalePrintAudit(null);
+        setPrintNotice(null);
+        setShowReceiptPreview(false);
+        void logPostSaleReceiptPrinted(auditContext, employee?.id);
+      } else {
+        setPostSalePrintAudit(auditContext);
+        setPrintNotice(
+          autoPrint.status === 'unknown' || autoPrint.status === 'failed'
+            ? { state: autoPrint.status, error: autoPrint.error }
+            : null
+        );
+        setShowReceiptPreview(true);
+      }
+    } catch (e) {
+      if (tableOrderId && !fiscalSaleWasIssued) {
+        try {
+          await tableOrderService.restoreOpen(tableOrderId);
+        } catch (restoreError) {
+          console.error('Could not reopen the table order after a failed checkout', restoreError);
+        }
+        settlingTableOrderId.current = null;
+      }
+      console.error('Checkout failed', e);
+
+      // The fiscal backend could not issue. Offer to complete the sale on a
+      // non-fiscal slip against a handwritten invoice — but only offer it, and
+      // only once: a fallback that itself failed is a plain error.
+      const issueFailure = nonFiscalFallback ? null : classifyFiscalIssueFailure(e);
+      if (issueFailure && isNonFiscalFallbackProvider(issueFailure.provider)) {
+        setFallbackPrompt({ confirmation, failure: issueFailure });
+        return false;
+      }
+
+      alert(e instanceof Error ? e.message : t('pos.checkoutFailed'));
+      return false;
+    }
+
+    if (tableSettlementNeedsReview) {
+      alert(t('pos.tableOrder.settlementNeedsReview'));
+    }
+    return true;
+  };
+
   return (
     <div
       className="ds2-visual-scope flex h-full min-h-0 w-full bg-neutral-50"
@@ -466,7 +1005,7 @@ const POSInner: React.FC = () => {
             <button
               type="button"
               onClick={toggleNavSidebar}
-              className="flex min-h-touch-xs min-w-[2.75rem] shrink-0 items-center justify-center rounded-xl text-[#727272] transition-colors duration-200 hover:bg-neutral-100 hover:text-[#171717]"
+              className="flex min-h-touch-xs min-w-[2.75rem] shrink-0 items-center justify-center rounded-2xl text-gray-700 transition-colors duration-200 hover:bg-gray-100"
               aria-label={t('pos.openMenu')}
             >
               <Menu className="h-[20px] w-[20px]" aria-hidden />
@@ -488,8 +1027,9 @@ const POSInner: React.FC = () => {
         <div className="flex-1 flex overflow-hidden">
           {/* Left Categories Sidebar - uses vw units to match CategoryFilterButton */}
           <div className="bg-neutral-100 flex flex-col" style={{ width: '8vw', paddingLeft: '0.5vw', paddingTop: '1.5vw' }}>
-            {/* All Categories (including All Menu) */}
-            <div className="flex-1 overflow-y-auto" style={{ padding: '0 0.5vw', gap: '0.5vw', display: 'flex', flexDirection: 'column' }}>
+            {/* All Categories (including All Menu) — scrollable, no scrollbar shown
+                (native one hidden: Windows renders hard-cornered gray bars) */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain hide-native-scrollbar" style={{ padding: '0 0.5vw', gap: '0.5vw', display: 'flex', flexDirection: 'column' }}>
               {/* All Menu Option */}
               <CategoryFilterButton
                 label={t('pos.allMenu')}
@@ -545,14 +1085,14 @@ const POSInner: React.FC = () => {
                   <div className="flex space-x-3 justify-center">
                     <button
                       onClick={handleRetryData}
-                      className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-neutral-50 px-6 py-3 rounded-2xl font-medium flex items-center space-x-2 transition-all"
                     >
                       <RefreshCw className="w-5 h-5" />
                       <span>{t('pos.retry')}</span>
                     </button>
                     <button
                       onClick={handleSyncData}
-                      className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-2xl font-semibold flex items-center space-x-2 transition-colors"
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-neutral-50 px-6 py-3 rounded-2xl font-medium flex items-center space-x-2 transition-all"
                     >
                       <RefreshCw className="w-5 h-5" />
                       <span>{t('pos.syncData')}</span>
@@ -579,21 +1119,23 @@ const POSInner: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => void handleSyncData()}
-                        className="min-h-touch px-6 rounded-2xl bg-green-500 hover:bg-green-600 text-white font-semibold text-lg transition-colors duration-200"
+                        className="min-h-touch px-6 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-neutral-50 font-medium text-lg transition-all duration-200"
                       >
                         {t('pos.syncDegradedRetry')}
                       </button>
                       <button
                         type="button"
                         onClick={() => clearSyncError()}
-                        className="min-h-touch px-6 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-lg transition-colors duration-200"
+                        className="min-h-touch px-6 rounded-2xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 text-lg transition-colors duration-200"
                       >
                         {t('pos.syncDegradedDismiss')}
                       </button>
                     </div>
                   </div>
                 )}
-                <div className="flex-1 min-h-0 overflow-y-auto">
+                {/* Scrollable, no scrollbar shown (native one hidden: Windows renders
+                    hard-cornered gray bars) */}
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain hide-native-scrollbar">
                   {/* Show products for selected category OR all products if no category selected */}
                   {(() => {
                     const productsToShow = selectedCategoryId ? filteredProducts : getActiveProducts();
@@ -606,8 +1148,7 @@ const POSInner: React.FC = () => {
                             {productsToShow.map((product) => {
                               const canAdd = canAddToCart(product, 1);
                               const isOutOfStock = !canAdd && !settings.pos.allowNegativeStock;
-                              const cartItem = cart.find(item => item.product.id === product.id);
-                              const cartQuantity = cartItem ? cartItem.quantity : 0;
+                              const cartQuantity = cartQuantityForProduct(product.id);
                               const remainingStock = product.stock - cartQuantity;
 
                               return (
@@ -615,6 +1156,7 @@ const POSInner: React.FC = () => {
                                   key={product.id}
                                   name={product.name}
                                   price={product.price}
+                                  soldByWeight={product.sold_by_weight ?? false}
                                   stock={product.stock}
                                   imageUrl={product.image_url || undefined}
                                   cartQuantity={cartQuantity}
@@ -648,36 +1190,58 @@ const POSInner: React.FC = () => {
           </div>
         </div>
 
-        {/* Bottom User Status Bar — spans categories + products, not cart */}
-        <div id="pos-status-bar" className="flex-none bg-white border-t border-gray-200 px-3 py-1">
+        {/* Bottom User Status Bar — spans categories + products, not cart.
+            In training mode the whole bar goes orange and carries the notice:
+            this replaced the page-wide banner, and it is the only place the
+            till advertises that issued documents have no fiscal value. */}
+        <div
+          id="pos-status-bar"
+          className={`flex-none px-3 py-1 ${
+            trainingMode ? 'bg-orange-100 border-t-2 border-orange-400' : 'bg-white border-t border-gray-200'
+          }`}
+        >
           <div className="flex items-center justify-between max-w-7xl mx-auto">
             <div className="flex items-center space-x-3">
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new Event(OPEN_MY_PROFILE_EVENT))}
-                className="min-h-touch-xs rounded-xl px-2 text-left text-xs font-medium text-gray-800 transition-colors hover:bg-gray-100"
+                className={`min-h-touch-xs rounded-2xl px-2 text-left text-xs font-medium transition-colors ${
+                  trainingMode ? 'text-orange-950 hover:bg-orange-200' : 'text-gray-900 hover:bg-gray-100'
+                }`}
               >
-                {employee?.name} • <span className="capitalize text-gray-600">{employee?.role}</span>
-                <span className="ml-2 text-emerald-700">{t('pos.myProfile')}</span>
+                {employee?.name} • <span className={`capitalize ${trainingMode ? 'text-orange-800' : 'text-gray-600'}`}>{employee?.role}</span>
+                <span className={`ml-2 ${trainingMode ? 'text-orange-900' : 'text-emerald-700'}`}>{t('pos.myProfile')}</span>
               </button>
+              {trainingMode && (
+                <span className="flex items-center gap-2 text-xs" role="status">
+                  <span className="rounded-full bg-orange-600 px-2 py-0.5 font-bold uppercase tracking-wide text-white">
+                    {t('pos.trainingBadge')}
+                  </span>
+                  <span className="hidden font-semibold text-orange-900 sm:inline">
+                    {t('pos.trainingBarNotice')}
+                  </span>
+                </span>
+              )}
               {cart.length > 0 && settings.autoLogout.protectWhenCartHasItems && (
-                <span className="text-green-600 text-xs font-medium">
+                <span className={`text-xs font-medium ${trainingMode ? 'text-green-800' : 'text-green-600'}`}>
                   {t('pos.saleInProgress')}
                 </span>
               )}
             </div>
-            <div className="flex items-center space-x-3 text-xs text-gray-500">
+            <div className={`flex items-center space-x-3 text-xs ${trainingMode ? 'text-orange-900' : 'text-gray-500'}`}>
               {settings.autoLogout.enabled && (
                 <span>
                   {Math.floor(timeUntilAutoLogout / 60000)}:{String(Math.floor((timeUntilAutoLogout % 60000) / 1000)).padStart(2, '0')}
                 </span>
               )}
               {settings.pos.autoClearCart.enabled && settings.pos.autoClearCart.timeoutMinutes > 0 && cart.length > 0 && (
-                <span className="text-orange-600">
-                  Cart: {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
+                <span className={trainingMode ? 'font-bold text-orange-950' : 'text-orange-600'}>
+                  {t('pos.cartTimerLabel')} {Math.floor(cartClearCountdown / 60000)}:{String(Math.floor((cartClearCountdown % 60000) / 1000)).padStart(2, '0')}
                 </span>
               )}
-              <span>POS Terminal • {new Date().toLocaleDateString('pt-PT')}</span>
+              <ScaleStatusIndicator />
+              <UpdateStatusIndicator />
+              <span>{t('pos.terminalLabel')} • {new Date().toLocaleDateString(uiLocale(i18n.language))}</span>
             </div>
           </div>
         </div>
@@ -686,14 +1250,20 @@ const POSInner: React.FC = () => {
       {/* Right Order Summary Panel (DEBUG 30/40/30) */}
       <OrderSummaryPanel
         items={cart.map(item => ({
+          lineId: item.lineId,
           product: item.product,
           quantity: item.quantity,
+          unitPrice: cartLineUnitPrice(item),
+          optionsSummary: item.options ? cartLineOptionsSummary(item.options) : undefined,
+          notes: item.options?.notes ?? null,
+          unit: item.product.sold_by_weight ? ('kg' as const) : ('un' as const),
           canIncrement:
-            recipeProductIds.has(item.product.id) ||
-            !settings.pos.trackInventory ||
-            !item.product.track_stock ||
-            settings.pos.allowNegativeStock ||
-            item.quantity < item.product.stock,
+            !item.product.sold_by_weight &&
+            (recipeProductIds.has(item.product.id) ||
+              !settings.pos.trackInventory ||
+              !item.product.track_stock ||
+              settings.pos.allowNegativeStock ||
+              cartQuantityForProduct(item.product.id) < item.product.stock),
         }))}
         onClearAll={handleClearAll}
         onDecrementCartLine={handleDecrementCartLine}
@@ -704,8 +1274,12 @@ const POSInner: React.FC = () => {
             : undefined
         }
         onProfile={() => window.dispatchEvent(new Event(OPEN_MY_PROFILE_EVENT))}
+        onTables={handleOpenTables}
         onCashDrawer={() => setShowCashDrawer(true)}
         onProcess={() => setShowPayment(true)}
+        serviceType={serviceType}
+        onServiceTypeChange={setServiceType}
+        tableName={activeTableOrder?.tableName}
         totalsOverride={{
           subtotal: Number(subtotal.toFixed(2)),
           tax: Number(adjustedFinalTax.toFixed(2)),
@@ -720,6 +1294,22 @@ const POSInner: React.FC = () => {
         fiscalChainHint={lastFiscalInvoiceNo ?? undefined}
       />
 
+      {optionsProduct && (
+        <ProductOptionsDialog
+          product={optionsProduct}
+          onClose={() => setOptionsProduct(null)}
+          onAdd={(quantity: number, options: CartLineOptions) => addOptionedToCart(optionsProduct, quantity, options)}
+        />
+      )}
+
+      <WeighDialog
+        product={weighProduct}
+        maxWeightKg={weighProduct ? maxWeightForProduct(weighProduct) : undefined}
+        cashier={employee ? { id: employee.id, name: employee.name } : null}
+        onConfirm={handleWeighConfirm}
+        onClose={() => setWeighProduct(null)}
+      />
+
       <DiscountDialog
         open={showDiscountDialog}
         onClose={() => setShowDiscountDialog(false)}
@@ -727,10 +1317,10 @@ const POSInner: React.FC = () => {
         loyalty={settings.loyalty}
         saleTotal={subtotal}
         presets={[
-          { id: 'p10', name: 'Promo 10%', type: 'percentage', value: 10, description: 'Seasonal discount' },
+          { id: 'p10', name: 'Promo 10%', type: 'percentage', value: 10, description: t('pos.discountDialog.presets.seasonal') },
           { id: 'p15', name: 'Promo 15%', type: 'percentage', value: 15 },
-          { id: 'f2', name: '€2 Off', type: 'fixed', value: 2 },
-          { id: 'f5', name: '€5 Off', type: 'fixed', value: 5, description: 'Limited time' }
+          { id: 'f2', name: t('pos.discountDialog.presets.off2'), type: 'fixed', value: 2 },
+          { id: 'f5', name: t('pos.discountDialog.presets.off5'), type: 'fixed', value: 5, description: t('pos.discountDialog.presets.limitedTime') }
         ]}
         onApply={(res) => {
           setDiscount({ type: res.type, value: res.value });
@@ -786,159 +1376,42 @@ const POSInner: React.FC = () => {
             setShowPayment(false);
             setCashReceived(0);
           }}
-          onConfirm={async () => {
-            const cartSnapshot = cart.map((ci) => ({ ...ci }));
-            const paymentMethod = cashReceived > 0 ? 'cash' : 'card' as const;
-            const employeeId = employee?.id || 'unknown-employee';
-            const employeeName = employee?.name || 'Employee';
+          onConfirm={handlePaymentConfirmed}
+        />
+      )}
 
+      {/* Fiscal issuance failed — offer the handwritten-invoice fallback. */}
+      {fallbackPrompt && (
+        <NonFiscalFallbackDialog
+          failure={fallbackPrompt.failure}
+          busy={fallbackBusy}
+          onCancel={() => setFallbackPrompt(null)}
+          onRetry={async () => {
+            const pending = fallbackPrompt;
+            // Cleared first so a second failure can raise its own prompt. Note
+            // the retry is not free: if the connection came back and THIS
+            // attempt times out, the failure escalates from not-dispatched to
+            // unresolved, and the slip then needs the operator's attestation.
+            setFallbackPrompt(null);
+            setFallbackBusy(true);
             try {
-              const { fiscal, receiptNumber, transactionId } = await processTransaction(
-                {
-                  paymentMethod,
-                  amountPaid: cashReceived > 0 ? cashReceived : undefined,
-                  employeeId,
-                  employeeName,
-                  employeeNumber: employee?.employee_number,
-                },
-                () => {
-                  setDiscount({ type: 'none', value: 0 });
-                  setPointsRedemption(null);
-                },
-                {
-                  type: discount.type,
-                  value: discount.value,
-                  amount: discountAmount + customerDiscountAmount,
-                },
-                { settings, updateSettings },
-                {
-                  enabled: settings.loyalty.enabled,
-                  pointsPerEuroEarned: settings.loyalty.pointsPerEuroEarned,
-                  pointsRedeemed: actualPointsRedeemed,
-                  customerId: pointsRedemption?.customerId,
-                }
-              );
-
-              if (paymentMethod === 'cash' && employee) {
-                try {
-                  const drawerEvent = await cashDrawerAuditService.openForSale({
-                    operator: {
-                      id: employee.id,
-                      name: employee.name,
-                      employeeNumber: employee.employee_number,
-                    },
-                    terminal: { label: settings.receipt.counterLabel },
-                    transactionId: fiscal?.transactionId || transactionId,
-                    transactionReference: fiscal?.invoiceNo || receiptNumber,
-                    saleAmount: finalTotal,
-                  });
-                  if (!drawerEvent.success) {
-                    console.warn('Cash sale completed, but the drawer open command failed:', drawerEvent.error_message);
-                  }
-                } catch (drawerError) {
-                  console.error('Cash sale completed, but the drawer action could not be logged:', drawerError);
-                }
+              await handlePaymentConfirmed(pending.confirmation);
+            } finally {
+              setFallbackBusy(false);
+            }
+          }}
+          onIssueSlip={async decision => {
+            const pending = fallbackPrompt;
+            setFallbackBusy(true);
+            try {
+              // Dismiss only once the slip actually exists. If issuing it fails
+              // the operator keeps the dialog — and the sale — instead of being
+              // dropped back to an empty till with nothing recorded anywhere.
+              if (await handlePaymentConfirmed(pending.confirmation, decision)) {
+                setFallbackPrompt(null);
               }
-
-              let queueTicketNumber: string | undefined;
-              if (settings.orderQueue.enabled) {
-                try {
-                  const queueTicket = await queueTicketService.issueTicket(
-                    fiscal?.invoiceNo || receiptNumber,
-                    {
-                      prefix: settings.orderQueue.prefix,
-                      startNumber: settings.orderQueue.startNumber,
-                      padding: settings.orderQueue.padding,
-                    }
-                  );
-                  queueTicketNumber = queueTicket.display_number;
-                } catch (queueError) {
-                  console.error('Sale completed, but the order ticket could not be created', queueError);
-                }
-              }
-
-              if (isSupabaseConfigured() && await checkSupabaseConnection()) {
-                try {
-                  syncManager.forceSync().catch(() => { });
-                } catch {
-                  /* ignore */
-                }
-              }
-
-              const qrCodeImage = fiscal
-                ? await generateQRCodeImage(fiscal.qrPayload)
-                : undefined;
-
-              const receiptData: ReceiptProps = {
-                documentType: fiscal
-                  ? saftTypeToReceiptDocumentType(fiscal.invoiceTypeSaft)
-                  : 'FATURA',
-                date: new Date(),
-                counter: settings.receipt.counterLabel,
-                ticketNumber: queueTicketNumber,
-                verificationCode: fiscal?.atcudBody || '',
-                documentNumber: fiscal?.invoiceNo || '',
-                documentHash: fiscal?.hashBase64,
-                hashFourChars: fiscal?.hashFourChars,
-                qrCodeData: fiscal?.qrPayload,
-                qrCodeImage,
-                trainingMode: fiscal ? fiscal.certificationMode === 'training' : settings.fiscal.trainingMode,
-                officialOutput: fiscal?.officialOutput,
-                documentLabel: getReceiptT(settings.receipt.receiptLanguage)('thermalReceipt.original'),
-                emitterName: employeeName,
-                company: {
-                  name: settings.company.name,
-                  address: settings.company.address,
-                  postalCode: settings.company.postalCode,
-                  city: settings.company.city,
-                  taxNumber: settings.company.taxNumber,
-                  phone: settings.company.phone || undefined,
-                  email: settings.company.email || undefined,
-                },
-                customer: buildReceiptCustomerProps(selectedCustomer),
-                items: cartSnapshot.map((ci) => ({
-                  id: ci.product.id,
-                  description: ci.product.name,
-                  quantity: ci.quantity,
-                  unitPrice: ci.product.price,
-                  vatRate: Math.round((ci.product.iva_rate || 0) * 100),
-                  total: Number((ci.product.price * ci.quantity).toFixed(2)),
-                })),
-                totals: {
-                  subtotal: Number(subtotal.toFixed(2)),
-                  discount: Number((discountAmount + customerDiscountAmount).toFixed(2)),
-                  discountPercentage: discount.type === 'percentage' ? discount.value : 0,
-                  net: Number(finalSubtotal.toFixed(2)),
-                  vat: Number(adjustedFinalTax.toFixed(2)),
-                  total: Number(finalTotal.toFixed(2)),
-                },
-                payment: {
-                  method: cashReceived > 0 ? 'Numerário' : 'Multibanco',
-                  amountGiven: Number(cashReceived.toFixed(2)),
-                  change: Number(changeAmount.toFixed(2)),
-                },
-                slogan: settings.company.slogan || undefined,
-                softwareInfo: settings.company.softwareInfo || undefined,
-                certificationNumber: settings.company.certificationNumber || undefined,
-              };
-
-              setShowPayment(false);
-              setReceiptPreviewData(receiptData);
-              // setLastCompletedReceipt(receiptData);
-              // setRecentReceipts((prev) => [receiptData, ...prev].slice(0, 20));
-              setNextReceiptAfterClose(null);
-              setPostSalePrintAudit({
-                documentNumber: fiscal?.invoiceNo || receiptData.documentNumber || '',
-                transactionId: fiscal?.transactionId,
-                fiscalDocumentId: fiscal?.fiscalId,
-              });
-              if (fiscal?.invoiceNo) {
-                setLastFiscalInvoiceNo(fiscal.invoiceNo);
-              }
-              setShowReceiptPreview(true);
-            } catch (e) {
-              console.error('Checkout failed', e);
-              alert(e instanceof Error ? e.message : 'Pagamento falhou');
+            } finally {
+              setFallbackBusy(false);
             }
           }}
         />
@@ -965,6 +1438,7 @@ const POSInner: React.FC = () => {
           onClose={() => {
             setShowReceiptPreview(false);
             setPostSalePrintAudit(null);
+            setPrintNotice(null);
             if (nextReceiptAfterClose) {
               const next = nextReceiptAfterClose;
               setNextReceiptAfterClose(null);
@@ -974,6 +1448,7 @@ const POSInner: React.FC = () => {
           }}
           receipt={receiptPreviewData}
           postSalePrintAudit={postSalePrintAudit}
+          initialPrintNotice={printNotice}
         />
       )}
 
@@ -1014,13 +1489,21 @@ const POSInner: React.FC = () => {
               <div className="flex space-x-4">
                 <button
                   onClick={handleAutoLogout}
-                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-touch transition-colors"
+                  className={
+                    shellButtons
+                      ? `${shellButtons.danger} flex-1`
+                      : 'flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-4 rounded-2xl min-h-touch transition-colors'
+                  }
                 >
                   {t('pos.logoutNow')}
                 </button>
                 <button
                   onClick={handleExtendSession}
-                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-touch transition-colors flex items-center justify-center space-x-2"
+                  className={
+                    shellButtons
+                      ? `${shellButtons.primary} flex-1 flex items-center justify-center space-x-2`
+                      : 'flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 rounded-2xl min-h-touch transition-colors flex items-center justify-center space-x-2'
+                  }
                 >
                   <UserCircle className="w-5 h-5" />
                   <span>{t('pos.stayLoggedIn')}</span>

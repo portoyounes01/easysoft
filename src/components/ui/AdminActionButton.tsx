@@ -20,7 +20,7 @@ export const AdminActionButton: React.FC<AdminActionButtonProps> = ({
     ...props
 }) => {
     const baseStyles =
-        'rounded-2xl transition-all duration-200 flex items-center justify-center min-h-touch-xs';
+        'rounded-2xl transition-all duration-200 flex items-center justify-center min-h-touch-xs disabled:cursor-not-allowed disabled:opacity-50';
 
     const variants = {
         primary: "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-neutral-50 px-4 py-2 font-medium space-x-2",

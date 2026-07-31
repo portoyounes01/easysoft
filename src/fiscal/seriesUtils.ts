@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { ReceiptSeriesProfile } from './receiptSeriesProfile';
 
 /** Segment used in invoice numbers: `FS {segment}/{seq}` — must not contain "/". */
@@ -8,10 +9,10 @@ export function invoiceSeriesSegment(profile: ReceiptSeriesProfile): string {
 export function assertInvoiceSeriesSegment(segment: string): void {
     const s = segment.trim();
     if (!s) {
-        throw new Error('Nome da série em falta (Definições > Numeração).');
+        throw new Error(i18n.t('checkout.missingSeriesName'));
     }
     if (s.includes('/')) {
-        throw new Error('O nome da série não pode conter o carácter "/".');
+        throw new Error(i18n.t('checkout.seriesNameSlash'));
     }
 }
 

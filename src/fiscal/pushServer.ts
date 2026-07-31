@@ -51,6 +51,7 @@ export function localTransactionItemsToServerInsert(
         category_id: i.category_id,
         category_name: i.category_name,
         quantity: i.quantity,
+        unit: i.unit ?? 'un',
         unit_price: i.unit_price,
         unit_cost: i.unit_cost,
         iva_rate: i.iva_rate,

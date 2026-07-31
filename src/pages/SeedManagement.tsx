@@ -18,11 +18,17 @@ import {
     Info,
     ShieldAlert,
     Trash2,
+    UtensilsCrossed,
 } from 'lucide-react';
 import { seedDataService, SeedResult } from '../utils/seedData';
+import { seedRestaurantDataset } from '../utils/seedRestaurantData';
+import { QBELLA_EVORA_DATASET } from '../utils/restaurantSeedDataset';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useProducts } from '../contexts/ProductsContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -35,6 +41,9 @@ interface SeedStatus {
     details: string[];
 }
 
+/** Which button is mid-run, so only that one shows a spinner. */
+type SeedAction = 'yaml' | 'restaurant' | 'clear' | null;
+
 export interface SeedManagementPanelProps {
     embedded?: boolean;
 }
@@ -45,6 +54,9 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
     const { refreshEmployees } = useEmployees();
     const { refreshData: refreshProducts } = useProducts();
     const { employee, hasPermission } = useSupabaseAuth();
+    const { updateSettings } = useSettings();
+    const applied = useAppliedDialogStyle();
+    const shellButtons = applied ? dialogButtonClasses(applied) : null;
     const canClearLocalData = hasPermission('clear_data');
     const [seedStatus, setSeedStatus] = useState<SeedStatus>({
         isRunning: false,
@@ -56,6 +68,7 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
         available: string[];
         missing: string[];
     }>({ available: [], missing: [] });
+    const [activeAction, setActiveAction] = useState<SeedAction>(null);
     const [showClearDialog, setShowClearDialog] = useState(false);
     const [clearConfirmation, setClearConfirmation] = useState('');
 
@@ -79,10 +92,11 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
     }, []);
 
     const handleRunSeed = useCallback(async () => {
+        setActiveAction('yaml');
         setSeedStatus({
             isRunning: true,
             success: null,
-            message: 'Starting seeding process...',
+            message: t('seedManagement.starting'),
             details: []
         });
 
@@ -119,7 +133,7 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                     isRunning: false,
                     success: false,
                     message: result.message,
-                    details: ['Check the browser console for detailed error information']
+                    details: [t('seedManagement.failureConsole')]
                 });
             }
         } catch (error) {
@@ -135,14 +149,77 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                     t('seedManagement.failureHints.console'),
                 ]
             });
+        } finally {
+            setActiveAction(null);
         }
     }, [refreshEmployees, refreshProducts, t]);
+
+    const handleSeedRestaurant = useCallback(async () => {
+        setActiveAction('restaurant');
+        setSeedStatus({
+            isRunning: true,
+            success: null,
+            message: t('seedManagement.restaurant.starting', { name: QBELLA_EVORA_DATASET.name }),
+            details: []
+        });
+
+        try {
+            const result = await seedRestaurantDataset(QBELLA_EVORA_DATASET);
+
+            // The seeder only writes local rows; the company block lives in
+            // settings, so the panel applies it once the catalogue is in.
+            const seedCompany = QBELLA_EVORA_DATASET.company;
+            if (seedCompany) updateSettings({ company: seedCompany });
+
+            const details = [
+                `✅ ${t('seedManagement.restaurant.detailCategories', { count: result.categoriesCount })}`,
+                `✅ ${t('seedManagement.restaurant.detailProducts', { count: result.productsCount })}`,
+                `✅ ${t('seedManagement.restaurant.detailRawMaterials', { count: result.rawMaterialsCount })}`,
+                `✅ ${t('seedManagement.restaurant.detailRecipeLines', { count: result.recipeLinesCount })}`,
+                `✅ ${t('seedManagement.restaurant.detailVariantOptions', { count: result.variantOptionsCount })}`,
+                `✅ ${t('seedManagement.restaurant.detailModifiers', { count: result.modifiersCount })}`,
+                `ℹ️ ${t('seedManagement.restaurant.detailCostsFromRecipes')}`,
+                `ℹ️ ${t('seedManagement.restaurant.detailLocalOnlyInventory')}`,
+            ];
+            if (seedCompany) {
+                details.push(`✅ ${t('seedManagement.restaurant.detailCompany', { name: seedCompany.name })}`);
+            }
+            if (result.unknownMaterials.length > 0) {
+                details.push(
+                    `⚠️ ${t('seedManagement.restaurant.detailUnknownMaterials', {
+                        materials: result.unknownMaterials.join(', '),
+                    })}`
+                );
+            }
+
+            setSeedStatus({
+                isRunning: false,
+                success: true,
+                message: t('seedManagement.restaurant.success', { name: result.datasetName }),
+                details
+            });
+
+            await refreshProducts();
+        } catch (error) {
+            setSeedStatus({
+                isRunning: false,
+                success: false,
+                message: t('seedManagement.restaurant.failure', {
+                    message: error instanceof Error ? error.message : t('seedManagement.unknownError'),
+                }),
+                details: [t('seedManagement.failureHints.console')]
+            });
+        } finally {
+            setActiveAction(null);
+        }
+    }, [refreshProducts, t, updateSettings]);
 
     const handleClearLocalData = useCallback(async () => {
         if (!canClearLocalData || !employee || clearConfirmation !== 'CLEAR LOCAL DATA') {
             return;
         }
 
+        setActiveAction('clear');
         setSeedStatus({
             isRunning: true,
             success: null,
@@ -286,28 +363,77 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                                     </p>
                                 </div>
 
-                                <button
+                                <AdminActionButton
                                     type="button"
+                                    variant="primary"
                                     onClick={handleRunSeed}
+                                    isLoading={activeAction === 'yaml'}
                                     disabled={seedStatus.isRunning}
-                                    className={`ds2-control-radius-lg flex w-full items-center justify-center gap-2 px-6 py-3 font-semibold transition-all duration-200 ${
-                                        seedStatus.isRunning
-                                            ? 'cursor-not-allowed bg-gray-300 text-gray-500'
-                                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                                    }`}
-                                >
-                                    {seedStatus.isRunning ? (
-                                        <>
-                                            <RefreshCw className="w-5 h-5 animate-spin" />
-                                            <span>{t('seedManagement.running')}</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Play className="w-5 h-5" />
-                                            <span>{t('seedManagement.runButton')}</span>
-                                        </>
-                                    )}
-                                </button>
+                                    icon={Play}
+                                    label={activeAction === 'yaml' ? t('seedManagement.running') : t('seedManagement.runButton')}
+                                    className="w-full"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Ready-made restaurant catalogue */}
+                        <div className="min-w-0 bg-white rounded-xl shadow-lg p-6" data-testid="restaurant-seed-card">
+                            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                                {t('seedManagement.restaurant.title')}
+                            </h2>
+                            <div className="space-y-4">
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                    <div className="mb-2 flex min-w-0 items-center gap-2 text-sm text-gray-600">
+                                        <Info className="w-4 h-4 shrink-0" />
+                                        <span className="min-w-0 break-words">
+                                            {t('seedManagement.restaurant.description', {
+                                                name: QBELLA_EVORA_DATASET.name,
+                                            })}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-gray-600">
+                                        {t('seedManagement.restaurant.contents', {
+                                            categories: QBELLA_EVORA_DATASET.categories.length,
+                                            products: QBELLA_EVORA_DATASET.products.length,
+                                            materials: QBELLA_EVORA_DATASET.rawMaterials.length,
+                                        })}
+                                    </p>
+                                    <p className="mt-2 text-xs text-gray-500">
+                                        {t('seedManagement.restaurant.source', {
+                                            source: QBELLA_EVORA_DATASET.source,
+                                        })}
+                                    </p>
+                                    <ul className="mt-2 space-y-1 text-xs text-gray-500">
+                                        <li className="flex min-w-0 items-start gap-2">
+                                            <span className="shrink-0">⚠️</span>
+                                            <span className="min-w-0 break-words">
+                                                {t('seedManagement.restaurant.estimateWarning')}
+                                            </span>
+                                        </li>
+                                        <li className="flex min-w-0 items-start gap-2">
+                                            <span className="shrink-0">•</span>
+                                            <span className="min-w-0 break-words">
+                                                {t('seedManagement.restaurant.rerunHint')}
+                                            </span>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <AdminActionButton
+                                    type="button"
+                                    variant="success"
+                                    onClick={handleSeedRestaurant}
+                                    isLoading={activeAction === 'restaurant'}
+                                    disabled={seedStatus.isRunning}
+                                    icon={UtensilsCrossed}
+                                    label={
+                                        activeAction === 'restaurant'
+                                            ? t('seedManagement.restaurant.running')
+                                            : t('seedManagement.restaurant.button')
+                                    }
+                                    className="w-full"
+                                    data-testid="seed-restaurant-button"
+                                />
                             </div>
                         </div>
 
@@ -330,7 +456,7 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                                     type="button"
                                     onClick={() => setShowClearDialog(true)}
                                     disabled={seedStatus.isRunning}
-                                    className="mt-5 flex min-h-touch w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-6 py-3 font-semibold text-white transition-colors duration-200 hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="mt-5 flex min-h-touch w-full items-center justify-center gap-2 rounded-xl bg-[var(--ds2-danger-solid,#dc2626)] px-6 py-3 font-semibold text-white transition-colors duration-200 hover:bg-[var(--ds2-danger-hover,#b91c1c)] disabled:cursor-not-allowed disabled:opacity-50"
                                     data-testid="clear-local-database-button"
                                 >
                                     <Trash2 className="h-5 w-5" />
@@ -544,7 +670,9 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                                     setClearConfirmation('');
                                 }}
                                 disabled={seedStatus.isRunning}
-                                className="min-h-touch rounded-lg border border-gray-300 bg-white px-5 font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                                className={shellButtons
+                                    ? `${shellButtons.secondary} disabled:opacity-50`
+                                    : 'min-h-touch rounded-lg border border-gray-300 bg-white px-5 font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50'}
                             >
                                 {t('seedManagement.clear.cancel')}
                             </button>
@@ -552,7 +680,9 @@ export const SeedManagementPanel: React.FC<SeedManagementPanelProps> = ({ embedd
                                 type="button"
                                 onClick={handleClearLocalData}
                                 disabled={seedStatus.isRunning || clearConfirmation !== 'CLEAR LOCAL DATA'}
-                                className="flex min-h-touch items-center justify-center gap-2 rounded-lg bg-red-600 px-5 font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                className={shellButtons
+                                    ? `flex items-center justify-center gap-2 ${shellButtons.danger} disabled:cursor-not-allowed disabled:opacity-40`
+                                    : 'flex min-h-touch items-center justify-center gap-2 rounded-lg bg-red-600 px-5 font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40'}
                             >
                                 {seedStatus.isRunning ? (
                                     <RefreshCw className="h-5 w-5 animate-spin" />

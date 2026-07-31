@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useWebSerialPrinter } from '../utils/webSerialPrinter';
 import electronHardwareService from '../services/electronHardwareService';
+import { usePrinterConfig } from '../hooks/usePrinterConfig';
 import { 
   Zap, 
   Printer, 
@@ -21,14 +22,14 @@ import {
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
+import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { useTranslation } from 'react-i18next';
 import '../styles/design-system-2-scope.css';
 
-const DS2_PRIMARY_ROW =
-    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50';
 const DS2_DANGER_ROW =
-    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-red-500 hover:bg-red-600 shadow-sm transition-all duration-200';
+    'rounded-xl min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-[var(--ds2-danger-solid,#dc2626)] hover:bg-[var(--ds2-danger-hover,#b91c1c)] transition-all duration-200';
 const DS2_TEST_TILE =
-    'ds2-control-radius-lg min-h-touch-sm flex w-full items-center gap-3 border-2 border-transparent bg-gradient-to-r from-blue-500 to-blue-600 p-4 text-left font-semibold text-white shadow-sm transition-all hover:from-blue-600 hover:to-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
+    'rounded-xl min-h-touch-sm flex w-full items-center gap-3 border border-gray-200 bg-white p-4 text-left text-neutral-900 hover:bg-gray-50 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50';
 
 interface HardwareMode {
   type: 'electron' | 'web';
@@ -42,8 +43,12 @@ export interface ElectronTestingPanelProps {
 }
 
 export const ElectronTestingPanel: React.FC<ElectronTestingPanelProps> = ({ embedded = false }) => {
+  const { t } = useTranslation();
   const { connectToAnyDevice, sendToPrinter, disconnectPrinter, isConnected, isSupported } = useWebSerialPrinter();
   const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+  // App-wide printer config (SSOT in the main process): the printer selected in
+  // the setup dialog ("Use This") is automatically THE printer here too.
+  const printerConfig = usePrinterConfig();
   // State management
   const [isLoading, setIsLoading] = useState(false);
   const [hardwareMode, setHardwareMode] = useState<HardwareMode>({
@@ -166,7 +171,7 @@ export const ElectronTestingPanel: React.FC<ElectronTestingPanelProps> = ({ embe
           : [0x1B, 0x70, 0x01, 0x19, 0xFA];
         
         await sendToPrinter(commands);
-        alert('Cash drawer command sent via Web Serial');
+        alert(t('electronTesting.alerts.drawerCommandSent'));
       }
     } catch (error) {
       console.error('Cash drawer test failed:', error);
@@ -265,6 +270,15 @@ Web Hardware Status:
         </h3>
       </div>
       <p className="text-blue-700 text-sm">{hardwareMode.status}</p>
+      {hardwareMode.type === 'electron' && printerConfig?.receiptPrinter && (
+        <p className="mt-1 text-sm font-medium text-blue-800">
+          Receipt printer: {printerConfig.receiptPrinter}
+          {printerConfig.mode === 'windows-queue' && ' (Windows print queue)'}
+          {printerConfig.mode === 'cups-queue' && ' (system queue)'}
+          {printerConfig.mode === 'direct-usb' && ' (direct USB)'}
+          {printerConfig.mode === 'network' && ' (network)'}
+        </p>
+      )}
       {hardwareMode.type === 'electron' && (
         <div className="mt-2 text-xs text-blue-600">
           • Direct hardware control via Node.js
@@ -286,21 +300,24 @@ Web Hardware Status:
 
       <div className="flex gap-3 flex-wrap">
         {!hardwareMode.initialized ? (
-          <button
+          <AdminActionButton
             type="button"
+            variant="primary"
+            icon={RefreshCw}
+            label={isLoading ? 'Connecting...' : 'Connect Hardware'}
+            isLoading={isLoading}
             onClick={connectHardware}
             disabled={isLoading || !hardwareMode.available}
-            className={DS2_PRIMARY_ROW}
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            {isLoading ? 'Connecting...' : 'Connect Hardware'}
-          </button>
+          />
         ) : (
           <>
-            <button type="button" onClick={getHardwareStatus} className={DS2_PRIMARY_ROW}>
-              <CheckCircle className="h-4 w-4" />
-              Hardware Status
-            </button>
+            <AdminActionButton
+              type="button"
+              variant="primary"
+              icon={CheckCircle}
+              label="Hardware Status"
+              onClick={getHardwareStatus}
+            />
 
             {hardwareMode.type === 'web' && (
               <button type="button" onClick={disconnectHardware} className={DS2_DANGER_ROW}>
@@ -327,10 +344,10 @@ Web Hardware Status:
           disabled={!hardwareMode.initialized || isLoading}
           className={DS2_TEST_TILE}
         >
-          <Printer className="h-5 w-5 shrink-0 text-white" />
+          <Printer className="h-5 w-5 shrink-0 text-gray-800" />
           <div className="text-left">
             <div className="font-medium">Test Printer</div>
-            <div className="text-sm font-normal opacity-90">Print test receipt</div>
+            <div className="text-sm font-normal text-neutral-500">Print test receipt</div>
           </div>
         </button>
 
@@ -340,10 +357,10 @@ Web Hardware Status:
           disabled={!hardwareMode.initialized || isLoading}
           className={DS2_TEST_TILE}
         >
-          <DollarSign className="h-5 w-5 shrink-0 text-white" />
+          <DollarSign className="h-5 w-5 shrink-0 text-gray-800" />
           <div className="text-left">
             <div className="font-medium">Test Cash Drawer</div>
-            <div className="text-sm font-normal opacity-90">Open cash drawer</div>
+            <div className="text-sm font-normal text-neutral-500">Open cash drawer</div>
           </div>
         </button>
 
@@ -353,10 +370,10 @@ Web Hardware Status:
           disabled={hardwareMode.type !== 'electron' || !hardwareMode.initialized || isLoading}
           className={DS2_TEST_TILE}
         >
-          <CircleDot className="h-5 w-5 shrink-0 text-white" />
+          <CircleDot className="h-5 w-5 shrink-0 text-gray-800" />
           <div className="text-left">
             <div className="font-medium">Test Drawer State</div>
-            <div className="text-sm font-normal opacity-90">Print state in terminal</div>
+            <div className="text-sm font-normal text-neutral-500">Print state in terminal</div>
           </div>
         </button>
       </div>
@@ -411,7 +428,7 @@ Web Hardware Status:
       <div className={embedded ? 'max-w-4xl' : `mx-auto max-w-4xl py-6 ${layoutClasses.contentInsetX}`}>
       {!embedded && (
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Hardware Testing</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t('electronTesting.title')}</h1>
         <p className="mt-2 text-gray-600">
           Test thermal printer and cash drawer functionality in both web and Electron environments
         </p>

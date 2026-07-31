@@ -31,6 +31,26 @@ function serverError(message: string) {
   return jsonResponse({ error: message }, 500);
 }
 
+/** A non-2xx answer from Vendus itself, as opposed to a fault of ours. */
+class UpstreamError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = 'UpstreamError';
+  }
+}
+
+/**
+ * The provider was reached and refused. Answered 200 on purpose: this function
+ * did its job — it called Vendus and got a definitive verdict — and the
+ * envelope carries that verdict. Returning non-2xx would make supabase-js
+ * surface a generic "non-2xx status code" and drop the body, which is exactly
+ * the status the till needs to tell a refusal (no document created) from a lost
+ * response (a document may exist). See src/fiscal/fiscalFailure.ts.
+ */
+function upstreamRejection(error: UpstreamError) {
+  return jsonResponse({ error: error.message, providerStatus: error.status, dispatched: true });
+}
+
 function vendusConfig() {
   const apiKey = Deno.env.get('VENDUS_API_KEY')?.trim();
   const baseUrl = (Deno.env.get('VENDUS_BASE_URL')?.trim() || 'https://www.vendus.pt/ws/v1.1').replace(/\/+$/, '');
@@ -67,7 +87,7 @@ async function vendusFetch(path: string, init: RequestInit = {}) {
       data && typeof data === 'object' && 'error' in data
         ? String((data as { error: unknown }).error)
         : `Vendus HTTP ${res.status}`;
-    throw new Error(message);
+    throw new UpstreamError(res.status, message);
   }
   return data;
 }
@@ -172,6 +192,12 @@ Deno.serve(async (req) => {
         return badRequest('Unsupported action');
     }
   } catch (error) {
+    // Our own faults (missing API key, a failed guard) keep the plain 500 and
+    // carry no providerStatus — a misconfigured till must never be told the
+    // provider refused, or it would offer a paper invoice for a config bug.
+    if (error instanceof UpstreamError) {
+      return upstreamRejection(error);
+    }
     return serverError(error instanceof Error ? error.message : String(error));
   }
 });

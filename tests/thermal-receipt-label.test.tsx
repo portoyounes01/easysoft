@@ -31,8 +31,18 @@ describe('ThermalReceipt documentLabel', () => {
         await i18n.changeLanguage('en');
     });
 
-    test('defaults to Original', () => {
+    test('an unlabelled render defaults to a copy marking, never Original', () => {
+        // Only the sale slip and the "view receipt" preview pass the Original
+        // marking. Anything that forgets must degrade to a copy, not silently
+        // mint a second original. The marking follows the RECEIPT language
+        // (settings default pt), not the UI language set in beforeEach.
         renderReceipt();
+        expect(screen.getByText(/ABC-202508-1001 2\.ª via/)).toBeInTheDocument();
+        expect(screen.queryByText(/Original/)).not.toBeInTheDocument();
+    });
+
+    test('renders the Original marking when a caller asks for it', () => {
+        renderReceipt({ documentLabel: i18n.t('thermalReceipt.original') });
         expect(screen.getByText(/ABC-202508-1001 Original/)).toBeInTheDocument();
     });
 

@@ -9,9 +9,8 @@ import LoginForm2 from './components/Auth/LoginForm2';
 import LoginFormPwa from './components/Auth/LoginFormPwa';
 import { HostRoute, PWA_LANDING } from './components/routing/HostRoute';
 import { isPwaHost } from './lib/host';
-import Dashboard from './pages/Dashboard';
 import POS from './pages/POS';
-import POS2 from './pages/POS2';
+import Tables from './pages/Tables';
 import Products from './pages/Products';
 import Customers from './pages/Customers';
 import Categories from './pages/Categories';
@@ -37,6 +36,8 @@ import Inventory from './pages/Inventory';
 import StockProfitReport from './pages/StockProfitReport';
 import Devices from './pages/Devices';
 import Assistant from './pages/Assistant';
+import PlatformConsole from './pages/PlatformConsole';
+import SeedManagement from './pages/SeedManagement';
 
 const Router = ['app:', 'file:'].includes(window.location.protocol) ? HashRouter : BrowserRouter;
 
@@ -65,20 +66,24 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
-// Permission-based route protection
+// Permission-based route protection. humanOnly additionally requires a membership
+// (human) session — for surfaces whose backend rejects device JWTs outright.
 const PermissionRoute: React.FC<{
   children: React.ReactNode;
   permission: string;
   fallbackPath?: string;
-}> = ({ children, permission, fallbackPath = '/pos' }) => {
+  humanOnly?: boolean;
+}> = ({ children, permission, fallbackPath = '/pos', humanOnly = false }) => {
   const { hasPermission, employee, principal } = useSupabaseAuth();
   const { t } = useTranslation();
   // A denied browser/PWA human must not be bounced to /pos (till-only) — send to PWA_LANDING.
-  const denyRedirect = isPwaHost ? PWA_LANDING : fallbackPath;
+  // A platform (sysadmin) principal fails EVERY tenant permission, so its deny target must
+  // be /platform — PWA_LANDING is itself permission-gated and would redirect-loop.
+  const denyRedirect = principal?.source === 'platform' ? '/platform' : isPwaHost ? PWA_LANDING : fallbackPath;
   const displayName = employee?.name ?? principal?.displayName ?? '';
   const displayRole = employee?.role ?? principal?.role ?? '';
 
-  if (!hasPermission(permission)) {
+  if (!hasPermission(permission) || (humanOnly && principal?.source !== 'membership')) {
     // Show access denied page for unauthorized access attempts
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -110,17 +115,35 @@ const PermissionRoute: React.FC<{
 
 // Post-login landing — HOST-aware. The till lands on /pos (the operator workspace); a
 // browser/PWA human lands on PWA_LANDING (/pos is till-only and would dead-end). Role is
-// no longer the discriminator: the host is.
-const getRoleBasedRedirect = (_role: string): string => (isPwaHost ? PWA_LANDING : '/pos');
+// no longer the discriminator: the host is — except the platform (sysadmin) principal,
+// whose only surface is the console.
+const getRoleBasedRedirect = (role: string): string =>
+  role === 'sysadmin' ? '/platform' : isPwaHost ? PWA_LANDING : '/pos';
+
+// Platform-console gate: the SOURCE is the credential (no tenant permission applies).
+const PlatformRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { principal } = useSupabaseAuth();
+  if (principal?.source !== 'platform') {
+    return <Navigate to={isPwaHost ? PWA_LANDING : '/pos'} replace />;
+  }
+  return <>{children}</>;
+};
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, principal } = useSupabaseAuth();
   // Host-selected login: the browser/PWA human form, or the till's employee-PIN screen.
   // Gate on isAuthenticated (principal), NOT `employee` — a PWA human has no employee row
   // and would otherwise be stuck on the login screen while authenticated.
+  // An unpaired till must land on /pair-device, not the PIN screen: the kiosk has no URL
+  // bar, so the pairing page is unreachable unless we route there ourselves (Devices.tsx
+  // hands the admin a one-time code meant to be typed on that machine).
   const loginElement = isAuthenticated
     ? <Navigate to={getRoleBasedRedirect(principal?.role ?? '')} replace />
-    : (isPwaHost ? <LoginFormPwa /> : <LoginForm2 />);
+    : isPwaHost
+      ? <LoginFormPwa />
+      : hasDevicePairingScope()
+        ? <LoginForm2 />
+        : <Navigate to="/pair-device" replace />;
 
   return (
     <Routes>
@@ -135,7 +158,6 @@ const AppContent: React.FC = () => {
       <Route path="/pair-device" element={<DevicePairing />} />
 
       {/* Standalone UI-redesign preview — dev-only (unauthenticated); not registered in production builds */}
-      {DEV_TOOLS && <Route path="/pos2" element={<POS2 />} />}
 
       {/* App routes — shared Layout + Sidebar (including POS) */}
       <Route
@@ -156,11 +178,28 @@ const AppContent: React.FC = () => {
                     }
                   />
                   <Route
-                    path="/"
+                    path="/tables"
                     element={
-                      <PermissionRoute permission="dashboard">
-                        <Dashboard />
-                      </PermissionRoute>
+                      <HostRoute host="till">
+                        <PermissionRoute permission="sales">
+                          <Tables />
+                        </PermissionRoute>
+                      </HostRoute>
+                    }
+                  />
+                  {/* Dashboard removed (was mock/placeholder) — '/' routes to the host landing. */}
+                  <Route
+                    path="/"
+                    element={<Navigate to={getRoleBasedRedirect(principal?.role ?? '')} replace />}
+                  />
+                  {/* Platform (sysadmin) console — source-gated, PWA-host only in practice
+                      (a till session can never be a platform principal). */}
+                  <Route
+                    path="/platform"
+                    element={
+                      <PlatformRoute>
+                        <PlatformConsole />
+                      </PlatformRoute>
                     }
                   />
                   <Route
@@ -231,8 +270,9 @@ const AppContent: React.FC = () => {
                     path="/assistant"
                     element={
                       // Gated on profit_costs = owner/admin only, matching the
-                      // assistant edge function's allowed roles.
-                      <PermissionRoute permission="profit_costs">
+                      // assistant edge function's allowed roles. humanOnly: the
+                      // edge fns reject device JWTs, so the till gets no route.
+                      <PermissionRoute permission="profit_costs" humanOnly>
                         <Assistant />
                       </PermissionRoute>
                     }
@@ -333,28 +373,52 @@ const AppContent: React.FC = () => {
                         }
                       />
                       <Route path="/seed" element={<Navigate to="/settings?hw=seed" replace />} />
-                      <Route
-                        path="/receipt-demo"
-                        element={
-                          <PermissionRoute permission="sales">
-                            <ReceiptDemoPage />
-                          </PermissionRoute>
-                        }
-                      />
-                      <Route
-                        path="/receipt-demo/:id"
-                        element={
-                          <PermissionRoute permission="sales">
-                            <ReceiptDemoPage />
-                          </PermissionRoute>
-                        }
-                      />
+                      {/* Dev only. /receipt-demo/:id loads a REAL historical
+                          transaction but takes its document type from live
+                          settings and, with no fiscal metadata, synthesizes an
+                          ATCUD-shaped code from the live série — a manufactured
+                          fiscal identifier no issuer snapshot can fix. Gated
+                          until it is rebuilt on the shared receipt builder. */}
+                      {import.meta.env.DEV && (
+                        <Route
+                          path="/receipt-demo"
+                          element={
+                            <PermissionRoute permission="sales">
+                              <ReceiptDemoPage />
+                            </PermissionRoute>
+                          }
+                        />
+                      )}
+                      {import.meta.env.DEV && (
+                        <Route
+                          path="/receipt-demo/:id"
+                          element={
+                            <PermissionRoute permission="sales">
+                              <ReceiptDemoPage />
+                            </PermissionRoute>
+                          }
+                        />
+                      )}
                     </>
                   )}
                   {DEV_TOOLS && <Route path="/cashier-testing" element={<Navigate to="/settings?hw=cashier" replace />} />}
                   {DEV_TOOLS && <Route path="/electron-testing" element={<Navigate to="/settings?hw=electron" replace />} />}
                   {/* /printer-test stays available — printer setup/recovery is production functionality */}
                   <Route path="/printer-test" element={<Navigate to="/settings?hw=printer" replace />} />
+                  {/* /seed-management: the standalone seed tools page. Deliberately NOT behind
+                      DEV_TOOLS so it stays reachable on the deployed PWA — an unknown path there
+                      falls to the catch-all and lands on PWA_LANDING (/reports), which is what
+                      made this URL look "dead". The `settings` permission is the guard, and the
+                      destructive clear-data block inside is separately gated on `clear_data`.
+                      ⚠️ Re-gate this behind DEV_TOOLS before the first real tenant goes live. */}
+                  <Route
+                    path="/seed-management"
+                    element={
+                      <PermissionRoute permission="settings">
+                        <SeedManagement />
+                      </PermissionRoute>
+                    }
+                  />
                   {DEV_TOOLS && (
                     <>
                       <Route
@@ -370,7 +434,7 @@ const AppContent: React.FC = () => {
                   )}
                   {/* Catch-all: an unknown or till-only path (e.g. /pos on the PWA) lands the
                       user on the host's home instead of a blank screen. */}
-                  <Route path="*" element={<Navigate to={isPwaHost ? PWA_LANDING : '/pos'} replace />} />
+                  <Route path="*" element={<Navigate to={getRoleBasedRedirect(principal?.role ?? '')} replace />} />
                 </Routes>
               </Layout>
             </POSProvider>

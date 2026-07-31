@@ -1,6 +1,11 @@
 import type { SystemSettings } from '../../contexts/SettingsContext';
-import type { LocalFiscalDocument, LocalTransaction, LocalTransactionItem } from '../../types/supabase';
-import { customerLocalService } from '../../lib/localDatabase';
+import type { LocalCustomer, LocalFiscalDocument, LocalTransaction, LocalTransactionItem } from '../../types/supabase';
+import {
+    deriveFiscalYear,
+    deriveProductId,
+    deriveSoftwareCertNumber,
+    type SaftHeaderProjection,
+} from './saftHeaderProjection';
 import {
     CONSUMER_FINAL_CUSTOMER_TAX_ID,
     isSaftPaymentReceiptType,
@@ -48,7 +53,21 @@ export interface BuildSaftAuditFileParams {
     loadTransaction: (
         transactionId: string
     ) => Promise<(LocalTransaction & { items: LocalTransactionItem[] }) | undefined>;
+    /**
+     * Injected so this module imports no database and stays runnable outside a
+     * browser — importing `localDatabase` pulls `supabase.ts`, whose module scope
+     * touches `window`, and that is what stopped the SAF-T suite collecting at all.
+     * Required, not optional: a missed call site must be a compile error.
+     */
+    loadCustomer: (customerId: string) => Promise<LocalCustomer | undefined>;
     productVersion: string;
+    /**
+     * D-SAFT1: the Header identity as it was at issuance, resolved by
+     * `planSaftExport`. ABSENT means the live-settings expressions below run
+     * verbatim — never pass a projection built from settings "for symmetry",
+     * because that absence is what guarantees legacy periods are byte-identical.
+     */
+    headerIssuer?: SaftHeaderProjection;
 }
 
 /**
@@ -60,7 +79,16 @@ export interface BuildSaftAuditFileParams {
  * **RG/RC** (tabela 4.4) are emitted under `<Payments>` — not in `<SalesInvoices>` (`InvoiceType` has no RG in 4.1).
  */
 export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): Promise<string> {
-    const { settings, startDateYmd, endDateYmd, fiscalDocuments, loadTransaction, productVersion } = params;
+    const {
+        settings,
+        startDateYmd,
+        endDateYmd,
+        fiscalDocuments,
+        loadTransaction,
+        loadCustomer,
+        productVersion,
+        headerIssuer,
+    } = params;
 
     const docs = fiscalDocuments
         .filter(d => d.invoice_date >= startDateYmd && d.invoice_date <= endDateYmd)
@@ -83,10 +111,10 @@ export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): P
     const taxEntries = new Map<string, { code: string; pct: number }>();
     const products = new Map<string, LocalTransactionItem>();
 
-    const customerById = new Map<string, Awaited<ReturnType<typeof customerLocalService.getCustomerById>>>();
+    const customerById = new Map<string, LocalCustomer>();
     const uniqueCustomerIds = [...new Set(loaded.map(l => l.tx.customer_id).filter((id): id is string => Boolean(id)))];
     for (const cid of uniqueCustomerIds) {
-        const row = await customerLocalService.getCustomerById(cid);
+        const row = await loadCustomer(cid);
         if (row) customerById.set(cid, row);
     }
 
@@ -155,23 +183,38 @@ export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): P
         taxEntries.set('NOR-23', { code: 'NOR', pct: 23 });
     }
 
-    const fiscalYear = endDateYmd.slice(0, 4);
+    // Field 1.9 describes what is INSIDE the file. Taking it from the export form's
+    // end date let a batch of 2025 invoices be filed under FiscalYear 2026.
+    const fiscalYear = deriveFiscalYear(
+        loaded.map(l => l.fiscal),
+        endDateYmd
+    );
     const dateCreated = new Date().toISOString().split('T')[0];
     const company = settings.company;
-    const swCert = (company.softwareCertNumber || '0').replace(/\s/g, '');
-    const productId = (company.softwareInfo || 'POS').split('-')[0].trim().slice(0, 32) || 'POS';
+    const hdrTaxNumber = headerIssuer ? headerIssuer.taxNumberDigits : company.taxNumber.replace(/\s/g, '');
+    const hdrName = headerIssuer ? headerIssuer.name : company.name;
+    const hdrAddress = headerIssuer ? headerIssuer.address : company.address;
+    const hdrCity = headerIssuer ? headerIssuer.city : company.city;
+    const hdrPostalCode = headerIssuer ? headerIssuer.postalCode : company.postalCode;
+    // Derived by the shared function on both branches, so no drift between the
+    // snapshotted and the legacy rendering of the same value is possible.
+    const productId = headerIssuer ? headerIssuer.productId : deriveProductId(company.softwareInfo);
+    // Portaria 302/2016 field 1.15. Frozen with the rest of the Header: read live it
+    // makes the same closed period export differently before and after AT
+    // certification, which is exactly the instability this change removes.
+    const swCert = headerIssuer ? headerIssuer.softwareCertNumber : deriveSoftwareCertNumber(company.softwareCertNumber);
 
     const header = `
   <Header>
     <AuditFileVersion>1.04_01</AuditFileVersion>
-    <CompanyID>${xmlEscape(company.taxNumber.replace(/\s/g, ''))}</CompanyID>
-    <TaxRegistrationNumber>${xmlEscape(company.taxNumber.replace(/\s/g, ''))}</TaxRegistrationNumber>
+    <CompanyID>${xmlEscape(hdrTaxNumber)}</CompanyID>
+    <TaxRegistrationNumber>${xmlEscape(hdrTaxNumber)}</TaxRegistrationNumber>
     <TaxAccountingBasis>F</TaxAccountingBasis>
-    <CompanyName>${xmlEscape(company.name)}</CompanyName>
+    <CompanyName>${xmlEscape(hdrName)}</CompanyName>
     <CompanyAddress>
-      <AddressDetail>${xmlEscape(company.address)}</AddressDetail>
-      <City>${xmlEscape(company.city)}</City>
-      <PostalCode>${xmlEscape(company.postalCode)}</PostalCode>
+      <AddressDetail>${xmlEscape(hdrAddress)}</AddressDetail>
+      <City>${xmlEscape(hdrCity)}</City>
+      <PostalCode>${xmlEscape(hdrPostalCode)}</PostalCode>
       <Country>PT</Country>
     </CompanyAddress>
     <FiscalYear>${xmlEscape(fiscalYear)}</FiscalYear>
@@ -180,7 +223,7 @@ export async function buildSaftAuditFileXml(params: BuildSaftAuditFileParams): P
     <CurrencyCode>EUR</CurrencyCode>
     <DateCreated>${xmlEscape(dateCreated)}</DateCreated>
     <TaxEntity>Global</TaxEntity>
-    <ProductCompanyTaxID>${xmlEscape(company.taxNumber.replace(/\s/g, ''))}</ProductCompanyTaxID>
+    <ProductCompanyTaxID>${xmlEscape(hdrTaxNumber)}</ProductCompanyTaxID>
     <SoftwareCertificateNumber>${xmlEscape(swCert)}</SoftwareCertificateNumber>
     <ProductID>${xmlEscape(productId)}</ProductID>
     <ProductVersion>${xmlEscape(productVersion)}</ProductVersion>
@@ -274,13 +317,16 @@ ${productXml}
                 const taxCode = mapIvaDecimalToSaftTaxCode(it.iva_rate);
                 const taxPct = fmtDec(Math.round(it.iva_rate * 10000) / 100);
                 const unitGross = it.quantity > 0 ? lineGross / it.quantity : lineGross;
+                // Weighed lines: quantity is kg at 3 decimals; legacy rows without
+                // a unit ('un') keep the historical 2-decimal formatting.
+                const isWeighed = it.unit === 'kg';
                 return `
         <Line>
           <LineNumber>${idx + 1}</LineNumber>${ncSourceDocBlock}
           <ProductCode>${xmlEscape(code)}</ProductCode>
           <ProductDescription>${xmlEscape(it.product_name)}</ProductDescription>
-          <Quantity>${fmtDec(it.quantity)}</Quantity>
-          <UnitOfMeasure>UN</UnitOfMeasure>
+          <Quantity>${isWeighed ? it.quantity.toFixed(3) : fmtDec(it.quantity)}</Quantity>
+          <UnitOfMeasure>${isWeighed ? 'KG' : 'UN'}</UnitOfMeasure>
           <UnitPrice>${fmtDec(unitGross)}</UnitPrice>
           <TaxPointDate>${xmlEscape(fiscal.invoice_date)}</TaxPointDate>
           <Description>${xmlEscape(it.product_name)}</Description>

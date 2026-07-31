@@ -31,7 +31,7 @@
 
 employees:
   - id: "EMP001"
-    employee_number: "SYS001"
+    employee_number: "ADM002"
     name: "Carlos Silva"
     email: "carlos.silva@pos.com"
     phone: "+351 912 345 678"

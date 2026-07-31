@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import { localDb } from '../lib/localDatabase';
 import { isSystemAdministrator } from './systemAdmin';
 
@@ -47,6 +48,7 @@ export const clearLocalDatabasePreservingRecovery = async (): Promise<LocalDatab
         transactions,
         transactionItems,
         fiscalDocuments,
+        receiptLogoArchive,
         fiscalAuditEvents,
         fiscalIssueAttempts,
         transactionSyncQueue,
@@ -57,6 +59,7 @@ export const clearLocalDatabasePreservingRecovery = async (): Promise<LocalDatab
         localDb.transactions.toArray(),
         localDb.transactionItems.toArray(),
         localDb.fiscalDocuments.toArray(),
+        localDb.receiptLogoArchive.toArray(),
         localDb.fiscalAuditEvents.toArray(),
         localDb.vendusIssueAttempts.toArray(),
         localDb.transactionSyncQueue.toArray(),
@@ -102,7 +105,7 @@ export const clearLocalDatabasePreservingRecovery = async (): Promise<LocalDatab
         }));
     const systemAdmins = preservedEmployees.filter(employee => isSystemAdministrator(employee));
     if (systemAdmins.length === 0) {
-        throw new Error('No local system administrator account was found. The database was not cleared.');
+        throw new Error(i18n.t('seedManagement.clear.noSystemAdmin'));
     }
 
     await clearAndReinitializeDatabase();
@@ -115,6 +118,7 @@ export const clearLocalDatabasePreservingRecovery = async (): Promise<LocalDatab
             localDb.transactions,
             localDb.transactionItems,
             localDb.fiscalDocuments,
+            localDb.receiptLogoArchive,
             localDb.fiscalAuditEvents,
             localDb.vendusIssueAttempts,
             localDb.transactionSyncQueue,
@@ -126,6 +130,10 @@ export const clearLocalDatabasePreservingRecovery = async (): Promise<LocalDatab
             await localDb.transactions.bulkPut(fiscalTransactions);
             await localDb.transactionItems.bulkPut(fiscalTransactionItems);
             await localDb.fiscalDocuments.bulkPut(fiscalDocuments);
+            // ALL entries, unfiltered. Without them a recovery keeps every
+            // transaction and every digest but drops every bitmap, and the
+            // reprints quietly lose their logo with no error anywhere.
+            await localDb.receiptLogoArchive.bulkPut(receiptLogoArchive);
             await localDb.fiscalAuditEvents.bulkPut(fiscalAuditEvents);
             await localDb.vendusIssueAttempts.bulkPut(fiscalIssueAttempts);
             await localDb.transactionSyncQueue.bulkPut(preservedTransactionQueue);

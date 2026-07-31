@@ -2,6 +2,7 @@ import React from 'react';
 import { Languages } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
+import { AdminActionButton } from './ui/AdminActionButton';
 
 interface LanguageSwitcherProps {
     className?: string;
@@ -18,12 +19,17 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
 }) => {
     const { language, setLanguage } = useLanguage();
     const { t } = useTranslation();
+    const LANGUAGE_CYCLE = ['en', 'pt', 'es'] as const;
+    const LANGUAGE_NAMES: Record<string, string> = { en: 'English', pt: 'Português', es: 'Español' };
     const languageCode = language.split(/[-_]/)[0].toLowerCase();
     const languageLabel = languageCode.toUpperCase();
-    const languageName = languageCode === 'pt' ? 'Português' : 'English';
+    const languageName = LANGUAGE_NAMES[languageCode] ?? 'English';
 
     const toggleLanguage = () => {
-        const newLang = languageCode === 'en' ? 'pt' : 'en';
+        // Cycle en → pt → es → en (kept as a compact cycle so the existing single-button
+        // sidebar/header UI still works with three languages).
+        const idx = LANGUAGE_CYCLE.indexOf(languageCode as (typeof LANGUAGE_CYCLE)[number]);
+        const newLang = LANGUAGE_CYCLE[(idx + 1) % LANGUAGE_CYCLE.length] ?? 'en';
         setLanguage(newLang);
     };
 
@@ -57,14 +63,14 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
     }
 
     return (
-        <button
+        <AdminActionButton
             type="button"
+            variant="outline"
             onClick={toggleLanguage}
-            className={`bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded-lg text-xs font-semibold transition-colors min-h-touch-xs min-w-touch-xs ${className || ''}`}
+            label={languageLabel}
+            className={`min-w-touch-xs ${className || ''}`}
             aria-label={`${t('common.language')}: ${languageName}`}
-        >
-            {languageLabel}
-        </button>
+        />
     );
 };
 

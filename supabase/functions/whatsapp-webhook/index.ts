@@ -162,12 +162,38 @@ Deno.serve(async (req: Request) => {
           .from('owner_whatsapp_numbers').select('tenant_id, user_id').eq('phone_e164', phoneE164).maybeSingle();
 
         if (reg?.tenant_id) {
-          const { data: tenant } = await admin.from('tenants').select('name, legal_name').eq('id', reg.tenant_id).maybeSingle();
+          // The registry row is a standing credential; tenant_members is the source of
+          // truth. Re-check membership + role on EVERY message (mirrors the custom
+          // access-token hook re-validating claims at refresh) so a revoked owner/admin
+          // loses WhatsApp access immediately — revoke-human also unlinks proactively,
+          // but this closes the gap for rows created before that or deleted out-of-band.
+          const { data: member, error: memberErr } = await admin
+            .from('tenant_members').select('role')
+            .eq('user_id', reg.user_id).eq('tenant_id', reg.tenant_id).maybeSingle();
+          if (memberErr) {
+            // Transient read failure is NOT revocation — never unlink on it (a
+            // false positive would silently destroy a valid link). Fail closed
+            // for this message only and let the sender retry.
+            console.error('membership re-check failed', memberErr);
+            await sendText(phoneNumberId, TOKEN, from, 'Sorry, something went wrong. Please try again in a moment.');
+            continue;
+          }
+          if (!member || !['owner', 'admin'].includes(member.role as string)) {
+            // Scope the delete to the row we actually validated, so it cannot
+            // race a concurrent re-pair of the same phone to a different user/tenant.
+            await admin.from('owner_whatsapp_numbers').delete()
+              .eq('phone_e164', phoneE164).eq('user_id', reg.user_id).eq('tenant_id', reg.tenant_id);
+            await sendText(phoneNumberId, TOKEN, from,
+              'This WhatsApp link is no longer active. If you need access again, ask an owner or admin to re-link it from the app (Assistant → "Link WhatsApp").');
+            continue;
+          }
+          const { data: tenant } = await admin.from('tenants').select('name, legal_name, country').eq('id', reg.tenant_id).maybeSingle();
           const vault = new PiiVault();
           const ctx: ToolContext = { admin, tenantId: reg.tenant_id, vault };
           const result = await runAssistant({
             apiKey: anthropicKey, todayIso: lisbonToday(),
             businessName: tenant?.name ?? tenant?.legal_name ?? undefined,
+            country: tenant?.country ?? undefined,
             history: [], question: text, ctx, channel: 'whatsapp',
           });
           await sendText(phoneNumberId, TOKEN, from, vault.rehydrate(result.answer));
@@ -188,6 +214,22 @@ Deno.serve(async (req: Request) => {
             .select('id, user_id, tenant_id, expires_at, used_at, attempt_count')
             .eq('code_hash', codeHash).maybeSingle();
           if (pc && !pc.used_at && new Date(pc.expires_at) > new Date() && pc.attempt_count < MAX_ATTEMPTS) {
+            // A code outlives its issuer's membership (revoke-human also purges
+            // pending codes, but a code redeemed mid-revocation must not re-create
+            // the registry row) — so re-check membership at redemption too.
+            const { data: pcMember, error: pcMemberErr } = await admin
+              .from('tenant_members').select('role')
+              .eq('user_id', pc.user_id).eq('tenant_id', pc.tenant_id).maybeSingle();
+            if (pcMemberErr) {
+              await sendText(phoneNumberId, TOKEN, from, 'Sorry, something went wrong. Please try again in a moment.');
+              continue;
+            }
+            if (!pcMember || !['owner', 'admin'].includes(pcMember.role as string)) {
+              await admin.from('owner_whatsapp_pairing_codes').update({ used_at: new Date().toISOString() }).eq('id', pc.id);
+              await sendText(phoneNumberId, TOKEN, from,
+                'This pairing code is no longer valid. Ask an owner or admin to generate a new one in the app.');
+              continue;
+            }
             await admin.from('owner_whatsapp_numbers').upsert({ phone_e164: phoneE164, user_id: pc.user_id, tenant_id: pc.tenant_id });
             await admin.from('owner_whatsapp_pairing_codes').update({ used_at: new Date().toISOString() }).eq('id', pc.id);
             await sendText(phoneNumberId, TOKEN, from, '✅ Your WhatsApp is now linked! Ask me anything about your business — for example: "How much did I sell today?"');

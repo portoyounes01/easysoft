@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Wifi, Printer, Search, CheckCircle, AlertCircle, Loader, Usb, RefreshCw } from 'lucide-react';
 import { useDesignSystem2Customization } from '../contexts/DesignSystem2CustomizationContext';
+import { TabToggle } from './ui/TabToggle';
+import type { UsbPrintDevice } from '../types/electron';
 import '../styles/design-system-2-scope.css';
 
 export interface PrinterConnectedDetails {
@@ -23,9 +25,9 @@ export interface PrinterConnectedPayload {
 }
 
 const DS2_PRIMARY_BTN =
-    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+    'rounded-2xl min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-medium text-neutral-50 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
 const DS2_SECONDARY_BTN =
-    'ds2-control-radius-lg min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+    'rounded-xl min-h-touch-sm inline-flex items-center justify-center gap-2 px-4 font-semibold text-gray-900 bg-gray-100 hover:bg-gray-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
 
 interface NetworkPrinter {
   ip: string;
@@ -45,6 +47,8 @@ interface USBPrinter {
   uri: string;
   isThermal: boolean;
   recommended: boolean;
+  /** Windows only: 'winusb' = direct mode possible; 'windows-driver' = print via its Windows queue (System tab). */
+  driverState?: 'winusb' | 'windows-driver';
 }
 
 interface PrinterSetupProps {
@@ -65,25 +69,31 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
   const [activeTab, setActiveTab] = useState<'auto' | 'usb' | 'manual' | 'system'>('auto');
   const [systemPrinters, setSystemPrinters] = useState<any[]>([]);
   const [systemLoading, setSystemLoading] = useState(false);
+  // Windows: printers as the OS sees them BEFORE any queue exists, with their
+  // real driver binding. A till often has no queue named for its printer at
+  // all (the reference till had two queues for other models on its port).
+  const [usbPrintDevices, setUsbPrintDevices] = useState<UsbPrintDevice[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [setupBusyPort, setSetupBusyPort] = useState<string | null>(null);
 
   const scanForPrinters = async () => {
     setIsScanning(true);
-    setCurrentStatus('Scanning network for thermal printers...');
+    setCurrentStatus(t('printerSetup.statusScanningNetwork'));
     setDiscoveredPrinters([]);
 
     try {
       // Call the Electron main process to discover printers
       const result = await window.electronAPI?.discoverThermalPrinters();
-      
+
       if (result?.success) {
         setDiscoveredPrinters(result.printers || []);
-        setCurrentStatus(`Found ${result.printers?.length || 0} thermal printer(s)`);
+        setCurrentStatus(t('printerSetup.statusFoundThermal', { n: result.printers?.length || 0 }));
       } else {
-        setCurrentStatus(`Scan failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusScanFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('Printer discovery failed:', error);
-      setCurrentStatus('Scan failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusScanFailedController'));
     } finally {
       setIsScanning(false);
     }
@@ -91,43 +101,199 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
   const scanForUSBPrinters = async () => {
     setIsScanning(true);
-    setCurrentStatus('Scanning for USB printers...');
+    setCurrentStatus(t('printerSetup.statusScanningUsb'));
     setUsbPrinters([]);
+    // Refresh Windows' view alongside the scan, so a scan result can never be
+    // merged against a stale (or not-yet-loaded) device list.
+    void listUsbPrintDevices();
 
     try {
       // Call the Electron main process to discover USB printers
       const result = await window.electronAPI?.discoverUSBPrinters();
-      
+      // Full scan trail in the DevTools console (F12) — the main-process log is
+      // invisible on a till, and "found 0" must never be unexplained.
+      console.log('[usb-scan]', result);
+
       if (result?.success) {
         setUsbPrinters(result.printers || []);
-        setCurrentStatus(`Found ${result.printers?.length || 0} USB printer(s)`);
+        const diagnostics = (result as { diagnostics?: string[] }).diagnostics;
+        const count = result.printers?.length || 0;
+        setCurrentStatus(
+          count === 0 && diagnostics?.length
+            ? t('printerSetup.statusFoundNoUsbWithDiagnostics', { diagnostics: diagnostics.join(' · ') })
+            : t('printerSetup.statusFoundUsb', { n: count }),
+        );
       } else {
-        setCurrentStatus(`Scan failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusScanFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('USB printer discovery failed:', error);
-      setCurrentStatus('Scan failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusScanFailedController'));
     } finally {
       setIsScanning(false);
     }
   };
 
+  /** One row per physical USB printer. Windows' PnP view is authoritative
+   *  (port, driver binding, existing queues); the libusb scan adds whether
+   *  direct USB is possible. Showing both lists meant the same printer twice. */
+  const usbRows = React.useMemo(() => {
+    // The scan emits usbwin://vid=0x2aaf&pid=0x6004 — the 0x prefix is optional
+    // here so a format change on either side does not silently unmerge the row
+    // and show the same printer twice.
+    const idsFromUri = (uri?: string) => {
+      const m = /vid=(?:0x)?([0-9a-f]{4}).*?pid=(?:0x)?([0-9a-f]{4})/i.exec(uri ?? '');
+      return m ? { vid: m[1].toUpperCase(), pid: m[2].toUpperCase() } : null;
+    };
+    const scanned = new Map<string, USBPrinter>();
+    usbPrinters.forEach(printer => {
+      const ids = idsFromUri(printer.uri);
+      if (ids) scanned.set(`${ids.vid}:${ids.pid}`, printer);
+    });
+
+    const matched = new Set<string>();
+    const rows = usbPrintDevices.map(device => {
+      const key = `${device.vendorId}:${device.productId}`.toUpperCase();
+      const legacy = scanned.get(key);
+      if (legacy) matched.add(key);
+      return {
+        key: device.instanceId,
+        label: device.model,
+        ids: key,
+        port: device.port,
+        queues: device.queues,
+        ownQueue: device.queues.find(
+          q => q.trim().toLowerCase() === device.model.trim().toLowerCase()
+        ),
+        driverState: legacy?.driverState,
+        isThermal: legacy?.isThermal,
+        device,
+        legacy,
+      };
+    });
+
+    usbPrinters.forEach(printer => {
+      const ids = idsFromUri(printer.uri);
+      const key = ids ? `${ids.vid}:${ids.pid}` : '';
+      if (key && matched.has(key)) return;
+      // A driver-bound scan hit that did not merge is the SAME printer Windows
+      // already listed, seen through libusb — it has no port, no action (it
+      // cannot be opened directly) and nothing the Windows row does not say.
+      // Rendering it produced a second card for one printer.
+      if (printer.driverState === 'windows-driver' && usbPrintDevices.length > 0) return;
+      rows.push({
+        key: printer.serial || printer.uri,
+        label: `${printer.brand} ${printer.model}`.trim(),
+        ids: key,
+        port: '',
+        queues: [],
+        ownQueue: undefined,
+        driverState: printer.driverState,
+        isThermal: printer.isThermal,
+        device: undefined as unknown as UsbPrintDevice,
+        legacy: printer,
+      });
+    });
+    return rows;
+  }, [usbPrintDevices, usbPrinters]);
+
+  /** Adopt an existing queue as the receipt printer (Windows). */
+  const useExistingQueue = async (queueName: string) => {
+    setSetupBusyPort(queueName);
+    try {
+      const result = await window.electronAPI?.hardware?.setPrinterRole?.(queueName, 'receipt');
+      if (result && result.success === false) {
+        setCurrentStatus(t('printerSetup.statusCouldNotSelect', { name: queueName, error: result.error ?? t('printerSetup.unknownErrorLower') }));
+        return;
+      }
+      setCurrentStatus(t('printerSetup.statusReceiptPrinterSet', { name: queueName }));
+      onPrinterConnected({ success: true, message: t('printerSetup.messageReceiptPrinterSet', { name: queueName }) });
+    } finally {
+      setSetupBusyPort(null);
+    }
+  };
+
+  const listUsbPrintDevices = async () => {
+    if (!window.electronAPI?.hardware?.listUsbPrintDevices) return;
+    setDevicesLoading(true);
+    try {
+      const result = await window.electronAPI.hardware.listUsbPrintDevices();
+      setUsbPrintDevices(result?.success ? result.devices ?? [] : []);
+    } catch (error) {
+      console.error('USB print device listing failed:', error);
+      setUsbPrintDevices([]);
+    } finally {
+      setDevicesLoading(false);
+    }
+  };
+
+  // One click: stage the in-box driver, create a queue on the printer's port,
+  // adopt it as the receipt printer. No vendor driver, no version matching —
+  // the RAW datatype we print with bypasses driver rendering entirely.
+  const setUpDevice = async (device: UsbPrintDevice) => {
+    if (!window.electronAPI?.hardware?.setupUsbPrinter || !device.port) return;
+    setSetupBusyPort(device.port);
+    setCurrentStatus(t('printerSetup.statusSettingUp', { name: device.model }));
+    try {
+      const queueName = device.model?.trim() || `Thermal ${device.port}`;
+      const result = await window.electronAPI.hardware.setupUsbPrinter({
+        port: device.port,
+        queueName,
+      });
+      if (result?.success) {
+        await listUsbPrintDevices();
+        await listSystemPrinters();
+        if (result.roleAssigned === false) {
+          // The queue exists but nothing will print to it — do NOT claim the
+          // receipt printer was set.
+          setCurrentStatus(
+            t('printerSetup.statusQueueCreatedRoleFailed', {
+              queueName,
+              error: result.error ?? t('printerSetup.unknownErrorLower'),
+            })
+          );
+        } else {
+          setCurrentStatus(
+            result.alreadyExisted
+              ? t('printerSetup.statusQueueAlreadySetUp', { queueName })
+              : t('printerSetup.statusQueueCreated', { queueName })
+          );
+          onPrinterConnected({
+            success: true,
+            message: t('printerSetup.messageReceiptPrinterSet', { name: queueName }),
+            details: { model: device.model },
+          });
+        }
+      } else {
+        setCurrentStatus(
+          result?.needsElevation
+            ? t('printerSetup.statusSetupNeedsElevation', { error: result.error })
+            : t('printerSetup.statusSetupFailed', { error: result?.error ?? t('printerSetup.unknownErrorLower') })
+        );
+      }
+    } catch (error) {
+      setCurrentStatus(t('printerSetup.statusSetupFailed', { error: error instanceof Error ? error.message : String(error) }));
+    } finally {
+      setSetupBusyPort(null);
+    }
+  };
+
   const listSystemPrinters = async () => {
     setSystemLoading(true);
-    setCurrentStatus('Listing system printers...');
+    setCurrentStatus(t('printerSetup.statusListingSystem'));
     try {
       const result = await window.electronAPI?.hardware.listPrinters();
       if (result?.success) {
         setSystemPrinters(result.printers || []);
-        setCurrentStatus(`Found ${result.printers?.length || 0} system printer(s)`);
+        setCurrentStatus(t('printerSetup.statusFoundSystem', { n: result.printers?.length || 0 }));
       } else {
         setSystemPrinters([]);
-        setCurrentStatus(`Listing failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusListingFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('System printers listing failed:', error);
       setSystemPrinters([]);
-      setCurrentStatus('Listing failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusListingFailedController'));
     } finally {
       setSystemLoading(false);
     }
@@ -135,7 +301,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
   const connectToUSBPrinter = async (printer: USBPrinter) => {
     setIsConnecting(true);
-    setCurrentStatus(`Connecting to USB printer ${printer.brand} ${printer.model}...`);
+    setCurrentStatus(t('printerSetup.statusConnectingUsb', { name: `${printer.brand} ${printer.model}` }));
 
     try {
       const result = await window.electronAPI?.connectToUSBPrinter(
@@ -144,15 +310,15 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
       );
 
       if (result?.success) {
-        setCurrentStatus('USB printer connected successfully!');
+        setCurrentStatus(t('printerSetup.statusUsbConnected'));
         onPrinterConnected(result as PrinterConnectedPayload);
         setTimeout(() => onClose(), 2000);
       } else {
-        setCurrentStatus(`Connection failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusConnectionFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('USB printer connection failed:', error);
-      setCurrentStatus('Connection failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusConnectionFailedController'));
     } finally {
       setIsConnecting(false);
     }
@@ -160,7 +326,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
   const connectToPrinter = async (printer: NetworkPrinter) => {
     setIsConnecting(true);
-    setCurrentStatus(`Connecting to ${printer.ip}:${printer.port}...`);
+    setCurrentStatus(t('printerSetup.statusConnectingTo', { target: `${printer.ip}:${printer.port}` }));
 
     try {
       const result = await window.electronAPI?.connectToNetworkPrinter(
@@ -170,15 +336,15 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
       );
 
       if (result?.success) {
-        setCurrentStatus('Connection successful!');
+        setCurrentStatus(t('printerSetup.statusConnectionSuccessful'));
         onPrinterConnected(result as PrinterConnectedPayload);
         setTimeout(() => onClose(), 2000);
       } else {
-        setCurrentStatus(`Connection failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusConnectionFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('Printer connection failed:', error);
-      setCurrentStatus('Connection failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusConnectionFailedController'));
     } finally {
       setIsConnecting(false);
     }
@@ -186,12 +352,12 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
   const connectToManualPrinter = async () => {
     if (!manualIP.trim()) {
-      setCurrentStatus('Please enter an IP address');
+      setCurrentStatus(t('printerSetup.statusEnterIp'));
       return;
     }
 
     setIsConnecting(true);
-    setCurrentStatus(`Connecting to ${manualIP}:${manualPort}...`);
+    setCurrentStatus(t('printerSetup.statusConnectingTo', { target: `${manualIP}:${manualPort}` }));
 
     try {
       const result = await window.electronAPI?.connectToNetworkPrinter(
@@ -201,15 +367,15 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
       );
 
       if (result?.success) {
-        setCurrentStatus('Connection successful!');
+        setCurrentStatus(t('printerSetup.statusConnectionSuccessful'));
         onPrinterConnected(result as PrinterConnectedPayload);
         setTimeout(() => onClose(), 2000);
       } else {
-        setCurrentStatus(`Connection failed: ${result?.error || 'Unknown error'}`);
+        setCurrentStatus(t('printerSetup.statusConnectionFailed', { error: result?.error || t('printerSetup.unknownError') }));
       }
     } catch (error) {
       console.error('Manual printer connection failed:', error);
-      setCurrentStatus('Connection failed: Unable to communicate with hardware controller');
+      setCurrentStatus(t('printerSetup.statusConnectionFailedController'));
     } finally {
       setIsConnecting(false);
     }
@@ -228,21 +394,21 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
   };
 
   useEffect(() => {
-    // Clear results when switching tabs
-    if (activeTab === 'auto') {
-      setDiscoveredPrinters([]);
-      setCurrentStatus('');
-    } else if (activeTab === 'usb') {
-      setUsbPrinters([]);
-      setCurrentStatus('');
-    } else if (activeTab === 'manual') {
-      setCurrentStatus('');
-    } else if (activeTab === 'system') {
-      setSystemPrinters([]);
-      setCurrentStatus('');
-      // Immediately list printers when opening the System tab
+    // Keep each tab's scan results across switches — scans are slow on a till
+    // and wiping them forced a rescan on every tab visit. Only the transient
+    // status line resets; the System tab refreshes IN PLACE (the previous list
+    // stays visible until the fresh one lands).
+    setCurrentStatus('');
+    if (activeTab === 'system') {
       listSystemPrinters();
     }
+    // The USB tab is where someone who just plugged a printer in looks, and
+    // where the "managed by a Windows driver" dead end used to be. Load the
+    // device list without waiting for a scan — it is a single fast query.
+    if (activeTab === 'usb') {
+      void listUsbPrintDevices();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   // Instant hardware monitoring updates inside the setup modal
@@ -288,76 +454,30 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
               <Printer className="h-6 w-6 text-blue-600" />
-              <h2 className="text-xl font-semibold">Thermal Printer Setup</h2>
+              <h2 className="text-xl font-semibold">{t('printerSetup.title')}</h2>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="ds2-control-radius-lg flex min-h-touch-sm min-w-touch-sm items-center justify-center text-2xl font-bold text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
-              aria-label="Close"
+              className="rounded-2xl flex min-h-touch-sm min-w-touch-sm items-center justify-center text-2xl font-bold text-gray-700 transition-colors hover:bg-gray-100"
+              aria-label={t('common.close')}
             >
               ×
             </button>
           </div>
 
           {/* Tabs */}
-          <div className="ds2-control-radius-lg mb-6 flex space-x-1 bg-gray-100 p-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('auto')}
-              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
-                activeTab === 'auto'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <Search className="h-4 w-4" />
-                <span>Network</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('usb')}
-              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
-                activeTab === 'usb'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <Usb className="h-4 w-4" />
-                <span>USB</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('manual')}
-              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
-                activeTab === 'manual'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <Wifi className="h-4 w-4" />
-                <span>Manual</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('system')}
-              className={`ds2-control-radius-md flex min-h-touch-sm flex-1 items-center justify-center px-4 py-2 transition-colors ${
-                activeTab === 'system'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <Printer className="h-4 w-4" />
-                <span>System</span>
-              </div>
-            </button>
+          <div className="mb-6">
+            <TabToggle
+              options={[
+                { value: 'auto', label: t('printerSetup.tabNetwork'), icon: Search },
+                { value: 'usb', label: t('printerSetup.tabUsb'), icon: Usb },
+                { value: 'manual', label: t('printerSetup.tabManual'), icon: Wifi },
+                { value: 'system', label: t('printerSetup.tabSystem'), icon: Printer },
+              ]}
+              value={activeTab}
+              onChange={setActiveTab}
+            />
           </div>
 
           {activeTab === 'auto' && (
@@ -365,7 +485,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               {/* Auto Discovery Tab */}
               <div className="flex items-center justify-between mb-4">
                 <p className="text-gray-600">
-                  Automatically discover thermal printers on your network
+                  {t('printerSetup.autoIntro')}
                 </p>
                 <button
                   type="button"
@@ -378,7 +498,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   ) : (
                     <Search className="h-4 w-4" />
                   )}
-                  <span>{isScanning ? 'Scanning...' : 'Scan Network'}</span>
+                  <span>{isScanning ? t('printerSetup.scanning') : t('printerSetup.scanNetwork')}</span>
                 </button>
               </div>
 
@@ -392,7 +512,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               {/* Discovered Printers */}
               {discoveredPrinters.length > 0 && (
                 <div className="space-y-3">
-                  <h3 className="font-medium text-gray-900">Discovered Printers:</h3>
+                  <h3 className="font-medium text-gray-900">{t('printerSetup.discoveredHeading')}</h3>
                   {discoveredPrinters.map((printer) => (
                     <div
                       key={`${printer.ip}:${printer.port}`}
@@ -409,20 +529,22 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                             <span className="font-medium">{printer.ip}:{printer.port}</span>
                             {printer.recommended && (
                               <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                                Recommended
+                                {t('printerSetup.recommended')}
                               </span>
                             )}
                           </div>
                           <div className="mt-1 space-y-1">
                             <p className={`text-sm ${getConfidenceColor(printer.confidence)}`}>
-                              Confidence: {printer.confidence}% 
-                              {printer.isThermal ? ' (Thermal)' : ' (Unknown)'}
+                              {t('printerSetup.confidenceLine', {
+                                confidence: printer.confidence,
+                                type: printer.isThermal ? t('printerSetup.thermal') : t('printerSetup.confidenceUnknown'),
+                              })}
                             </p>
                             {printer.brand && (
-                              <p className="text-sm text-gray-600">Brand: {printer.brand}</p>
+                              <p className="text-sm text-gray-600">{t('printerSetup.brandLine', { brand: printer.brand })}</p>
                             )}
                             {printer.identification && (
-                              <p className="text-sm text-gray-500">ID: {printer.identification}</p>
+                              <p className="text-sm text-gray-500">{t('printerSetup.idLine', { id: printer.identification })}</p>
                             )}
                           </div>
                         </div>
@@ -435,7 +557,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                           {isConnecting ? (
                             <Loader className="h-4 w-4 animate-spin" />
                           ) : (
-                            'Connect'
+                            t('printerSetup.connect')
                           )}
                         </button>
                       </div>
@@ -451,7 +573,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               {/* USB Detection Tab */}
               <div className="flex items-center justify-between mb-4">
                 <p className="text-gray-600">
-                  Detect thermal printers connected via USB
+                  {t('printerSetup.usbIntro')}
                 </p>
                 <button
                   type="button"
@@ -464,7 +586,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   ) : (
                     <Usb className="h-4 w-4" />
                   )}
-                  <span>{isScanning ? 'Scanning...' : 'Scan USB'}</span>
+                  <span>{isScanning ? t('printerSetup.scanning') : t('printerSetup.scanUsb')}</span>
                 </button>
               </div>
 
@@ -475,52 +597,68 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                 </div>
               )}
 
-              {/* USB Printers */}
-              {usbPrinters.length > 0 && (
+              {devicesLoading && usbRows.length === 0 && (
+                <div className="mb-4 flex items-center space-x-2 text-sm text-gray-600">
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>{t('printerSetup.lookingForUsb')}</span>
+                </div>
+              )}
+
+              {usbRows.length > 0 && (
                 <div className="space-y-3">
-                  <h3 className="font-medium text-gray-900">USB Printers:</h3>
-                  {usbPrinters.map((printer) => (
-                    <div
-                      key={printer.serial}
-                      className={`p-4 border rounded-lg ${
-                        printer.recommended
-                          ? 'border-green-300 bg-green-50'
-                          : 'border-gray-200 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-lg">🔌</span>
-                            <span className="font-medium">{printer.brand} {printer.model}</span>
-                            {printer.recommended && (
-                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                                Recommended
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-1 space-y-1">
-                            <p className="text-sm text-green-600">
-                              {printer.isThermal ? 'Thermal Printer ✅' : 'Standard Printer'}
+                  {usbRows.map(row => {
+                    const busy = setupBusyPort === row.port || setupBusyPort === row.ownQueue;
+                    const detail = row.ownQueue
+                      ? t('printerSetup.detailQueue', { name: row.ownQueue })
+                      : row.queues.length > 0
+                        ? t('printerSetup.detailSharedPort', { queues: row.queues.join(', ') })
+                        : row.port
+                          ? t('printerSetup.detailNoQueueYet')
+                          : row.driverState === 'winusb'
+                            ? t('printerSetup.detailDirectUsb')
+                            : row.driverState === 'windows-driver'
+                              ? t('printerSetup.detailDriverHeld')
+                              : '';
+                    const action = row.ownQueue
+                      ? { label: t('printerSetup.actionUseThis'), run: () => void useExistingQueue(row.ownQueue as string) }
+                      : row.port
+                        ? { label: t('printerSetup.actionSetUpForMe'), run: () => void setUpDevice(row.device) }
+                        : row.legacy && row.driverState !== 'windows-driver'
+                          // A driver-bound device CANNOT be opened directly —
+                          // libusb returns NOT_SUPPORTED. Offering the button
+                          // guarantees a failure message, so don't.
+                          ? { label: t('printerSetup.connect'), run: () => connectToUSBPrinter(row.legacy as USBPrinter) }
+                          : null;
+                    return (
+                      <div key={row.key} className="p-4 border border-gray-200 rounded-lg bg-white">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-lg">🔌</span>
+                              <span className="font-medium">{row.label}</span>
+                              {row.isThermal && (
+                                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">{t('printerSetup.thermal')}</span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-sm text-gray-600 font-mono">
+                              {[row.ids, row.port, detail].filter(Boolean).join(' · ')}
                             </p>
-                            <p className="text-sm text-gray-600">Serial: {printer.serial}</p>
                           </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => connectToUSBPrinter(printer)}
-                          disabled={isConnecting}
-                          className={`${DS2_PRIMARY_BTN} ml-4 shrink-0`}
-                        >
-                          {isConnecting ? (
-                            <Loader className="h-4 w-4 animate-spin" />
-                          ) : (
-                            'Connect'
+                          {action && (
+                            <button
+                              type="button"
+                              onClick={action.run}
+                              disabled={busy || isConnecting}
+                              className={`${DS2_PRIMARY_BTN} shrink-0 px-4 py-2`}
+                            >
+                              {busy ? <Loader className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                              <span>{busy ? t('printerSetup.working') : action.label}</span>
+                            </button>
                           )}
-                        </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -537,13 +675,13 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      IP Address *
+                      {t('printerSetup.ipLabel')}
                     </label>
                     <input
                       type="text"
                       value={manualIP}
                       onChange={(e) => setManualIP(e.target.value)}
-                      placeholder="e.g., 192.168.1.113"
+                      placeholder={t('printerSetup.ipPlaceholder')}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -575,7 +713,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                     ) : (
                       <CheckCircle className="h-4 w-4" />
                     )}
-                    <span>{isConnecting ? 'Connecting...' : 'Connect to Printer'}</span>
+                    <span>{isConnecting ? t('printerSetup.connecting') : t('printerSetup.connectToPrinter')}</span>
                   </button>
                 </div>
 
@@ -594,7 +732,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
               {/* System Printers Tab */}
               <div className="flex items-center justify-between mb-4">
                 <p className="text-gray-600">
-                  Printers available to your OS (CUPS/Windows). Select a printer to use or verify connectivity.
+                  {t('printerSetup.systemIntro')}
                 </p>
                 <button
                   type="button"
@@ -607,7 +745,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                   )}
-                  <span>{systemLoading ? 'Refreshing...' : 'Refresh'}</span>
+                  <span>{systemLoading ? t('printerSetup.refreshing') : t('printerSetup.refresh')}</span>
                 </button>
               </div>
 
@@ -620,7 +758,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
 
               {systemPrinters.length > 0 ? (
                 <div className="space-y-3">
-                  <h3 className="font-medium text-gray-900">System Printers:</h3>
+                  <h3 className="font-medium text-gray-900">{t('printerSetup.systemPrintersHeading')}</h3>
                   {systemPrinters.map((p: any) => (
                     <div key={p.name} className={`p-4 border rounded-lg ${p.connected ? 'border-gray-200 bg-white' : 'border-orange-200 bg-orange-50'}`}>
                       <div className="flex items-center justify-between">
@@ -629,35 +767,53 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                             <span className="text-lg">🖨️</span>
                             <span className="font-medium">{p.name}</span>
                             {p.connected ? (
-                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Connected</span>
+                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">{t('printerSetup.statusConnected')}</span>
                             ) : (
-                              <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">Offline</span>
+                              <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">{t('printerSetup.statusOffline')}</span>
                             )}
                           </div>
                           <div className="mt-1 space-y-1 text-sm text-gray-600">
-                            <p>Device: <span className="font-mono">{p.device}</span></p>
-                            <p>Type: {p.type?.toUpperCase?.() || 'UNKNOWN'}</p>
+                            <p>{t('printerSetup.deviceLabel')} <span className="font-mono">{p.device}</span></p>
+                            {/* The slot holds the raw device type, uppercased — the
+                                fallback stays untranslated to match it. */}
+                            <p>{t('printerSetup.typeLine', { type: p.type?.toUpperCase?.() || 'UNKNOWN' })}</p>
                             {p.hasQueuedJobs && (
-                              <p className="text-orange-700">Queued jobs: {p.queueCount}</p>
+                              <p className="text-orange-700">{t('printerSetup.queuedJobs', { n: p.queueCount })}</p>
                             )}
                             {p.isStale && (
-                              <p className="text-red-600">Marked as stale/ghost</p>
+                              <p className="text-red-600">{t('printerSetup.markedStale')}</p>
                             )}
                           </div>
                         </div>
                         <div className="ml-4">
                           <button
                             type="button"
-                            onClick={() =>
+                            onClick={async () => {
+                              // Windows: actually wire the selection into the print
+                              // engine — the 'receipt' role makes this queue the
+                              // winspool raw-print target (previously the click only
+                              // updated local React state and nothing could print).
+                              // macOS keeps its long-standing behavior untouched: the
+                              // CUPS print target is managed by the USB-tab setup flow.
+                              const isWindows = window.electronAPI?.app?.platform === 'win32';
+                              if (isWindows) {
+                                const roleResult = await window.electronAPI?.hardware?.setPrinterRole?.(p.name, 'receipt');
+                                if (roleResult && roleResult.success === false) {
+                                  setCurrentStatus(t('printerSetup.statusCouldNotSelect', { name: p.name, error: roleResult.error ?? t('printerSetup.unknownErrorLower') }));
+                                  return;
+                                }
+                              }
                               onPrinterConnected({
                                 success: true,
-                                message: `Selected system printer: ${p.name}`,
+                                message: isWindows
+                                  ? t('printerSetup.messageReceiptPrinterSet', { name: p.name })
+                                  : t('printerSetup.messageSelectedSystemPrinter', { name: p.name }),
                                 printerName: p.name,
-                              })
-                            }
+                              });
+                            }}
                             className={DS2_PRIMARY_BTN}
                           >
-                            Use This
+                            {t('printerSetup.useThis')}
                           </button>
                         </div>
                       </div>
@@ -666,7 +822,7 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
                 </div>
               ) : (
                 !systemLoading && (
-                  <div className="p-4 border border-dashed rounded-lg text-gray-500 text-sm">No system printers found.</div>
+                  <div className="p-4 border border-dashed rounded-lg text-gray-500 text-sm">{t('printerSetup.noSystemPrinters')}</div>
                 )
               )}
             </div>
@@ -677,12 +833,12 @@ const PrinterSetup: React.FC<PrinterSetupProps> = ({ onPrinterConnected, onClose
             <div className="flex items-start space-x-2">
               <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-blue-800">
-                <p className="font-medium mb-1">Tips:</p>
+                <p className="font-medium mb-1">{t('printerSetup.tipsTitle')}</p>
                 <ul className="space-y-1 text-xs">
-                  <li>• <strong>Network:</strong> Make sure your thermal printer is powered on and connected to the network</li>
-                  <li>• <strong>USB:</strong> Connect your thermal printer via USB cable before scanning</li>
-                  <li>• <strong>Network:</strong> Your computer and printer should be on the same WiFi network</li>
-                  <li>• <strong>Manual:</strong> Check the printer's display for its IP address if manual setup is needed</li>
+                  <li>• <strong>{t('printerSetup.tabNetwork')}:</strong> {t('printerSetup.tipNetworkPowered')}</li>
+                  <li>• <strong>{t('printerSetup.tabUsb')}:</strong> {t('printerSetup.tipUsbCable')}</li>
+                  <li>• <strong>{t('printerSetup.tabNetwork')}:</strong> {t('printerSetup.tipSameWifi')}</li>
+                  <li>• <strong>{t('printerSetup.tabManual')}:</strong> {t('printerSetup.tipManualIp')}</li>
                 </ul>
               </div>
             </div>

@@ -1,16 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle,
+    BarChart3,
     Building2,
     Calculator,
+    ChevronLeft,
+    ChevronRight,
+    CircleDollarSign,
     Package,
     Plus,
     ReceiptText,
     RefreshCw,
+    SlidersHorizontal,
     Trash2,
     TrendingDown,
     TrendingUp,
     WalletCards,
+    X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +25,9 @@ import { useProducts } from '../contexts/ProductsContext';
 import { offlineReportingService } from '../services/offlineReportingService';
 import type { ReportFilters, ReportTransaction } from '../types/supabase';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { ListRow } from '../components/ui/ListRow';
+import { TabToggle } from '../components/ui/TabToggle';
+import { TableActionButton } from '../components/ui/TableActionButton';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -50,6 +59,11 @@ interface ProductCostRow {
     cost: number;
     profit: number;
 }
+
+type MobileProfitCostsView = 'overview' | 'operating' | 'products' | 'inventory';
+type MobileProductMetric = 'profit' | 'margin' | 'cost';
+
+const toDateInputValue = (date: Date): string => date.toISOString().split('T')[0];
 
 const metricToneClasses: Record<MetricCardProps['tone'], { border: string; icon: string; label: string; value: string }> = {
     blue: {
@@ -136,8 +150,12 @@ const ProfitCosts: React.FC = () => {
     const [reloadToken, setReloadToken] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [mobileView, setMobileView] = useState<MobileProfitCostsView>('overview');
+    const [showMobilePeriodPicker, setShowMobilePeriodPicker] = useState(false);
+    const [mobileEditingCostId, setMobileEditingCostId] = useState<string | null>(null);
+    const [mobileProductMetric, setMobileProductMetric] = useState<MobileProductMetric>('profit');
 
-    const locale = language?.startsWith('pt') ? 'pt-PT' : 'en-US';
+    const locale = language?.startsWith('pt') ? 'pt-PT' : language?.startsWith('es') ? 'es-ES' : 'en-US';
     const currencyFormatter = useMemo(
         () => new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }),
         [locale],
@@ -153,6 +171,20 @@ const ProfitCosts: React.FC = () => {
             dateRange: {
                 ...prev.dateRange,
                 [field]: value,
+            },
+        }));
+    };
+
+    const handleMobileDatePreset = (days: number) => {
+        const end = new Date();
+        const start = new Date(end);
+        start.setDate(end.getDate() - days + 1);
+
+        setFilters(prev => ({
+            ...prev,
+            dateRange: {
+                start: toDateInputValue(start),
+                end: toDateInputValue(end),
             },
         }));
     };
@@ -177,15 +209,17 @@ const ProfitCosts: React.FC = () => {
     };
 
     const handleAddOperatingCost = () => {
+        const id = `custom-${Date.now()}`;
         setOperatingCosts(prev => [
             ...prev,
             {
-                id: `custom-${Date.now()}`,
+                id,
                 name: t('profitCosts.operatingCosts.newCostName'),
                 amount: 0,
                 frequency: 'monthly',
             },
         ]);
+        setMobileEditingCostId(id);
     };
 
     const handleRemoveOperatingCost = (id: string) => {
@@ -265,6 +299,42 @@ const ProfitCosts: React.FC = () => {
             },
         );
     }, [products]);
+
+    const mobileProductCostRows = useMemo(() => {
+        const metricValue = (row: ProductCostRow): number => {
+            switch (mobileProductMetric) {
+                case 'margin':
+                    return row.sales === 0 ? 0 : (row.profit / row.sales) * 100;
+                case 'cost':
+                    return row.cost;
+                case 'profit':
+                default:
+                    return row.profit;
+            }
+        };
+
+        return [...productCostRows].sort((a, b) => metricValue(b) - metricValue(a));
+    }, [mobileProductMetric, productCostRows]);
+
+    const inventoryCapitalRows = useMemo(() => (
+        products
+            .filter(product => product.is_active && !product.deleted_at)
+            .map(product => ({
+                id: product.id,
+                name: product.name,
+                units: product.stock,
+                value: product.cost * product.stock,
+            }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5)
+    ), [products]);
+
+    const mobileDateRangeLabel = useMemo(() => {
+        const start = new Date(`${filters.dateRange.start}T00:00:00`);
+        const end = new Date(`${filters.dateRange.end}T00:00:00`);
+        const dateFormat: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+        return `${start.toLocaleDateString(locale, dateFormat)} – ${end.toLocaleDateString(locale, dateFormat)}`;
+    }, [filters.dateRange.end, filters.dateRange.start, locale]);
 
     useEffect(() => {
         let isMounted = true;
@@ -358,7 +428,89 @@ const ProfitCosts: React.FC = () => {
 
     return (
         <div className="ds2-visual-scope" style={visualStyle} data-ds2-neutral={prefs.neutralFamilyId}>
-            <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
+            <div className="space-y-5 px-4 pb-7 pt-1 md:hidden">
+                {mobileView === 'overview' && (
+                    <>
+                        <header className="flex items-start justify-between gap-3 pt-2">
+                            <div>
+                                <p className="text-sm font-medium text-gray-500">{t('profitCosts.mobile.businessHealth')}</p>
+                                <h1 className="mt-0.5 text-[32px] font-bold tracking-tight text-gray-950">{t('profitCosts.header.title')}</h1>
+                            </div>
+                            <div className="flex gap-2">
+                                <AdminActionButton type="button" variant="icon" icon={SlidersHorizontal} onClick={() => setShowMobilePeriodPicker(true)} className="min-w-touch-xs" aria-label={t('profitCosts.mobile.choosePeriod')} />
+                                <AdminActionButton type="button" variant="icon" icon={RefreshCw} onClick={handleRefresh} className="min-w-touch-xs" aria-label={t('profitCosts.header.refresh')} />
+                            </div>
+                        </header>
+
+                        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                            <ListRow onClick={() => setShowMobilePeriodPicker(true)}>
+                                <span className="min-w-0 flex-1"><span className="block text-xs font-semibold uppercase tracking-wide text-gray-500">{t('profitCosts.mobile.reportingPeriod')}</span><span className="mt-1 block text-base font-semibold text-gray-900">{mobileDateRangeLabel}</span></span>
+                                <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700">{summary.dateRangeDays} {t('profitCosts.filters.days')}</span>
+                            </ListRow>
+                        </div>
+
+                        <section className={`rounded-3xl p-6 text-white shadow-sm ${summary.netProfit >= 0 ? 'bg-[#227a4f]' : 'bg-red-700'}`}>
+                            <div className="flex items-start justify-between gap-4">
+                                <div><p className="text-sm font-semibold text-white/75">{t('profitCosts.statement.netProfit')}</p><p className="mt-1 text-4xl font-bold tracking-tight">{formatCurrency(summary.netProfit)}</p></div>
+                                <div className="rounded-2xl bg-white/15 px-3 py-2 text-right"><p className="text-xs font-medium text-white/70">{t('profitCosts.mobile.margin')}</p><p className="text-lg font-bold">{formatPercent(summary.netMarginPercent)}</p></div>
+                            </div>
+                            <div className="mt-6 border-t border-white/15 pt-4"><p className="text-sm font-medium text-white/80">{summary.netProfit >= 0 ? t('profitCosts.mobile.marginHealthy') : t('profitCosts.mobile.marginNegative')}</p><p className="mt-1 text-xs text-white/65">{t('profitCosts.metrics.transactionCount', { count: summary.transactionCount })}</p></div>
+                        </section>
+
+                        <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                            <div className="flex items-center justify-between"><div><h2 className="text-lg font-bold text-gray-950">{t('profitCosts.mobile.whereRevenueGoes')}</h2><p className="mt-0.5 text-sm text-gray-500">{t('profitCosts.mobile.whereRevenueGoesSubtitle')}</p></div><BarChart3 className="h-5 w-5 text-gray-400" /></div>
+                            <div className="mt-5 flex h-3 overflow-hidden rounded-full bg-gray-100">
+                                <div className="bg-[#60a5fa]" style={{ width: `${summary.netSales <= 0 ? 0 : Math.max(0, (summary.productCosts / summary.netSales) * 100)}%` }} />
+                                <div className="bg-gray-400" style={{ width: `${summary.netSales <= 0 ? 0 : Math.max(0, (summary.operatingCosts / summary.netSales) * 100)}%` }} />
+                                <div className={summary.netProfit >= 0 ? 'bg-[#34a86b]' : 'bg-red-500'} style={{ width: `${summary.netSales <= 0 ? 0 : Math.max(0, (summary.netProfit / summary.netSales) * 100)}%` }} />
+                            </div>
+                            <div className="mt-5 space-y-3">
+                                {[{ label: t('profitCosts.statement.netSales'), value: summary.netSales, tone: 'bg-blue-400' }, { label: t('profitCosts.statement.productCosts'), value: -summary.productCosts, tone: 'bg-amber-400' }, { label: t('profitCosts.statement.operatingCosts'), value: -summary.operatingCosts, tone: 'bg-gray-400' }, { label: t('profitCosts.statement.netProfit'), value: summary.netProfit, tone: summary.netProfit >= 0 ? 'bg-green-500' : 'bg-red-500' }].map(item => <div key={item.label} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 font-medium text-gray-600"><span className={`h-2.5 w-2.5 rounded-full ${item.tone}`} />{item.label}</span><span className="font-semibold text-gray-900">{item.value < 0 ? '-' : ''}{formatCurrency(Math.abs(item.value))}</span></div>)}
+                            </div>
+                        </section>
+
+                        <section className="grid grid-cols-2 gap-3">
+                            {[{ label: t('profitCosts.metrics.grossSales'), value: formatCurrency(summary.grossSales), icon: ReceiptText, tone: 'text-blue-700 bg-blue-50' }, { label: t('profitCosts.metrics.productCosts'), value: formatCurrency(summary.productCosts), icon: Package, tone: 'text-amber-700 bg-amber-50' }, { label: t('profitCosts.statement.grossMargin'), value: formatPercent(summary.grossMarginPercent), icon: TrendingUp, tone: 'text-green-700 bg-green-50' }, { label: t('profitCosts.statement.breakEven'), value: formatCurrency(summary.breakEvenNetSales), icon: Calculator, tone: 'text-gray-700 bg-gray-100' }].map(({ label, value, icon: Icon, tone }) => <div key={label} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}><Icon className="h-4 w-4" /></span><p className="mt-3 text-xs font-semibold text-gray-500">{label}</p><p className="mt-1 truncate text-lg font-bold tracking-tight text-gray-950">{value}</p></div>)}
+                        </section>
+
+                        <section><h2 className="px-1 text-lg font-bold text-gray-950">{t('profitCosts.mobile.explore')}</h2><div className="mt-2 overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">{[{ view: 'operating' as const, icon: Building2, title: t('profitCosts.operatingCosts.title'), subtitle: formatCurrency(summary.operatingCosts) }, { view: 'products' as const, icon: TrendingUp, title: t('profitCosts.mobile.productProfitability'), subtitle: formatCurrency(summary.grossProfit) }, { view: 'inventory' as const, icon: CircleDollarSign, title: t('profitCosts.mobile.inventoryCapital'), subtitle: formatCurrency(inventorySnapshot.stockAtCost) }].map(({ view, icon: Icon, title, subtitle }) => <button key={view} type="button" onClick={() => setMobileView(view)} className="flex min-h-touch items-center gap-4 border-b border-gray-100 px-4 text-left last:border-b-0"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block text-base font-semibold text-gray-900">{title}</span><span className="block text-sm text-gray-500">{subtitle}</span></span><ChevronRight className="h-5 w-5 text-gray-400" /></button>)}</div></section>
+                    </>
+                )}
+
+                {mobileView === 'operating' && (
+                    <>
+                        <header className="flex min-h-touch-xs items-center gap-2"><AdminActionButton type="button" variant="icon" icon={ChevronLeft} onClick={() => setMobileView('overview')} className="min-w-touch-xs" aria-label={t('profitCosts.mobile.backToOverview')} /><div><p className="text-sm font-medium text-gray-500">{t('profitCosts.mobile.manage')}</p><h1 className="text-2xl font-bold tracking-tight text-gray-950">{t('profitCosts.operatingCosts.title')}</h1></div></header>
+                        <section className="rounded-3xl bg-[#f2f8f4] p-6"><p className="text-sm font-semibold text-[#35684b]">{t('profitCosts.mobile.appliedThisPeriod')}</p><p className="mt-1 text-4xl font-bold tracking-tight text-[#155b36]">{formatCurrency(summary.operatingCosts)}</p><p className="mt-2 text-sm text-[#4d7960]">{t('profitCosts.mobile.periodDailyAverage', { days: summary.dateRangeDays, amount: formatCurrency(summary.operatingCostDailyAverage) })}</p></section>
+                        <div className="flex items-center justify-between px-1"><h2 className="text-lg font-bold text-gray-950">{t('profitCosts.mobile.yourCharges')}</h2><button type="button" onClick={handleResetOperatingCosts} className="min-h-touch-xs rounded-xl border border-[var(--ds2-danger-border,#fca5a5)] px-2 text-sm font-semibold text-[var(--ds2-danger-solid,#dc2626)] hover:bg-[var(--ds2-danger-tint-bg,#fef2f2)]">{t('profitCosts.operatingCosts.reset')}</button></div>
+                        <section className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">{operatingCostRows.map(({ cost, appliedAmount }) => <button key={cost.id} type="button" onClick={() => setMobileEditingCostId(cost.id)} className="flex min-h-touch items-center gap-3 border-b border-gray-100 px-4 text-left last:border-b-0"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700"><Building2 className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block truncate text-base font-semibold text-gray-900">{cost.name}</span><span className="block text-sm text-gray-500">{t(`profitCosts.frequency.${cost.frequency}`)} · {formatCurrency(cost.amount)}</span></span><span className="text-right"><span className="block text-sm font-bold text-gray-900">{formatCurrency(appliedAmount)}</span><ChevronRight className="ml-auto mt-1 h-4 w-4 text-gray-400" /></span></button>)}{operatingCostRows.length === 0 && <p className="p-5 text-center text-sm text-gray-500">{t('profitCosts.operatingCosts.empty')}</p>}</section>
+                        <AdminActionButton type="button" variant="primary" icon={Plus} label={t('profitCosts.operatingCosts.add')} onClick={handleAddOperatingCost} className="w-full" />
+                    </>
+                )}
+
+                {mobileView === 'products' && (
+                    <>
+                        <header className="flex min-h-touch-xs items-center gap-2"><AdminActionButton type="button" variant="icon" icon={ChevronLeft} onClick={() => setMobileView('overview')} className="min-w-touch-xs" aria-label={t('profitCosts.mobile.backToOverview')} /><div><p className="text-sm font-medium text-gray-500">{t('profitCosts.mobile.salesPerformance')}</p><h1 className="text-2xl font-bold tracking-tight text-gray-950">{t('profitCosts.mobile.productProfitability')}</h1></div></header>
+                        <section className="rounded-3xl bg-[#227a4f] p-6 text-white"><p className="text-sm font-semibold text-white/75">{t('profitCosts.statement.grossProfit')}</p><p className="mt-1 text-4xl font-bold tracking-tight">{formatCurrency(summary.grossProfit)}</p><div className="mt-5 flex items-center justify-between border-t border-white/15 pt-4"><span className="text-sm text-white/75">{t('profitCosts.statement.grossMargin')}</span><span className="text-lg font-bold">{formatPercent(summary.grossMarginPercent)}</span></div></section>
+                        <TabToggle options={[{ value: 'profit', label: t('profitCosts.mobile.metricProfit') }, { value: 'margin', label: t('profitCosts.mobile.metricMargin') }, { value: 'cost', label: t('profitCosts.mobile.metricCost') }]} value={mobileProductMetric} onChange={setMobileProductMetric} />
+                        <section className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">{mobileProductCostRows.map((row, index) => { const value = mobileProductMetric === 'margin' ? (row.sales === 0 ? 0 : (row.profit / row.sales) * 100) : mobileProductMetric === 'cost' ? row.cost : row.profit; const max = Math.max(...mobileProductCostRows.map(item => mobileProductMetric === 'margin' ? (item.sales === 0 ? 0 : (item.profit / item.sales) * 100) : mobileProductMetric === 'cost' ? item.cost : item.profit), 1); return <div key={row.productId} className="border-b border-gray-100 p-4 last:border-b-0"><div className="flex items-start gap-3"><span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-bold text-gray-600">{index + 1}</span><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><p className="truncate text-base font-semibold text-gray-900">{row.productName}</p><p className="whitespace-nowrap text-base font-bold text-[#227a4f]">{mobileProductMetric === 'margin' ? formatPercent(value) : formatCurrency(value)}</p></div><p className="mt-0.5 text-sm text-gray-500">{t('profitCosts.mobile.soldSales', { count: row.quantitySold, amount: formatCurrency(row.sales) })}</p><div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-[#4cae76]" style={{ width: `${Math.max(0, Math.min(100, (value / max) * 100))}%` }} /></div></div></div></div>})}{mobileProductCostRows.length === 0 && <p className="p-6 text-center text-sm text-gray-500">{t('profitCosts.productBreakdown.empty')}</p>}</section>
+                    </>
+                )}
+
+                {mobileView === 'inventory' && (
+                    <>
+                        <header className="flex min-h-touch-xs items-center gap-2"><AdminActionButton type="button" variant="icon" icon={ChevronLeft} onClick={() => setMobileView('overview')} className="min-w-touch-xs" aria-label={t('profitCosts.mobile.backToOverview')} /><div><p className="text-sm font-medium text-gray-500">{t('profitCosts.mobile.stockValue')}</p><h1 className="text-2xl font-bold tracking-tight text-gray-950">{t('profitCosts.mobile.inventoryCapital')}</h1></div></header>
+                        <section className="rounded-3xl bg-[#1f2937] p-6 text-white"><p className="text-sm font-semibold text-white/70">{t('profitCosts.mobile.capitalTiedUp')}</p><p className="mt-1 text-4xl font-bold tracking-tight">{formatCurrency(inventorySnapshot.stockAtCost)}</p><div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/15 pt-4"><div><p className="text-xs font-semibold uppercase tracking-wide text-white/55">{t('profitCosts.mobile.retailValue')}</p><p className="mt-1 text-lg font-bold">{formatCurrency(inventorySnapshot.stockAtRetail)}</p></div><div><p className="text-xs font-semibold uppercase tracking-wide text-white/55">{t('profitCosts.mobile.potentialMargin')}</p><p className="mt-1 text-lg font-bold text-[#7ee2aa]">{formatCurrency(inventorySnapshot.stockAtRetail - inventorySnapshot.stockAtCost)}</p></div></div></section>
+                        <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="text-lg font-bold text-gray-950">{t('profitCosts.mobile.capitalConcentration')}</h2><p className="mt-0.5 text-sm text-gray-500">{t('profitCosts.mobile.capitalConcentrationSubtitle')}</p></div><CircleDollarSign className="h-5 w-5 text-gray-400" /></div><div className="mt-5 space-y-4">{inventoryCapitalRows.map(row => <div key={row.id}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-base font-semibold text-gray-900">{row.name}</p><p className="mt-0.5 text-sm text-gray-500">{t('profitCosts.mobile.unitsInStockCount', { count: row.units })}</p></div><p className="whitespace-nowrap text-base font-bold text-gray-900">{formatCurrency(row.value)}</p></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-[#65758b]" style={{ width: `${inventorySnapshot.stockAtCost === 0 ? 0 : Math.min(100, (row.value / inventorySnapshot.stockAtCost) * 100)}%` }} /></div></div>)}{inventoryCapitalRows.length === 0 && <p className="text-center text-sm text-gray-500">{t('profitCosts.mobile.noActiveInventory')}</p>}</div></section>
+                        <section className="grid grid-cols-2 gap-3"><div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"><p className="text-sm font-semibold text-gray-500">{t('profitCosts.inventory.activeProducts')}</p><p className="mt-2 text-2xl font-bold text-gray-950">{inventorySnapshot.activeProducts}</p></div><div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"><p className="text-sm font-semibold text-gray-500">{t('profitCosts.inventory.unitsInStock')}</p><p className="mt-2 text-2xl font-bold text-gray-950">{inventorySnapshot.unitsInStock}</p></div></section>
+                    </>
+                )}
+
+                {showMobilePeriodPicker && <div className="fixed inset-0 z-50 flex items-end bg-gray-950/40" role="dialog" aria-modal="true" aria-label={t('profitCosts.mobile.choosePeriod')}><div className="relative w-full rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"><div className="absolute left-1/2 top-3 h-1.5 w-10 -translate-x-1/2 rounded-full bg-gray-200" /><div className="mt-3 flex items-center justify-between"><div><p className="text-sm font-medium text-gray-500">{t('profitCosts.mobile.reportingPeriod')}</p><h2 className="text-2xl font-bold text-gray-950">{t('profitCosts.mobile.chooseDates')}</h2></div><AdminActionButton type="button" variant="icon" icon={X} onClick={() => setShowMobilePeriodPicker(false)} className="min-w-touch-xs" aria-label={t('profitCosts.mobile.closePeriodPicker')} /></div><div className="mt-6 grid grid-cols-3 gap-2">{[{ label: t('profitCosts.mobile.presetToday'), days: 1 }, { label: t('profitCosts.mobile.presetDays7'), days: 7 }, { label: t('profitCosts.mobile.presetDays30'), days: 30 }].map(option => <button key={option.days} type="button" onClick={() => handleMobileDatePreset(option.days)} className={`min-h-touch-xs text-sm ${(option.days === summary.dateRangeDays || (option.days === 30 && summary.dateRangeDays === 31)) ? 'bg-green-50 border border-green-500 text-green-700 font-semibold rounded-lg' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg'}`}>{option.label}</button>)}</div><div className="mt-5 grid grid-cols-2 gap-3"><label className="text-sm font-semibold text-gray-700">{t('profitCosts.filters.startDate')}<input type="date" value={filters.dateRange.start} onChange={event => handleDateChange('start', event.target.value)} className="mt-2 min-h-touch-xs w-full rounded-xl border border-gray-200 px-3 text-base font-normal" /></label><label className="text-sm font-semibold text-gray-700">{t('profitCosts.filters.endDate')}<input type="date" value={filters.dateRange.end} onChange={event => handleDateChange('end', event.target.value)} className="mt-2 min-h-touch-xs w-full rounded-xl border border-gray-200 px-3 text-base font-normal" /></label></div><button type="button" onClick={() => setShowMobilePeriodPicker(false)} className="mt-6 min-h-touch w-full rounded-xl bg-gradient-primary text-base font-semibold text-white hover:opacity-90">{t('profitCosts.mobile.applyPeriod')}</button></div></div>}
+
+                {mobileEditingCostId && (() => { const cost = operatingCosts.find(item => item.id === mobileEditingCostId); return cost ? <div className="fixed inset-0 z-50 flex items-end bg-gray-950/40" role="dialog" aria-modal="true" aria-label={t('profitCosts.mobile.editOperatingCharge')}><div className="relative w-full rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"><div className="absolute left-1/2 top-3 h-1.5 w-10 -translate-x-1/2 rounded-full bg-gray-200" /><div className="mt-3 flex items-center justify-between"><h2 className="text-2xl font-bold text-gray-950">{t('profitCosts.mobile.editCharge')}</h2><AdminActionButton type="button" variant="icon" icon={X} onClick={() => setMobileEditingCostId(null)} className="min-w-touch-xs" aria-label={t('profitCosts.mobile.closeChargeEditor')} /></div><label className="mt-5 block text-sm font-semibold text-gray-700">{t('profitCosts.operatingCosts.table.cost')}<input type="text" value={cost.name} onChange={event => handleCostNameChange(cost.id, event.target.value)} className="mt-2 min-h-touch-xs w-full rounded-xl border border-gray-200 px-3 text-base font-normal" /></label><label className="mt-4 block text-sm font-semibold text-gray-700">{t('profitCosts.operatingCosts.table.amount')}<input type="number" min="0" step="0.01" value={cost.amount} onChange={event => handleCostAmountChange(cost.id, event.target.value)} className="mt-2 min-h-touch-xs w-full rounded-xl border border-gray-200 px-3 text-base font-normal" /></label><div className="mt-4"><p className="text-sm font-semibold text-gray-700">{t('profitCosts.operatingCosts.table.frequency')}</p><div className="mt-2 grid grid-cols-2 gap-2">{operatingCostFrequencies.map(frequency => <button key={frequency} type="button" onClick={() => handleCostFrequencyChange(cost.id, frequency)} className={`min-h-touch-xs text-sm ${cost.frequency === frequency ? 'bg-green-50 border border-green-500 text-green-700 font-semibold rounded-lg' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg'}`}>{t(`profitCosts.frequency.${frequency}`)}</button>)}</div></div><div className="mt-6 grid grid-cols-2 gap-3"><button type="button" onClick={() => { handleRemoveOperatingCost(cost.id); setMobileEditingCostId(null); }} className="min-h-touch-xs rounded-xl border border-[var(--ds2-danger-border,#fca5a5)] font-semibold text-[var(--ds2-danger-solid,#dc2626)] hover:bg-[var(--ds2-danger-tint-bg,#fef2f2)]"><Trash2 className="mr-2 inline h-4 w-4" />{t('common.delete')}</button><button type="button" onClick={() => setMobileEditingCostId(null)} className="min-h-touch-xs rounded-xl bg-gray-100 font-semibold text-gray-900 hover:bg-gray-200">{t('profitCosts.mobile.done')}</button></div></div></div> : null; })()}
+            </div>
+
+            <div className={`hidden space-y-6 md:block ${layoutClasses.contentInsetX}`}>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-800">{t('profitCosts.header.title')}</h1>
@@ -558,34 +710,23 @@ const ProfitCosts: React.FC = () => {
                                                 />
                                             </td>
                                             <td className="px-5 py-4">
-                                                <div className="inline-flex overflow-hidden rounded-lg border border-gray-200">
-                                                    {operatingCostFrequencies.map(frequency => {
-                                                        const active = cost.frequency === frequency;
-                                                        return (
-                                                            <button
-                                                                key={frequency}
-                                                                type="button"
-                                                                onClick={() => handleCostFrequencyChange(cost.id, frequency)}
-                                                                className={`min-h-touch-xs px-3 text-xs font-semibold transition-colors ${active ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-                                                            >
-                                                                {t(`profitCosts.frequency.${frequency}`)}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
+                                                <TabToggle
+                                                    options={operatingCostFrequencies.map(frequency => ({ value: frequency, label: t(`profitCosts.frequency.${frequency}`) }))}
+                                                    value={cost.frequency}
+                                                    onChange={frequency => handleCostFrequencyChange(cost.id, frequency)}
+                                                />
                                             </td>
                                             <td className="px-5 py-4 text-right text-sm font-semibold text-gray-900">
                                                 {formatCurrency(appliedAmount)}
                                             </td>
                                             <td className="px-5 py-4 text-right">
-                                                <button
+                                                <TableActionButton
                                                     type="button"
+                                                    variant="delete"
+                                                    icon={Trash2}
                                                     onClick={() => handleRemoveOperatingCost(cost.id)}
-                                                    className="inline-flex min-h-touch-xs min-w-[44px] items-center justify-center rounded-lg text-red-600 transition-colors hover:bg-red-50"
                                                     aria-label={t('profitCosts.operatingCosts.remove')}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
+                                                />
                                             </td>
                                         </tr>
                                     ))}

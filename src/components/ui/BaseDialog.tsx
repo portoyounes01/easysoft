@@ -1,4 +1,7 @@
 import React from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { useAppliedDialogStyle } from '../../theme/dialogStyle';
+import { ConfiguredDialogShell } from './ConfiguredDialogShell';
 
 interface BaseDialogProps {
     open: boolean;
@@ -11,6 +14,9 @@ interface BaseDialogProps {
     height?: string;
     /** Overlay stacking class. Lower it (e.g. "z-40") when another dialog must open on top. */
     overlayClassName?: string;
+    /** Icon for chip header variants of the applied-style shell. */
+    icon?: LucideIcon;
+    subtitle?: string;
 }
 
 export const BaseDialog: React.FC<BaseDialogProps> = ({
@@ -23,8 +29,29 @@ export const BaseDialog: React.FC<BaseDialogProps> = ({
     width = '50vw',
     height = '60vh',
     overlayClassName = 'z-50',
+    icon,
+    subtitle,
 }) => {
+    const applied = useAppliedDialogStyle();
+
     if (!open) return null;
+
+    if (applied) {
+        return (
+            <ConfiguredDialogShell
+                config={applied}
+                title={title}
+                subtitle={subtitle}
+                icon={icon}
+                onClose={onClose}
+                overlayClassName={overlayClassName}
+                footer={footer}
+                vwvhSize={{ width, height }}
+            >
+                {children}
+            </ConfiguredDialogShell>
+        );
+    }
 
     return (
         <div className={`fixed inset-0 bg-black/50 flex items-center justify-center ${overlayClassName}`} onClick={onClose}>

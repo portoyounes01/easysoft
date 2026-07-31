@@ -1,10 +1,9 @@
 import React, { useCallback, useState, useEffect } from 'react';
+import { WithDialogTokens, DialogToggleRow } from './ui/dialogParts';
 import {
     AlertCircle,
     Tag,
     Hash,
-    ToggleLeft,
-    ToggleRight,
     Coffee,
     Milk,
     Cake,
@@ -234,7 +233,8 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                         <button
                             type="button"
                             onClick={() => setShowKeyboard(!showKeyboard)}
-                            className={`rounded-xl px-3 py-2 text-sm font-medium transition-colors ${showKeyboard ? 'bg-gray-300 text-gray-900' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                            aria-pressed={showKeyboard}
+                            className={`rounded-[10px] border px-3 py-2 text-sm font-medium transition-all ${showKeyboard ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
                             title={t('forms.toggleKeyboard')}
                         >
                             {t('forms.keyboard')}
@@ -270,12 +270,13 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                 {/* Form - Scrollable Content */}
                 <div className="flex-1 overflow-y-auto">
                     <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                <WithDialogTokens>{tk => (<>
 
                         {/* Basic Information */}
                         <div className="space-y-4">
                             {/* Category Name */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.nameLabel')}
                                 </label>
                                 <div className="relative">
@@ -300,7 +301,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                             {/* Description */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.description')}
                                 </label>
                                 <textarea
@@ -317,11 +318,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                         {/* Visual Appearance */}
                         <div className="space-y-4">
-                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('categories.form.visualAppearance')}</h3>
+                            <h3 className={`text-md font-semibold ${tk.p.titleText} border-b ${tk.p.border} pb-2`}>{t('categories.form.visualAppearance')}</h3>
 
                             {/* Color Selection */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.colorGradient')}
                                 </label>
                                 <div className="grid grid-cols-2 gap-2">
@@ -330,9 +331,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                             key={colorOption.value}
                                             type="button"
                                             onClick={() => handleFieldChange('color', colorOption.value)}
-                                            className={`p-3 rounded-lg border-2 transition-all ${formData.color === colorOption.value
-                                                    ? 'border-blue-500 ring-2 ring-blue-200'
-                                                    : 'border-gray-300 hover:border-gray-400'
+                                            className={`p-3 rounded-[10px] border transition-all ${formData.color === colorOption.value
+                                                    ? 'bg-green-50 border-green-500'
+                                                    : 'bg-white border-gray-200 hover:bg-gray-50'
                                                 }`}
                                         >
                                             <div className={`w-full h-6 rounded ${colorOption.preview} mb-2`}></div>
@@ -350,7 +351,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                             {/* Icon Selection */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.categoryIcon')}
                                 </label>
                                 <div className="grid grid-cols-5 gap-2">
@@ -361,9 +362,9 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
                                                 key={iconOption.name}
                                                 type="button"
                                                 onClick={() => handleFieldChange('icon', iconOption.name)}
-                                                className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center space-y-1 ${formData.icon === iconOption.name
-                                                        ? 'border-blue-500 bg-blue-50 text-blue-600'
-                                                        : 'border-gray-300 hover:border-gray-400 text-gray-600'
+                                                className={`p-3 rounded-[10px] border transition-all flex flex-col items-center space-y-1 ${formData.icon === iconOption.name
+                                                        ? 'bg-green-50 border-green-500 text-green-600'
+                                                        : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-600'
                                                     }`}
                                                 title={t(iconOption.labelKey)}
                                             >
@@ -383,7 +384,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                             {/* Preview */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.preview')}
                                 </label>
                                 <div className={`w-full p-4 rounded-lg bg-gradient-to-r ${formData.color} text-white flex items-center space-x-3`}>
@@ -398,11 +399,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                         {/* Settings */}
                         <div className="space-y-4">
-                            <h3 className="text-md font-semibold text-gray-800 border-b pb-2">{t('categories.form.settingsHeading')}</h3>
+                            <h3 className={`text-md font-semibold ${tk.p.titleText} border-b ${tk.p.border} pb-2`}>{t('categories.form.settingsHeading')}</h3>
 
                             {/* Display Order */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.displayOrder')}
                                 </label>
                                 <div className="relative">
@@ -423,27 +424,18 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
                             {/* Active Status */}
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                <label className={`block text-sm font-semibold ${tk.p.titleText} mb-2`}>
                                     {t('categories.form.statusLabel')}
                                 </label>
-                                <button
-                                    type="button"
-                                    onClick={() => handleFieldChange('is_active', !formData.is_active)}
-                                    className={`flex items-center space-x-2 px-4 py-3 rounded-lg border transition-colors w-full ${formData.is_active
-                                        ? 'bg-green-50 border-green-200 text-green-700'
-                                        : 'bg-red-50 border-red-200 text-red-700'
-                                        }`}
-                                >
-                                    {formData.is_active ? (
-                                        <ToggleRight className="w-6 h-6 text-green-600" />
-                                    ) : (
-                                        <ToggleLeft className="w-6 h-6 text-red-600" />
-                                    )}
-                                    <span>{formData.is_active ? t('common.active') : t('common.inactive')}</span>
-                                </button>
+                                <DialogToggleRow
+                                    title={formData.is_active ? t('common.active') : t('common.inactive')}
+                                    checked={formData.is_active}
+                                    onChange={() => handleFieldChange('is_active', !formData.is_active)}
+                                />
                             </div>
                         </div>
-                    </form>
+                    </>)}</WithDialogTokens>
+                </form>
                 </div>
 
                 {/* Virtual Keyboard */}

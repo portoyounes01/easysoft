@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Plus, Tag, Trash2, Package, AlertTriangle, Loader2 } from 'lucide-react';
 import { useProducts } from '../contexts/ProductsContext';
 import { LocalCategory, LocalProduct } from '../types/supabase';
@@ -6,6 +7,7 @@ import CategoryForm from '../components/CategoryForm';
 import { useTranslation } from 'react-i18next';
 import { DashedCardButton } from '../components/ui/DashedCardButton';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -18,6 +20,7 @@ const CategoriesInner: React.FC = () => {
 
     const [showCategoryForm, setShowCategoryForm] = useState(false);
     const [editingCategory, setEditingCategory] = useState<LocalCategory | null>(null);
+    const [deletingCategory, setDeletingCategory] = useState<{ id: string; name: string } | null>(null);
 
     const headerPrimaryBtn =
         'ds2-control-radius-lg ds2-toolbar-control-h !px-4 text-sm font-semibold gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
@@ -37,7 +40,7 @@ const CategoriesInner: React.FC = () => {
         setEditingCategory(null);
     };
 
-    const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
+    const handleDeleteCategory = (categoryId: string, categoryName: string) => {
         const productsInCategory = products.filter(
             (p: LocalProduct) => p.category_id === categoryId && p.is_active && !p.deleted_at
         );
@@ -52,13 +55,18 @@ const CategoriesInner: React.FC = () => {
             return;
         }
 
-        if (window.confirm(t('categories.confirm.deleteCategoryQuestion', { name: categoryName }))) {
-            try {
-                await deleteCategory(categoryId);
-            } catch (e) {
-                console.error('Failed to delete category:', e);
-                alert(t('categories.confirm.failedDelete'));
-            }
+        setDeletingCategory({ id: categoryId, name: categoryName });
+    };
+
+    const confirmDeleteCategory = async () => {
+        if (!deletingCategory) return;
+        try {
+            await deleteCategory(deletingCategory.id);
+        } catch (e) {
+            console.error('Failed to delete category:', e);
+            alert(t('categories.confirm.failedDelete'));
+        } finally {
+            setDeletingCategory(null);
         }
     };
 
@@ -183,7 +191,78 @@ const CategoriesInner: React.FC = () => {
                     </div>
 
                     <div className={`py-4 ${layoutClasses.contentInsetX}`}>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {/* Mobile: compact tap-to-edit list (the big touch-grid tiles below are for md+ / the till). */}
+                        <div className="space-y-2.5 md:hidden">
+                            <div className="overflow-hidden rounded-xl border border-gray-100 empty:hidden">
+                            {categories
+                                .filter((category) => !category.deleted_at)
+                                .sort((a, b) => a.display_order - b.display_order)
+                                .map((category) => {
+                                    const productCount = products.filter(
+                                        (p) => p.category_id === category.id && p.is_active && !p.deleted_at
+                                    ).length;
+                                    return (
+                                        <div
+                                            key={category.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    handleEditCategory(category);
+                                                }
+                                            }}
+                                            onClick={() => handleEditCategory(category)}
+                                            className={`flex min-h-touch cursor-pointer items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 ${category.is_active
+                                                ? 'hover:bg-gray-50'
+                                                : 'bg-gray-100 opacity-60'
+                                                }`}
+                                        >
+                                            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-r ${category.color} ${!category.is_active ? 'opacity-70' : ''}`}>
+                                                <Package className="h-5 w-5 text-white" />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                                    <span className={`truncate font-semibold ${category.is_active ? 'text-gray-800' : 'text-gray-500'}`}>
+                                                        {category.name}
+                                                    </span>
+                                                    {!category.is_active && (
+                                                        <span className="rounded-full bg-gray-500 px-2 py-0.5 text-[10px] font-medium text-white">
+                                                            {t('categories.grid.inactive')}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className={`truncate text-xs ${category.is_active ? 'text-gray-500' : 'text-gray-400'}`}>
+                                                    {category.description || t('categories.grid.noDescription')}
+                                                    <span className="mx-1.5 text-gray-300">·</span>
+                                                    {t('categories.grid.productsCount', { count: productCount })}
+                                                </p>
+                                            </div>
+                                            <TableActionButton
+                                                variant="delete"
+                                                icon={Trash2}
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteCategory(category.id, category.name);
+                                                }}
+                                                className="shrink-0"
+                                                title={t('categories.grid.deleteCategoryTitle')}
+                                                aria-label={t('categories.grid.deleteCategoryTitle')}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <DashedCardButton
+                                icon={Plus}
+                                label={t('categories.addCategoryCard')}
+                                onClick={handleCreateCategory}
+                                className="min-h-14 w-full"
+                            />
+                        </div>
+
+                        <div className="hidden gap-4 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                             {categories
                                 .filter((category) => !category.deleted_at)
                                 .sort((a, b) => a.display_order - b.display_order)
@@ -262,17 +341,17 @@ const CategoriesInner: React.FC = () => {
                                                     <span>
                                                         {t('categories.grid.productsCount', { count: productCount })}
                                                     </span>
-                                                    <button
+                                                    <TableActionButton
+                                                        variant="delete"
+                                                        icon={Trash2}
                                                         type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleDeleteCategory(category.id, category.name);
                                                         }}
-                                                        className="ds2-control-radius-lg min-h-touch-xs min-w-touch-xs p-2 text-red-600 transition-colors hover:bg-red-50"
                                                         title={t('categories.grid.deleteCategoryTitle')}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </button>
+                                                        aria-label={t('categories.grid.deleteCategoryTitle')}
+                                                    />
                                                 </div>
                                             </div>
                                         </div>
@@ -289,7 +368,19 @@ const CategoriesInner: React.FC = () => {
                     </div>
                 </div>
 
-                <CategoryForm
+                {deletingCategory && (
+                <ConfirmDialog
+                    tone="danger"
+                    title={t('categories.confirm.deleteTitle')}
+                    message={t('categories.confirm.deleteCategoryQuestion', { name: deletingCategory.name })}
+                    cancelLabel={t('common.cancel')}
+                    confirmLabel={t('categories.confirm.deleteCta')}
+                    onCancel={() => setDeletingCategory(null)}
+                    onConfirm={() => void confirmDeleteCategory()}
+                />
+            )}
+
+            <CategoryForm
                     isOpen={showCategoryForm}
                     onClose={() => setShowCategoryForm(false)}
                     category={editingCategory}

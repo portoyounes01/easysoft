@@ -11,7 +11,7 @@ const systemAdminId = '77777777-7777-4777-8777-777777777777';
 
 function stubSeedFetch() {
   const files: Record<string, string> = {
-    'employees.yml': `employees:\n  - id: "${cashierId}"\n    employee_number: "CSH001"\n    name: "Ana Costa"\n    phone: "+351 915 678 901"\n    pin: "9999"\n    role: "cashier"\n    access_levels: ["sales"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${managerId}"\n    employee_number: "MGR001"\n    name: "João Pereira"\n    pin: "9999"\n    role: "manager"\n    access_levels: ["sales", "inventory"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${mariaAdminId}"\n    employee_number: "ADM001"\n    name: "Maria Santos"\n    password_hash: "wrong-admin-default"\n    role: "admin"\n    access_levels: ["all"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${carlosAdminId}"\n    employee_number: "SYS001"\n    name: "Carlos Silva"\n    password_hash: "wrong-carlos-default"\n    role: "admin"\n    access_levels: ["all"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${systemAdminId}"\n    employee_number: "ADMIN001"\n    name: "System Administrator"\n    password_hash: "wrong-system-admin-default"\n    role: "admin"\n    access_levels: ["all"]\n    is_active: true\n    hire_date: "2024-01-15"\n`,
+    'employees.yml': `employees:\n  - id: "${cashierId}"\n    employee_number: "CSH001"\n    name: "Ana Costa"\n    phone: "+351 915 678 901"\n    pin: "9999"\n    role: "cashier"\n    access_levels: ["sales"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${managerId}"\n    employee_number: "MGR001"\n    name: "João Pereira"\n    pin: "9999"\n    role: "manager"\n    access_levels: ["sales", "inventory"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${mariaAdminId}"\n    employee_number: "ADM001"\n    name: "Maria Santos"\n    password_hash: "wrong-admin-default"\n    role: "admin"\n    access_levels: ["all"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${carlosAdminId}"\n    employee_number: "ADM002"\n    name: "Carlos Silva"\n    password_hash: "wrong-carlos-default"\n    role: "admin"\n    access_levels: ["all"]\n    is_active: true\n    hire_date: "2024-01-15"\n  - id: "${systemAdminId}"\n    employee_number: "SYS001"\n    name: "System Administrator"\n    password_hash: "wrong-system-admin-default"\n    role: "admin"\n    access_levels: ["all"]\n    is_active: true\n    hire_date: "2024-01-15"\n`,
   };
 
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
@@ -104,8 +104,8 @@ describe('startup local seed', () => {
       localDb.employees.where('employee_number').equals('CSH001').first(),
       localDb.employees.where('employee_number').equals('MGR001').first(),
       localDb.employees.where('employee_number').equals('ADM001').first(),
+      localDb.employees.where('employee_number').equals('ADM002').first(),
       localDb.employees.where('employee_number').equals('SYS001').first(),
-      localDb.employees.where('employee_number').equals('ADMIN001').first(),
     ]);
 
     expect(await verifyPasswordHash('1111', cashier?.pin ?? '')).toBe(true);

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { WithDialogTokens } from '../components/ui/dialogParts';
 import {
     Plus,
     Search,
@@ -17,7 +18,10 @@ import {
     UserCheck,
     UserX,
     Copy,
-    Banknote
+    Banknote,
+    X,
+    MoreHorizontal,
+    SlidersHorizontal
 } from 'lucide-react';
 import { useEmployees } from '../contexts/EmployeesContext';
 import { useSupabaseAuth } from '../contexts/SupabaseAuthContext';
@@ -27,7 +31,11 @@ import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../contexts/LanguageContext';
 import { AdminActionButton } from '../components/ui/AdminActionButton';
 import { ActionButton } from '../components/ui/ActionButton';
+import { TableActionButton } from '../components/ui/TableActionButton';
+import { MenuRow } from '../components/ui/MenuRow';
 import { BaseDialog } from '../components/ui/BaseDialog';
+import { ConfiguredDialogShell } from '../components/ui/ConfiguredDialogShell';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 import {
     useDesignSystem2Customization,
 } from '../contexts/DesignSystem2CustomizationContext';
@@ -36,6 +44,7 @@ import {
     RestrictedAccessLevels,
 } from '../utils/accessPermissions';
 import { isSystemAdministrator } from '../utils/systemAdmin';
+import { useIsMobile } from '../hooks/useIsMobile';
 import '../styles/design-system-2-scope.css';
 
 const EmployeesInner: React.FC = () => {
@@ -54,8 +63,8 @@ const EmployeesInner: React.FC = () => {
     } = useEmployees();
 
     const { employee: currentUser, principal } = useSupabaseAuth();
-    // IDENTITY check (ADMIN001) — gates who may SEE/GRANT the RESTRICTED access levels
-    // (reports/dashboard/profit_costs/orders/clear_data) and protects ADMIN001 rows.
+    // IDENTITY check (SYS001) — gates who may SEE/GRANT the RESTRICTED access levels
+    // (reports/dashboard/profit_costs/orders/clear_data) and protects SYS001 rows.
     // Extended ONLY to owner (a membership human, the tenant's top authority). Keeping this
     // narrow is critical: folding it into a role check would let every admin grant
     // restricted levels (privilege escalation) — docs/pwa-p1-refactor-plan.md Gap #1.
@@ -72,6 +81,10 @@ const EmployeesInner: React.FC = () => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState<Employee | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+    const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+    const [showMobileRoleChips, setShowMobileRoleChips] = useState(true);
+    const employeeFormSnapshotRef = useRef<string>('');
+    const isMobileViewport = useIsMobile();
     const [showDatabaseReset, setShowDatabaseReset] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -79,6 +92,7 @@ const EmployeesInner: React.FC = () => {
     const { t } = useTranslation();
     const { language } = useLanguage();
     const { visualStyle, prefs, layoutClasses } = useDesignSystem2Customization();
+    const appliedDialogStyle = useAppliedDialogStyle();
 
     const toolbarBtn =
         'ds2-control-radius-lg ds2-toolbar-control-h !px-3 text-sm font-medium gap-2 shadow-none whitespace-nowrap leading-none shrink-0 [&>svg]:!h-4 [&>svg]:!w-4';
@@ -175,10 +189,13 @@ const EmployeesInner: React.FC = () => {
         });
     }, [employees, searchTerm, selectedRole]);
 
-    const getRoleBadge = (role: string, isActive: boolean) => {
+    const getRoleBadge = (role: string, isActive: boolean, compact = false) => {
+        const sizing = compact
+            ? 'space-x-0.5 px-1.5 py-0.5 text-[10px]'
+            : 'space-x-1 px-2 py-1 text-xs';
         if (!isActive) {
             return (
-                <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700`}>
+                <span className={`inline-flex items-center ${sizing} rounded-full font-medium bg-gray-200 text-gray-700`}>
                     <Shield className="w-3 h-3" />
                     <span>{role.toUpperCase()}</span>
                 </span>
@@ -192,7 +209,7 @@ const EmployeesInner: React.FC = () => {
         };
 
         return (
-            <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${colors[role] || 'bg-gray-100 text-gray-800'}`}>
+            <span className={`inline-flex items-center ${sizing} rounded-full font-medium ${colors[role] || 'bg-gray-100 text-gray-800'}`}>
                 <Shield className="w-3 h-3" />
                 <span>{role.toUpperCase()}</span>
             </span>
@@ -322,7 +339,7 @@ const EmployeesInner: React.FC = () => {
         const errors: Partial<Record<keyof EmployeeFormData, string>> = {};
 
         if (!formData.name.trim()) {
-            errors.name = 'Name is required';
+            errors.name = t('employees.form.errors.nameRequired');
         }
 
         // Prevent non-admins from assigning admin role
@@ -348,25 +365,25 @@ const EmployeesInner: React.FC = () => {
         // PIN validation for managers and cashiers only
         if ((formData.role === 'manager' || formData.role === 'cashier')) {
             if (!editingEmployee && !formData.pin?.trim()) {
-                errors.pin = 'PIN is required for new employees';
+                errors.pin = t('employees.form.errors.pinRequired');
             } else if (formData.pin?.trim() && formData.pin.length < 4) {
-                errors.pin = 'PIN must be at least 4 digits';
+                errors.pin = t('employees.form.errors.pinTooShort');
             } else if (formData.pin?.trim() && !/^\d+$/.test(formData.pin)) {
-                errors.pin = 'PIN must contain only numbers';
+                errors.pin = t('employees.form.errors.pinDigitsOnly');
             }
         }
 
         if (!formData.hire_date) {
-            errors.hire_date = 'Hire date is required';
+            errors.hire_date = t('employees.form.errors.hireDateRequired');
         }
 
         if (!isSystemAdministrator(editingEmployee) && formData.access_levels.length === 0) {
-            errors.access_levels = 'At least one access level is required';
+            errors.access_levels = t('employees.form.errors.accessLevelRequired');
         }
 
         // Password validation only for new admin employees
         if (formData.role === 'admin' && !editingEmployee && !formData.password?.trim()) {
-            errors.password = 'Password is required for new admin employees';
+            errors.password = t('employees.form.errors.passwordRequired');
         }
 
         setFormErrors(errors);
@@ -528,6 +545,78 @@ const EmployeesInner: React.FC = () => {
         setOpenDropdown(openDropdown === employeeId ? null : employeeId);
     };
 
+    // Mobile form sheet: snapshot the form when it opens so the X can warn on unsaved edits.
+    useEffect(() => {
+        if (showEmployeeForm) {
+            employeeFormSnapshotRef.current = JSON.stringify(formData);
+            setShowDiscardConfirm(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showEmployeeForm]);
+
+    const requestCloseEmployeeForm = () => {
+        if (JSON.stringify(formData) !== employeeFormSnapshotRef.current) {
+            setShowDiscardConfirm(true);
+        } else {
+            handleCloseForm();
+        }
+    };
+
+    /**
+     * Kebab actions menu (edit / copy number / (de)activate / delete), shared by the desktop
+     * card and the mobile list row. `menuId` must be unique per rendered instance (the mobile
+     * row uses `m-<id>`) so the open/close + click-outside logic keeps working.
+     */
+    const renderEmployeeActionsMenu = (employee: Employee, canDeleteEmployee: boolean, menuId: string, horizontalTrigger = false) => (
+        <div className="relative" ref={openDropdown === menuId ? dropdownRef : null}>
+            <TableActionButton
+                variant="icon"
+                icon={horizontalTrigger ? MoreHorizontal : MoreVertical}
+                onClick={() => handleDropdownToggle(menuId)}
+            />
+            {openDropdown === menuId && (
+                <div className="absolute right-0 top-10 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+                    <MenuRow
+                        icon={Edit}
+                        label={t('employees.actions.edit')}
+                        onClick={() => {
+                            handleEditEmployee(employee);
+                            setOpenDropdown(null);
+                        }}
+                    />
+
+                    <MenuRow
+                        icon={Copy}
+                        label={t('employees.actions.copyNumber')}
+                        onClick={() => handleCopyEmployeeNumber(employee.employee_number)}
+                    />
+
+                    {!isSystemAdministrator(employee) && (
+                        <MenuRow
+                            icon={employee.is_active ? UserX : UserCheck}
+                            label={employee.is_active ? t('employees.actions.deactivate') : t('employees.actions.reactivate')}
+                            onClick={() => handleToggleEmployeeStatus(employee)}
+                        />
+                    )}
+
+                    <div className="border-t border-gray-100 my-1"></div>
+
+                    {canDeleteEmployee && (
+                        <MenuRow
+                            variant="danger"
+                            icon={Trash2}
+                            label={t('employees.actions.delete')}
+                            onClick={() => {
+                                setShowDeleteConfirm(employee);
+                                setOpenDropdown(null);
+                            }}
+                        />
+                    )}
+                </div>
+            )}
+        </div>
+    );
+
     // Handle activate/deactivate employee
     const handleToggleEmployeeStatus = async (employee: Employee) => {
         if (isSystemAdministrator(employee)) {
@@ -551,10 +640,14 @@ const EmployeesInner: React.FC = () => {
         // You could add a toast notification here
     };
 
+    // Mobile: drop the ds2 content inset so page content aligns with the Layout-level
+    // elements (e.g. the install banner), which only get the main `p-5`.
+    const pageInsetX = isMobileViewport ? 'px-0' : layoutClasses.contentInsetX;
+
     // Show database reset if there's a schema error
     if (showDatabaseReset) {
         return scopeShell(
-            <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
+            <div className={`space-y-6 ${pageInsetX}`}>
                 <div>
                     <h1 className="text-3xl font-bold text-gray-800">{t('employees.header.title')}</h1>
                     <p className="mt-1 text-gray-600">{t('employees.errors.dbResetNeeded')}</p>
@@ -574,20 +667,19 @@ const EmployeesInner: React.FC = () => {
 
     if (loadError) {
         return scopeShell(
-            <div className={`flex h-full flex-col items-center justify-center space-y-4 p-12 ${layoutClasses.contentInsetX}`}>
+            <div className={`flex h-full flex-col items-center justify-center space-y-4 p-12 ${pageInsetX}`}>
                 <p className="font-semibold text-red-600">{loadError}</p>
                 <div className="flex space-x-3">
-                    <button
+                    <AdminActionButton
+                        variant="primary"
                         type="button"
                         onClick={refreshEmployees}
-                        className="ds2-control-radius-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-                    >
-                        {t('employees.errors.retry')}
-                    </button>
+                        label={t('employees.errors.retry')}
+                    />
                     <button
                         type="button"
                         onClick={() => setShowDatabaseReset(true)}
-                        className="ds2-control-radius-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+                        className="rounded-xl bg-[var(--ds2-danger-solid,#dc2626)] px-4 py-2 font-semibold text-white hover:bg-[var(--ds2-danger-hover,#b91c1c)]"
                     >
                         {t('employees.errors.resetDb')}
                     </button>
@@ -602,7 +694,7 @@ const EmployeesInner: React.FC = () => {
             style={visualStyle}
             data-ds2-neutral={prefs.neutralFamilyId}
         >
-            <div className={`space-y-6 ${layoutClasses.contentInsetX}`}>
+            <div className={`space-y-6 ${pageInsetX}`}>
             {syncError && (
                 <div className="flex flex-col sm:flex-row sm:items-start gap-4 rounded-2xl border-2 border-orange-300 bg-orange-50 p-4">
                     <div className="flex-1 min-w-0">
@@ -613,7 +705,7 @@ const EmployeesInner: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => clearSyncError()}
-                        className="min-h-touch shrink-0 px-6 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold transition-colors duration-200"
+                        className="min-h-touch shrink-0 px-6 rounded-2xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 font-semibold transition-colors duration-200"
                     >
                         {t('login.syncDegradedDismiss')}
                     </button>
@@ -625,30 +717,72 @@ const EmployeesInner: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => clearOperationError()}
-                        className="min-h-touch px-6 rounded-xl bg-gray-500 hover:bg-gray-600 text-white font-semibold transition-colors duration-200"
+                        className="min-h-touch px-6 rounded-2xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 font-semibold transition-colors duration-200"
                     >
                         {t('pos.syncDegradedDismiss')}
                     </button>
                 </div>
             )}
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-800">{t('employees.header.title')}</h1>
+            <div className="flex items-start justify-between gap-3 sm:items-center">
+                <div className="min-w-0">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">{t('employees.header.title')}</h1>
                     <p className="text-gray-600 mt-1">{t('employees.header.subtitle')}</p>
                 </div>
                 <AdminActionButton
                     variant="primary"
-                    label={t('employees.header.addEmployee')}
+                    label={isMobileViewport ? t('employees.header.addEmployeeShort') : t('employees.header.addEmployee')}
                     icon={Plus}
                     onClick={handleAddEmployee}
-                    className={headerPrimaryBtn}
+                    className={`${headerPrimaryBtn} shrink-0 self-start sm:self-auto`}
                 />
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border border-gray-100">
+                {/* Mobile: full-width search + filter toggle, role chips below (desktop keeps the select). */}
+                <div className="space-y-3 sm:hidden">
+                    <div className="flex gap-2">
+                        <div className="relative min-w-0 flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                            <input
+                                type="text"
+                                placeholder={t('employees.header.searchPlaceholder')}
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="ds2-control-radius-lg ds2-toolbar-control-h box-border w-full border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowMobileRoleChips((v) => !v)}
+                            aria-label={t('employees.header.filters')}
+                            aria-expanded={showMobileRoleChips}
+                            className={`ds2-control-radius-lg ds2-toolbar-control-h box-border flex w-11 shrink-0 items-center justify-center border transition-colors ${showMobileRoleChips ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+                        >
+                            <SlidersHorizontal className="h-4 w-4" />
+                        </button>
+                    </div>
+                    {showMobileRoleChips && (
+                        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
+                            {roles.map(role => (
+                                <button
+                                    key={role}
+                                    type="button"
+                                    onClick={() => setSelectedRole(role)}
+                                    className={`shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm transition-colors ${selectedRole === role
+                                        ? 'border border-green-500 bg-green-50 font-semibold text-green-700'
+                                        : 'border border-gray-200 bg-white font-medium text-gray-700 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    {role === 'all' ? t('employees.header.allRoles') : role.charAt(0).toUpperCase() + role.slice(1)}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="hidden sm:flex sm:flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
                     <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -686,7 +820,54 @@ const EmployeesInner: React.FC = () => {
             </div>
 
             {/* Employee Cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Mobile: compact contact-list rows (the analytics cards below are md+). */}
+            <div className="space-y-3 md:hidden">
+                {filteredEmployees.map((employee) => {
+                    const canEditEmployee =
+                        employee.role !== 'admin' ||
+                        (canManageAdminEmployees &&
+                            (isCurrentSystemAdmin || !isSystemAdministrator(employee)));
+                    const canDeleteEmployee =
+                        !isSystemAdministrator(employee) &&
+                        (canManageAdminEmployees || employee.role !== 'admin');
+                    return (
+                        <div
+                            key={employee.id}
+                            className={`rounded-2xl border bg-white p-3 shadow-sm ${employee.is_active ? 'border-gray-100' : 'border-gray-200 opacity-75'}`}
+                            data-testid={`employee-row-${employee.employee_number}`}
+                        >
+                            <div className="flex items-center gap-2.5">
+                                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${employee.is_active ? (employee.role === 'admin' ? 'bg-rose-500' : 'bg-green-600') : 'bg-gray-300'}`}>
+                                    <span className="text-sm font-bold text-white">
+                                        {employee.name.split(' ').map(n => n[0]).join('')}
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => canEditEmployee && handleEditEmployee(employee)}
+                                    className="min-w-0 flex-1 rounded-lg text-left transition-colors hover:bg-gray-50"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span className={`min-w-0 truncate text-[15px] font-semibold ${employee.is_active ? 'text-gray-900' : 'text-gray-600'}`}>{employee.name}</span>
+                                        <span className="shrink-0 font-mono text-[11px] text-gray-400">{employee.employee_number}</span>
+                                    </div>
+                                    <div className="mt-1 flex items-center gap-2">
+                                        {getRoleBadge(employee.role, employee.is_active, true)}
+                                        {!employee.is_active && (
+                                            <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-700">
+                                                {t('employees.badges.inactive')}
+                                            </span>
+                                        )}
+                                    </div>
+                                </button>
+                                {renderEmployeeActionsMenu(employee, canDeleteEmployee, `m-${employee.id}`, true)}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="hidden gap-6 md:grid md:grid-cols-1 lg:grid-cols-2">
                 {filteredEmployees.map((employee) => {
                     // Calculate days worked (assuming 8 hours = 1 day)
                     const daysWorked = Math.max(1, Math.round(employee.hours_worked / 8));
@@ -730,72 +911,7 @@ const EmployeesInner: React.FC = () => {
                                             {t('employees.badges.inactive')}
                                         </span>
                                     )}
-                                    <div className="relative" ref={openDropdown === employee.id ? dropdownRef : null}>
-                                        <button
-                                            onClick={() => handleDropdownToggle(employee.id)}
-                                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                                        >
-                                            <MoreVertical className="w-4 h-4" />
-                                        </button>
-
-                                        {/* Dropdown Menu */}
-                                        {openDropdown === employee.id && (
-                                            <div className="absolute right-0 top-10 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
-                                                <button
-                                                    onClick={() => {
-                                                        handleEditEmployee(employee);
-                                                        setOpenDropdown(null);
-                                                    }}
-                                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                    <span>{t('employees.actions.edit')}</span>
-                                                </button>
-
-                                                <button
-                                                    onClick={() => handleCopyEmployeeNumber(employee.employee_number)}
-                                                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-                                                >
-                                                    <Copy className="w-4 h-4" />
-                                                    <span>{t('employees.actions.copyNumber')}</span>
-                                                </button>
-
-                                                {!isSystemAdministrator(employee) && (
-                                                    <button
-                                                        onClick={() => handleToggleEmployeeStatus(employee)}
-                                                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-                                                    >
-                                                        {employee.is_active ? (
-                                                            <>
-                                                                <UserX className="w-4 h-4" />
-                                                                <span>{t('employees.actions.deactivate')}</span>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <UserCheck className="w-4 h-4" />
-                                                                <span>{t('employees.actions.reactivate')}</span>
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                )}
-
-                                                <div className="border-t border-gray-100 my-1"></div>
-
-                                                {canDeleteEmployee && (
-                                                    <button
-                                                        onClick={() => {
-                                                            setShowDeleteConfirm(employee);
-                                                            setOpenDropdown(null);
-                                                        }}
-                                                        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                        <span>{t('employees.actions.delete')}</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
+                                    {renderEmployeeActionsMenu(employee, canDeleteEmployee, employee.id)}
                                 </div>
                             </div>
 
@@ -826,47 +942,43 @@ const EmployeesInner: React.FC = () => {
 
                             <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                                 <span className="text-sm text-gray-500">
-                                    {t('employees.card.hireDate')} {new Date(employee.hire_date).toLocaleDateString(language?.startsWith('pt') ? 'pt-PT' : 'en-US')}
+                                    {t('employees.card.hireDate')} {new Date(employee.hire_date).toLocaleDateString(language?.startsWith('pt') ? 'pt-PT' : language?.startsWith('es') ? 'es-ES' : 'en-US')}
                                 </span>
                                 <div className="flex items-center space-x-2">
                                     {/* Only admins can edit other admins */}
                                     {canEditEmployee ? (
-                                        <button
+                                        <TableActionButton
+                                            variant="icon"
+                                            icon={Edit}
                                             onClick={() => handleEditEmployee(employee)}
-                                            className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-500 hover:bg-gray-100'}`}
                                             title={t('employees.actions.edit')}
                                             aria-label={`${t('employees.actions.edit')} ${employee.name}`}
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                        </button>
+                                        />
                                     ) : (
-                                        <button
+                                        <TableActionButton
+                                            variant="icon"
+                                            icon={Edit}
                                             disabled
-                                            className="p-2 text-gray-400 cursor-not-allowed rounded-lg"
                                             title={t('employees.actions.onlyAdminsEditAdmins')}
                                             aria-label={`${t('employees.actions.onlyAdminsEditAdmins')} ${employee.name}`}
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                        </button>
+                                        />
                                     )}
 
                                     {/* Only admins can delete other admins */}
                                     {canDeleteEmployee ? (
-                                        <button
+                                        <TableActionButton
+                                            variant="delete"
+                                            icon={Trash2}
                                             onClick={() => setShowDeleteConfirm(employee)}
-                                            className={`p-2 rounded-lg transition-colors ${employee.is_active ? 'text-red-600 hover:bg-red-50' : 'text-gray-500 hover:bg-gray-100'}`}
                                             title={t('employees.actions.delete')}
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        />
                                     ) : (
-                                        <button
+                                        <TableActionButton
+                                            variant="icon"
+                                            icon={Trash2}
                                             disabled
-                                            className="p-2 text-gray-400 cursor-not-allowed rounded-lg"
                                             title={t('employees.actions.onlyAdminsDeleteAdmins')}
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        />
                                     )}
                                 </div>
                             </div>
@@ -876,37 +988,15 @@ const EmployeesInner: React.FC = () => {
             </div>
 
             {/* Employee Form Modal */}
-            {showEmployeeForm && (
-                <BaseDialog
-                    open={showEmployeeForm}
-                    onClose={handleCloseForm}
-                    title={editingEmployee ? t('employees.actions.editTitle') : t('employees.actions.addTitle')}
-                    width="55vw"
-                    height="85vh"
-                    footer={
-                        <div className="flex space-x-4">
-                            <ActionButton
-                                type="button"
-                                onClick={handleCloseForm}
-                                label={t('employees.form.cancel')}
-                                variant="secondary"
-                                className="flex-1"
-                                style={{ height: '5vh', fontSize: '1.6vh' }}
-                            />
-                            <ActionButton
-                                type="submit"
-                                form="employee-form"
-                                disabled={isSubmitting}
-                                label={isSubmitting ? t('employees.form.saving') : editingEmployee ? t('employees.form.update') : t('employees.form.create')}
-                                className="flex-1"
-                                style={{ height: '5vh', fontSize: '1.6vh' }}
-                            />
-                        </div>
-                    }
-                >
+            {showEmployeeForm && (() => {
+                // Shared form body: the tablet/terminal BaseDialog below renders it UNCHANGED;
+                // mobile wraps the same children in a full-screen sheet (X top-left + sticky
+                // full-width "Save Changes", per the mobile form pattern).
+                const formShellChildren = (
+                    <WithDialogTokens>{tk => (
                     <div className="flex h-full flex-col">
                         {formData.employee_number && (
-                            <div className="px-6 pt-5 text-sm font-medium text-gray-600">
+                            <div className={`px-6 pt-5 text-sm font-medium ${tk.p.subText}`}>
                                 {t('employees.form.employeeNumber')} {formData.employee_number}
                             </div>
                         )}
@@ -915,11 +1005,11 @@ const EmployeesInner: React.FC = () => {
                         <form id="employee-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
                                     {/* Basic Information */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.basicInfo')}</h3>
+                                        <h3 className={`text-lg font-semibold ${tk.p.titleText} mb-4`}>{t('employees.form.basicInfo')}</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {/* 1. Full Name */}
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.fullName')} *</label>
+                                                <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.fullName')} *</label>
                                                 <input
                                                     type="text"
                                                     value={formData.name}
@@ -938,7 +1028,7 @@ const EmployeesInner: React.FC = () => {
 
                                             {/* 2. Hire Date */}
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.hireDate')} *</label>
+                                                <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.hireDate')} *</label>
                                                 <div className="relative">
                                                     <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                                                     <input
@@ -959,7 +1049,7 @@ const EmployeesInner: React.FC = () => {
 
                                             {/* 3. Role */}
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.role')} *</label>
+                                                <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.role')} *</label>
                                                 <select
                                                     value={formData.role}
                                                     onChange={(e) => handleFormChange('role', e.target.value as EmployeeRole)}
@@ -981,7 +1071,7 @@ const EmployeesInner: React.FC = () => {
                                             {/* 4. Phone field - only for managers and admins */}
                                             {(formData.role === 'manager' || formData.role === 'admin') && (
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.phone')}</label>
+                                                    <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.phone')}</label>
                                                     <div className="relative">
                                                         <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                                                         <input
@@ -999,12 +1089,12 @@ const EmployeesInner: React.FC = () => {
 
                                     {/* Security */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.security')}</h3>
+                                        <h3 className={`text-lg font-semibold ${tk.p.titleText} mb-4`}>{t('employees.form.security')}</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {/* Password field - only for admins */}
                                             {formData.role === 'admin' && (
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.password')} {!editingEmployee && '*'}</label>
+                                                    <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.password')} {!editingEmployee && '*'}</label>
                                                     <div className="relative">
                                                         <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                                                         <input
@@ -1034,7 +1124,7 @@ const EmployeesInner: React.FC = () => {
                                             {/* PIN field - for managers and cashiers */}
                                             {(formData.role === 'manager' || formData.role === 'cashier') && (
                                                 <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">{t('employees.form.pin')} {!editingEmployee && '*'}</label>
+                                                    <label className={`block text-sm font-medium ${tk.p.titleText} mb-2`}>{t('employees.form.pin')} {!editingEmployee && '*'}</label>
                                                     <input
                                                         type="text"
                                                         value={formData.pin}
@@ -1056,12 +1146,12 @@ const EmployeesInner: React.FC = () => {
                                     </div>
 
                                     <div>
-                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.accessLevels')}</h3>
+                                            <h3 className={`text-lg font-semibold ${tk.p.titleText} mb-4`}>{t('employees.form.accessLevels')}</h3>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                 {accessLevels.map((level) => (
                                                     <label
                                                         key={level.value}
-                                                        className="flex items-start space-x-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
+                                                        className="flex items-start space-x-3 p-3 rounded-[10px] border border-gray-200 bg-white transition-all hover:bg-gray-50 cursor-pointer"
                                                     >
                                                         <input
                                                             type="checkbox"
@@ -1086,7 +1176,7 @@ const EmployeesInner: React.FC = () => {
 
                                     {/* Status */}
                                     <div>
-                                        <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('employees.form.status')}</h3>
+                                        <h3 className={`text-lg font-semibold ${tk.p.titleText} mb-4`}>{t('employees.form.status')}</h3>
                                         <label className="flex items-center space-x-3">
                                             <input
                                                 type="checkbox"
@@ -1100,11 +1190,177 @@ const EmployeesInner: React.FC = () => {
 
                                 </form>
                     </div>
-                </BaseDialog>
-            )}
+                    )}</WithDialogTokens>
+                );
+
+                if (!isMobileViewport) {
+                    return (
+                        <BaseDialog
+                            open={showEmployeeForm}
+                            onClose={handleCloseForm}
+                            title={editingEmployee ? t('employees.actions.editTitle') : t('employees.actions.addTitle')}
+                            width="55vw"
+                            height="85vh"
+                            footer={
+                                <div className="flex space-x-4">
+                                    <ActionButton
+                                        type="button"
+                                        onClick={handleCloseForm}
+                                        label={t('employees.form.cancel')}
+                                        variant="secondary"
+                                        className="flex-1"
+                                        style={{ height: '5vh', fontSize: '1.6vh' }}
+                                    />
+                                    <ActionButton
+                                        type="submit"
+                                        form="employee-form"
+                                        disabled={isSubmitting}
+                                        label={isSubmitting ? t('employees.form.saving') : editingEmployee ? t('employees.form.update') : t('employees.form.create')}
+                                        className="flex-1"
+                                        style={{ height: '5vh', fontSize: '1.6vh' }}
+                                    />
+                                </div>
+                            }
+                        >
+                            {formShellChildren}
+                        </BaseDialog>
+                    );
+                }
+
+                // Mobile: full-screen sheet — X top-left, centered title, scrollable form,
+                // always-visible bottom primary action. No duplicated Cancel/Save.
+                return (
+                    <div className="fixed inset-0 z-[70] flex flex-col bg-white">
+                        <div className="flex items-center border-b border-gray-200 px-2 py-2.5">
+                            <button
+                                type="button"
+                                onClick={requestCloseEmployeeForm}
+                                aria-label={t('common.cancel')}
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-gray-700 transition-colors hover:bg-gray-100"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                            <h2 className="min-w-0 flex-1 truncate pr-10 text-center text-lg font-bold text-gray-900">
+                                {editingEmployee ? t('employees.actions.editTitle') : t('employees.actions.addTitle')}
+                            </h2>
+                        </div>
+
+                        <div className="min-h-0 flex-1">{formShellChildren}</div>
+
+                        <div className="border-t border-gray-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                            <button
+                                type="submit"
+                                form="employee-form"
+                                disabled={isSubmitting}
+                                className={`w-full py-3.5 text-base disabled:cursor-not-allowed disabled:opacity-60 ${appliedDialogStyle
+                                    ? dialogButtonClasses(appliedDialogStyle).primary
+                                    : 'rounded-xl bg-green-600 font-semibold text-white transition-colors hover:bg-green-700'}`}
+                            >
+                                {isSubmitting
+                                    ? t('employees.form.saving')
+                                    : editingEmployee
+                                        ? t('employees.form.saveChanges')
+                                        : t('employees.form.create')}
+                            </button>
+                        </div>
+
+                        {/* Discard-changes confirmation (web modal — native confirm is unavailable in Electron) */}
+                        {showDiscardConfirm && (appliedDialogStyle ? (
+                            <ConfiguredDialogShell
+                                config={appliedDialogStyle}
+                                title={t('employees.form.discardTitle')}
+                                subtitle={t('employees.form.discardBody')}
+                                icon={AlertCircle}
+                                onClose={() => setShowDiscardConfirm(false)}
+                                overlayClassName="z-[80]"
+                                footer={
+                                    <div className="space-y-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowDiscardConfirm(false)}
+                                            className={`w-full ${dialogButtonClasses(appliedDialogStyle).secondary}`}
+                                        >
+                                            {t('employees.form.keepEditing')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowDiscardConfirm(false);
+                                                handleCloseForm();
+                                            }}
+                                            className={`w-full ${dialogButtonClasses(appliedDialogStyle).danger}`}
+                                        >
+                                            {t('employees.form.discard')}
+                                        </button>
+                                    </div>
+                                }
+                            >
+                                <p className="px-6 py-5 text-sm text-gray-600">{t('employees.form.discardBody')}</p>
+                            </ConfiguredDialogShell>
+                        ) : (
+                            <div
+                                className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-6"
+                                onClick={() => setShowDiscardConfirm(false)}
+                            >
+                                <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                                    <h3 className="text-lg font-bold text-gray-900">{t('employees.form.discardTitle')}</h3>
+                                    <p className="mt-1 text-sm text-gray-600">{t('employees.form.discardBody')}</p>
+                                    <div className="mt-5 space-y-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowDiscardConfirm(false)}
+                                            className="w-full rounded-xl bg-gray-100 py-3 font-semibold text-gray-900 transition-colors hover:bg-gray-200"
+                                        >
+                                            {t('employees.form.keepEditing')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowDiscardConfirm(false);
+                                                handleCloseForm();
+                                            }}
+                                            className="w-full rounded-xl bg-red-600 py-3 font-semibold text-white transition-colors hover:bg-red-700"
+                                        >
+                                            {t('employees.form.discard')}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                );
+            })()}
 
             {/* Delete Confirmation Modal */}
-            {showDeleteConfirm && (
+            {showDeleteConfirm && (appliedDialogStyle ? (
+                <ConfiguredDialogShell
+                    config={appliedDialogStyle}
+                    title={t('employees.confirm.title')}
+                    subtitle={t('employees.confirm.subtitle')}
+                    icon={Trash2}
+                    onClose={() => setShowDeleteConfirm(null)}
+                    footer={
+                        <div className={dialogButtonClasses(appliedDialogStyle).container}>
+                            <button
+                                onClick={() => setShowDeleteConfirm(null)}
+                                className={dialogButtonClasses(appliedDialogStyle).secondary}
+                            >
+                                {t('employees.confirm.cancel')}
+                            </button>
+                            <button
+                                onClick={handleDeleteEmployee}
+                                className={dialogButtonClasses(appliedDialogStyle).danger}
+                            >
+                                {t('employees.confirm.delete')}
+                            </button>
+                        </div>
+                    }
+                >
+                    <p className="px-6 py-5 text-gray-700">
+                        {t('employees.confirm.deleteQuestion', { name: showDeleteConfirm.name })}
+                    </p>
+                </ConfiguredDialogShell>
+            ) : (
                 <>
                     {/* Backdrop */}
                     <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowDeleteConfirm(null)} />
@@ -1143,7 +1399,7 @@ const EmployeesInner: React.FC = () => {
                         </div>
                     </div>
                 </>
-            )}
+            ))}
         </div>
         </div>
     );

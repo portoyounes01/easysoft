@@ -1,10 +1,29 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import i18n from '../i18n';
+import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { Employee, EmployeeLoginResult } from '../types/supabase';
 import { hasEmployeePermission } from '../utils/accessPermissions';
 import type { Principal, MembershipRole } from '../types/principal';
 import { ROLE_CAPABILITIES, humanHasCapability } from '../utils/roleCapabilities';
+import { isPwaHost } from '../lib/host';
+import { reconcileAlerts, disableAlerts } from '../lib/push';
+
+// Keep the Realtime socket's auth token in lockstep with the session so the RLS-scoped
+// notification channel authorizes as the signed-in user (setAuth is realtime-only — no
+// PostgREST/getSession — so it's safe to call inside the auth-state callbacks that hold the
+// auth lock). PWA host only: the till has no notification feed. On sign-out we pass no token
+// (falls back to anon, which RLS denies — fail-closed) and drop every open channel.
+// See docs/pwa-notifications-plan.md P3a Step 4.
+function syncRealtimeAuth(session: Session | null): void {
+  if (!isPwaHost) return;
+  void supabase.realtime.setAuth(session?.access_token);
+}
+function clearRealtimeAuth(): void {
+  if (!isPwaHost) return;
+  void supabase.realtime.setAuth();
+  supabase.removeAllChannels();
+}
 
 interface AuthState {
   user: User | null;
@@ -32,7 +51,15 @@ interface AuthContextType extends AuthState {
   clearError: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Exported ONLY for the dev POS harness (src/dev/PosDevApp.tsx), which injects a
+// fake operator session to run the POS without pairing/login. App code must keep
+// using SupabaseAuthProvider + useSupabaseAuth.
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export type { AuthContextType };
+
+// Sentinel matched by LoginForm2 to offer the "Re-pair this till" action (kiosk has no
+// URL bar, so this failure must carry its own way back to /pair-device).
+export const TILL_NOT_PAIRED_ERROR = 'This till is not paired. Pair the device before employee login.';
 
 export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>({
@@ -146,6 +173,34 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   };
 
+  // Platform (sysadmin) principal — PURE + SYNCHRONOUS like the membership deriver.
+  // Keyed on the platform_admin claim read from the ACCESS TOKEN (hook-controlled),
+  // NOT from session.user.app_metadata: when an admin is revoked, the access-token
+  // hook strips the claim from newly minted JWTs but GoTrue keeps the key in the user
+  // record — the token is the truthful source, so revocation demotes the client at
+  // the next refresh. The claim only renders the console shell; every platform ACTION
+  // is re-authorized server-side against the platform_admins table by the edge fn.
+  const derivePlatformPrincipal = (session: Session): Principal | null => {
+    let isPlatform = false;
+    try {
+      const payload = session.access_token.split('.')[1] ?? '';
+      const claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as { app_metadata?: Record<string, unknown> };
+      isPlatform = claims.app_metadata?.platform_admin === true;
+    } catch {
+      isPlatform = false;
+    }
+    if (!isPlatform) return null;
+    return {
+      source: 'platform',
+      userId: session.user.id,
+      displayName: session.user.email ?? i18n.t('common.platformAdmin'),
+      role: 'sysadmin',
+      tenantId: null,
+      storeIds: [],
+      capabilities: new Set<string>(),
+    };
+  };
+
   const fetchEmployeeDataForId = async (session: Session, employeeId: string): Promise<Employee | null> => {
     try {
       const tenantId = session.user.app_metadata.tenant_id;
@@ -208,7 +263,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       // Guard: only attempt Supabase auth when properly configured
       if (!isSupabaseConfigured()) {
-        const msg = 'Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON.';
+        const msg = i18n.t('login.supabaseNotConfiguredEnv');
         setState(prev => ({ ...prev, isLoading: false, error: msg }));
         return { success: false, error: msg };
       }
@@ -225,7 +280,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Employee data will be fetched in the auth state change listener
       return { success: true };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorMessage = error instanceof Error ? error.message : i18n.t('common.unknownErrorOccurred');
       setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
       return { success: false, error: errorMessage };
     }
@@ -237,26 +292,26 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     try {
       if (!isSupabaseConfigured()) {
-        throw new Error('Supabase is not configured. Device pairing and online login are required.');
+        throw new Error(i18n.t('login.supabaseNotConfiguredPairing'));
       }
 
       const { data: sessionData } = await supabase.auth.getSession();
       const deviceSession = sessionData.session;
       if (!deviceSession || deviceSession.user.app_metadata.app_role !== 'device') {
-        throw new Error('This till is not paired. Pair the device before employee login.');
+        throw new Error(TILL_NOT_PAIRED_ERROR);
       }
 
       const { data, error } = await supabase.rpc('employee_pin_login', {
         p_employee_number: employeeNumber,
         p_secret: password,
       });
-      if (error) throw new Error(error.message || 'Employee credential verification failed.');
+      if (error) throw new Error(error.message || i18n.t('login.credentialVerificationFailed'));
 
       const loginResult = (data as EmployeeLoginResult[] | null)?.[0];
       if (!loginResult?.success || !loginResult.employee_id) {
         const message = loginResult?.error === 'locked'
-          ? 'Too many failed attempts. Try again in 15 minutes.'
-          : 'Invalid employee number or credentials.';
+          ? i18n.t('login.tooManyAttempts')
+          : i18n.t('login.invalidEmployeeCredentials');
         setState(prev => ({ ...prev, isLoading: false, error: message }));
         return { success: false, error: message };
       }
@@ -275,7 +330,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         ? sanitizeEmployee(localEmployee)
         : await fetchEmployeeDataForId(deviceSession, loginResult.employee_id);
       if (!employee || !employee.is_active) {
-        throw new Error('Employee roster is out of date. Sync this till and try again.');
+        throw new Error(i18n.t('login.rosterOutOfDate'));
       }
 
       setState(prev => ({
@@ -292,7 +347,7 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       return { success: true };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorMessage = error instanceof Error ? error.message : i18n.t('common.unknownErrorOccurred');
       setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
       return { success: false, error: errorMessage };
     }
@@ -304,12 +359,12 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     try {
       if (!isSupabaseConfigured()) {
-        const msg = 'Supabase is not configured.';
+        const msg = i18n.t('login.supabaseNotConfigured');
         setState(prev => ({ ...prev, isLoading: false, error: msg }));
         return { success: false, error: msg };
       }
-      const url = import.meta.env.VITE_SUPABASE_URL as string;
-      const anon = import.meta.env.VITE_SUPABASE_ANON as string;
+      const url = supabaseUrl;
+      const anon = supabaseAnonKey;
       const res = await fetch(`${url}/functions/v1/pwa-login`, {
         method: 'POST',
         headers: { apikey: anon, Authorization: `Bearer ${anon}`, 'Content-Type': 'application/json' },
@@ -332,14 +387,14 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
       // errors — keep them friendly + generic (no enumeration signal).
       const msg = res.status === 401
-        ? 'Invalid username/email or password.'
+        ? i18n.t('login.pwaInvalidCredentials')
         : (body?.error === 'no_membership' || body?.error === 'not_a_member')
-          ? 'This account has no access to a workspace.'
-          : (typeof body?.error === 'string' ? body.error : 'Login failed.');
+          ? i18n.t('login.pwaNoWorkspaceAccess')
+          : (typeof body?.error === 'string' ? body.error : i18n.t('login.loginFailed'));
       setState(prev => ({ ...prev, isLoading: false, error: msg }));
       return { success: false, error: msg };
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Login failed.';
+      const msg = e instanceof Error ? e.message : i18n.t('login.loginFailed');
       setState(prev => ({ ...prev, isLoading: false, error: msg }));
       return { success: false, error: msg };
     }
@@ -400,8 +455,27 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (!mounted) return;
 
       if (event === 'SIGNED_IN' && session) {
+        // Precedence is MEMBERSHIP FIRST at every derivation site (matches pwa-login's
+        // "a tenant member always gets the tenant path, never the console"; the hook
+        // additionally strips platform_admin from any member's JWT, so a dual-claim
+        // session should be unreachable — this ordering is the client-side backstop).
         const appRole = session.user.app_metadata?.app_role;
-        if (appRole === 'owner' || appRole === 'admin' || appRole === 'manager') {
+        const platformPrincipal = appRole === 'owner' || appRole === 'admin' || appRole === 'manager'
+          ? null
+          : derivePlatformPrincipal(session);
+        if (platformPrincipal) {
+          // Platform (sysadmin) operator: no tenant, no realtime feed, no push — just
+          // the console. Derived synchronously (no PostgREST, no deadlock).
+          setState({
+            user: session.user,
+            employee: null,
+            principal: platformPrincipal,
+            session,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+        } else if (appRole === 'owner' || appRole === 'admin' || appRole === 'manager') {
           // PWA human: derive the principal SYNCHRONOUSLY from app_metadata (no PostgREST,
           // so no deadlock, no employees read — a human has no employee row).
           const principal = deriveMembershipPrincipal(session);
@@ -414,6 +488,8 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
             isLoading: false,
             error: null,
           });
+          syncRealtimeAuth(session);
+          if (principal?.tenantId) void reconcileAlerts(session.user.id, principal.tenantId);
         } else {
           // Device/undefined: defer the employee lookup outside this callback.
           // fetchEmployeeData issues a PostgREST query whose internal getSession() would
@@ -437,15 +513,24 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
           }, 0);
         }
       } else if (event === 'SIGNED_OUT') {
-        setState({
-          user: null,
-          employee: null,
-          principal: null,
-          session: null,
-          isAuthenticated: false,
-          isLoading: false,
-          error: null,
+        setState(prev => {
+          // Drop THIS device's push subscription for the signed-out user's active tenant so a shared
+          // device stops surfacing their tenant's criticals after logout (plan §P3b). Best-effort +
+          // PWA-only (disableAlerts no-ops without a subscription, e.g. on the till).
+          const uid = prev.session?.user?.id;
+          const tid = prev.principal?.tenantId;
+          if (uid && tid) void disableAlerts(uid, tid);
+          return {
+            user: null,
+            employee: null,
+            principal: null,
+            session: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: null,
+          };
         });
+        clearRealtimeAuth();
       } else if (event === 'TOKEN_REFRESHED' && session) {
         // SAFETY-CRITICAL: isAuthenticated now keys on principal, and the till's ~hourly
         // device token refresh arrives here. deriveMembershipPrincipal returns null for a
@@ -453,12 +538,27 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
         // keep ...prev — never null the till's principal / isAuthenticated mid-shift. For a
         // human switch-tenant refresh, the fresh app_metadata yields a new membership
         // principal (active tenant updates). Do NOT recompute isAuthenticated here.
-        setState(prev => ({
-          ...prev,
-          user: session.user,
-          session,
-          principal: deriveMembershipPrincipal(session) ?? prev.principal,
-        }));
+        setState(prev => {
+          const derived = deriveMembershipPrincipal(session) ?? derivePlatformPrincipal(session);
+          // The prev-principal fallback exists for the TILL (employee attribution under a
+          // device session — both derivers return null there). For browser humans, a
+          // refresh whose claims were hook-stripped (revoked member / revoked platform
+          // admin) must DEMOTE — keeping prev.principal would pin a dead identity with
+          // "session expired" errors on every action until a manual reload.
+          const keepTill = prev.principal?.source === 'employee';
+          const principal = derived ?? (keepTill ? prev.principal : null);
+          return {
+            ...prev,
+            user: session.user,
+            session,
+            principal,
+            isAuthenticated: keepTill ? prev.isAuthenticated : !!principal,
+          };
+        });
+        syncRealtimeAuth(session);
+        // Switch-tenant refreshes the token with new app_metadata — repoint push at the new tenant.
+        const refreshedTenant = deriveMembershipPrincipal(session)?.tenantId;
+        if (refreshedTenant) void reconcileAlerts(session.user.id, refreshedTenant);
       }
     });
 
@@ -486,7 +586,22 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (session) {
         const appRole = session.user.app_metadata?.app_role;
-        if (appRole === 'owner' || appRole === 'admin' || appRole === 'manager') {
+        // membership-first, same precedence as SIGNED_IN
+        const platformPrincipal = appRole === 'owner' || appRole === 'admin' || appRole === 'manager'
+          ? null
+          : derivePlatformPrincipal(session);
+        if (platformPrincipal) {
+          // Platform (sysadmin) reload — synchronous, no employees read, no tenant feed.
+          setState({
+            user: session.user,
+            employee: null,
+            principal: platformPrincipal,
+            session,
+            isAuthenticated: true,
+            isLoading: false,
+            error: null,
+          });
+        } else if (appRole === 'owner' || appRole === 'admin' || appRole === 'manager') {
           // Human reload: derive synchronously; skip the employees read (returns null anyway).
           const principal = deriveMembershipPrincipal(session);
           setState({
@@ -498,6 +613,8 @@ export const SupabaseAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
             isLoading: false,
             error: null,
           });
+          syncRealtimeAuth(session);
+          if (principal?.tenantId) void reconcileAlerts(session.user.id, principal.tenantId);
         } else {
           const employee = await fetchEmployeeData(session);
           const principal = employee ? deriveEmployeePrincipal(employee, session) : null;

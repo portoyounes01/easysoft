@@ -1,17 +1,24 @@
 // pos-checkout — server-side fiscal issuance for the online-required v1 POS.
 //
-// Verified request contract (fiskaly SIGN PT, X-Api-Version 2026-06-01), from the
-// TEST-API probe: auth POST /tokens {content:{type:"API_KEY",key,secret}} + headers
-// X-Api-Version + X-Idempotency-Key(uuid v4); issuance = root POST /records twice
-// (INTENTION -> TRANSACTION). See docs/PHASE-STATUS.md and docs/multi-tenant-plan.md §7.
+// Contract: fiskaly SIGN PT — the Portugal service of fiskaly's UNIFIED API
+// (test/live.api.fiskaly.com, X-Api-Version 2026-06-01). "SIGN PT" is the real,
+// current product name (launched 2026-05-21); it shares the unified hosts and is NOT
+// a specialized per-country API like SIGN ES/DE/AT. Auth POST /tokens
+// {content:{type:"API_KEY",key,secret}} -> content.authentication.bearer; headers
+// X-Api-Version + X-Idempotency-Key (uuid, required on every POST incl. /tokens);
+// issuance = root POST /records twice (INTENTION -> TRANSACTION). Document numbers
+// and series are CLIENT-generated (DocumentIdentifier ^[0-9A-Z_/\-\.]{1,20}$).
+// See docs/fiskaly-pt-contract-capture.md and docs/multi-tenant-plan.md §7.
 //
-// ⚠️ VERIFICATION STATUS:
-//   - REQUEST contract: VERIFIED against test.api.fiskaly.com (schema-echo).
-//   - RESPONSE contract (ATCUD/number-authority/hash/cert/token lifetime): ASSUMED
-//     (best-effort from the SIGN IT guide + plan). Marked ⚠️ASSUMED inline.
-//   - HAPPY PATH: NOT end-to-end tested — the provisioned TEST API_KEY `key`+`secret`
-//     are not yet available (the .env values are a subject *name* + secret and return
-//     invalid_grant). Reachable error paths (missing config, bad session) ARE testable.
+// ⚠️ VERIFICATION STATUS (2026-07-19 pass, REGISTER B16):
+//   - REQUEST + RESPONSE contract: VERIFIED at schema level against the official
+//     SIGN PT OpenAPI 2026-06-01 (workspace.fiskaly.com) + live schema-echo probes.
+//     Response: RecordResource{content: {id, state, mode, journal{signature},
+//     compliance{data=ATCUD, qr_code, signature_hash, software_certificate}, ...}}.
+//     A REJECTED/FAILED record still returns HTTP 200 — state MUST be checked.
+//   - RUNTIME still UNVERIFIED (SIGN PT not enabled on org group1): no authenticated
+//     issuance has ever run; actual ATCUD/QR values, PROCESSING->FINISHED timing and
+//     fiskaly's real software_certificate number are unconfirmed.
 //   Do NOT rely on this for real issuance until one live POST /records is confirmed.
 //
 // Tenant/store/device are derived from the device-session JWT — never the payload.
@@ -74,13 +81,16 @@ Deno.serve(async (req) => {
   if (meta.app_role !== 'device') return json({ error: 'not_a_device_session' }, 403);
 
   // device must be enrolled (covers the <=JWT-lifetime revocation window)
-  const { data: device } = await admin.from('devices').select('id,status,training_mode').eq('id', deviceId).eq('tenant_id', tenantId).maybeSingle();
+  const { data: device } = await admin.from('devices').select('id,status,training_mode,fiskaly_system_id_test,fiskaly_system_id_live').eq('id', deviceId).eq('tenant_id', tenantId).maybeSingle();
   if (!device || device.status !== 'enrolled') return json({ error: 'device_not_enrolled' }, 403);
 
   let body: {
     checkout_id?: string; transaction_id?: string; doc_type?: string;
-    customer?: { nif?: string; name?: string; address?: string; code?: string };
-    entries?: unknown[]; payments?: unknown[]; breakdown?: unknown[]; totals?: unknown;
+    customer?: { nif?: string; code?: string };
+    /** Spec-shaped fiskaly recipients — REQUIRED for FT (INVOICE); built by the client. */
+    recipients?: unknown[];
+    entries?: unknown[]; payments?: unknown[]; breakdown?: unknown[];
+    totals?: { vat?: { amount?: string; exclusive?: string; inclusive?: string } };
     cashier_label?: string;
   };
   try { body = await req.json(); } catch { return json({ error: 'invalid_json' }, 400); }
@@ -113,13 +123,39 @@ Deno.serve(async (req) => {
   if (!cfg || cfg.issuer !== 'fiskaly') return await fail('fiscal_config_missing', 409);
   if (!secret?.fiskaly_api_key || !secret?.fiskaly_api_secret) return await fail('fiscal_secret_missing', 409);
 
-  // ---- resolve series + document.number (reuse on a crashed 'pending' retry) ----
+  // System (till) id = the device's fiskaly System resource for this environment.
+  const systemId = environment === 'test' ? device.fiskaly_system_id_test : device.fiskaly_system_id_live;
+  if (!systemId) return await fail('fiscal_system_unprovisioned', 409);
+
+  // ---- validate the spec-shaped payload BEFORE burning a number ----
+  // Per the verified OpenAPI: entries/payments/breakdown are minItems-1 arrays and
+  // totals is {vat:{amount,exclusive,inclusive}} with decimal-STRING money values.
+  // The client builds these shapes; we reject structurally-invalid payloads here so
+  // schema failures never reach fiskaly with an allocated number attached.
   const docType = (body.doc_type ?? 'FS').toUpperCase();
+  const wantsInvoice = docType === 'FT'; // NIF on a receipt stays a RECEIPT (customer.code) — no auto-upgrade
+  if (!Array.isArray(body.entries) || body.entries.length === 0) return await fail('invalid_entries', 400);
+  if (!Array.isArray(body.payments) || body.payments.length === 0) return await fail('invalid_payments', 400);
+  if (!Array.isArray(body.breakdown) || body.breakdown.length === 0) return await fail('invalid_breakdown', 400);
+  const vatTotals = body.totals?.vat;
+  if (!vatTotals || typeof vatTotals.amount !== 'string' || typeof vatTotals.exclusive !== 'string' || typeof vatTotals.inclusive !== 'string') {
+    return await fail('invalid_totals', 400);
+  }
+  // INVOICE (FT) requires full spec-shaped recipients (CONSUMER: name+address;
+  // BUSINESS: name+address+identification) — the server cannot fabricate them.
+  if (wantsInvoice && (!Array.isArray(body.recipients) || body.recipients.length === 0)) {
+    return await fail('invoice_requires_recipients', 400);
+  }
+
+  // ---- resolve series + document.number (reuse on a crashed 'pending' retry) ----
   const year = new Date().getUTCFullYear();
   let seriesName: string;
   let documentNumber: string;
-  if (prior?.status === 'pending' && prior.document_number && prior.series) {
-    // resume a crashed attempt with the SAME number — fiskaly (deterministic key) dedups.
+  if (prior?.document_number && prior.series) {
+    // Resume ANY prior attempt (pending OR failed) with the SAME reserved number: the
+    // derived idempotency keys are seeded by checkout_id only, so re-sending with a
+    // fresh number would be same-key-different-payload (422) — and the prior record may
+    // already be signed at fiskaly. Same number + same keys → fiskaly replays it.
     seriesName = prior.series;
     documentNumber = prior.document_number;
   } else {
@@ -158,48 +194,79 @@ Deno.serve(async (req) => {
   const intentionKey = await derivedUuidV4(`${checkoutId}:intention`);
   const transactionKey = await derivedUuidV4(`${checkoutId}:transaction`);
   const recHeaders = (key: string) => ({ 'X-Api-Version': API_VERSION, 'X-Idempotency-Key': key, 'Content-Type': 'application/json', Authorization: `Bearer ${fiskalyToken}` });
+  const getHeaders = () => ({ 'X-Api-Version': API_VERSION, Authorization: `Bearer ${fiskalyToken}` });
 
-  const systemId = cfg.fiskaly_taxpayer_id; // ⚠️ NOTE: this must be the System (till) id; provisioning must store it. Using a config field as placeholder.
   const training = !!device.training_mode;
 
   try {
-    // 1) INTENTION
+    // 1) INTENTION — response envelope is RecordResource{content: Record} (spec-verified)
     const iRes = await fetch(`${host}/records`, { method: 'POST', headers: recHeaders(intentionKey),
       body: JSON.stringify({ content: { type: 'INTENTION', system: { id: systemId },
-        operation: { type: 'TRANSACTION', details: { creators: [{ type: 'PERSON', label: (body.cashier_label ?? 'cashier').slice(0, 64) }], training, properties: {} } } } }) });
+        operation: { type: 'TRANSACTION', details: { creators: [{ type: 'PERSON', label: ((body.cashier_label ?? '').trim() || 'cashier').slice(0, 128) }], training } } } }) });
     if (!iRes.ok) return await fail('fiskaly_intention_failed', 502, await iRes.text());
-    const intention = await iRes.json();
-    const intentionId = intention?.id ?? intention?.content?.id; // ⚠️ASSUMED response shape
+    const intention = (await iRes.json())?.content;
+    // HTTP 200 does NOT mean accepted: REJECTED/FAILED come back as 200 with logs.
+    if (!intention?.id) return await fail('fiskaly_intention_no_id', 502, intention);
+    if (intention.state === 'REJECTED' || intention.state === 'FAILED') {
+      return await fail('fiskaly_intention_rejected', 502, intention.logs ?? intention);
+    }
 
-    // 2) TRANSACTION — RECEIPT (FS/FR) unless a validated NIF forces INVOICE (FT)
-    const wantsInvoice = docType === 'FT' || !!body.customer?.nif;
+    // 2) TRANSACTION — RECEIPT (FS/FR; NIF travels as customer.code) or INVOICE (FT,
+    // client-supplied recipients). Entries/payments/breakdown/totals are validated
+    // spec-shaped pass-throughs built by the client.
     const operation = wantsInvoice
       ? { type: 'INVOICE', document: { number: documentNumber, series: seriesName },
-          recipients: [{ type: body.customer?.nif ? 'BUSINESS' : 'CONSUMER',
-            ...(body.customer?.nif ? { name: body.customer?.name ?? 'Cliente', address: body.customer?.address ?? 'PT',
-              identification: { type: 'VAT', number: body.customer.nif } } : {}) }],
-          entries: body.entries ?? [], payments: body.payments ?? [], breakdown: body.breakdown ?? [], totals: body.totals ?? { vat: [] } }
+          recipients: body.recipients,
+          entries: body.entries, payments: body.payments, breakdown: body.breakdown, totals: body.totals }
       : { type: 'RECEIPT', document: { number: documentNumber, series: seriesName, simplified_invoice: docType === 'FS' },
           ...(body.customer?.code || body.customer?.nif ? { customer: { type: 'EXTERNAL', code: (body.customer?.code ?? body.customer?.nif ?? '').slice(0, 128) } } : {}),
-          entries: body.entries ?? [], payments: body.payments ?? [], breakdown: body.breakdown ?? [], totals: body.totals ?? { vat: [] } };
+          entries: body.entries, payments: body.payments, breakdown: body.breakdown, totals: body.totals };
 
     const trRes = await fetch(`${host}/records`, { method: 'POST', headers: recHeaders(transactionKey),
-      body: JSON.stringify({ content: { type: 'TRANSACTION', record: { id: intentionId }, operation } }) });
+      body: JSON.stringify({ content: { type: 'TRANSACTION', record: { id: intention.id }, operation } }) });
     if (!trRes.ok) return await fail('fiskaly_transaction_failed', 502, await trRes.text());
-    const tx = await trRes.json();
+    let c = (await trRes.json())?.content;
+    if (!c?.id) return await fail('fiskaly_transaction_no_id', 502, c);
+    if (c.state === 'REJECTED' || c.state === 'FAILED') {
+      // Number stays reserved on the attempt row; a retry reuses it (deterministic keys).
+      return await fail('fiskaly_transaction_rejected', 502, c.logs ?? c);
+    }
+    // mode PROCESSING = compliance data may not be final yet — bounded re-read.
+    // ⚠️ RUNTIME-UNVERIFIED: real PROCESSING->FINISHED timing needs a live TEST pass.
+    for (let i = 0; i < 3 && c.mode === 'PROCESSING' && !c.compliance; i++) {
+      await new Promise((r) => setTimeout(r, 700));
+      const gRes = await fetch(`${host}/records/${c.id}`, { headers: getHeaders() });
+      if (!gRes.ok) break;
+      const refreshed = (await gRes.json())?.content;
+      if (refreshed?.id) c = refreshed;
+      if (c.state === 'REJECTED' || c.state === 'FAILED') {
+        return await fail('fiskaly_transaction_rejected', 502, c.logs ?? c);
+      }
+    }
 
-    // ---- persist the signed document (⚠️ASSUMED response field names) ----
-    const c = tx?.content ?? tx;
+    // A PT sale document is only lawfully printable with ATCUD (Portaria 195/2020),
+    // the QR payload and the 4-char signature hash. If the record is still incomplete
+    // after the bounded re-read, FAIL — never persist an ATCUD-less document as
+    // 'issued' (the idempotency replay would serve it forever). The attempt keeps the
+    // reserved number + deterministic keys, so a retry replays the SAME fiskaly record
+    // and picks it up once FINISHED.
+    if (!c?.compliance?.data || !c?.compliance?.qr_code || !c?.compliance?.signature_hash) {
+      return await fail('fiskaly_record_incomplete', 502, { id: c?.id, state: c?.state, mode: c?.mode });
+    }
+
+    // ---- persist the signed document (field paths spec-verified, values runtime-unverified) ----
+    // ATCUD = compliance.data; QR payload = compliance.qr_code (we render the QR);
+    // printed 4-char hash = compliance.signature_hash; full chain signature = journal.signature.
     const { data: doc, error: docErr } = await admin.from('fiscal_documents').insert({
       tenant_id: tenantId, store_id: storeId, device_id: deviceId, transaction_id: body.transaction_id ?? null,
       environment, is_training: training, doc_type: docType, series: seriesName,
-      number: c?.document?.number ?? documentNumber,        // fiskaly's returned number is authoritative if present
-      atcud: c?.atcud ?? c?.compliance?.atcud ?? null,
-      fiskaly_record_id: tx?.id ?? c?.id ?? null,
-      hash: c?.hash ?? c?.compliance?.hash ?? null,
-      qr_data: c?.qr_code ?? c?.compliance?.qr_code ?? null,
+      number: documentNumber,                               // client-generated per spec; fiskaly never assigns numbers
+      atcud: c.compliance.data,
+      fiskaly_record_id: c.id,
+      hash: c.compliance.signature_hash,
+      qr_data: c.compliance.qr_code,
       software_certificate: c?.compliance?.software_certificate ?? null,
-      signed_payload: tx, status: 'issued',
+      signed_payload: c, status: 'issued',
     }).select().single();
     if (docErr) return await fail('fiscal_persist_failed', 500, docErr.message);
 

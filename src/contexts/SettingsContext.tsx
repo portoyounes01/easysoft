@@ -1,9 +1,13 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 
 import { applyFiscalSecretsFromEnv, settingsWithoutPersistedFiscalSecrets } from '../utils/fiscalEnvDefaults';
+import type { ReceiptLogo } from '../utils/receiptLogo';
+import { RECEIPT_LOGO_CHANGED_EVENT } from '../services/receiptBrandingSync';
+import { COMPANY_PROFILE_CHANGED_EVENT } from '../services/companyProfileSync';
 import type { FiscalSeriesDocKey, ReceiptSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { defaultSeriesProfiles, normalizeStoredSeriesProfile } from '../fiscal/receiptSeriesProfile';
 import { normalizeReceiptLanguage, type ReceiptLanguage } from '../utils/receiptLanguage';
+import { type OperatingCountry, normalizeCountry, setActiveCountry } from '../lib/countryProfile';
 
 function mergeSeriesProfilesDeep(
     base: Record<FiscalSeriesDocKey, ReceiptSeriesProfile>,
@@ -205,6 +209,12 @@ function migrateStoredReceipt(raw: unknown, defaults: SystemSettings['receipt'])
 }
 
 export interface SystemSettings {
+    /**
+     * Operating country — the single source of truth for every PT vs ES difference
+     * (fiscal issuer set, VAT/IVA rates, tax-id format, locale/formatting, default UI +
+     * receipt language, postal/phone shape). See src/lib/countryProfile.ts.
+     */
+    operatingCountry: OperatingCountry;
     autoLogout: {
         enabled: boolean;
         timeoutMinutes: number;
@@ -261,6 +271,10 @@ export interface SystemSettings {
         softwareInfo?: string;
         certificationNumber?: string;
         softwareCertNumber?: string; // AT software certification number
+        /** Printed at the top of every receipt. Prepared once when chosen
+         *  (utils/receiptLogo.ts) because the ESC/POS builder is synchronous.
+         *  Per-device: settings live in localStorage and are not synced. */
+        logo?: ReceiptLogo;
     };
     receipt: {
         defaultDocumentType: 'FATURA' | 'FATURA_SIMPLIFICADA';
@@ -276,7 +290,7 @@ export interface SystemSettings {
     };
     /** Portugal AT: signing, training mode, key version (HashControl). */
     fiscal: {
-        issuer: 'local_at' | 'vendus' | 'invoicexpress' | 'fiskaly';
+        issuer: 'local_at' | 'vendus' | 'invoicexpress' | 'fiskaly' | 'sign_es';
         hashControlVersion: string;
         /** RSA private key PKCS#8 PEM — dev/local; prefer secure storage in production */
         privateKeyPem?: string;
@@ -345,17 +359,24 @@ export interface InvoiceXpressFiscalSettings {
 }
 
 /**
- * Fiskaly SIGN PT (cloud, AT-certified). API key/secret live in the `fiskaly-fiscal`
- * edge function env (FISKALY_API_KEY / FISKALY_API_SECRET); routing config is stored here.
+ * Fiskaly SIGN PT — the Portugal service of fiskaly's UNIFIED API (shared hosts,
+ * not a specialized per-country API like SIGN ES). API key/secret live in the
+ * `fiskaly-fiscal` edge function env (FISKALY_API_KEY / FISKALY_API_SECRET);
+ * routing config is stored here. ⚠️ fiskaly claims AT certification but publishes
+ * no certificate number (REGISTER B5/B14) — `local_at` stays the PT primary issuer.
  */
 export interface FiskalyFiscalSettings {
     enabled: boolean;
     /** `test` → test.api.fiskaly.com, `live` → live.api.fiskaly.com. */
     environment: 'test' | 'live';
-    /** Fiskaly resource hierarchy: taxpayer → location → system → series. */
+    /** Fiskaly unified-API resource hierarchy: taxpayer → location → system. */
     taxpayerId: string;
     locationId: string;
     systemId: string;
+    /**
+     * Client-chosen series LABEL (there is no series resource in the unified API —
+     * document numbers/series are taxpayer-generated, charset [0-9A-Z_/\-.]).
+     */
     seriesId?: string;
     documentType: 'FT' | 'FS' | 'FR';
     exemptTax: {
@@ -397,6 +418,7 @@ interface SettingsContextType extends SettingsState {
 }
 
 const defaultSettings: SystemSettings = {
+    operatingCountry: 'PT',
     autoLogout: {
         enabled: true,
         timeoutMinutes: 15,
@@ -636,6 +658,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                     const mergedSettings = {
                         ...defaultSettings,
                         ...parsedSettings,
+                        operatingCountry: normalizeCountry(parsedSettings.operatingCountry),
                         autoLogout: {
                             ...defaultSettings.autoLogout,
                             ...(parsedSettings.autoLogout || {}),
@@ -696,6 +719,42 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
         loadSettings();
     }, []);
+
+    // Keep the module-level active country (used by country-aware formatters/validators) and a
+    // lightweight localStorage mirror in sync. The mirror lets LanguageContext — which is mounted
+    // A sync that pulls a new tenant logo writes it straight into the persisted
+    // settings blob (services/receiptBrandingSync). Mirror it into live state so
+    // a till that syncs mid-shift prints the new logo without a reload.
+    useEffect(() => {
+        const onLogoChanged = (event: Event) => {
+            const logo = (event as CustomEvent).detail as SystemSettings['company']['logo'] | null;
+            dispatch({ type: 'UPDATE_SETTINGS', payload: { company: { logo: logo ?? undefined } } });
+        };
+        window.addEventListener(RECEIPT_LOGO_CHANGED_EVENT, onLogoChanged);
+        return () => window.removeEventListener(RECEIPT_LOGO_CHANGED_EVENT, onLogoChanged);
+    }, []);
+
+    // Same bridge for the company block (services/companyProfileSync). The
+    // server owns it now, so a till that syncs mid-shift starts printing the
+    // corrected header without a reload.
+    useEffect(() => {
+        const onCompanyChanged = (event: Event) => {
+            const company = (event as CustomEvent).detail as Partial<SystemSettings['company']>;
+            dispatch({ type: 'UPDATE_SETTINGS', payload: { company } });
+        };
+        window.addEventListener(COMPANY_PROFILE_CHANGED_EVENT, onCompanyChanged);
+        return () => window.removeEventListener(COMPANY_PROFILE_CHANGED_EVENT, onCompanyChanged);
+    }, []);
+
+    // ABOVE SettingsProvider — resolve the country's default language at init time.
+    useEffect(() => {
+        setActiveCountry(state.settings.operatingCountry);
+        try {
+            localStorage.setItem('operating_country', state.settings.operatingCountry);
+        } catch {
+            /* non-fatal */
+        }
+    }, [state.settings.operatingCountry]);
 
     return (
         <SettingsContext.Provider value={{ ...state, updateSettings, resetToDefaults }}>

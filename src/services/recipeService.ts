@@ -137,8 +137,12 @@ class RecipeService {
                 const material = await localDb.rawMaterials.get(materialId);
                 if (!material) continue;
                 await localDb.rawMaterials.update(materialId, {
+                    // This scalar is now THIS store's stock — the store pull
+                    // folds store_raw_materials onto it — so the deduction no
+                    // longer reaches across to another store's inventory.
                     stock: Math.max(0, material.stock - amount),
                     updated_at: new Date(),
+                    store_stock_dirty: true,
                 });
             }
         });

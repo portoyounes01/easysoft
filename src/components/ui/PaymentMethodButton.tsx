@@ -1,11 +1,14 @@
 import React from 'react';
+import { useDialogTokens } from './dialogParts';
 import { LucideIcon } from 'lucide-react';
 
 interface PaymentMethodButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     selected: boolean;
     icon: LucideIcon;
     label: string;
-    method: 'cash' | 'card';
+    /** Optional semantic hint; unused visually — PMB is the blessed generic
+     *  selectable option card (staff pickers, icon pickers, option chips). */
+    method?: 'cash' | 'card';
 }
 
 export const PaymentMethodButton: React.FC<PaymentMethodButtonProps> = ({
@@ -16,6 +19,7 @@ export const PaymentMethodButton: React.FC<PaymentMethodButtonProps> = ({
     className = '',
     ...props
 }) => {
+    const tk = useDialogTokens();
     const baseStyles = "rounded-[10px] border transition-all flex items-center justify-center space-x-2 px-6 py-3";
 
     // Actually, looking at the scan, cash was green, card was gray when unselected. 
@@ -30,14 +34,14 @@ export const PaymentMethodButton: React.FC<PaymentMethodButtonProps> = ({
         if (selected) {
             return "bg-green-50 border-green-500";
         }
-        return "bg-gray-100 border-gray-200 hover:bg-gray-200";
+        return `bg-white ${tk.p.border} hover:${tk.p.tintBg}`;
     };
 
     const getIconColor = () => {
         if (selected) {
             return "text-green-600";
         }
-        return "text-gray-700";
+        return tk.p.subText;
     };
 
     return (

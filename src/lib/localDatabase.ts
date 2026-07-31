@@ -1,4 +1,5 @@
 import Dexie, { Table } from 'dexie';
+import i18n from '../i18n';
 import { generateUUID } from '../utils/uuid';
 import { readPosTrackInventoryFromStorage } from '../utils/posSettingsStorage';
 import {
@@ -7,6 +8,7 @@ import {
     LocalProduct,
     LocalCustomer,
     LocalQueueTicket,
+    LocalTableOrder,
     LocalTransaction,
     LocalTransactionItem,
     LocalDailySalesSummary,
@@ -25,14 +27,18 @@ import type {
     FiscalCheckoutAtomicPayload,
     FiscalCheckoutResult,
     FiscalTransactionMetadata,
+    LocalReceiptLogoArchiveEntry,
+    NonFiscalFallbackPersistencePayload,
     VendusFiscalCheckoutPersistencePayload,
 } from '../fiscal/types';
+import { buildIssuerSnapshot, logoArchiveEntryFor } from '../fiscal/issuerSnapshot';
 import type {
     LocalAttendanceEntry,
     LocalEmployeeHrProfile,
     LocalLeaveRequest,
 } from '../types/hr';
 import type { LocalCashDrawerEvent } from '../types/cashDrawer';
+import type { LocalManualWeightAudit } from '../types/scaleAudit';
 import type {
     LocalPurchaseReceipt,
     LocalPurchaseReceiptLine,
@@ -78,6 +84,7 @@ export class LocalPOSDatabase extends Dexie {
     products!: Table<LocalProduct>;
     customers!: Table<LocalCustomer>;
     queueTickets!: Table<LocalQueueTicket>;
+    tableOrders!: Table<LocalTableOrder>;
     attendanceEntries!: Table<LocalAttendanceEntry>;
     employeeHrProfiles!: Table<LocalEmployeeHrProfile>;
     leaveRequests!: Table<LocalLeaveRequest>;
@@ -85,10 +92,12 @@ export class LocalPOSDatabase extends Dexie {
     purchaseReceipts!: Table<LocalPurchaseReceipt>;
     purchaseReceiptLines!: Table<LocalPurchaseReceiptLine>;
     rawMaterials!: Table<LocalRawMaterial>;
+    manualWeightAudits!: Table<LocalManualWeightAudit>;
     recipeLines!: Table<LocalRecipeLine>;
     transactions!: Table<LocalTransaction>;
     transactionItems!: Table<LocalTransactionItem>;
     fiscalDocuments!: Table<LocalFiscalDocument>;
+    receiptLogoArchive!: Table<LocalReceiptLogoArchiveEntry>;
     fiscalAuditEvents!: Table<LocalFiscalAuditEvent>;
     vendusIssueAttempts!: Table<LocalVendusIssueAttempt>;
     dailySalesSummaries!: Table<LocalDailySalesSummary>;
@@ -321,6 +330,38 @@ export class LocalPOSDatabase extends Dexie {
 
         this.version(15).stores(schemaV15).upgrade(async () => {
             console.log('Upgrading database to version 15 - raw materials & recipes (fiche technique)');
+        });
+
+        const schemaV16 = {
+            ...schemaV15,
+            manualWeightAudits: 'id, product_id, authorized_by_id, timestamp',
+        } as const;
+
+        this.version(16).stores(schemaV16).upgrade(async () => {
+            console.log('Upgrading database to version 16 - manual weight entry audit log');
+        });
+
+        // Version 17: mutable restaurant table orders. These are intentionally
+        // not transactions: an order only becomes fiscal when it is settled.
+        const schemaV17 = {
+            ...schemaV16,
+            tableOrders: 'id, table_id, status, updated_at, fiscal_transaction_id, [table_id+status]',
+        } as const;
+
+        this.version(17).stores(schemaV17).upgrade(async () => {
+            console.log('Upgrading database to version 17 - local table orders');
+        });
+
+        // Version 18: content-addressed receipt-logo archive. The issuer snapshot
+        // on each transaction references a logo by digest instead of inlining
+        // ~1-23 KB of base64 per sale into a table that is never pruned.
+        const schemaV18 = {
+            ...schemaV17,
+            receiptLogoArchive: 'digest, created_at',
+        } as const;
+
+        this.version(18).stores(schemaV18).upgrade(async () => {
+            console.log('Upgrading database to version 18 - archived receipt logos for immutable reprints');
         });
 
         // Add hooks for auto-updating sync flags
@@ -822,7 +863,7 @@ export class CustomerLocalService {
 
     // Create new customer
     async createCustomer(customerData: Omit<LocalCustomer, 'id' | 'created_at' | 'updated_at' | 'needs_push' | 'is_conflicted' | 'last_synced_at'>): Promise<string> {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(i18n.t('serviceErrors.pwaViewOnly'));
         const taxRaw = customerData.tax_number;
         const normalizedNew =
             taxRaw == null || String(taxRaw).trim() === ''
@@ -866,7 +907,7 @@ export class CustomerLocalService {
 
     // Update customer
     async updateCustomer(id: string, updates: Partial<LocalCustomer>): Promise<void> {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(i18n.t('serviceErrors.pwaViewOnly'));
         const updateData = {
             ...updates,
             updated_at: new Date(),
@@ -881,7 +922,7 @@ export class CustomerLocalService {
 
     // Soft delete customer
     async deleteCustomer(id: string): Promise<void> {
-        if (isPwaHost) throw new Error('PWA is view-only; management is disabled in the browser.');
+        if (isPwaHost) throw new Error(i18n.t('serviceErrors.pwaViewOnly'));
         await localDb.transaction('rw', [localDb.customers], async () => {
             await localDb.customers.update(id, {
                 deleted_at: new Date(),
@@ -1348,6 +1389,11 @@ export class TransactionLocalService {
     async createFiscalCheckoutAtomic(payload: FiscalCheckoutAtomicPayload): Promise<FiscalCheckoutResult> {
         const { settings, chainScope, atCode, seriesKey, payment, customerCountryForQr, receiptProfile } = payload;
         const company = settings.company;
+        // Captured ONCE, above the retry loop: the loop rebuilds the metadata
+        // literal on every attempt, and re-reading live settings per attempt
+        // would reintroduce the exact drift this fixes through a narrower window.
+        const issuer = buildIssuerSnapshot(settings);
+        const logoArchiveEntry = logoArchiveEntryFor(settings);
         const hashControl = settings.fiscal.hashControlVersion || '1';
         const qrCountry =
             (customerCountryForQr || 'PT').trim().slice(0, 2).toUpperCase() || 'PT';
@@ -1360,6 +1406,7 @@ export class TransactionLocalService {
             localDb.transactionItems,
             localDb.fiscalDocuments,
             localDb.fiscalAuditEvents,
+            localDb.receiptLogoArchive,
         ] as const;
 
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -1425,6 +1472,7 @@ export class TransactionLocalService {
                 chainScope,
                 sequentialNumber: nextSequential,
                 certificationMode: payload.certificationMode,
+                issuer,
                 fiscalProvider: 'local_at',
             };
 
@@ -1523,13 +1571,18 @@ export class TransactionLocalService {
                         .equals(transactionId)
                         .count();
                     if (dupCount > 0) {
-                        throw new Error('Já existe documento fiscal para esta transação.');
+                        throw new Error(i18n.t('checkout.fiscalDocumentAlreadyExists'));
                     }
 
                     await localDb.fiscalDocuments.add(fiscalDoc);
                     await localDb.transactions.add(transaction);
                     await localDb.transactionItems.bulkAdd(transactionItems);
                     await localDb.fiscalAuditEvents.add(auditRow);
+                    // Same transaction as the document that references it — the
+                    // digest is load-bearing, not backstopped, so a dangling one
+                    // would render as a silently logo-less receipt. `put` on a
+                    // content key is idempotent across the retries.
+                    if (logoArchiveEntry) await localDb.receiptLogoArchive.put(logoArchiveEntry);
 
                     result = {
                         transactionId,
@@ -1564,7 +1617,7 @@ export class TransactionLocalService {
             }
         }
 
-        throw new Error('Fiscal checkout: excedidas tentativas (cadeia fiscal avançou durante a assinatura).');
+        throw new Error(i18n.t('checkout.fiscalChainRetriesExceeded'));
     }
 
     async createVendusIssueAttempt(
@@ -1639,6 +1692,7 @@ export class TransactionLocalService {
             chainScope,
             sequentialNumber,
             certificationMode: payload.certificationMode,
+            issuer: payload.issuer,
             fiscalProvider: 'vendus',
             externalDocumentId: vendus.documentId,
             externalReference: vendus.externalReference,
@@ -1743,12 +1797,16 @@ export class TransactionLocalService {
                 localDb.transactionItems,
                 localDb.fiscalDocuments,
                 localDb.fiscalAuditEvents,
+                localDb.receiptLogoArchive,
             ],
             async () => {
                 await localDb.fiscalDocuments.add(fiscalDoc);
                 await localDb.transactions.add(transaction);
                 await localDb.transactionItems.bulkAdd(transactionItems);
                 await localDb.fiscalAuditEvents.add(auditRow);
+                // Atomic with the document that references the digest; see the
+                // note on the local_at path.
+                if (payload.logoArchiveEntry) await localDb.receiptLogoArchive.put(payload.logoArchiveEntry);
             }
         );
         await this.queueOperation('CREATE', transactionId, { ...transaction, items: transactionItems });
@@ -1825,6 +1883,7 @@ export class TransactionLocalService {
             chainScope,
             sequentialNumber,
             certificationMode: payload.certificationMode,
+            issuer: payload.issuer,
             fiscalProvider: ext.provider,
             externalDocumentId: ext.documentId,
             externalReference: ext.externalReference,
@@ -1928,12 +1987,16 @@ export class TransactionLocalService {
                 localDb.transactionItems,
                 localDb.fiscalDocuments,
                 localDb.fiscalAuditEvents,
+                localDb.receiptLogoArchive,
             ],
             async () => {
                 await localDb.fiscalDocuments.add(fiscalDoc);
                 await localDb.transactions.add(transaction);
                 await localDb.transactionItems.bulkAdd(transactionItems);
                 await localDb.fiscalAuditEvents.add(auditRow);
+                // Atomic with the document that references the digest; see the
+                // note on the local_at path.
+                if (payload.logoArchiveEntry) await localDb.receiptLogoArchive.put(payload.logoArchiveEntry);
             }
         );
         await this.queueOperation('CREATE', transactionId, { ...transaction, items: transactionItems });
@@ -1961,7 +2024,167 @@ export class TransactionLocalService {
             externalDocumentId: ext.documentId,
             externalReference: ext.externalReference,
             officialOutput,
+            // Spain / SIGN ES: surface the Veri*factu legend to the receipt (providerMeta.legend,
+            // e.g. "QR tributario:|VERI*FACTU"); other providers leave it undefined.
+            verifactuLegend: ext.provider === 'sign_es'
+                ? (typeof ext.providerMeta?.legend === 'string' && ext.providerMeta.legend.trim() ? ext.providerMeta.legend : 'VERI*FACTU')
+                : undefined,
         };
+    }
+
+    /**
+     * Persist a sale that completed WITHOUT a fiscal document, because the cloud
+     * issuer could not produce one and the operator chose to invoice it by hand
+     * from the AT-authorised paper book (docs/fiscal-fallback-legal-brief.md).
+     *
+     * Writes no fiscal_documents row on purpose. That absence is what keeps the
+     * slip out of SAF-T (exportSaft takes fiscal documents, not transactions),
+     * out of the AT hash chain, and out of every série counter. The audit event
+     * goes in the SAME IndexedDB transaction as the sale: a slip that exists
+     * without its reminder is a paper invoice nobody knows is owed.
+     */
+    async createNonFiscalFallbackAtomic(
+        payload: NonFiscalFallbackPersistencePayload
+    ): Promise<FiscalCheckoutResult> {
+        const transactionId = generateUUID();
+        const persistedAt = new Date();
+        const payment = payload.payment;
+        const sourceId = payment.employeeNumber?.trim() || payment.employeeId.slice(0, 12);
+        const prefix = payload.slipPrefix;
+
+        let result: FiscalCheckoutResult | undefined;
+        let pendingQueue: { transaction: LocalTransaction; transactionItems: LocalTransactionItem[] } | undefined;
+        await localDb.transaction(
+            'rw',
+            [
+                localDb.transactions,
+                localDb.transactionItems,
+                localDb.fiscalAuditEvents,
+                localDb.receiptLogoArchive,
+            ],
+            async () => {
+                // Next slip number for THIS till, read inside the write transaction
+                // so two concurrent tabs cannot mint the same reference.
+                const existing = await localDb.transactions
+                    .where('transaction_number')
+                    .startsWith(prefix)
+                    .toArray();
+                const highest = existing.reduce((max, row) => {
+                    const suffix = Number(row.transaction_number.slice(prefix.length));
+                    return Number.isFinite(suffix) && suffix > max ? suffix : max;
+                }, 0);
+                const slipReference = `${prefix}${String(highest + 1).padStart(payload.slipNumericWidth, '0')}`;
+
+                const fiscalMetadata: FiscalTransactionMetadata = {
+                    // No document exists, so every fiscal field is empty rather
+                    // than absent — a reprint must never find a plausible-looking
+                    // ATCUD or QR here and render this slip as a fatura.
+                    invoiceNo: slipReference,
+                    atcudBody: '',
+                    hashBase64: '',
+                    hashFourChars: '',
+                    hashControl: '',
+                    qrPayload: '',
+                    chainScope: '',
+                    sequentialNumber: highest + 1,
+                    certificationMode: payload.certificationMode,
+                    issuer: payload.issuer,
+                    nonFiscal: true,
+                    nonFiscalFallback: {
+                        slipReference,
+                        provider: payload.failure.provider,
+                        dispatch: payload.failure.dispatch,
+                        reason: payload.failure.reason,
+                    },
+                };
+
+                const transaction: LocalTransaction = {
+                    ...payload.transactionBase,
+                    id: transactionId,
+                    fiscal_document_id: null,
+                    transaction_number: slipReference,
+                    receipt_number: slipReference,
+                    fiscal_metadata_json: JSON.stringify(fiscalMetadata),
+                    created_at: persistedAt,
+                    updated_at: persistedAt,
+                    needs_push: true,
+                    is_conflicted: false,
+                    last_synced_at: null,
+                };
+
+                const transactionItems: LocalTransactionItem[] = payload.transactionItems.map(item => ({
+                    ...item,
+                    id: generateUUID(),
+                    transaction_id: transactionId,
+                    created_at: persistedAt,
+                    updated_at: persistedAt,
+                    needs_push: true,
+                    is_conflicted: false,
+                    last_synced_at: null,
+                }));
+
+                await localDb.transactions.add(transaction);
+                await localDb.transactionItems.bulkAdd(transactionItems);
+                // Atomic with the slip that references the digest; see the note
+                // on the local_at path.
+                if (payload.logoArchiveEntry) await localDb.receiptLogoArchive.put(payload.logoArchiveEntry);
+                await localDb.fiscalAuditEvents.add({
+                    id: generateUUID(),
+                    event_type: 'NON_FISCAL_FALLBACK_ISSUED',
+                    payload_json: JSON.stringify({
+                        slipReference,
+                        transactionId,
+                        provider: payload.failure.provider,
+                        reason: payload.failure.reason,
+                        dispatch: payload.failure.dispatch,
+                        externalReference: payload.failure.externalReference ?? null,
+                        attemptId: payload.failure.attemptId ?? null,
+                        providerStatus: payload.failure.providerStatus ?? null,
+                        operatorAttested: payload.failure.operatorAttested ?? false,
+                        totalGross: payload.grossTotal,
+                    }),
+                    employee_id: payment.employeeId,
+                    created_at: new Date().toISOString(),
+                });
+
+                result = {
+                    transactionId,
+                    fiscalId: '',
+                    invoiceNo: slipReference,
+                    slipReference,
+                    nonFiscal: true,
+                    atcudBody: '',
+                    hashBase64: '',
+                    hashFourChars: '',
+                    qrPayload: '',
+                    hashControl: '',
+                    certificationMode: payload.certificationMode,
+                    grossTotal: payload.grossTotal,
+                    netTotal: payload.netRounded,
+                    taxTotal: payload.taxTotal,
+                    systemEntryDate: payload.systemEntryDate,
+                    invoiceDate: payload.transactionDate,
+                    // SAF-T type of the sale that WOULD have been issued. Kept for
+                    // reporting shape only; `nonFiscal` gates every fiscal use.
+                    invoiceTypeSaft: 'FS',
+                    sourceId,
+                    sequentialNumber: highest + 1,
+                    seriesKey: '',
+                    fiscalProvider: payload.failure.provider,
+                };
+
+                // Captured for the post-transaction sync queue below.
+                pendingQueue = { transaction, transactionItems };
+            }
+        );
+
+        if (pendingQueue) {
+            await this.queueOperation('CREATE', transactionId, {
+                ...pendingQueue.transaction,
+                items: pendingQueue.transactionItems,
+            });
+        }
+        return result as FiscalCheckoutResult;
     }
 
     /** Mark fiscal rows included in a SAF-T export (optional anti-duplicate workflow). */
@@ -2091,9 +2314,7 @@ export class TransactionLocalService {
     async deleteTransaction(id: string): Promise<void> {
         const existing = await localDb.transactions.get(id);
         if (existing?.fiscal_document_id) {
-            throw new Error(
-                'Documentos fiscais finalizados não podem ser eliminados. Utilize anulação ou nota de crédito.'
-            );
+            throw new Error(i18n.t('checkout.finalizedFiscalCannotBeDeleted'));
         }
 
         const now = new Date();
@@ -2165,12 +2386,19 @@ export class TransactionLocalService {
             for (const item of transactionItems) {
                 const product = await localDb.products.get(item.product_id);
                 if (product && readPosTrackInventoryFromStorage() && product.track_stock) {
-                    const newStock = Math.max(0, product.stock - item.quantity);
+                    // 3dp: weighed lines subtract fractional kg — keep stock free of binary-float drift.
+                    const newStock = Math.max(0, Math.round((product.stock - item.quantity) * 1000) / 1000);
                     await localDb.products.update(item.product_id, {
                         stock: newStock,
                         updated_at: new Date(),
-                        needs_push: true,
-                    });
+                        // NOT needs_push: stock belongs to THIS store's row now,
+                        // not the tenant product. Pushing it to the tenant would
+                        // have two tills overwriting each other with figures that
+                        // describe neither. storeScopedSyncService pushes it to
+                        // store_products instead; needs_push stays for genuine
+                        // catalogue edits (name, price, category).
+                        store_stock_dirty: true,
+                    } as never);
                 }
             }
         });

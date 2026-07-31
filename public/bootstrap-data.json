@@ -2,7 +2,7 @@
   "employees": [
     {
       "id": "16d51781-8959-4597-8af0-e05d88709dc0",
-      "employee_number": "ADMIN001",
+      "employee_number": "SYS001",
       "name": "System Administrator",
       "email": "admin@company.com",
       "phone": null,

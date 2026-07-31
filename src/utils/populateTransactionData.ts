@@ -831,88 +831,46 @@ export async function populateTransactionData() {
     }
 }
 
-// Helper function to clear transaction data (for testing/reset purposes)
-export async function clearTransactionData() {
+export interface ClearTransactionDataResult {
+    success: true;
+    /** Local rows kept back by the hardened clear, for honest reporting. */
+    preservedSystemAdmins: number;
+    preservedFiscalIssueAttempts: number;
+    preservedFiscalDocuments: number;
+    preservedFiscalTransactions: number;
+}
+
+/**
+ * Reset the LOCAL database for a seed / reseed cycle.
+ *
+ * Local only, deliberately. This used to call a `clear_all_transaction_data()`
+ * RPC that has never existed on the server — the genesis baseline excludes it
+ * on purpose (it was SECURITY DEFINER, granted to `anon`, and deleted every
+ * product/category/employee/customer/transaction of every tenant). Phase 0
+ * hardening then removed the client-side mass-DELETE fallback, which left this
+ * function throwing on a missing RPC *after* it had already wiped local data
+ * while reporting "no data was deleted".
+ *
+ * It now delegates to the same hardened clear the seed tools use, which keeps
+ * system-admin logins and sealed fiscal evidence. Cloud data is NOT touched;
+ * say so at the call site rather than implying a full reset.
+ */
+export async function clearTransactionData(): Promise<ClearTransactionDataResult> {
     try {
-        console.log('🔄 Starting data clearing process...');
+        console.log('🗑️ Clearing the local database (cloud data is left untouched)...');
 
-        // Clear local database first
-        console.log('🗑️ Clearing local database...');
-        try {
-            await localDb.transaction('rw', [
-                localDb.categories, 
-                localDb.products, 
-                localDb.employees,
-                localDb.categorySyncQueue, 
-                localDb.productSyncQueue,
-                localDb.employeeSyncQueue,
-                localDb.syncMetadata
-            ], async () => {
-                await localDb.categories.clear();
-                await localDb.products.clear();
-                await localDb.employees.clear();
-                await localDb.categorySyncQueue.clear();
-                await localDb.productSyncQueue.clear();
-                await localDb.employeeSyncQueue.clear();
-                await localDb.syncMetadata.clear();
-                
-                // Reinitialize sync metadata after clearing
-                await localDb.syncMetadata.add({
-                    id: 'employees',
-                    lastPulledAt: null,
-                    lastPushedAt: null,
-                    pendingOperations: 0,
-                    conflictCount: 0,
-                });
-                
-                await localDb.syncMetadata.add({
-                    id: 'categories',
-                    lastPulledAt: null,
-                    lastPushedAt: null,
-                    pendingOperations: 0,
-                    conflictCount: 0,
-                });
-                
-                await localDb.syncMetadata.add({
-                    id: 'products',
-                    lastPulledAt: null,
-                    lastPushedAt: null,
-                    pendingOperations: 0,
-                    conflictCount: 0,
-                });
-            });
-            console.log('✅ Local database cleared and reinitialized successfully!');
-        } catch (localError) {
-            console.error('❌ Error clearing local database:', localError);
-        }
+        const { clearLocalDatabasePreservingRecovery } = await import('./clearLocalDatabase');
+        const preserved = await clearLocalDatabasePreservingRecovery();
 
-        // Try SQL function first
-        console.log('🔧 Attempting to use SQL clear function...');
-        const { error: sqlError } = await supabase.rpc('clear_all_transaction_data');
-        
-        if (sqlError) {
-            // Phase 0 hardening: the previous raw per-table delete fallback (mass-DELETE on every
-            // table via the anon client) was removed. It was a catastrophic footgun once multi-tenant,
-            // and it silently bypassed the fiscal/sealed-document protections. If the RPC is missing or
-            // fails, surface the error loudly instead of nuking the database directly.
-            console.error('❌ SQL clear function failed:', sqlError);
-            throw new Error(
-                `clear_all_transaction_data RPC failed (${sqlError.message}). ` +
-                `The raw-delete fallback was removed for safety (Phase 0 hardening); no data was deleted.`
-            );
-        } else {
-            console.log('✅ SQL clear function executed successfully!');
-        }
+        console.log('✅ Local database cleared successfully!');
 
-        console.log('🎉 All data cleared successfully!');
-
-        return { success: true };
-
+        return { success: true, ...preserved };
     } catch (error) {
-        console.error('💥 Error clearing data:', error);
+        console.error('💥 Error clearing local data:', error);
         throw error;
     }
 }
+
 
 // Utility function to check if transaction data exists
 export async function checkTransactionDataExists() {

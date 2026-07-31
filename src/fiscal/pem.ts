@@ -1,3 +1,5 @@
+import i18n from '../i18n';
+
 /** RSA encryption OID (1.2.840.113549.1.1.1) inside PKCS#8 / AlgorithmIdentifier */
 const RSA_OID_BYTES = new Uint8Array([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01]);
 
@@ -21,10 +23,7 @@ export function pemExtractBase64Payload(pem: string): string {
     }
     const body = block[2];
     if (/Proc-Type:\s*4,\s*ENCRYPTED/i.test(body) || /\bDEK-Info:/i.test(body)) {
-        throw new Error(
-            'Chave PEM encriptada (OpenSSL "Proc-Type: 4,ENCRYPTED" / DEK-Info). ' +
-                'Exporte sem password: openssl rsa -in key.pem -out key-clear.pem (ou pkcs8 -nocrypt) ou use Electron.'
-        );
+        throw new Error(i18n.t('checkout.pemEncrypted'));
     }
     const lines = body.split(/\r?\n/);
     const parts: string[] = [];
@@ -36,7 +35,7 @@ export function pemExtractBase64Payload(pem: string): string {
         parts.push(t);
     }
     if (parts.length === 0) {
-        throw new Error('PEM sem linhas base64 válidas entre os marcadores BEGIN/END.');
+        throw new Error(i18n.t('checkout.pemNoBase64Lines'));
     }
     return parts.join('');
 }
@@ -91,7 +90,7 @@ export function pemToArrayBuffer(pem: string): ArrayBuffer {
     try {
         binary = atob(b64);
     } catch {
-        throw new Error('PEM base64 inválido (caracteres ilegais ou corpo truncado).');
+        throw new Error(i18n.t('checkout.pemInvalidBase64'));
     }
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {

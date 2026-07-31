@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { Plus, Edit, Trash2, Tag, Package, Menu, Hash, AlertCircle } from 'lucide-react';
 import { PrinterStation, PrinterRoutingRule } from '../types/printerWorkflow';
 import { printerWorkflowService } from '../services/printerWorkflowService';
+import { AdminActionButton } from './ui/AdminActionButton';
+import { TableActionButton } from './ui/TableActionButton';
+import { dialogButtonClasses, useAppliedDialogStyle } from '../theme/dialogStyle';
 
 interface RoutingRuleManagerProps {
   station: PrinterStation;
@@ -11,6 +14,8 @@ interface RoutingRuleManagerProps {
 
 const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStationUpdate }) => {
   const { t } = useTranslation();
+  const applied = useAppliedDialogStyle();
+  const shellButtons = applied ? dialogButtonClasses(applied) : null;
   const [rules, setRules] = useState<PrinterRoutingRule[]>(station.routingRules || []);
   const [editingRule, setEditingRule] = useState<PrinterRoutingRule | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -88,13 +93,12 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="font-medium text-gray-900">{t('printerWorkflow.routingRulesTitle')}</h4>
-        <button
+        <AdminActionButton
+          variant="primary"
           onClick={handleCreateRule}
-          className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          <Plus className="h-3 w-3" />
-          {t('printerWorkflow.addRule')}
-        </button>
+          icon={Plus}
+          label={t('printerWorkflow.addRule')}
+        />
       </div>
 
       {rules.length === 0 ? (
@@ -147,13 +151,13 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
                   >
                     <Edit className="h-3 w-3" />
                   </button>
-                  <button
+                  <TableActionButton
+                    variant="delete"
+                    icon={Trash2}
                     onClick={() => handleDeleteRule(rule.id)}
-                    className="p-1 text-gray-400 hover:text-red-600 rounded"
                     title={t('printerWorkflow.deleteRuleTooltip')}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+                    aria-label={t('printerWorkflow.deleteRuleTooltip')}
+                  />
                 </div>
               </div>
             ))}
@@ -283,7 +287,11 @@ const RoutingRuleManager: React.FC<RoutingRuleManagerProps> = ({ station, onStat
               <button
                 onClick={handleSaveRule}
                 disabled={!editingRule.condition.trim()}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className={
+                  shellButtons
+                    ? `${shellButtons.primary} flex-1 disabled:opacity-50`
+                    : 'flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50'
+                }
               >
                 {editingRule.id.startsWith('new-') ? t('printerWorkflow.createRuleBtn') : t('printerWorkflow.updateRuleBtn')}
               </button>

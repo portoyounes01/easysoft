@@ -1,6 +1,6 @@
 // Curated read-only tools exposed to the model. Each maps 1:1 to a
 // SECURITY DEFINER, SELECT-only RPC that is tenant-scoped by p_tenant_id (see
-// 20260720000000_assistant_readonly_rpcs.sql). The model can ONLY reach data
+// 20260729000000_assistant_readonly_rpcs.sql). The model can ONLY reach data
 // through these — it never emits SQL, and the RPCs physically cannot write.
 //
 // Tenant is injected server-side (never from tool input), so a prompt-injected

@@ -9,7 +9,7 @@ interface ImportMetaEnv {
     readonly VITE_FISCAL_SOFTWARE_CERT_NUMBER?: string;
     /** HashControl version for new fiscal documents — not stored in app settings */
     readonly VITE_FISCAL_HASH_CONTROL_VERSION?: string;
-    /** Comma-separated employee_number values treated as system administrator (Definições sensíveis). Default: ADMIN001 */
+    /** Comma-separated employee_number values treated as system administrator (Definições sensíveis). Default: SYS001 */
     readonly VITE_SYSTEM_ADMIN_EMPLOYEE_NUMBERS?: string;
 }
 
@@ -173,12 +173,39 @@ interface ElectronAPI {
       plaintext: string
     ) => Promise<{ success: boolean; hashBase64?: string; error?: string }>;
   };
+  /** Versioned UI↔shell contract (update-policy §8); absent on legacy shells */
+  shell?: {
+    version: string;
+    hardwareApiVersion: number;
+    getInfo: () => Promise<{ shellVersion: string; hardwareApiVersion: number; platform: string }>;
+    getUpdateStatus: () => Promise<{ status: string; detail: string; at: string | null }>;
+    onUpdateStatus: (callback: (status: { status: string; detail: string; at: string | null }) => void) => () => void;
+  };
+  /** Boot readiness gate bridge (shell-local gate page only) */
+  gate?: {
+    getState: () => Promise<unknown>;
+    proceed: () => Promise<{ ok: boolean; error?: string }>;
+    restart: () => Promise<{ ok: boolean; error?: string }>;
+  };
+  /** Shell device store — carries pairing/session across origin flips; absent on old shells */
+  deviceStore?: {
+    snapshot: Record<string, string> | null;
+    storeExists: boolean;
+    set: (key: string, value: string) => Promise<{ success: boolean; error?: string }>;
+    remove: (key: string) => Promise<{ success: boolean; error?: string }>;
+  };
   isDev: boolean;
 }
 
 declare global {
   interface Window {
     electronAPI: ElectronAPI;
+    /** Stage-0 runtime config from the till shell's preload; absent in browsers */
+    __RUNTIME_CONFIG__?: {
+      supabaseUrl?: string;
+      supabaseAnonKey?: string;
+      environment?: string;
+    };
   }
 }
 

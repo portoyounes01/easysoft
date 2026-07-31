@@ -9,10 +9,20 @@ import React, {
     type ReactNode,
 } from 'react';
 import {
+    getInternalCssVars,
+    INTERNAL_COLOR_DEFAULTS,
+    type InternalColorKey,
     getPrimaryCssVars,
     getSecondaryCssVars,
     getPairingCssVars,
     getRadiusCssVars,
+    getButtonRadiusCssVars,
+    getButtonHeightCssVars,
+    clampButtonHeightPx,
+    DS2_RADIUS_BASE_PX,
+    DS2_RADIUS_MIN_PX,
+    DS2_RADIUS_MAX_PX,
+    DS2_BUTTON_HEIGHT_BASE_PX,
     type DesignSystem2ColorChoiceId,
     type DesignSystem2RadiusPreset,
     type DesignSystem2BaseColorId,
@@ -46,11 +56,23 @@ export interface DesignSystem2Prefs {
     primaryColorId: DesignSystem2ColorChoiceId;
     /** Admin chrome, table actions, sidebar nav gradients */
     secondaryColorId: DesignSystem2ColorChoiceId;
+    /** Free-form hex values for internal accents + semantic states (dialog
+     *  chips, gradient headers, focus rings, success / warning / danger). */
+    internalColors: Record<InternalColorKey, string>;
     /** Page canvas behind preview — distinct from neutral text scale */
     baseColorId: DesignSystem2BaseColorId;
     /** Which gray family maps `neutral-*` utilities in the preview scope */
     neutralFamilyId: DesignSystem2NeutralFamilyId;
+    /** Corners for everything except buttons — cards, inputs, panels, chips. */
     radiusPreset: DesignSystem2RadiusPreset;
+    /** Base radius in px used when radiusPreset === 'custom' (the 'default' preset ≙ 10px). */
+    radiusCustomPx: number;
+    /** Corners for buttons, independent of radiusPreset since buttons split off. */
+    buttonRadiusPreset: DesignSystem2RadiusPreset;
+    /** Base radius in px used when buttonRadiusPreset === 'custom'. */
+    buttonRadiusCustomPx: number;
+    /** Height of the min-h-touch-xs tier; the taller tiers follow by a fixed offset. */
+    buttonHeightPx: number;
     schemaVersion: number;
 }
 
@@ -61,14 +83,20 @@ const defaultPrefs: DesignSystem2Prefs = {
     sidebarWidth: 'md',
     primaryColorId: 'green',
     secondaryColorId: 'green',
+    internalColors: { ...INTERNAL_COLOR_DEFAULTS },
     baseColorId: 'gray50',
     neutralFamilyId: 'gray',
     radiusPreset: 'default',
+    radiusCustomPx: DS2_RADIUS_BASE_PX,
+    buttonRadiusPreset: 'default',
+    buttonRadiusCustomPx: DS2_RADIUS_BASE_PX,
+    buttonHeightPx: DS2_BUTTON_HEIGHT_BASE_PX,
     schemaVersion: PREFS_SCHEMA_VERSION,
 };
 
 const COLOR_IDS = new Set<DesignSystem2ColorChoiceId>([
     'green',
+    'emerald',
     'blue',
     'indigo',
     'violet',
@@ -76,13 +104,14 @@ const COLOR_IDS = new Set<DesignSystem2ColorChoiceId>([
     'rose',
     'teal',
     'slate',
+    'black',
 ]);
 
 const BASE_IDS = new Set<DesignSystem2BaseColorId>(['white', 'stone50', 'slate50', 'zinc50', 'gray50']);
 
 const NEUTRAL_IDS = new Set<DesignSystem2NeutralFamilyId>(['gray', 'slate', 'stone', 'zinc']);
 
-const RADIUS_ALLOWED: DesignSystem2RadiusPreset[] = ['none', 'sharp', 'default', 'soft'];
+const RADIUS_ALLOWED: DesignSystem2RadiusPreset[] = ['none', 'sharp', 'default', 'soft', 'custom'];
 
 /** Legacy stored keys from earlier iterations */
 type LegacyPartial = Partial<DesignSystem2Prefs> & {
@@ -113,10 +142,40 @@ function normalizePrefs(raw: LegacyPartial): DesignSystem2Prefs {
 
     if (!COLOR_IDS.has(m.primaryColorId)) m.primaryColorId = defaultPrefs.primaryColorId;
     if (!COLOR_IDS.has(m.secondaryColorId)) m.secondaryColorId = defaultPrefs.secondaryColorId;
+    // Internal colours: keep only valid hex entries; anything else falls back.
+    {
+        const hexRe = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+        const raw2 = (m.internalColors ?? {}) as Partial<Record<InternalColorKey, string>>;
+        const cleaned = { ...INTERNAL_COLOR_DEFAULTS };
+        (Object.keys(INTERNAL_COLOR_DEFAULTS) as InternalColorKey[]).forEach((key) => {
+            const v = raw2[key];
+            if (typeof v === 'string' && hexRe.test(v.trim())) cleaned[key] = v.trim();
+        });
+        m.internalColors = cleaned;
+    }
     m.schemaVersion = PREFS_SCHEMA_VERSION;
     if (!BASE_IDS.has(m.baseColorId)) m.baseColorId = defaultPrefs.baseColorId;
     if (!NEUTRAL_IDS.has(m.neutralFamilyId)) m.neutralFamilyId = defaultPrefs.neutralFamilyId;
     if (!RADIUS_ALLOWED.includes(m.radiusPreset)) m.radiusPreset = defaultPrefs.radiusPreset;
+    m.radiusCustomPx = Number.isFinite(m.radiusCustomPx)
+        ? Math.min(DS2_RADIUS_MAX_PX, Math.max(DS2_RADIUS_MIN_PX, Math.round(m.radiusCustomPx)))
+        : defaultPrefs.radiusCustomPx;
+
+    // Buttons used to take their corners from radiusPreset; a device that stored
+    // its prefs before the split must not change shape on upgrade, so the button
+    // axis starts from whatever the general one was already giving it. Reads the
+    // validated values above, not the raw ones, so a corrupt stored preset is not
+    // copied forward.
+    if (raw.buttonRadiusPreset === undefined) m.buttonRadiusPreset = m.radiusPreset;
+    if (raw.buttonRadiusCustomPx === undefined) m.buttonRadiusCustomPx = m.radiusCustomPx;
+
+    if (!RADIUS_ALLOWED.includes(m.buttonRadiusPreset)) m.buttonRadiusPreset = defaultPrefs.buttonRadiusPreset;
+    m.buttonRadiusCustomPx = Number.isFinite(m.buttonRadiusCustomPx)
+        ? Math.min(DS2_RADIUS_MAX_PX, Math.max(DS2_RADIUS_MIN_PX, Math.round(m.buttonRadiusCustomPx)))
+        : defaultPrefs.buttonRadiusCustomPx;
+    m.buttonHeightPx = Number.isFinite(m.buttonHeightPx)
+        ? clampButtonHeightPx(m.buttonHeightPx)
+        : defaultPrefs.buttonHeightPx;
 
     return m;
 }
@@ -124,9 +183,12 @@ function normalizePrefs(raw: LegacyPartial): DesignSystem2Prefs {
 function buildVisualStyle(prefs: DesignSystem2Prefs): CSSProperties {
     return {
         ...getPrimaryCssVars(prefs.primaryColorId),
+        ...getInternalCssVars(prefs.internalColors),
         ...getSecondaryCssVars(prefs.secondaryColorId),
         ...getPairingCssVars(prefs.primaryColorId, prefs.secondaryColorId),
-        ...getRadiusCssVars(prefs.radiusPreset),
+        ...getRadiusCssVars(prefs.radiusPreset, prefs.radiusCustomPx),
+        ...getButtonRadiusCssVars(prefs.buttonRadiusPreset, prefs.buttonRadiusCustomPx),
+        ...getButtonHeightCssVars(prefs.buttonHeightPx),
     } as CSSProperties;
 }
 
@@ -316,4 +378,13 @@ export function useDesignSystem2Customization(): DesignSystem2CustomizationConte
         throw new Error('useDesignSystem2Customization must be used within DesignSystem2CustomizationProvider');
     }
     return ctx;
+}
+
+/**
+ * Non-throwing variant for components that may render outside the provider
+ * (e.g. ConfiguredDialogShell): returns the CSS-var style when available so
+ * var-driven tokens resolve, undefined otherwise (their fallbacks apply).
+ */
+export function useDesignSystem2VisualStyleSafe(): CSSProperties | undefined {
+    return useContext(DesignSystem2CustomizationContext)?.visualStyle;
 }

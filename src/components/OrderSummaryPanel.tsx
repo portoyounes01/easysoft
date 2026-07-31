@@ -1,18 +1,30 @@
-import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
-import { Archive, Table, Save, Minus, Plus, UserRound } from 'lucide-react';
+import React, { useMemo, useState, useCallback } from 'react';
+import { Archive, Table, Minus, Plus, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LocalProduct } from '../types/supabase';
+import { activeProfile } from '../lib/countryProfile';
 import { POSActionButton } from './ui/POSActionButton';
 import { OutlineButton } from './ui/OutlineButton';
 import { TabToggle, TabToggleOption } from './ui/TabToggle';
 import { ActionButton } from './ui/ActionButton';
+import { ScrollArea } from './ui/ScrollArea';
 
 
 export interface OrderSummaryItem {
+    /** Cart line identity (weighed products can have several lines per product). */
+    lineId: string;
     product: LocalProduct;
     quantity: number;
+    /** 'kg' renders the quantity as a 3-decimal weight; default 'un'. */
+    unit?: 'un' | 'kg';
     /** When false, + is disabled (e.g. stock max reached). Defaults to true if omitted. */
     canIncrement?: boolean;
+    /** Per-unit price including option deltas; defaults to product.price. */
+    unitPrice?: number;
+    /** Compact option summary ("Large, Extra Cheese") shown under the name. */
+    optionsSummary?: string;
+    /** Free-text line note from the item-options dialog. */
+    notes?: string | null;
 }
 
 export interface OrderSummaryPanelProps {
@@ -22,9 +34,7 @@ export interface OrderSummaryPanelProps {
     onProfile?: () => void;
     onTables?: () => void;
     onCashDrawer?: () => void;
-    onSaveBill?: () => void;
     onProcess?: () => void;
-    canSaveBill?: boolean;
     className?: string;
     totalsOverride?: {
         subtotal: number;
@@ -39,15 +49,21 @@ export interface OrderSummaryPanelProps {
     };
     /** Last issued invoice no in current AT chain (local Dexie). */
     fiscalChainHint?: string;
-    /** Tap − to subtract 1 unit; removes line when quantity was 1. */
-    onDecrementCartLine?: (productId: string) => void;
-    /** Tap + to add 1 unit (stock limits enforced in parent). */
-    onIncrementCartLine?: (productId: string) => void;
+    /** Tap − to subtract 1 unit (removes the line when quantity was 1, or the
+     *  whole weighing on a kg line). Receives the cart lineId. */
+    onDecrementCartLine?: (lineId: string) => void;
+    /** Tap + to add 1 unit (stock limits enforced in parent). Receives the cart lineId. */
+    onIncrementCartLine?: (lineId: string) => void;
     /** Selected invoice customer for display (name + NIF). */
     customerSummary?: { name: string; taxNumber?: string | null };
+    /** Controlled service selection lets the POS keep table actions in the dine-in flow. */
+    serviceType?: ServiceType;
+    onServiceTypeChange?: (type: ServiceType) => void;
+    /** Name of the currently loaded table order, if any. */
+    tableName?: string;
 }
 
-type ServiceType = 'dine-in' | 'take-away';
+export type ServiceType = 'dine-in' | 'take-away';
 
 const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     items,
@@ -55,31 +71,32 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     onProfile,
     onTables,
     onCashDrawer,
-    onSaveBill,
     onProcess,
-    canSaveBill = false,
     className = '',
     totalsOverride,
     discountInfo,
     fiscalChainHint,
     onDecrementCartLine,
     onIncrementCartLine,
-    customerSummary
+    customerSummary,
+    serviceType: controlledServiceType,
+    onServiceTypeChange,
+    tableName,
 }) => {
     // 1. Hooks
     const { t } = useTranslation();
-    const [serviceType, setServiceType] = useState<ServiceType>('dine-in');
-    const scrollRef = useRef<HTMLDivElement | null>(null);
-    const trackRef = useRef<HTMLDivElement | null>(null);
-    const thumbRef = useRef<HTMLDivElement | null>(null);
+    const [uncontrolledServiceType, setUncontrolledServiceType] = useState<ServiceType>('dine-in');
+    const serviceType = controlledServiceType ?? uncontrolledServiceType;
 
     // 2. Event handlers
     const handleSetServiceType = useCallback((type: ServiceType) => {
-        setServiceType(type);
-    }, []);
+        setUncontrolledServiceType(type);
+        onServiceTypeChange?.(type);
+    }, [onServiceTypeChange]);
 
     const formatCurrency = useCallback((value: number) => {
-        return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR' }).format(value);
+        // Deterministic, country-aware locale (was browser-default → non-deterministic grouping).
+        return new Intl.NumberFormat(activeProfile().locale, { style: 'currency', currency: 'EUR' }).format(value);
     }, []);
 
     const formatDiscountDisplay = useCallback((discountInfo?: { type: 'none' | 'percentage' | 'fixed'; value: number; amount: number }) => {
@@ -100,13 +117,13 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
 
     // 3. Computed values
     const subtotal = useMemo(() => {
-        return items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+        return items.reduce((sum, item) => sum + (item.unitPrice ?? item.product.price) * item.quantity, 0);
     }, [items]);
 
     const tax = useMemo(() => {
         return items.reduce((sum, item) => {
             const rate = item.product.iva_rate || 0;
-            const total = item.product.price * item.quantity;
+            const total = (item.unitPrice ?? item.product.price) * item.quantity;
             const taxAmount = total - total / (1 + rate);
             return sum + taxAmount;
         }, 0);
@@ -123,42 +140,14 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
 
     const displayTotals = totalsOverride || computedTotals;
 
-    // 4. Effects - none
-    const updateScrollbar = useCallback(() => {
-        const container = scrollRef.current;
-        const track = trackRef.current;
-        const thumb = thumbRef.current;
-        if (!container || !track || !thumb) return;
-
-        const isScrollable = container.scrollHeight > container.clientHeight + 1;
-        track.style.opacity = isScrollable ? '1' : '0';
-        if (!isScrollable) return;
-
-        const ratio = container.scrollTop / (container.scrollHeight - container.clientHeight || 1);
-        const trackHeight = track.clientHeight; // use actual track height, not container height
-        const bottomInsetPx = 4; // leave a small safe zone to avoid clipping at the bottom
-        const effectiveTrack = Math.max(0, trackHeight - bottomInsetPx);
-        const thumbHeight = Math.max(30, (container.clientHeight / container.scrollHeight) * effectiveTrack);
-        const top = ratio * (effectiveTrack - thumbHeight);
-        thumb.style.height = `${thumbHeight}px`;
-        thumb.style.transform = `translateY(${top}px)`;
-    }, []);
-
-    useEffect(() => {
-        updateScrollbar();
-    }, [items, updateScrollbar]);
-
-    useEffect(() => {
-        const handleResize = () => updateScrollbar();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [updateScrollbar]);
+    // 4. Effects - none (list scrollbar handled inside ScrollArea)
 
     // 5. Render
     return (
-        // <aside className={`w-[24.5vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[15.5%_58%_26.5%] h-screen overflow-hidden ${className}`}>
-
-        <aside className={`w-[24.5vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[auto_1fr_26.5%] h-screen overflow-hidden ${className}`}>
+        // minmax(0,1fr) row + minmax(0,1fr) column: without the explicit 0 minimum, the
+        // implicit `auto` track grows to the content's min-content size (long item names /
+        // many items), overflowing the panel instead of letting the list scroll.
+        <aside className={`w-[24.5vw] bg-white shadow-xl border-l border-gray-200 grid grid-rows-[auto_minmax(0,1fr)_auto] grid-cols-[minmax(0,1fr)] h-screen overflow-hidden ${className}`}>
             {/* Top quick actions — auto height (2-up grid: Cash Drawer + Profile) */}
             <div className="overflow-hidden relative shrink-0" style={{ paddingTop: '1.25vh', paddingBottom: '1.25vh', paddingLeft: '2vh', paddingRight: '2vh' }}>
                 <div className="grid grid-cols-2" style={{ gap: '0.8vh' }}>
@@ -176,30 +165,14 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                         style={{ padding: '0.5vh', height: '6vh' }}
                         className="w-full"
                     />
-                    {/* AGENTS: Do not delete the block below (false && …) — 2.ª via + Mesas UI preserved until implemented. Remove only if explicitly requested by a human. */}
-                    {false && (
-                        <>
-                            <POSActionButton
-                                icon={Save}
-                                label={t('pos.saveBill')}
-                                onClick={onSaveBill}
-                                disabled={!canSaveBill}
-                                variant={!canSaveBill ? 'disabled' : 'default'}
-                                title={!canSaveBill ? 'Disponível após completar a venda' : undefined}
-                                style={{ padding: '0.3vh', height: '6vh' }}
-                                className="w-full"
-                            />
-                            <POSActionButton
-                                icon={Table}
-                                label={t('pos.tables')}
-                                onClick={onTables}
-                                disabled={true}
-                                variant="disabled"
-                                title={t('pos.paymentDisabled')}
-                                style={{ padding: '0.5vh', height: '6vh' }}
-                                className="w-full"
-                            />
-                        </>
+                    {onTables && (
+                        <POSActionButton
+                            icon={Table}
+                            label={t('pos.tables')}
+                            onClick={onTables}
+                            style={{ padding: '0.5vh', height: '6vh' }}
+                            className="w-full"
+                        />
                     )}
                 </div>
             </div>
@@ -221,6 +194,19 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                 onChange={handleSetServiceType}
                             />
                         </div>
+                        {tableName && (
+                            <div
+                                className="mb-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2"
+                                data-testid="order-panel-table-summary"
+                            >
+                                <p className="font-semibold text-emerald-900" style={{ fontSize: '1.45vh' }}>
+                                    {t('pos.tableLabelWithName', { name: tableName })}
+                                </p>
+                                <p className="mt-0.5 text-emerald-700" style={{ fontSize: '1.25vh' }}>
+                                    {t('pos.tableOrderHeldHint')}
+                                </p>
+                            </div>
+                        )}
                         {customerSummary && (
                             <div
                                 className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 mb-2"
@@ -231,7 +217,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                 </p>
                                 {customerSummary.taxNumber ? (
                                     <p className="text-gray-600 mt-0.5" style={{ fontSize: '1.35vh' }}>
-                                        NIF {customerSummary.taxNumber}
+                                        {activeProfile().taxId.label} {customerSummary.taxNumber}
                                     </p>
                                 ) : null}
                             </div>
@@ -239,13 +225,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                     </div>
 
                     {/* Items list - takes most space */}
-                    <div className="flex-1 overflow-y-auto relative" style={{ paddingRight: '2vh' }}>
-                        <div
-                            ref={scrollRef}
-                            className="overflow-y-auto overscroll-contain h-full hide-native-scrollbar"
-                            onScroll={updateScrollbar}
-                            onMouseEnter={updateScrollbar}
-                        >
+                    <ScrollArea className="flex-1 min-h-0" gutter="2vh">
                             {items.length === 0 ? (
                                 <div className="text-center py-12">
                                     <p className="text-gray-500 mb-2" style={{ fontSize: '1.8vh' }}>{t('pos.noCartItemsTitle')}</p>
@@ -256,31 +236,44 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                     {items.map((ci, index) => {
                                         const linePadding = { paddingTop: index === 0 ? '2vh' : '1.5vh', paddingBottom: '1vh' } as const;
                                         const showStepper = Boolean(onDecrementCartLine || onIncrementCartLine);
+                                        const isWeighed = ci.unit === 'kg';
                                         const canInc = ci.canIncrement !== false;
+                                        const unitPrice = ci.unitPrice ?? ci.product.price;
                                         const lineDetails = (
-                                            <div className="min-w-0 flex-1">
+                                            <div className="min-w-[7rem] flex-1">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <p
-                                                        className="font-semibold text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap"
-                                                        style={{ fontSize: '1.7vh', maxWidth: showStepper ? '11vw' : '14vw' }}
+                                                        className="flex-1 min-w-0 font-semibold text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap"
+                                                        style={{ fontSize: '1.7vh' }}
                                                         title={ci.product.name}
                                                     >
                                                         {ci.product.name}
                                                     </p>
-                                                    <p className="font-semibold text-gray-900 whitespace-nowrap shrink-0" style={{ fontSize: '1.5vh' }}>{formatCurrency(ci.product.price * ci.quantity)}</p>
+                                                    <p className="font-semibold text-gray-900 whitespace-nowrap shrink-0" style={{ fontSize: '1.5vh' }}>{formatCurrency(unitPrice * ci.quantity)}</p>
                                                 </div>
+                                                {ci.optionsSummary && (
+                                                    <p className="text-gray-500" style={{ fontSize: '1.3vh', paddingLeft: '0.5vh' }}>{ci.optionsSummary}</p>
+                                                )}
+                                                {ci.notes && (
+                                                    <p className="italic text-gray-400" style={{ fontSize: '1.25vh', paddingLeft: '0.5vh' }}>“{ci.notes}”</p>
+                                                )}
                                                 <div className="text-gray-500" style={{ marginTop: index === 0 ? '0.2vh' : '0.8vh', paddingLeft: '0.5vh' }}>
-                                                    <span style={{ fontSize: '1.3vh' }}>{formatCurrency(ci.product.price)}</span>
+                                                    <span style={{ fontSize: '1.3vh' }}>
+                                                        {formatCurrency(unitPrice)}
+                                                        {isWeighed ? '/kg' : ''}
+                                                    </span>
                                                 </div>
                                             </div>
                                         );
                                         return (
-                                            <li key={ci.product.id} style={linePadding}>
-                                                <div className="flex w-full items-center gap-2 rounded-xl px-1 py-1">
+                                            <li key={ci.lineId} style={linePadding}>
+                                                {/* flex-wrap + 7rem min on the details: on very narrow panels the
+                                                    stepper wraps under the line instead of painting over the price */}
+                                                <div className="flex w-full flex-wrap items-center gap-2 rounded-xl px-1 py-1">
                                                     {lineDetails}
                                                     {showStepper ? (
                                                         <div
-                                                            className="flex shrink-0 items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1"
+                                                            className="ml-auto flex shrink-0 items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1"
                                                             onClick={(e) => e.stopPropagation()}
                                                         >
                                                             {onDecrementCartLine ? (
@@ -288,7 +281,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                                                     type="button"
                                                                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-gray-300 bg-white text-gray-800 shadow-sm transition-all duration-150 hover:bg-gray-50 active:scale-95"
                                                                     aria-label={`${t('pos.cartQtyDecrease')}, ${ci.product.name}`}
-                                                                    onClick={() => onDecrementCartLine(ci.product.id)}
+                                                                    onClick={() => onDecrementCartLine(ci.lineId)}
                                                                 >
                                                                     <Minus className="h-5 w-5" strokeWidth={2.5} aria-hidden />
                                                                 </button>
@@ -298,15 +291,15 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                                                 style={{ fontSize: '1.65vh' }}
                                                                 aria-live="polite"
                                                             >
-                                                                {ci.quantity}
+                                                                {isWeighed ? `${ci.quantity.toFixed(3)} kg` : ci.quantity}
                                                             </span>
-                                                            {onIncrementCartLine ? (
+                                                            {onIncrementCartLine && !isWeighed ? (
                                                                 <button
                                                                     type="button"
                                                                     disabled={!canInc}
                                                                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-gray-300 bg-white text-gray-800 shadow-sm transition-all duration-150 hover:bg-gray-50 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
                                                                     aria-label={`${t('pos.cartQtyIncrease')}, ${ci.product.name}`}
-                                                                    onClick={() => onIncrementCartLine(ci.product.id)}
+                                                                    onClick={() => onIncrementCartLine(ci.lineId)}
                                                                 >
                                                                     <Plus className="h-5 w-5" strokeWidth={2.5} aria-hidden />
                                                                 </button>
@@ -319,15 +312,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                     })}
                                 </ul>
                             )}
-                        </div>
-
-                        {/* Custom scrollbar track */}
-                        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-2 flex">
-                            <div ref={trackRef} className="scroll-indicator-track w-full bg-[#F7F7F7] rounded-full relative my-2 transition-opacity duration-200 opacity-0">
-                                <div ref={thumbRef} className="scroll-indicator-thumb absolute left-0 right-0 bg-[#D7D7D7] rounded-full" style={{ top: 0, height: 40 }} />
-                            </div>
-                        </div>
-                    </div>
+                    </ScrollArea>
 
                     {/* Clear All Orders button at bottom */}
                     {items.length > 0 && (
@@ -341,11 +326,12 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                 </div>
             </div>
 
-            {/* Bottom section: Totals + Process button (26.5% row) */}
-            <div className="h-full overflow-hidden relative" style={{ paddingLeft: '2vh', paddingRight: '2vh', paddingBottom: '2vh', paddingTop: '1.5vh' }}>
-                <div className="h-full overflow-hidden flex flex-col justify-between">
+            {/* Bottom section: Totals + Process button (auto row — grows with the optional
+                fiscal-chain hint line instead of clipping the total) */}
+            <div className="relative" style={{ paddingLeft: '2vh', paddingRight: '2vh', paddingBottom: '2vh', paddingTop: '1.5vh' }}>
+                <div className="flex flex-col" style={{ gap: '1.5vh' }}>
                     {/* Totals section */}
-                    <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden" style={{ padding: '1vh', height: 'calc(26.5vh - 8vh - 2vh)' }}>
+                    <div className="bg-gray-50 rounded-xl border border-gray-200" style={{ padding: '1vh' }}>
                         {fiscalChainHint && (
                             <p className="text-gray-600 mb-1" style={{ fontSize: '1.25vh' }} title={t('pos.lastFiscalDocumentTooltip')}>
                                 {t('pos.lastFiscalDocumentLabel')} <span className="font-semibold text-gray-800">{fiscalChainHint}</span>
@@ -384,4 +370,3 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
 };
 
 export default React.memo(OrderSummaryPanel);
-
